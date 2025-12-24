@@ -77,7 +77,8 @@ def _second_chan_field(field: str) -> Optional[str]:
         core.ChanField.RANGE: core.ChanField.RANGE2,
         core.ChanField.SIGNAL: core.ChanField.SIGNAL2,
         core.ChanField.REFLECTIVITY: core.ChanField.REFLECTIVITY2,
-        core.ChanField.FLAGS: core.ChanField.FLAGS2
+        core.ChanField.FLAGS: core.ChanField.FLAGS2,
+        core.ChanField.NORMALS: core.ChanField.NORMALS2
     })
     # yapf: enable
     return second_fields.get(field, None)
@@ -213,8 +214,7 @@ class SimpleMode(ImageCloudMode):
 
 
 class RGBMode(ImageCloudMode):
-    """RGB view mode
-    """
+    """RGB view mode"""
 
     def __init__(self,
                  field: str,
@@ -278,6 +278,76 @@ class RGBMode(ImageCloudMode):
     def enabled(self, ls: core.LidarScan, return_num: int = 0):
         field = ls.field(self._field)
         return np.ndim(field) == 3
+
+
+class NormalsMode(ImageCloudMode):
+    """Normals value remap [-1, 1] -> [0, 1]"""
+
+    def __init__(self,
+                 field: str,
+                 *,
+                 info: Optional[core.SensorInfo] = None) -> None:
+        self._info = info
+        self._fields = [field]
+        field2 = _second_chan_field(field)
+        if field2:
+            self._fields.append(field2)
+
+    @property
+    def name(self) -> str:
+        return str(self._fields[0])
+
+    @property
+    def names(self) -> List[str]:
+        return [str(field) for field in self._fields]
+
+    def _prepare_data(self,
+                      ls: core.LidarScan,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+        if not self.enabled(ls, return_num):
+            return None
+
+        field = self._fields[return_num]
+        data = ls.field(field)
+        if np.ndim(data) != 3 or data.shape[-1] != 3:
+            raise TypeError(f"Unsupported normal field shape: {data.shape}")
+        key_data = np.asarray(data, dtype=np.float32)
+        zero_mask = np.all(key_data == 0.0, axis=-1)
+        np.clip(key_data, -1.0, 1.0, out=key_data)
+        key_data = 0.5 * (key_data + 1.0)
+        if np.any(zero_mask):
+            key_data[zero_mask] = 0.0
+        return key_data
+
+    def set_image(self,
+                  img: Image,
+                  ls: core.LidarScan,
+                  return_num: int = 0) -> None:
+        if self._info is None:
+            raise ValueError(
+                f"VizMode[{self.name}] requires metadata to make a 2D image")
+        key_data = self._prepare_data(ls, return_num)
+        if key_data is not None:
+            img.set_image(core.destagger(self._info, key_data))
+
+    def set_cloud_color(self,
+                        cloud: Cloud,
+                        ls: core.LidarScan,
+                        return_num: int = 0) -> None:
+        key_data = self._prepare_data(ls, return_num)
+        if key_data is not None:
+            cloud.set_key(key_data)
+
+    def enabled(self, ls: core.LidarScan, return_num: int = 0):
+        if return_num >= len(self._fields):
+            return False
+
+        field = self._fields[return_num]
+        if field not in ls.fields:
+            return False
+
+        data = ls.field(field)
+        return np.ndim(data) == 3 and data.shape[-1] == 3
 
 
 class ReflMode(SimpleMode, ImageCloudMode):

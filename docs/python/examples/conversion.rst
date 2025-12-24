@@ -45,7 +45,7 @@ a ``numpy.ndarray`` and continuing to use it as a 2D image.
     import numpy as np
 
     # read array from CSV
-    frame = np.loadtxt('my_frame_00000.csv', delimiter=',')
+    frame = np.loadtxt('output_0.csv', delimiter=',')
 
     # convert back to "fat" 2D image [H x W x num_fields] shape
     frame = frame.reshape((128, -1, frame.shape[1]))

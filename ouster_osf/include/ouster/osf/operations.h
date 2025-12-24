@@ -8,7 +8,9 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "ouster/osf/basics.h"
 #include "ouster/osf/metadata.h"
@@ -16,6 +18,7 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
@@ -63,7 +66,7 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
                                   const std::string& backup_file_name);
 
 /**
- * Modify an OSF files sensor_info metadata.
+ * Modify an OSF files SensorInfo metadata.
  *
  * @param[in] file_name The OSF file to modify.
  * @param[out] new_metadata The new metadata for the OSF file
@@ -72,7 +75,8 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
 OUSTER_API_FUNCTION
 int64_t osf_file_modify_metadata(
     const std::string& file_name,
-    const std::vector<ouster::sensor::sensor_info>& new_metadata);
+    const std::vector<ouster::sdk::core::SensorInfo>& new_metadata);
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

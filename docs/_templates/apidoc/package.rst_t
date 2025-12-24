@@ -1,0 +1,78 @@
+{# Package (namespace) template #}
+{%- set name = pkgname
+    | default(module)
+    | default((subpackages and subpackages[0]) or '')
+-%}
+{%- if not name -%}
+.. # Skipped: package name unresolved
+{%- else -%}
+{{ name }}
+{{ "=" * name|length }}
+
+Module contents
+---------------
+
+.. automodule:: {{ name }}
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+{%- if subpackages %}
+Subpackages
+-----------
+
+{%- if name == "ouster.sdk" %}
+{# Main package: show full toctree with depth 4 #}
+.. toctree::
+   :maxdepth: 4
+
+{% for subpkg in subpackages | sort %}
+   {{ subpkg }}
+{% endfor %}
+
+{%- else %}
+{# Other packages: use titles only #}
+.. toctree::
+   :maxdepth: 2
+   :titlesonly:
+
+{% for subpkg in subpackages | sort %}
+   {{ subpkg }}
+{% endfor %}
+{%- endif %}
+{%- endif %}
+
+{%- if submodules %}
+{%- if name == "ouster.sdk" %}
+
+{# Top-level package: use default toctree behavior with depth 4 #}
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 4
+
+{% for submod in submodules | sort %}
+   {{ submod.replace(' module', '') }}
+{% endfor %}
+
+{%- else %}
+
+{# Subpackages: inline module content directly #}
+
+{%- for submod in submodules | sort %}
+{%- set mod_name = submod.replace(' module', '') %}
+
+{{ mod_name }}
+{{ "--" * (mod_name|length + 7) }}
+
+.. automodule:: {{ submod }}
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+{%- endfor %}
+
+{%- endif %}
+{%- endif %}
+{%- endif -%}

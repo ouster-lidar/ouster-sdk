@@ -6,7 +6,7 @@
    Ouster SDK Overview <self>
    Installation <installation>
    Download and Visualize Sample Data <sample-data>
-   
+
 .. toctree::
    :caption: Python Guide
    :hidden:
@@ -37,8 +37,9 @@
 
    OSF <reference/osf>
    Lidar Scan API <reference/lidar-scan>
-   Python API Reference <python/api/index>
-   C++ API Reference <cpp/api>
+   Python API Reference <python/api_python/ouster.sdk>
+   C++ API Reference <cpp/api_cpp/index>
+   Zone Monitor <reference/zone_monitor>
    Changelog <reference/changelog>
 
 .. toctree::
@@ -58,11 +59,12 @@
    :caption: Migration Guides
    :hidden:
 
-    Migrating from 0.5.1 to 0.7.1 <migration/migration-20220927-20230114>
-    Migrating from 0.7.1 to 0.8.1 <migration/migration-20230114-20230403>
-    Migration from 0.10.0 to 0.11.0 <migration/migration-20231031-20240423>
-    Migration from 0.13.1 to 0.14.0 <migration/migration-20241004-20250113>
-    Migration from 0.14.0 to 0.15.0 <migration/migration-0.14.0-0.15.0.rst>
+   Migrating from 0.5.1 to 0.7.1 <migration/migration-20220927-20230114>
+   Migrating from 0.7.1 to 0.8.1 <migration/migration-20230114-20230403>
+   Migration from 0.10.0 to 0.11.0 <migration/migration-20231031-20240423>
+   Migration from 0.13.1 to 0.14.0 <migration/migration-20241004-20250113>
+   Migration from 0.14.0 to 0.15.0 <migration/migration-0.14.0-0.15.0.rst>
+   Migration from 0.15.0 to 0.16.0 <migration/migration-0.15.0-0.16.0.rst>
 ..
    FAQ <faq>
 
@@ -79,4 +81,4 @@
 .. include:: overview.rst
 
 
-.. todolist:: 
+.. todolist::

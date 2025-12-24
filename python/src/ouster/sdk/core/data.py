@@ -35,6 +35,8 @@ class ChanField:
     NEAR_IR = "NEAR_IR"
     FLAGS = "FLAGS"
     FLAGS2 = "FLAGS2"
+    WINDOW = "WINDOW"
+    ZONE = "ZONE"
     RAW_HEADERS = "RAW_HEADERS"
     RAW32_WORD1 = "RAW32_WORD1"
     RAW32_WORD2 = "RAW32_WORD2"
@@ -45,6 +47,23 @@ class ChanField:
     RAW32_WORD7 = "RAW32_WORD7"
     RAW32_WORD8 = "RAW32_WORD8"
     RAW32_WORD9 = "RAW32_WORD9"
+    NORMALS = "NORMALS"
+    NORMALS2 = "NORMALS2"
+    IMU_ACC = "IMU_ACC"
+    IMU_GYRO = "IMU_GYRO"
+    IMU_TIMESTAMP = "IMU_TIMESTAMP"
+    IMU_MEASUREMENT_ID = "IMU_MEASUREMENT_ID"
+    IMU_STATUS = "IMU_STATUS"
+    IMU_PACKET_TIMESTAMP = "IMU_PACKET_TIMESTAMP"
+    IMU_ALERT_FLAGS = "IMU_ALERT_FLAGS"
+    POSITION_STRING = "POSITION_STRING"
+    POSITION_LAT_LONG = "POSITION_LAT_LONG"
+    POSITION_TIMESTAMP = "POSITION_TIMESTAMP"
+    LIVE_ZONESET_HASH = "LIVE_ZONESET_HASH"
+    ZONE_TIMESTAMP = "ZONE_TIMESTAMP"
+    ZONE_PACKET_TIMESTAMP = "ZONE_PACKET_TIMESTAMP"
+    ZONE_STATES = "ZONE_STATES"
+    ZONE_ALERT_FLAGS = "ZONE_ALERT_FLAGS"
 
 
 class ColHeader(Enum):
@@ -123,6 +142,10 @@ def destagger(info: SensorInfo,
     # remember original shape
     shape = fields.shape
     fields = fields.reshape((h, w, -1))
+
+    # don't bother dstacking if we are only a 2d array
+    if fields.shape[2] == 1:
+        return _destagger(fields[:, :, 0], shifts, inverse).reshape(shape)
 
     # apply destagger to each channel
     # note: astype() needed due to some strange behavior of the pybind11

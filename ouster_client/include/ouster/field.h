@@ -5,21 +5,26 @@
 
 #pragma once
 
-#include <stdlib.h>  // for size_t since gcc-12
-
 #include <cstdint>
-#include <numeric>
+#include <cstdlib>  // for size_t since gcc-12
+#include <initializer_list>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
-#include <typeindex>
-#include <unordered_map>
 #include <vector>
 
 #include "ouster/array_view.h"
-#include "ouster/types.h"
+#include "ouster/chanfield.h"
+#include "ouster/typedefs.h"
 #include "ouster/visibility.h"
+#include "ouster/zone_state.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
+
+// Forward declaration
+class SensorInfo;
 
 namespace impl {
 
@@ -33,11 +38,6 @@ namespace impl {
 OUSTER_API_FUNCTION
 std::vector<size_t> calculate_strides(const std::vector<size_t>& shape);
 
-}  // namespace impl
-
-namespace sensor {
-namespace impl {
-
 // clang-format off
 
 template <typename T> int type_size() { return sizeof(T); }
@@ -47,7 +47,7 @@ template <typename T> size_t type_hash() { return typeid(T).hash_code(); }
 template <> OUSTER_API_FUNCTION size_t type_hash<void>();
 
 template <typename T>
-ChanFieldType type_cft() { return ChanFieldType::UNREGISTERED; }
+ChanFieldType type_cft() { return ouster::sdk::core::ChanFieldType::UNREGISTERED; }
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<void>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint8_t>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint16_t>();
@@ -59,11 +59,12 @@ template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int32_t>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int64_t>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<float>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<double>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<char>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<ouster::sdk::core::ZoneState>();
 
 // clang-format on
 
 }  // namespace impl
-}  // namespace sensor
 
 /**
  * Helper struct used by FieldView and Field to describe field contents.
@@ -111,8 +112,8 @@ struct OUSTER_API_CLASS FieldDescriptor {
      */
     template <typename T>
     static size_t type_hash() {
-        using Type = typename std::remove_cv<T>::type;
-        return sensor::impl::type_hash<Type>();
+        using Type = std::remove_cv_t<T>;
+        return impl::type_hash<Type>();
     }
 
     /**
@@ -130,7 +131,7 @@ struct OUSTER_API_CLASS FieldDescriptor {
      * @return ChanFieldType
      */
     OUSTER_API_FUNCTION
-    sensor::ChanFieldType tag() const;
+    ChanFieldType tag() const;
 
     OUSTER_API_FUNCTION
     bool operator==(const FieldDescriptor& other) const noexcept {
@@ -154,8 +155,7 @@ struct OUSTER_API_CLASS FieldDescriptor {
     template <typename T>
     bool eligible_type() const {
         // TODO: reinstate upon c++17 -- Tim T.
-        if /*constexpr*/ (
-            std::is_same<void, typename std::remove_cv<T>::type>::value) {
+        if /*constexpr*/ (std::is_same<void, std::remove_cv_t<T>>::value) {
             return true;
         }
         return !type || type_hash<T>() == type;
@@ -221,29 +221,32 @@ struct OUSTER_API_CLASS FieldDescriptor {
      * @return FieldDescriptor
      */
     template <class ContainerT = std::initializer_list<size_t>>
-    static FieldDescriptor array(sensor::ChanFieldType tag,
-                                 const ContainerT& shape) {
+    static FieldDescriptor array(ChanFieldType tag, const ContainerT& shape) {
         switch (tag) {
-            case sensor::ChanFieldType::UINT8:
+            case ChanFieldType::UINT8:
                 return array<uint8_t>(shape);
-            case sensor::ChanFieldType::UINT16:
+            case ChanFieldType::UINT16:
                 return array<uint16_t>(shape);
-            case sensor::ChanFieldType::UINT32:
+            case ChanFieldType::UINT32:
                 return array<uint32_t>(shape);
-            case sensor::ChanFieldType::UINT64:
+            case ChanFieldType::UINT64:
                 return array<uint64_t>(shape);
-            case sensor::ChanFieldType::INT8:
+            case ChanFieldType::INT8:
                 return array<int8_t>(shape);
-            case sensor::ChanFieldType::INT16:
+            case ChanFieldType::INT16:
                 return array<int16_t>(shape);
-            case sensor::ChanFieldType::INT32:
+            case ChanFieldType::INT32:
                 return array<int32_t>(shape);
-            case sensor::ChanFieldType::INT64:
+            case ChanFieldType::INT64:
                 return array<int64_t>(shape);
-            case sensor::ChanFieldType::FLOAT32:
+            case ChanFieldType::FLOAT32:
                 return array<float>(shape);
-            case sensor::ChanFieldType::FLOAT64:
+            case ChanFieldType::FLOAT64:
                 return array<double>(shape);
+            case ChanFieldType::CHAR:
+                return array<char>(shape);
+            case ChanFieldType::ZONE_STATE:
+                return array<ZoneState>(shape);
             default:
                 throw std::invalid_argument(
                     "fd_array: unsupported ChanFieldType");
@@ -253,6 +256,7 @@ struct OUSTER_API_CLASS FieldDescriptor {
 
 /**
  * Parameter pack shorthand for FieldDescriptor::array
+ * @tparam T The element type of the array (e.g., `int`, `float`).
  * @param[in] args Variadic arguments that are forwarded to the function.
  * @return FieldDescriptor array
  */
@@ -261,9 +265,11 @@ auto fd_array(Args&&... args) -> FieldDescriptor {
     return FieldDescriptor::array<T>({static_cast<size_t>(args)...});
 }
 
-// @copydoc fd_array()
+/** @copydoc fd_array
+ * @param[in] tag The ChanFieldType representing the type of the array.
+ */
 template <typename... Args>
-auto fd_array(sensor::ChanFieldType tag, Args&&... args) -> FieldDescriptor {
+auto fd_array(ChanFieldType tag, Args&&... args) -> FieldDescriptor {
     return FieldDescriptor::array(tag, {static_cast<size_t>(args)...});
 }
 
@@ -304,14 +310,14 @@ class OUSTER_API_CLASS FieldView {
         return const_cast<T*>(const_cast<const FieldView&>(*this).get<T>());
     }
 
-    // @copydoc get()
+    /// @copydoc get()
     template <typename T = void>
     const T* get() const {
         if (!desc_.eligible_type<T>()) {
             throw std::invalid_argument(
                 "FieldView: ineligible dereference type for field of element "
                 "type " +
-                ouster::sensor::to_string(desc_.tag()) +
+                ouster::sdk::core::to_string(desc_.tag()) +
                 ". Dereference type must match or be void.");
         }
         return reinterpret_cast<T*>(ptr_);
@@ -345,7 +351,7 @@ class OUSTER_API_CLASS FieldView {
      * @throw std::invalid_argument on type mismatch
      * @throw std::invalid_argument on dimensional shape mismatch
      */
-    template <typename T, int Dim>
+    template <typename T, size_t Dim>
     operator ArrayView<T, Dim>() {
         if (desc_.ndim() != Dim) {
             throw std::invalid_argument(
@@ -364,7 +370,7 @@ class OUSTER_API_CLASS FieldView {
      * @throw std::invalid_argument on type mismatch
      * @throw std::invalid_argument on dimensional shape mismatch
      */
-    template <typename T, int Dim>
+    template <typename T, size_t Dim>
     operator ConstArrayView<T, Dim>() const {
         if (desc_.ndim() != Dim) {
             throw std::invalid_argument(
@@ -398,7 +404,8 @@ class OUSTER_API_CLASS FieldView {
                 "Field: Cannot convert sparse view to dense Eigen array");
         }
 
-        Eigen::Index h = shape()[0], w = shape()[1];
+        Eigen::Index h = shape()[0];
+        Eigen::Index w = shape()[1];
         return Eigen::Map<img_t<T>>{get<T>(), h, w};
     }
 
@@ -423,7 +430,8 @@ class OUSTER_API_CLASS FieldView {
                 "Field: Cannot convert sparse view to dense Eigen array");
         }
 
-        Eigen::Index h = shape()[0], w = shape()[1];
+        Eigen::Index h = shape()[0];
+        Eigen::Index w = shape()[1];
         return Eigen::Map<const img_t<T>>{get<T>(), h, w};
     }
 
@@ -479,6 +487,60 @@ class OUSTER_API_CLASS FieldView {
     }
 
     /**
+     * Arbitrary type const Eigen Nx3 array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>() {
+        if (desc_.ndim() != 2 || desc_.shape[1] != 3) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) +
+                " dimensions but must have the shape (N, 3).");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument(
+                "Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index w = shape()[0];
+        return Eigen::Map<Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>{
+            get<T>(), w, 3};
+    }
+
+    /**
+     * Arbitrary type const Eigen Nx3 array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<
+        const Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>() const {
+        if (desc_.ndim() != 2 || desc_.shape[1] != 3) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) +
+                " dimensions but must have the shape (N, 3).");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument(
+                "Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index w = shape()[0];
+        return Eigen::Map<
+            const Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>{get<T>(),
+                                                                       w, 3};
+    }
+
+    /**
      * Bool conversion
      *
      * @return true if FieldView is owning a resource
@@ -517,11 +579,12 @@ class OUSTER_API_CLASS FieldView {
     FieldView subview(Args... idx) const {
         auto dim = desc().ndim();
         auto subview_dim =
-            dim - sizeof...(Args) + impl::count_n_ranges<Args...>::value;
+            dim - sizeof...(Args) + impl::count_n_ranges<Args...>::VALUE;
 
-        if (subview_dim <= 0)
+        if (subview_dim <= 0) {
             throw std::invalid_argument(
                 "FieldView: ran out of dimensions to subview");
+        }
 
         if (impl::subview_oob_check(shape(), idx...)) {
             throw std::invalid_argument(
@@ -530,8 +593,8 @@ class OUSTER_API_CLASS FieldView {
 
         char* ptr =
             reinterpret_cast<char*>(ptr_) +
-            impl::strided_index(desc().strides, impl::range_or_idx(idx)...) *
-                desc().element_size;
+            (impl::strided_index(desc().strides, impl::range_or_idx(idx)...) *
+             desc().element_size);
 
         auto new_desc = FieldDescriptor{};
         new_desc.type = desc().type;
@@ -627,7 +690,7 @@ class OUSTER_API_CLASS FieldView {
      * @return ChanFieldType
      */
     OUSTER_API_FUNCTION
-    sensor::ChanFieldType tag() const;
+    ChanFieldType tag() const;
 
     /**
      * Check if the FieldView is not contiguous
@@ -663,6 +726,12 @@ enum class FieldClass {
      * as a whole rather than any pixel, column or packet
      */
     SCAN_FIELD = 4,
+
+    /**
+     * Corresponds to fields of any dimension associated with collations of
+     * scans
+     */
+    COLLATION_FIELD = 5,
 };
 
 /**
@@ -773,7 +842,7 @@ class OUSTER_API_CLASS Field : public FieldView {
  * @return the staggered/destaggered field
  */
 OUSTER_API_FUNCTION
-Field destagger(const ouster::sensor::sensor_info& info, const FieldView& field,
+Field destagger(const SensorInfo& info, const FieldView& field,
                 bool inverse = false);
 
 /**
@@ -793,6 +862,8 @@ Field destagger(const ouster::sensor::sensor_info& info, const FieldView& field,
 OUSTER_API_FUNCTION
 FieldView uint_view(const FieldView& other);
 
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster
 
 namespace std {
@@ -804,6 +875,6 @@ namespace std {
  * @param[in] b Field to swap with a
  */
 OUSTER_API_FUNCTION
-void swap(ouster::Field& a, ouster::Field& b);
+void swap(ouster::sdk::core::Field& a, ouster::sdk::core::Field& b);
 
 }  // namespace std

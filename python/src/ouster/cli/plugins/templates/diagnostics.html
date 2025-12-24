@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="top-banner" id="topBanner" style="display:flex;justify-content:center;align-items:center;gap:12px;position:relative;">
+        <a href="/disclaimer" style="color:#fff;text-decoration:underline;flex:1;text-align:center;">Important Disclaimer: Read this before developing applications using this emulator!</a>
+        <button type="button" id="dismissBanner" aria-label="Dismiss" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">×</button>
+    </div>
+    <script>
+        (function() {
+            var btn = document.getElementById('dismissBanner');
+            var banner = document.getElementById('topBanner');
+            if (btn && banner) {
+                btn.addEventListener('click', function() {
+                    banner.style.display = 'none';
+                });
+            }
+        })();
+    </script>
+    <div class="navbar">
+        <div class="logo">OUSTER</div>
+        <a href="/">Dashboard</a>
+        <a href="/diag">Diagnostics</a>
+        <a href="/config">Configuration</a>
+        <a href="#">Documentation</a>
+    </div>
+
+    <div class="container">
+        <h1>Active Alerts</h1>
+
+        <h2>Active Alerts</h2>
+        <div class="alert-table-wrapper">
+            <table class="alert-table">
+                <thead>
+                    <tr>
+                        <th>Cursor</th>
+                        <th>ID</th>
+                        <th>Category</th>
+                        <th>Level</th>
+                        <th>Msg</th>
+                        <th>Msg Verbose</th>
+                        <th>Realtime</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in active_alerts %}
+                    <tr>
+                        <td>{{ alert.cursor }}</td>
+                        <td>{{ alert.id }}</td>
+                        <td>{{ alert.category }}</td>
+                        <td>{{ alert.level }}</td>
+                        <td>{{ alert.msg }}</td>
+                        <td>{{ alert.msg_verbose }}</td>
+                        <td>{{ alert.realtime }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h2>Logged Alerts</h2>
+        <div class="alert-table-wrapper">
+            <table class="alert-table">
+                <thead>
+                    <tr>
+                        <th>Cursor</th>
+                        <th>ID</th>
+                        <th>Category</th>
+                        <th>Activation</th>
+                        <th>Level</th>
+                        <th>Msg</th>
+                        <th>Msg Verbose</th>
+                        <th>Realtime</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in logged_alerts %}
+                    <tr>
+                        <td>{{ alert.cursor }}</td>
+                        <td>{{ alert.id }}</td>
+                        <td>{{ alert.category }}</td>
+                        <td>{{ alert.activation if alert.activation else '' }}</td> {# Activation is only for logged alerts in the image #}
+                        <td>{{ alert.level }}</td>
+                        <td>{{ alert.msg }}</td>
+                        <td>{{ alert.msg_verbose }}</td>
+                        <td>{{ alert.realtime }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="diag-info">
+            <h2>Diagnostic Information</h2>
+            <p>Please download the following diagnostic file when requesting support from Ouster.</p>
+            <a href="#" class="diag-button">System Diagnostics</a>
+        </div>
+    </div>
+</body>
+</html>

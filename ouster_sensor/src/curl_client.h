@@ -1,19 +1,26 @@
 #include <curl/curl.h>
+#include <curl/easy.h>
 
 #include <chrono>
+#include <cstdint>
 #include <cstring>
+#include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "http_client.h"
 #include "ouster/impl/logging.h"
 
-class CurlClient : public ouster::util::HttpClient {
+class CurlClient : public ouster::sdk::sensor::HttpClient {
     enum class RequestType {
         TYPE_GET = 0,
         TYPE_DELETE = 1,
         TYPE_POST = 2,
-        TYPE_PUT = 3
+        TYPE_PUT = 3,
+        TYPE_POST_BINARY = 4,
+        TYPE_PUT_BINARY = 5
     };
 
     mutable std::mutex mutex_;
@@ -64,14 +71,30 @@ class CurlClient : public ouster::util::HttpClient {
                      int timeout_seconds) const override {
         auto full_url = url_combine(base_url_, url);
         return execute_request(RequestType::TYPE_POST, full_url,
-                               timeout_seconds, data.c_str());
+                               timeout_seconds, data.c_str(), data.size());
+    }
+
+    std::string post(const std::string& url, const std::vector<uint8_t>& data,
+                     int timeout_seconds) const override {
+        auto full_url = url_combine(base_url_, url);
+        return execute_request(
+            RequestType::TYPE_POST_BINARY, full_url, timeout_seconds,
+            reinterpret_cast<const char*>(data.data()), data.size());
     }
 
     std::string put(const std::string& url, const std::string& data,
                     int timeout_seconds) const override {
         auto full_url = url_combine(base_url_, url);
         return execute_request(RequestType::TYPE_PUT, full_url, timeout_seconds,
-                               data.c_str());
+                               data.c_str(), data.size());
+    }
+
+    std::string put(const std::string& url, const std::vector<uint8_t>& data,
+                    int timeout_seconds) const override {
+        auto full_url = url_combine(base_url_, url);
+        return execute_request(
+            RequestType::TYPE_PUT_BINARY, full_url, timeout_seconds,
+            reinterpret_cast<const char*>(data.data()), data.size());
     }
 
     std::string encode(const std::string& str) const override {
@@ -100,7 +123,7 @@ class CurlClient : public ouster::util::HttpClient {
 
     std::string execute_request(RequestType type, const std::string& url,
                                 int timeout_seconds, const char* data = nullptr,
-                                int attempts = 3,
+                                size_t data_size = 0, int attempts = 3,
                                 int retry_delay_ms = 500) const {
         long http_code = 0;  // NOLINT(google-runtime-int); curl docs uses long
         struct curl_slist* hs = nullptr;
@@ -126,16 +149,30 @@ class CurlClient : public ouster::util::HttpClient {
         } else if (type == RequestType::TYPE_POST) {
             curl_easy_setopt(curl_handle_, CURLOPT_CUSTOMREQUEST, 0);
             hs = curl_slist_append(hs, "Content-Type: application/json");
+            curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDSIZE, data_size);
             curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
         } else if (type == RequestType::TYPE_PUT) {
             curl_easy_setopt(curl_handle_, CURLOPT_CUSTOMREQUEST, "PUT");
             hs = curl_slist_append(hs, "Content-Type: application/json");
+            curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDSIZE, data_size);
+            curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
+        } else if (type == RequestType::TYPE_POST_BINARY) {
+            curl_easy_setopt(curl_handle_, CURLOPT_CUSTOMREQUEST, 0);
+            hs =
+                curl_slist_append(hs, "Content-Type: application/octet-stream");
+            curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDSIZE, data_size);
+            curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
+        } else if (type == RequestType::TYPE_PUT_BINARY) {
+            curl_easy_setopt(curl_handle_, CURLOPT_CUSTOMREQUEST, "PUT");
+            hs =
+                curl_slist_append(hs, "Content-Type: application/octet-stream");
+            curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDSIZE, data_size);
             curl_easy_setopt(curl_handle_, CURLOPT_POSTFIELDS, data);
         }
         for (const auto& header : additional_headers_) {
             hs = curl_slist_append(hs, header.c_str());
         }
-        if (hs) {
+        if (hs != nullptr) {
             curl_easy_setopt(curl_handle_, CURLOPT_HTTPHEADER, hs);
         }
         while (attempts-- != 0) {
@@ -162,7 +199,7 @@ class CurlClient : public ouster::util::HttpClient {
             if (attempts != 0 && 500 <= http_code && http_code < 600) {
                 // HTTP 5XX means a server error, so we should re-attempt.
                 // log a warning and sleep before re-attempting
-                ouster::sensor::logger().warn(
+                ouster::sdk::core::logger().warn(
                     "Re-attempting CurlClient::execute_get after failure for "
                     "url: [{}] with the code: [{}] - and return: {}",
                     url, http_code, buffer_);

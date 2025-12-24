@@ -3,6 +3,8 @@
 #include "ouster/impl/transform_vector.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 namespace impl {
 
 PoseV PoseQ::v() const {
@@ -13,4 +15,6 @@ PoseV PoseQ::v() const {
 }
 
 }  // namespace impl
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

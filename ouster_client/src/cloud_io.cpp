@@ -1,20 +1,26 @@
 #include "ouster/cloud_io.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
+#include <ios>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace {
-std::vector<std::string> split(std::string s, const std::string& delimiter) {
+std::vector<std::string> split(std::string str, const std::string& delimiter) {
     std::vector<std::string> tokens;
     size_t pos = 0;
     std::string token;
-    while ((pos = s.find(delimiter)) != std::string::npos) {
-        token = s.substr(0, pos);
+    while ((pos = str.find(delimiter)) != std::string::npos) {
+        token = str.substr(0, pos);
         tokens.push_back(token);
-        s.erase(0, pos + delimiter.length());
+        str.erase(0, pos + delimiter.length());
     }
-    tokens.push_back(s);
+    tokens.push_back(str);
 
     return tokens;
 }
@@ -24,17 +30,17 @@ std::vector<std::string> split(std::string s, const std::string& delimiter) {
 template <class StreamT>
 auto& getline2(StreamT& stream, std::string& out_line) {
     auto& res = std::getline(stream, out_line);
-    if (out_line.size() && out_line[out_line.size() - 1] == '\r') {
+    if (!out_line.empty() && out_line[out_line.size() - 1] == '\r') {
         out_line.pop_back();
     }
     return res;
 }
 
 namespace ouster {
+namespace sdk {
 namespace core {
 
-Eigen::Matrix<float, Eigen::Dynamic, 3> read_pointcloud(
-    const std::string& filename) {
+PointCloudXYZf read_pointcloud(const std::string& filename) {
     std::ifstream infile(filename, std::ios::binary);
     if (!infile) {
         throw std::runtime_error("File does not exist");
@@ -55,21 +61,25 @@ Eigen::Matrix<float, Eigen::Dynamic, 3> read_pointcloud(
     };
 
     // Utility for parsing the first line to detect format
-    auto detect_format = [&](std::ifstream& in) {
+    auto detect_format = [&](std::ifstream& input) {
         std::string line;
-        getline2(in, line);
+        getline2(input, line);
         auto words = split(line, " ");
-        if (line == "ply") return std::string("ply");
-        if (!words.empty() && words[0] == "FIELDS") return std::string("pcd");
+        if (line == "ply") {
+            return std::string("ply");
+        }
+        if (!words.empty() && words[0] == "FIELDS") {
+            return std::string("pcd");
+        }
         throw std::runtime_error("Invalid or unsupported file format.");
     };
 
     // Parse header, fill in struct info
-    auto parse_header = [&](std::ifstream& in) {
-        in.seekg(0, std::ios::beg);
+    auto parse_header = [&](std::ifstream& input) {
+        input.seekg(0, std::ios::beg);
         HeaderInfo info;
-        info.format = detect_format(in);
-        in.seekg(0, std::ios::beg);
+        info.format = detect_format(input);
+        input.seekg(0, std::ios::beg);
 
         // field sizes
         std::map<std::string, int> field_sizes{{"float", 4}};
@@ -81,9 +91,11 @@ Eigen::Matrix<float, Eigen::Dynamic, 3> read_pointcloud(
 
         // read header lines
         std::string line;
-        while (getline2(in, line)) {
+        while (getline2(input, line)) {
             auto words = split(line, " ");
-            if (words.empty()) continue;
+            if (words.empty()) {
+                continue;
+            }
             const auto& cmd = words[0];
 
             if (info.format == "ply") {
@@ -104,10 +116,10 @@ Eigen::Matrix<float, Eigen::Dynamic, 3> read_pointcloud(
                             throw std::runtime_error("Unsupported type: " +
                                                      words[1]);
                         }
-                        Field f{words[2], words[1], current_offset,
-                                field_sizes[words[1]]};
-                        fields.push_back(f);
-                        current_offset += f.size;
+                        Field field{words[2], words[1], current_offset,
+                                    field_sizes[words[1]]};
+                        fields.push_back(field);
+                        current_offset += field.size;
                     } else {
                         throw std::runtime_error("Unsupported property: " +
                                                  line);
@@ -191,61 +203,62 @@ Eigen::Matrix<float, Eigen::Dynamic, 3> read_pointcloud(
     auto file_info = parse_header(infile);
 
     // Prepare result matrix
-    Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor> result(
-        file_info.num_vertices, 3);
+    PointCloudXYZf result(file_info.num_vertices, 3);
     float* pts = result.data();
     std::map<std::string, int> field_to_index{{"x", 0}, {"y", 1}, {"z", 2}};
 
     // Functions for reading data
-    auto read_binary_data = [&](std::ifstream& in, const HeaderInfo& info) {
-        auto pos = in.tellg();
-        in.seekg(0, std::ios::end);
-        auto end_pos = in.tellg();
+    auto read_binary_data = [&](std::ifstream& input, const HeaderInfo& info) {
+        auto pos = input.tellg();
+        input.seekg(0, std::ios::end);
+        auto end_pos = input.tellg();
         auto size = end_pos - pos;
-        in.seekg(pos, std::ios::beg);
+        input.seekg(pos, std::ios::beg);
 
         std::vector<uint8_t> data(size);
-        in.read(reinterpret_cast<char*>(data.data()), size);
+        input.read(reinterpret_cast<char*>(data.data()), size);
 
         int stride = 0;
         if (!info.fields.empty()) {
             // For PCD we already had a "current_offset" as total bytes per
             // point For PLY it's roughly sum of field sizes
-            for (auto& f : info.fields) {
-                if (f.offset + f.size > stride) {
-                    stride = f.offset + f.size;
+            for (auto& field : info.fields) {
+                if (field.offset + field.size > stride) {
+                    stride = field.offset + field.size;
                 }
             }
         }
-        for (auto& f : info.fields) {
-            auto idx_it = field_to_index.find(f.name);
-            if (idx_it == field_to_index.end()) continue;
-            if (f.type != "float") {
+        for (auto& field : info.fields) {
+            auto idx_it = field_to_index.find(field.name);
+            if (idx_it == field_to_index.end()) {
+                continue;
+            }
+            if (field.type != "float") {
                 throw std::runtime_error("Only float fields supported");
             }
             for (int i = 0; i < info.num_vertices; i++) {
-                const uint8_t* ptr = &data[i * stride + f.offset];
-                float* dst = &pts[i * 3 + idx_it->second];
+                const uint8_t* ptr = &data[(i * stride) + field.offset];
+                float* dst = &pts[(i * 3) + idx_it->second];
                 memcpy(dst, ptr, 4);
             }
         }
     };
 
-    auto read_ascii_data = [&](std::ifstream& in, const HeaderInfo& info) {
+    auto read_ascii_data = [&](std::ifstream& input, const HeaderInfo& info) {
         std::vector<int> column_to_element;
-        for (auto& f : info.fields) {
-            auto it = field_to_index.find(f.name);
+        for (auto& field : info.fields) {
+            auto it = field_to_index.find(field.name);
             column_to_element.push_back(
                 (it != field_to_index.end()) ? it->second : -1);
         }
         int i = 0;
         std::string line;
-        while (getline2(in, line) && i < info.num_vertices) {
+        while (getline2(input, line) && i < info.num_vertices) {
             auto words = split(line, " ");
             for (size_t w = 0; w < words.size() && w < column_to_element.size();
                  w++) {
                 if (column_to_element[w] >= 0) {
-                    pts[i * 3 + column_to_element[w]] =
+                    pts[(i * 3) + column_to_element[w]] =
                         std::atof(words[w].c_str());
                 }
             }
@@ -264,4 +277,5 @@ Eigen::Matrix<float, Eigen::Dynamic, 3> read_pointcloud(
 }
 
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

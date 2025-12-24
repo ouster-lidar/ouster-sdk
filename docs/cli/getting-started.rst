@@ -26,7 +26,7 @@ commands. To see what this means, open a terminal and type:
     to your path:
 
     .. code::
-        
+
         export PATH=$PATH:/.local/bin
 
     We recommend using python virtual environments for all users!
@@ -46,7 +46,7 @@ You should see a few commands listed there, including ``viz`` and ``info``. To f
 them, try using ``--help``. For example, for help with the ``ouster-cli source <SAMPLE PCAP FILE>
 viz`` command:
 
-.. code:: 
+.. code::
 
     ouster-cli source <SAMPLE PCAP FILE> viz --help
 
@@ -57,7 +57,7 @@ If you have a live sensor, you can replace the <SAMPLE PCAP FILE> with the hostn
 
 To see a full list of flags and options for the ``viz`` command, run the following:
 
-.. code:: 
+.. code::
 
     ouster-cli source <SENSOR HOSTNAME> viz --help
 
@@ -80,11 +80,11 @@ auto-configuration, respectively.
     - CLI command ``ouster-cli source <SENSOR HOSTNAME> {info,config}`` are working properly
     - Viz ``ouster-cli source <PCAP FILE> viz`` from the ``tcpdump`` recorded pcap can be played and
       visualized
-    
+
     But ``ouster-cli source <SENSOR HOSTNAME> viz``, or ``ouster-cli source <SENSOR HOSTNAME>
     save`` still can't receive any packets and get the following error::
 
-        ouster.client.core.ClientTimeout: No packets received within 1.0s
+        ouster.sdk.sensor.ClientTimeout: No packets received within 1.0s
 
     Please check your `UFW Firewall`_ settings and try to allow the UDP traffic for ``7502``
     (or whatever the **UDP Port Lidar** is set on the sensor)::
@@ -110,7 +110,7 @@ commands also have subcommands that further extend or specify what
       * Sensors and files
 
         * ``viz`` - visualizes data in a 3D point cloud viewer.
-        * ``slice`` - use the slice command to extract a subset of lidar frames from a source by specifing a frame index 
+        * ``slice`` - use the slice command to extract a subset of lidar frames from a source by specifing a frame index
           interval or time duration.
         * ``clip`` - the clip command can be used to limit the range of values of scan fields.
         * ``filter`` - the filter command can be used to suppress or replace certain field measurements based on predicate.
@@ -120,6 +120,12 @@ commands also have subcommands that further extend or specify what
         * ``stats`` - calculates statistics from the source data.
         * ``metadata`` - displays the metadata (e.g. sensor information) associated with the source data.
         * ``save`` - saves the source data, optionally converting to a new format.
+        * ``save_raw`` - save raw packets from the sensor.
+        * ``save_trajectory`` - save a trajectory of the movement of selected sensor.
+        * ``normals`` - compute unit surface normals for each ``LidarScan``.
+        * ``localize`` - run localization based on the mapping output ply map.
+        * ``plumb`` - calculate the extrinsic matrix to align each sensor's Z-axis with the gravity vector using IMU data.
+        * ``live_zones`` - query or set the list of zones live on the sensor.
 
       * Pcap and OSF files only
 
@@ -128,6 +134,8 @@ commands also have subcommands that further extend or specify what
 
         * ``config`` - configures a sensor.
         * ``userdata`` - displays the userdata from a sensor.
+        * ``restart`` - soft-restart the sensor.
+        * ``firmware`` - retrieve or update the FW version on a sensor.
       * OSF files only
 
         * ``dump`` - prints metadata from an OSF file.
@@ -138,7 +146,10 @@ commands also have subcommands that further extend or specify what
       * ``benchmark`` - runs a performance benchmark for ouster-sdk.
       * ``benchmark-sensor`` - runs a performance benchmark for ouster-sdk using a sensor.
       * ``system-info`` - generates system diagnostic information as a JSON string, useful to Ouster support staff when providing customer support.
-
+      * ``network`` - manages and queries network settings on the sensor.
+      * ``diagnostics`` - download diagnostics dump from a sensor.
+      * ``emulate_zones`` - emulate zone monitoring off-sensor.
+      * ``stats`` - calculate and output various statistics about the scans at this point in the pipeline.
 
 You can now to use ``ouster-cli`` as you please, exploring available utilities with the handy
 ``---help``. If you'd prefer some more detailed examples, you can check out our :ref:`sample sessions`

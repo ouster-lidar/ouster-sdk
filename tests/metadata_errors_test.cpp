@@ -38,8 +38,8 @@ TEST_P(MetaErrorsFiles, MetadataParsingExceptions) {
 
     EXPECT_ANY_THROW({
         // parse json file
-        const ouster::sensor::sensor_info si =
-            ouster::sensor::metadata_from_json(data_dir + "/malformed/" +
-                                               param + ".json");
+        const ouster::sdk::core::SensorInfo si =
+            ouster::sdk::core::metadata_from_json(data_dir + "/malformed/" +
+                                                  param + ".json");
     });
 }

@@ -6,7 +6,14 @@
 #include <ouster/compat_ops.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <ios>
+#include <limits>
+#include <nonstd/optional.hpp>
+#include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -16,14 +23,15 @@
 // clang-format off
 #include <dirent.h>
 #include <netdb.h>
-#include <time.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <ctime>
 // clang-format on
 #endif
 
 namespace ouster {
+namespace sdk {
 namespace core {
 
 #ifdef _WIN32
@@ -42,11 +50,11 @@ nonstd::optional<bool> is_directory(const std::string& path) {
 }
 #else
 nonstd::optional<bool> is_directory(const std::string& path) {
-    struct stat s;
-    if (stat(path.c_str(), &s) == 0) {
-        if (s.st_mode & S_IFDIR) {
+    struct stat stat_buf;
+    if (stat(path.c_str(), &stat_buf) == 0) {
+        if ((stat_buf.st_mode & S_IFDIR) != 0u) {
             return true;
-        } else if (s.st_mode & S_IFREG) {
+        } else if ((stat_buf.st_mode & S_IFREG) != 0u) {
             return false;
         }
     }
@@ -64,7 +72,7 @@ bool is_host(const std::string& name) {
     hints.ai_socktype = SOCK_STREAM;  // TCP socket
 
     // Use getaddrinfo to resolve the address.
-    if (getaddrinfo(name.c_str(), NULL, &hints, &result) == 0) {
+    if (getaddrinfo(name.c_str(), nullptr, &hints, &result) == 0) {
         freeaddrinfo(result);
         return true;
     }
@@ -111,11 +119,15 @@ std::vector<std::string> files_in_directory(const std::string& directory) {
     // open directory
     DIR* dir;
     dir = opendir(directory.c_str());
-    if (dir == NULL) return files;
+    if (dir == nullptr) {
+        return files;
+    }
 
     // get file names
     struct dirent* ent;
-    while ((ent = readdir(dir)) != NULL) files.push_back(ent->d_name);
+    while ((ent = readdir(dir)) != nullptr) {
+        files.emplace_back(ent->d_name);
+    }
     closedir(dir);
 
     // delete current and parent directories
@@ -129,5 +141,23 @@ std::vector<std::string> files_in_directory(const std::string& directory) {
 }
 #endif  // _WIN32
 
+// TODO[tws] consider using tellg
+size_t get_file_size(const std::string& path) {
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    file.ignore(std::numeric_limits<std::streamsize>::max());
+    if (file.bad()) {
+        throw std::runtime_error("Error reading " + path);
+    }
+    return file.gcount();
+}
+
+std::vector<uint8_t> get_file_as_bytes(const std::string& path) {
+    std::vector<uint8_t> bytes(get_file_size(path));
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    file.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
+    return bytes;
+}
+
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

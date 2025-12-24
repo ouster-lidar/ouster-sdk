@@ -17,11 +17,12 @@
 #include "ouster/types.h"
 #include "util.h"
 
-using namespace ouster;
-using namespace ouster::sensor;
-using namespace ouster::sensor::impl;
+using namespace ouster::sdk::core;
+using namespace ouster::sdk::core::impl;
+using namespace ouster::sdk::pcap;
 
-using test_param = std::tuple<UDPProfileLidar, size_t, size_t, size_t>;
+using test_param =
+    std::tuple<UDPProfileLidar, HeaderType, uint32_t, uint32_t, uint32_t>;
 class ScanBatcherTest : public ::testing::TestWithParam<test_param> {};
 
 // clang-format off
@@ -34,20 +35,21 @@ INSTANTIATE_TEST_CASE_P(
             UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
             UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
             UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
-            UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL),
+            UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL
+            ),
+        ::testing::Values(
+            HeaderType::STANDARD,
+            HeaderType::FUSA),
         ::testing::Values(1024), // columns_per_frame
         ::testing::Values(128),  // pixels_per_column
         ::testing::Values(16))); // columns_per_packet
 // clang-format on
 
-std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
-                                      size_t columns_per_frame,
-                                      size_t pixels_per_column,
-                                      size_t columns_per_packet) {
-    packet_writer pw(profile, pixels_per_column, columns_per_packet);
+std::vector<Packet> random_frame(const DataFormat& format) {
+    PacketWriter pw{format};
 
-    auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
-                        columns_per_packet);
+    auto ls = LidarScan(format.columns_per_frame, format.pixels_per_column,
+                        format.udp_profile_lidar, format.columns_per_packet);
 
     ls.frame_id = 700;
     std::iota(ls.measurement_id().data(),
@@ -61,7 +63,7 @@ std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
     auto randomise = [&](auto ref_field, const std::string& i) {
         randomize_field(ref_field, pw.field_value_mask(i));
     };
-    ouster::impl::foreach_channel_field(ls, pw, randomise);
+    impl::foreach_channel_field(ls, pw, randomise);
 
     auto g = std::mt19937(0xdeadbeef);
     auto dinit_id = std::uniform_int_distribution<uint32_t>(0, 0xFFFFFF);
@@ -70,9 +72,9 @@ std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
     uint32_t init_id = dinit_id(g);      // 24 bits
     uint64_t serial_no = dserial_no(g);  // 40 bits
 
-    auto packets = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets), init_id,
-                                  serial_no);
+    auto packets = std::vector<Packet>{};
+    impl::scan_to_packets(ls, pw, std::back_inserter(packets), init_id,
+                          serial_no);
 
     return packets;
 }
@@ -80,20 +82,32 @@ std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
 TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
     auto param = GetParam();
     UDPProfileLidar profile = std::get<0>(param);
-    size_t columns_per_frame = std::get<1>(param);
-    size_t pixels_per_column = std::get<2>(param);
-    size_t columns_per_packet = std::get<3>(param);
+    HeaderType profile_type = std::get<1>(param);
+    uint32_t columns_per_frame = std::get<2>(param);
+    uint32_t pixels_per_column = std::get<3>(param);
+    uint32_t columns_per_packet = std::get<4>(param);
 
-    auto packets = random_frame(profile, columns_per_frame, pixels_per_column,
-                                columns_per_packet);
+    const DataFormat df{pixels_per_column,
+                        columns_per_packet,
+                        columns_per_frame,
+                        0,
+                        0,
+                        {},
+                        {0, columns_per_frame - 1},
+                        profile,
+                        PROFILE_IMU_LEGACY,
+                        profile_type,
+                        10};
+    SensorInfo info;
+    info.format = df;
+    const PacketFormat pf{info};
+    PacketWriter pw{pf};
 
-    packet_format pf(profile, pixels_per_column, columns_per_packet);
-    packet_writer pw(profile, pixels_per_column, columns_per_packet);
+    auto packets = random_frame(df);
 
-    auto reference = LidarScan(columns_per_frame, pixels_per_column, profile,
-                               columns_per_packet);
+    auto reference = LidarScan(info);
     {
-        ScanBatcher batcher(columns_per_frame, pf);
+        ScanBatcher batcher(info);
         for (size_t i = 0; i < packets.size(); i++) {
             const auto& p = packets[i];
             if (i == 63) {
@@ -113,7 +127,7 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
     // produce a reordered packet from "previous frame" with data from one of
     // the dropped packets, therefore we will know if it gets parsed
     auto reordered_packet = std::make_unique<LidarPacket>();
-    *reordered_packet = packets.back();
+    *reordered_packet = packets.back().as<LidarPacket>();
     pw.set_frame_id(reordered_packet->buf.data(), frame_id - 1);
 
     std::set<uint16_t> invalid_m_ids;
@@ -172,19 +186,18 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
             valid_m_ids.insert(m_id);
     }
 
-    auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
-                        columns_per_packet);
+    auto ls = LidarScan(info);
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
         auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
-        ouster::impl::foreach_channel_field(ls, pf, fill);
+        impl::foreach_channel_field(ls, pf, fill);
         ls.packet_timestamp() = 2000;
         ls.timestamp() = 100;
         ls.status() = 0x0f;
         ls.measurement_id() = 10000;
     }
 
-    ScanBatcher batcher(columns_per_frame, pf);
+    ScanBatcher batcher(info);
     for (const auto& p : packets) {
         EXPECT_FALSE(batcher(p, ls));
     }
@@ -246,7 +259,7 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
                   dropped_packets.size());
     };
 
-    ouster::impl::foreach_channel_field(ls, pf, test_skipped_fields);
+    impl::foreach_channel_field(ls, pf, test_skipped_fields);
     test_headers(ls);
 
     // now repeat for RAW_HEADERS and CUSTOM fields
@@ -260,16 +273,16 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
         auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
-        ouster::impl::foreach_channel_field(rh_ls, pf, fill);
-        ouster::impl::visit_field(rh_ls, "CUSTOM0", fill, "");
-        ouster::impl::visit_field(rh_ls, "CUSTOM9", fill, "");
+        impl::foreach_channel_field(rh_ls, pf, fill);
+        impl::visit_field(rh_ls, "CUSTOM0", fill, "");
+        impl::visit_field(rh_ls, "CUSTOM9", fill, "");
         rh_ls.packet_timestamp() = 2000;
         rh_ls.timestamp() = 100;
         rh_ls.status() = 0x0f;
         rh_ls.measurement_id() = 10000;
     }
 
-    ScanBatcher rh_batcher(columns_per_frame, pf);
+    ScanBatcher rh_batcher(info);
     for (const auto& p : packets) {
         EXPECT_FALSE(rh_batcher(p, rh_ls));
     }
@@ -282,12 +295,12 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
         EXPECT_TRUE((ref_field == 1).all());
     };
 
-    ouster::impl::visit_field(rh_ls, "CUSTOM0", test_custom_fields);
-    ouster::impl::visit_field(rh_ls, "CUSTOM9", test_custom_fields);
+    impl::visit_field(rh_ls, "CUSTOM0", test_custom_fields);
+    impl::visit_field(rh_ls, "CUSTOM9", test_custom_fields);
 
-    ouster::impl::foreach_channel_field(rh_ls, pf, test_skipped_fields);
-    ouster::impl::visit_field(rh_ls, ChanField::RAW_HEADERS,
-                              test_skipped_fields, ChanField::RAW_HEADERS);
+    impl::foreach_channel_field(rh_ls, pf, test_skipped_fields);
+    impl::visit_field(rh_ls, ChanField::RAW_HEADERS, test_skipped_fields,
+                      ChanField::RAW_HEADERS);
     test_headers(rh_ls);
 }
 
@@ -297,20 +310,32 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
 TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
     auto param = GetParam();
     UDPProfileLidar profile = std::get<0>(param);
-    size_t columns_per_frame = std::get<1>(param);
-    size_t pixels_per_column = std::get<2>(param);
-    size_t columns_per_packet = std::get<3>(param);
+    HeaderType profile_type = std::get<1>(param);
+    uint32_t columns_per_frame = std::get<2>(param);
+    uint32_t pixels_per_column = std::get<3>(param);
+    uint32_t columns_per_packet = std::get<4>(param);
 
-    auto packets = random_frame(profile, columns_per_frame, pixels_per_column,
-                                columns_per_packet);
+    DataFormat df{pixels_per_column,
+                  columns_per_packet,
+                  columns_per_frame,
+                  0,
+                  0,
+                  {},
+                  {0, columns_per_frame - 1},
+                  profile,
+                  PROFILE_IMU_LEGACY,
+                  profile_type,
+                  10};
+    SensorInfo info;
+    info.format = df;
+    PacketFormat pf{info};
+    PacketWriter pw{pf};
 
-    packet_format pf(profile, pixels_per_column, columns_per_packet);
-    packet_writer pw(profile, pixels_per_column, columns_per_packet);
+    auto packets = random_frame(df);
 
-    auto reference = LidarScan(columns_per_frame, pixels_per_column, profile,
-                               columns_per_packet);
+    auto reference = LidarScan(info);
     {
-        ScanBatcher batcher(columns_per_frame, pf);
+        ScanBatcher batcher(info);
         for (size_t i = 0; i < packets.size(); i++) {
             const auto& p = packets[i];
             if (i == 63) {
@@ -347,19 +372,18 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
         if (!dropped_m_ids.count(m_id)) valid_m_ids.insert(m_id);
     }
 
-    auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
-                        columns_per_packet);
+    auto ls = LidarScan(info);
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
         auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
-        ouster::impl::foreach_channel_field(ls, pf, fill);
+        impl::foreach_channel_field(ls, pf, fill);
         ls.packet_timestamp() = 2000;
         ls.timestamp() = 100;
         ls.status() = 0x0f;
         ls.measurement_id() = 10000;
     }
 
-    ScanBatcher batcher(columns_per_frame, pf);
+    ScanBatcher batcher(info);
     for (const auto& p : packets) {
         EXPECT_FALSE(batcher(p, ls));
     }
@@ -397,7 +421,7 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
                   dropped_packets.size());
     };
 
-    ouster::impl::foreach_channel_field(ls, pf, test_skipped_fields);
+    impl::foreach_channel_field(ls, pf, test_skipped_fields);
     test_headers(ls);
 
     // now repeat for CUSTOM fields
@@ -410,16 +434,16 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
         auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
-        ouster::impl::foreach_channel_field(custom_ls, pf, fill);
-        ouster::impl::visit_field(custom_ls, "CUSTOM0", fill, "");
-        ouster::impl::visit_field(custom_ls, "CUSTOM9", fill, "");
+        impl::foreach_channel_field(custom_ls, pf, fill);
+        impl::visit_field(custom_ls, "CUSTOM0", fill, "");
+        impl::visit_field(custom_ls, "CUSTOM9", fill, "");
         custom_ls.packet_timestamp() = 2000;
         custom_ls.timestamp() = 100;
         custom_ls.status() = 0x0f;
         custom_ls.measurement_id() = 10000;
     }
 
-    ScanBatcher custom_batcher(columns_per_frame, pf);
+    ScanBatcher custom_batcher(info);
     for (const auto& p : packets) {
         EXPECT_FALSE(custom_batcher(p, custom_ls));
     }
@@ -431,29 +455,35 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
         EXPECT_TRUE((ref_field == 1).all());
     };
 
-    ouster::impl::visit_field(custom_ls, "CUSTOM0", test_custom_fields);
-    ouster::impl::visit_field(custom_ls, "CUSTOM9", test_custom_fields);
+    impl::visit_field(custom_ls, "CUSTOM0", test_custom_fields);
+    impl::visit_field(custom_ls, "CUSTOM9", test_custom_fields);
 
-    ouster::impl::foreach_channel_field(custom_ls, pf, test_skipped_fields);
+    impl::foreach_channel_field(custom_ls, pf, test_skipped_fields);
     test_headers(custom_ls);
 }
 
 TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
     auto param = GetParam();
     UDPProfileLidar profile = std::get<0>(param);
-    size_t columns_per_frame = std::get<1>(param);
-    size_t pixels_per_column = std::get<2>(param);
-    size_t columns_per_packet = std::get<3>(param);
+    HeaderType profile_type = std::get<1>(param);
+    uint32_t columns_per_frame = std::get<2>(param);
+    uint32_t pixels_per_column = std::get<3>(param);
+    uint32_t columns_per_packet = std::get<4>(param);
 
     auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
                         columns_per_packet);
 
-    packet_format pf(profile, pixels_per_column, columns_per_packet);
-    packet_writer pw(profile, pixels_per_column, columns_per_packet);
+    DataFormat df{
+        pixels_per_column, columns_per_packet, columns_per_frame, 0, 0, {}, {},
+        profile,           PROFILE_IMU_LEGACY, profile_type,      10};
+    SensorInfo info;
+    info.format = df;
+    PacketFormat pf{df};
+    PacketWriter pw{pf};
 
     // pre-fill lidar scan so we know which fields/headers are changed
     auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
-    ouster::impl::foreach_channel_field(ls, pf, fill);
+    impl::foreach_channel_field(ls, pf, fill);
     ls.packet_timestamp() = 2000;
     ls.timestamp() = 100;
     ls.status() = 0x0f;
@@ -473,7 +503,7 @@ TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
         pw.set_col_timestamp(col_buf, ts++);
     }
 
-    ScanBatcher batcher(columns_per_frame, pf);
+    ScanBatcher batcher(info);
     EXPECT_FALSE(batcher(*packet, ls));
 
     EXPECT_EQ(ls.frame_id, 0);
@@ -484,7 +514,7 @@ TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
     auto test_fields = [](auto ref_field, const std::string&) {
         EXPECT_TRUE((ref_field == 1).all());
     };
-    ouster::impl::foreach_channel_field(ls, pf, test_fields);
+    impl::foreach_channel_field(ls, pf, test_fields);
 }
 
 using HashMap = std::map<std::string, size_t>;
@@ -548,7 +578,7 @@ INSTANTIATE_TEST_CASE_P(
 // https://wjngkoh.wordpress.com/2015/03/04/c-hash-function-for-eigen-matrix-and-vector/
 struct matrix_hash {
     template <typename T>
-    void operator()(Eigen::Ref<ouster::img_t<T>> matrix, const std::string& f,
+    void operator()(Eigen::Ref<img_t<T>> matrix, const std::string& f,
                     HashMap& map) const {
         size_t seed = 0;
         for (int i = 0; i < matrix.size(); ++i) {
@@ -559,8 +589,6 @@ struct matrix_hash {
         map[f] = seed;
     }
 };
-
-using namespace ouster::sensor_utils;
 
 TEST_P(ScanBatcherSnapshotTest, snapshot_test) {
 #ifdef _WIN32
@@ -573,15 +601,14 @@ TEST_P(ScanBatcherSnapshotTest, snapshot_test) {
     const auto test_params = GetParam();
 
     auto info = metadata_from_json(data_dir + "/" + std::get<1>(test_params));
-    auto pf = packet_format(info);
+    auto pf = PacketFormat(info);
     PcapReader pcap(data_dir + "/" + std::get<0>(test_params));
 
     const HashMap snapshot_hashes = std::get<2>(test_params);
 
-    auto ls = LidarScan(info.format.columns_per_frame, pf.pixels_per_column,
-                        pf.udp_profile_lidar, pf.columns_per_packet);
+    auto ls = LidarScan(info);
     uint64_t packet_ts = 1234;  // arbitrary, irrelevant for test
-    ScanBatcher batcher(ls.w, pf);
+    ScanBatcher batcher(info);
     int packet_index = 0;
     while (pcap.next_packet())
         if (pcap.current_info().dst_port == 7502) {
@@ -598,7 +625,7 @@ TEST_P(ScanBatcherSnapshotTest, snapshot_test) {
         }
 
     HashMap hashes;
-    ouster::impl::foreach_channel_field(ls, pf, matrix_hash{}, hashes);
+    impl::foreach_channel_field(ls, pf, matrix_hash{}, hashes);
 
     EXPECT_EQ(hashes, snapshot_hashes);
 }
@@ -618,7 +645,8 @@ static const Fields single_field_info{
     {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
     {ChanField::REFLECTIVITY, {UINT8, 3, 0xff00, 8}},
     {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
-    {ChanField::NEAR_IR, {UINT16, 8, 0, 0}}};
+    {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
+    {ChanField::WINDOW, {UINT8, 11, 0, 0}}};
 
 static const Fields fusa_info{
     {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},  // uint16 => uint32
@@ -626,17 +654,20 @@ static const Fields fusa_info{
     {ChanField::NEAR_IR, {UINT16, 3, 0xff, -4}},
     {ChanField::RANGE2, {UINT32, 4, 0x7fff, -3}},  // uint16 => uint32
     {ChanField::REFLECTIVITY2, {UINT8, 6, 0xff, 0}},
+    {ChanField::WINDOW, {UINT8, 7, 0xff, 0}},
     {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
     {ChanField::FLAGS2, {UINT8, 5, 0b10000000, 7}},
 };
 
 int add_profiles() {
-    add_custom_profile(10 + UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
+    add_custom_profile(10 + static_cast<int>(UDPProfileLidar::RNG15_RFL8_NIR8),
                        "PROFILE_LOWBAND_ALT", lb_field_info, 4);
-    add_custom_profile(10 + UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
-                       "PROFILE_SINGLE_ALT", single_field_info, 12);
-    add_custom_profile(10 + UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
-                       "PROFILE_FUSA_ALT", fusa_info, 8);
+    add_custom_profile(
+        10 + static_cast<int>(UDPProfileLidar::RNG19_RFL8_SIG16_NIR16),
+        "PROFILE_SINGLE_ALT", single_field_info, 12);
+    add_custom_profile(
+        10 + static_cast<int>(UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL),
+        "PROFILE_FUSA_ALT", fusa_info, 8);
     return 1;
 }
 
@@ -655,21 +686,22 @@ TEST_P(ScanBatcherSnapshotTest, extended_profile_comp_test) {
     UDPProfileLidar prof = info.format.udp_profile_lidar;
 
     // skip legacy because some parsing specifics are very different
-    if (prof == UDPProfileLidar::PROFILE_LIDAR_LEGACY) GTEST_SKIP();
+    if (prof == UDPProfileLidar::LEGACY) GTEST_SKIP();
     // skip dual returns because it doesn't have type inconsistencies
-    if (prof == UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL)
-        GTEST_SKIP();
+    if (prof == UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL) GTEST_SKIP();
 
     auto get_hashes = [&](UDPProfileLidar profile) -> HashMap {
         HashMap hashes;
 
-        packet_format pf(profile, info.format.pixels_per_column,
-                         info.format.columns_per_packet);
+        DataFormat format = info.format;
+        format.udp_profile_lidar = profile;
+
+        PacketFormat pf(format);
 
         auto ls = LidarScan(info.format.columns_per_frame, pf.pixels_per_column,
                             pf.udp_profile_lidar, pf.columns_per_packet);
         uint64_t packet_ts = 1234;  // arbitrary, irrelevant for test
-        ScanBatcher batcher(ls.w, pf);
+        ScanBatcher batcher(info);
 
         int packet_index = 0;
         while (pcap.next_packet()) {
@@ -687,11 +719,12 @@ TEST_P(ScanBatcherSnapshotTest, extended_profile_comp_test) {
             }
         }
         pcap.seek(0);
-        ouster::impl::foreach_channel_field(ls, pf, matrix_hash{}, hashes);
+        impl::foreach_channel_field(ls, pf, matrix_hash{}, hashes);
         return hashes;
     };
 
-    UDPProfileLidar p_alt = static_cast<UDPProfileLidar>(10 + prof);
+    UDPProfileLidar p_alt =
+        static_cast<UDPProfileLidar>(10 + static_cast<int>(prof));
 
     HashMap hashes_orig = get_hashes(prof);
     HashMap hashes_alt = get_hashes(p_alt);
@@ -708,7 +741,7 @@ TEST(ScanBatcherLegacyTest, legacy_col_status) {
     auto info = metadata_from_json(data_dir + "/" + meta_file);
     PcapReader pcap(data_dir + "/" + pcap_file);
 
-    packet_format pf(info);
+    PacketFormat pf(info);
 
     while (pcap.next_packet()) {
         if (pcap.current_info().dst_port == 7502) {
@@ -722,29 +755,28 @@ TEST(ScanBatcherLegacyTest, legacy_col_status) {
 }
 
 TEST(ScanBatcherTest, cached_packet_test) {
-    data_format df{128,
-                   16,
-                   1024,
-                   {},
-                   {0, 1023},
-                   PROFILE_RNG15_RFL8_NIR8,
-                   PROFILE_IMU_LEGACY,
-                   10};
-    sensor_info meta{};
+    DataFormat df{128,
+                  16,
+                  1024,
+                  0,
+                  0,
+                  {},
+                  {0, 1023},
+                  UDPProfileLidar::RNG15_RFL8_NIR8,
+                  UDPProfileIMU::LEGACY,
+                  HeaderType::STANDARD,
+                  10};
+    SensorInfo meta{};
     meta.format = df;
-    packet_writer pw{meta};
+    PacketWriter pw{meta};
 
     uint16_t frame_id = 1337;
 
-    auto packets_first =
-        random_frame(df.udp_profile_lidar, df.columns_per_frame,
-                     df.pixels_per_column, df.columns_per_packet);
+    auto packets_first = random_frame(df);
     // drop one last packet so that the scan does not finalize
     packets_first.pop_back();
 
-    auto packets_second =
-        random_frame(df.udp_profile_lidar, df.columns_per_frame,
-                     df.pixels_per_column, df.columns_per_packet);
+    auto packets_second = random_frame(df);
 
     for (auto& p : packets_first) {
         pw.set_frame_id(p.buf.data(), frame_id);
@@ -756,7 +788,7 @@ TEST(ScanBatcherTest, cached_packet_test) {
     auto ref_second = LidarScan(df.columns_per_frame, df.pixels_per_column,
                                 df.udp_profile_lidar, df.columns_per_packet);
     {  // parse ref_second only for final reference
-        ScanBatcher batcher{df.columns_per_frame, pw};
+        ScanBatcher batcher{meta};
         for (const auto& p : packets_second) {
             batcher(p, ref_second);
         }
@@ -764,7 +796,7 @@ TEST(ScanBatcherTest, cached_packet_test) {
 
     auto ls = LidarScan(df.columns_per_frame, df.pixels_per_column,
                         df.udp_profile_lidar, df.columns_per_packet);
-    ScanBatcher batcher{df.columns_per_frame, pw};
+    ScanBatcher batcher{meta};
     for (const auto& p : packets_first) {
         ASSERT_FALSE(batcher(p, ls));
     }
@@ -783,4 +815,86 @@ TEST(ScanBatcherTest, cached_packet_test) {
 
     // check scan gets fully batched
     EXPECT_EQ(ls, ref_second);
+}
+
+TEST(ScanBatcherImuParsingTest, imu_parsing_test) {
+    auto df = DataFormat{128,
+                         16,
+                         1024,
+                         64,
+                         1,
+                         {},
+                         {0, 1023},
+                         UDPProfileLidar::OFF,
+                         UDPProfileIMU::ACCEL32_GYRO32_NMEA,
+                         HeaderType::STANDARD,
+                         10};
+    SensorInfo info;
+    info.format = df;
+    auto pw = PacketWriter(df);
+    auto batcher = ScanBatcher(info);
+
+    // TODO: update from imu_packet_size once we have it
+    ImuPacket packet{65535};
+    uint8_t* data = packet.buf.data();
+
+    uint64_t timestamp = 133701337;
+    std::string sentence = "Freddy Mercury";
+    int64_t frame_id = 1337;
+    uint8_t alert_flags_val = 0x7F;
+
+    pw.set_packet_type(data, 0x2);
+    pw.set_imu_nmea_ts(data, timestamp);
+    pw.set_imu_nmea_sentence(data, sentence);
+    pw.set_frame_id(data, frame_id);
+    pw.set_alert_flags(data, alert_flags_val);
+    for (size_t i = 0; i < df.imu_measurements_per_packet; ++i) {
+        uint8_t* measurement = pw.imu_nth_measurement(i, data);
+        pw.set_col_measurement_id(measurement, 16 * i);
+        pw.set_col_timestamp(measurement, 1000 + i);
+        pw.set_col_status(measurement, 0x1);
+        pw.set_imu_la_x(measurement, 100 + i);
+        pw.set_imu_la_y(measurement, 200 + i);
+        pw.set_imu_la_z(measurement, 300 + i);
+        pw.set_imu_av_x(measurement, 400 + i);
+        pw.set_imu_av_y(measurement, 500 + i);
+        pw.set_imu_av_z(measurement, 600 + i);
+    }
+
+    LidarScan ls(df);
+    ASSERT_EQ(ls.frame_id, -1);
+
+    // Check parsing correctness
+
+    batcher(packet, ls);
+
+    ArrayView2<float> acc = ls.field(ChanField::IMU_ACC);
+    ArrayView2<float> gyro = ls.field(ChanField::IMU_GYRO);
+    ArrayView1<uint64_t> imu_ts = ls.field(ChanField::IMU_TIMESTAMP);
+    ArrayView1<uint16_t> imu_m_id = ls.field(ChanField::IMU_MEASUREMENT_ID);
+    ArrayView1<uint16_t> imu_status = ls.field(ChanField::IMU_STATUS);
+
+    for (size_t i = 0; i < df.imu_measurements_per_packet; ++i) {
+        EXPECT_EQ(imu_ts(i), 1000 + i);
+        EXPECT_EQ(imu_m_id(i), 16 * i);
+        EXPECT_EQ(imu_status(i), 0x1);
+        EXPECT_EQ(acc(i, 0), 100 + i);
+        EXPECT_EQ(acc(i, 1), 200 + i);
+        EXPECT_EQ(acc(i, 2), 300 + i);
+        EXPECT_EQ(gyro(i, 0), 400 + i);
+        EXPECT_EQ(gyro(i, 1), 500 + i);
+        EXPECT_EQ(gyro(i, 2), 600 + i);
+    }
+
+    ArrayView1<uint64_t> nmea_ts = ls.field(ChanField::POSITION_TIMESTAMP);
+    ArrayView2<char> nmea_sentence = ls.field(ChanField::POSITION_STRING);
+    ArrayView2<double> lat_long = ls.field(ChanField::POSITION_LAT_LONG);
+    ArrayView1<uint8_t> alert_flags = ls.field(ChanField::IMU_ALERT_FLAGS);
+
+    sentence.resize(NMEA_SENTENCE_LENGTH, '\0');
+    EXPECT_EQ(nmea_ts(0), timestamp);
+    EXPECT_EQ(alert_flags(0), alert_flags_val);
+    EXPECT_EQ(std::strcmp(nmea_sentence.subview(0).data(), sentence.data()), 0);
+    EXPECT_TRUE(std::isnan(lat_long(0, 0)));
+    EXPECT_TRUE(std::isnan(lat_long(0, 1)));
 }

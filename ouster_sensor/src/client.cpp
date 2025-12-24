@@ -23,6 +23,7 @@
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -39,25 +40,29 @@
 
 using namespace std::chrono_literals;
 namespace chrono = std::chrono;
-using ouster::sensor::impl::Logger;
-using ouster::sensor::util::SensorHttp;
+using ouster::sdk::core::logger;
+using ouster::sdk::core::impl::Logger;
+using ouster::sdk::sensor::SensorHttp;
+using namespace ouster::sdk::core;
 
 namespace ouster {
+namespace sdk {
+namespace core {
+// defined in types.cpp
+// NOLINTNEXTLINE (misc-use-internal-linkage)
+jsoncons::json config_to_json(const ouster::sdk::core::SensorConfig& config);
+}  // namespace core
 namespace sensor {
 
-struct client {
+struct Client {
     SOCKET lidar_fd{};
     SOCKET imu_fd{};
     std::string hostname;
-    ~client() {
+    ~Client() {
         impl::socket_close(lidar_fd);
         impl::socket_close(imu_fd);
     }
 };
-
-// defined in types.cpp
-// NOLINTNEXTLINE (misc-use-internal-linkage)
-jsoncons::json config_to_json(const sensor_config& config);
 
 // default udp receive buffer size on windows is very low -- use 1MB
 const int RCVBUF_SIZE = 1024 * 1024;
@@ -85,8 +90,9 @@ int32_t get_sock_port(SOCKET sock_fd) {
 }
 
 // NOLINTNEXTLINE (misc-use-internal-linkage)
-SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
-                       const std::string& mtp_dest_host = "") {
+SOCKET mtp_data_socket(int port, const std::set<std::string>& udp_dest_hosts,
+                       const std::string& mtp_dest_host = "",
+                       bool reuse_ports = true) {
     // try to bind a dual-stack ipv6 socket, but fall back to ipv4 only if that
     // fails (when ipv6 is disabled via kernel parameters)
     for (auto preferred_af : {AF_INET6, AF_INET}) {
@@ -109,7 +115,7 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
             continue;
         }
 
-        if (impl::socket_set_reuse(sock_fd)) {
+        if (reuse_ports && impl::socket_set_reuse(sock_fd) != 0) {
             logger().warn("udp socket_set_reuse(): {}",
                           impl::socket_get_error());
         }
@@ -122,7 +128,7 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
             address.sin6_port = htons(port);
             address.sin6_scope_id = 0;
             if (::bind(sock_fd, reinterpret_cast<struct sockaddr*>(&address),
-                       sizeof(address))) {
+                       sizeof(address)) != 0) {
                 logger().warn("udp bind(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
@@ -135,7 +141,7 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
                 INADDR_ANY;                  // NOLINT (misc-include-cleaner)
             address.sin_port = htons(port);  // NOLINT (misc-include-cleaner)
             if (::bind(sock_fd, reinterpret_cast<struct sockaddr*>(&address),
-                       sizeof(address))) {
+                       sizeof(address)) != 0) {
                 logger().warn("udp bind(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
@@ -164,7 +170,7 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
         }
 
         // join to multicast group succeeded; set some options and return
-        if (impl::socket_set_non_blocking(sock_fd)) {
+        if (impl::socket_set_non_blocking(sock_fd) != 0) {
             logger().warn("udp fcntl(): {}", impl::socket_get_error());
             impl::socket_close(sock_fd);
             continue;
@@ -178,6 +184,22 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
                           impl::socket_get_error());
             impl::socket_close(sock_fd);
             continue;
+        }
+
+        // Validate that we successfully set the rcvbuf size
+        int actual_rcvbuf_value = 0;
+        socklen_t actual_rcvbuf_size = sizeof(actual_rcvbuf_value);
+        if (getsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF,
+                       reinterpret_cast<char*>(&actual_rcvbuf_value),
+                       &actual_rcvbuf_size) != 0) {
+            logger().warn("udp getsockopt(SO_RCVBUF): {}",
+                          impl::socket_get_error());
+        } else if (actual_rcvbuf_value < RCVBUF_SIZE) {
+            logger().warn(
+                "Failed to set desired SO_RCVBUF size to {}. Actual was {}. "
+                "You may experience packet drop unless you allow a larger "
+                "receive buffer.",
+                RCVBUF_SIZE, actual_rcvbuf_value);
         }
 
         return sock_fd;
@@ -217,7 +239,7 @@ jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
         std::this_thread::sleep_for(1s);
     }
 
-    std::string user_data = "";
+    std::string user_data;
     try {
         user_data = sensor_http.get_user_data(timeout_sec);
     } catch (const std::runtime_error& e) {
@@ -231,7 +253,8 @@ jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
         auto metadata =
             jsoncons::json::parse(sensor_http.metadata(timeout_sec));
 
-        metadata["ouster-sdk"]["client_version"] = client_version();
+        metadata["ouster-sdk"]["client_version"] =
+            ouster::sdk::core::client_version();
         metadata["ouster-sdk"]["output_source"] = "collect_metadata";
         metadata["user_data"] = user_data;
 
@@ -264,8 +287,8 @@ jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
 }
 
 namespace {
-bool get_config(SensorHttp& sensor_http, sensor_config& config,
-                bool active = true,
+bool get_config(SensorHttp& sensor_http,
+                ouster::sdk::core::SensorConfig& config, bool active = true,
                 int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) {
     auto res = sensor_http.get_config_params(active, timeout_sec);
     ValidatorIssues issues;
@@ -276,14 +299,14 @@ bool get_config(SensorHttp& sensor_http, sensor_config& config,
 }
 }  // anonymous namespace
 
-bool get_config(const std::string& hostname, sensor_config& config, bool active,
+bool get_config(const std::string& hostname, SensorConfig& config, bool active,
                 int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     return get_config(*sensor_http, config, active, timeout_sec);
 }
 
 // NOLINTNEXTLINE (misc-use-internal-linkage)
-bool set_config(SensorHttp& sensor_http, const sensor_config& config,
+bool set_config(SensorHttp& sensor_http, const SensorConfig& config,
                 uint8_t config_flags, int timeout_sec) {
     // reset staged config to avoid spurious errors
     jsoncons::json config_params =
@@ -291,7 +314,7 @@ bool set_config(SensorHttp& sensor_http, const sensor_config& config,
     jsoncons::json config_params_copy = config_params;
 
     // set all desired config parameters
-    jsoncons::json config_json = config_to_json(config);
+    jsoncons::json config_json = core::config_to_json(config);
     for (const auto& it : config_json.object_range()) {
         config_params[it.key()] = it.value();
     }
@@ -341,6 +364,11 @@ bool set_config(SensorHttp& sensor_http, const sensor_config& config,
         } else {  // don't need to worry about udp_ip
             config_params["udp_dest"] = staged["udp_dest"].as<std::string>();
         }
+
+        // if ZM is enabled/present set the dest there too
+        if (staged.contains("udp_dest_zm")) {
+            config_params["udp_dest_zm"] = staged["udp_dest"].as<std::string>();
+        }
     }
 
     // if configuration didn't change then skip applying the params
@@ -365,13 +393,13 @@ bool set_config(SensorHttp& sensor_http, const sensor_config& config,
     return true;
 }
 
-bool set_config(const std::string& hostname, const sensor_config& config,
+bool set_config(const std::string& hostname, const SensorConfig& config,
                 uint8_t config_flags, int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     return set_config(*sensor_http, config, config_flags, timeout_sec);
 }
 
-std::string get_metadata(client& cli, int timeout_sec) {
+std::string get_metadata(Client& cli, int timeout_sec) {
     // Note, this function calls functions that throw std::runtime_error
     // on timeout.
     auto sensor_http = SensorHttp::create(cli.hostname, timeout_sec);
@@ -397,13 +425,13 @@ bool init_logger(const std::string& log_level, const std::string& log_file_path,
     }
 }
 
-std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
+std::shared_ptr<Client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
     logger().info(
         "initializing sensor client: {} expecting lidar port/imu port: {}/{}",
         hostname, lidar_port, imu_port);
 
-    auto cli = std::make_shared<client>();
+    auto cli = std::make_shared<Client>();
     cli->hostname = hostname;
 
     cli->lidar_fd = udp_data_socket(lidar_port);
@@ -417,13 +445,16 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
     return cli;
 }
 
-std::shared_ptr<client> init_client(const std::string& hostname,
+std::shared_ptr<Client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    lidar_mode ld_mode, timestamp_mode ts_mode,
+                                    LidarMode ld_mode, TimestampMode ts_mode,
                                     int lidar_port, int imu_port,
                                     int timeout_sec, bool persist_config,
                                     OperatingMode operating_mode) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     auto cli = init_client(hostname, lidar_port, imu_port);
+#pragma GCC diagnostic pop
 
     if (!cli) {
         return {};
@@ -439,23 +470,23 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
     try {
         auto sensor_http = SensorHttp::create(hostname, timeout_sec);
-        sensor::sensor_config config;
+        SensorConfig config;
         uint8_t config_flags = 0;
         if (udp_dest_host.empty()) {
             config_flags |= CONFIG_UDP_DEST_AUTO;
         } else {
             config.udp_dest = udp_dest_host;
         }
-        if (ld_mode) {
+        if (ld_mode != LidarMode::UNSPECIFIED) {
             config.lidar_mode = ld_mode;
         }
-        if (ts_mode) {
+        if (ts_mode != TimestampMode::UNSPECIFIED) {
             config.timestamp_mode = ts_mode;
         }
-        if (lidar_port) {
+        if (lidar_port != 0) {
             config.udp_port_lidar = lidar_port;
         }
-        if (imu_port) {
+        if (imu_port != 0) {
             config.udp_port_imu = imu_port;
         }
         if (persist_config) {
@@ -480,8 +511,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     return cli;
 }
 
-std::shared_ptr<client> mtp_init_client(const std::string& hostname,
-                                        const sensor_config& config,
+std::shared_ptr<Client> mtp_init_client(const std::string& hostname,
+                                        const SensorConfig& config,
                                         const std::string& mtp_dest_host,
                                         bool main, int timeout_sec,
                                         bool persist_config) {
@@ -494,7 +525,7 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
         "group: {} (0 means a random port will be chosen)",
         hostname, lidar_port, imu_port, udp_dest);
 
-    auto cli = std::make_shared<client>();
+    auto cli = std::make_shared<Client>();
     cli->hostname = hostname;
 
     cli->lidar_fd = mtp_data_socket(lidar_port, {udp_dest}, mtp_dest_host);
@@ -509,20 +540,20 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
         auto lidar_port = get_sock_port(cli->lidar_fd);
         auto imu_port = get_sock_port(cli->imu_fd);
 
-        sensor_config config_copy{config};
+        SensorConfig config_copy{config};
         try {
             auto sensor_http = SensorHttp::create(hostname, timeout_sec);
             uint8_t config_flags = 0;
-            if (lidar_port) {
+            if (lidar_port != 0) {
                 config_copy.udp_port_lidar = lidar_port;
             }
-            if (imu_port) {
+            if (imu_port != 0) {
                 config_copy.udp_port_imu = imu_port;
             }
             if (persist_config) {
                 config_flags |= CONFIG_PERSIST;
             }
-            config_copy.operating_mode = OPERATING_NORMAL;
+            config_copy.operating_mode = OperatingMode::NORMAL;
             set_config(*sensor_http, config_copy, config_flags, timeout_sec);
 
             // will block until no longer INITIALIZING
@@ -544,29 +575,29 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
 
 namespace impl {
 
-struct client_poller {
+struct ClientPoller {
     fd_set rfds;  // NOLINT (misc-include-cleaner)
     SOCKET max_fd;
-    client_state err;
+    ClientState err;
 };
 
-std::shared_ptr<client_poller> make_poller() {
-    return std::make_unique<client_poller>();
+std::shared_ptr<ClientPoller> make_poller() {
+    return std::make_unique<ClientPoller>();
 }
 
-void reset_poll(client_poller& poller) {
+void reset_poll(ClientPoller& poller) {
     FD_ZERO(&poller.rfds);  // NOLINT (misc-include-cleaner)
     poller.max_fd = 0;
-    poller.err = client_state::TIMEOUT;
+    poller.err = ClientState::TIMEOUT;
 }
 
-void set_poll(client_poller& poller, const client& client) {
+void set_poll(ClientPoller& poller, const Client& client) {
     FD_SET(client.lidar_fd, &poller.rfds);  // NOLINT (misc-include-cleaner)
     FD_SET(client.imu_fd, &poller.rfds);    // NOLINT (misc-include-cleaner)
     poller.max_fd = std::max({poller.max_fd, client.lidar_fd, client.imu_fd});
 }
 
-int poll(client_poller& poller, int timeout_sec) {
+int poll(ClientPoller& poller, int timeout_sec) {
     // NOLINTNEXTLINE (misc-include-cleaner)
     timeval timeout_val = {timeout_sec, 0};
 
@@ -576,10 +607,10 @@ int poll(client_poller& poller, int timeout_sec) {
     // NOLINTEND (misc-include-cleaner)
     if (!impl::socket_valid(retval)) {
         if (impl::socket_exit()) {
-            poller.err = client_state::EXIT;
+            poller.err = ClientState::EXIT;
         } else {
             logger().error("select: {}", impl::socket_get_error());
-            poller.err = client_state::CLIENT_ERROR;
+            poller.err = ClientState::ERR;
         }
 
         return -1;
@@ -588,25 +619,25 @@ int poll(client_poller& poller, int timeout_sec) {
     return retval;
 }
 
-client_state get_error(const client_poller& poller) { return poller.err; }
+ClientState get_error(const ClientPoller& poller) { return poller.err; }
 
-client_state get_poll(const client_poller& poller, const client& client) {
-    auto state = client_state(0);
+ClientState get_poll(const ClientPoller& poller, const Client& client) {
+    auto state = ClientState(0);
 
     // NOLINTBEGIN (misc-include-cleaner)
     if (FD_ISSET(client.lidar_fd, &poller.rfds)) {
-        state = client_state(state | LIDAR_DATA);
+        state = ClientState(state | LIDAR_DATA);
     }
     if (FD_ISSET(client.imu_fd, &poller.rfds))
-        state = client_state(state | IMU_DATA);
+        state = ClientState(state | IMU_DATA);
     // NOLINTEND (misc-include-cleaner)
     return state;
 }
 
 }  // namespace impl
 
-client_state poll_client(const client& client, const int timeout_sec) {
-    impl::client_poller poller{};
+ClientState poll_client(const Client& client, const int timeout_sec) {
+    impl::ClientPoller poller{};
     impl::reset_poll(poller);
     impl::set_poll(poller, client);
     int res = impl::poll(poller, timeout_sec);
@@ -636,18 +667,18 @@ bool recv_fixed(SOCKET file_desc, void* buf, int64_t len) {
 }
 }  // namespace
 
-bool read_lidar_packet(const client& client, uint8_t* buf, size_t bytes) {
+bool read_lidar_packet(const Client& client, uint8_t* buf, size_t bytes) {
     return recv_fixed(client.lidar_fd, buf, bytes);
 }
 
-bool read_lidar_packet(const client& client, uint8_t* buf,
-                       const packet_format& packet_format) {
+bool read_lidar_packet(const Client& client, uint8_t* buf,
+                       const PacketFormat& packet_format) {
     return read_lidar_packet(client, buf, packet_format.lidar_packet_size);
 }
 
 // Types.h is included which defines LidarPacket
 // NOLINTNEXTLINE (misc-include-cleaner)
-bool read_lidar_packet(const client& client, LidarPacket& packet) {
+bool read_lidar_packet(const Client& client, LidarPacket& packet) {
     auto now = std::chrono::system_clock::now();
     packet.host_timestamp =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -656,18 +687,18 @@ bool read_lidar_packet(const client& client, LidarPacket& packet) {
     return read_lidar_packet(client, packet.buf.data(), packet.buf.size());
 }
 
-bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes) {
+bool read_imu_packet(const Client& cli, uint8_t* buf, size_t bytes) {
     return recv_fixed(cli.imu_fd, buf, static_cast<int64_t>(bytes));
 }
 
-bool read_imu_packet(const client& cli, uint8_t* buf,
-                     const packet_format& packet_format) {
+bool read_imu_packet(const Client& cli, uint8_t* buf,
+                     const PacketFormat& packet_format) {
     return read_imu_packet(cli, buf, packet_format.imu_packet_size);
 }
 
 // Types.h is included which defines ImuPacket
 // NOLINTNEXTLINE (misc-include-cleaner)
-bool read_imu_packet(const client& cli, ImuPacket& packet) {
+bool read_imu_packet(const Client& cli, ImuPacket& packet) {
     auto now = std::chrono::system_clock::now();
     packet.host_timestamp =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -676,9 +707,9 @@ bool read_imu_packet(const client& cli, ImuPacket& packet) {
     return read_imu_packet(cli, packet.buf.data(), packet.buf.size());
 }
 
-int get_lidar_port(const client& cli) { return get_sock_port(cli.lidar_fd); }
+int get_lidar_port(const Client& cli) { return get_sock_port(cli.lidar_fd); }
 
-int get_imu_port(const client& cli) { return get_sock_port(cli.imu_fd); }
+int get_imu_port(const Client& cli) { return get_sock_port(cli.imu_fd); }
 
 bool in_multicast(const std::string& addr) {
     // NOLINTNEXTLINE (misc-include-cleaner)
@@ -693,7 +724,7 @@ bool in_multicast(const std::string& addr) {
  *
  * @return the socket file descriptor.
  */
-extern SOCKET get_lidar_socket_fd(client& cli) { return cli.lidar_fd; }
+extern SOCKET get_lidar_socket_fd(Client& cli) { return cli.lidar_fd; }
 
 /**
  * Return the socket file descriptor used to listen for imu UDP data.
@@ -703,7 +734,8 @@ extern SOCKET get_lidar_socket_fd(client& cli) { return cli.lidar_fd; }
  *
  * @return the socket file descriptor.
  */
-extern SOCKET get_imu_socket_fd(client& cli) { return cli.imu_fd; }
+extern SOCKET get_imu_socket_fd(Client& cli) { return cli.imu_fd; }
 
 }  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

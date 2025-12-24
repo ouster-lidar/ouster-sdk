@@ -9,40 +9,56 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "ouster/deprecation.h"
 #include "ouster/pcap.h"
 #include "ouster/types.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
-namespace sensor_utils {
+namespace sdk {
+namespace pcap {
 /**
  * Structure representing a hash key/sorting key for a udp stream
  */
-struct OUSTER_API_CLASS stream_key {
+struct OUSTER_API_CLASS StreamKey {
     std::string dst_ip;  ///< The destination IP
     std::string src_ip;  ///< The source IP
     int src_port;        ///< The src port
     int dst_port;        ///< The destination port
 
     OUSTER_API_FUNCTION
-    bool operator==(const struct stream_key& other) const;
+    bool operator==(const struct StreamKey& other) const;
 };
-}  // namespace sensor_utils
+/**
+ * @deprecated Use `StreamKey` instead.
+ */
+OUSTER_DEPRECATED_TYPE(stream_key, StreamKey,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
+}  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster
 
+/**
+ * @brief Hash function specialization for stream_key.
+ *
+ * Allows stream_key to be used in hash-based containers like
+ * std::unordered_map.
+ */
 template <>
-struct OUSTER_API_CLASS std::hash<ouster::sensor_utils::stream_key> {
+struct OUSTER_API_CLASS std::hash<ouster::sdk::pcap::StreamKey> {
     OUSTER_API_FUNCTION
     std::size_t operator()(
-        const ouster::sensor_utils::stream_key& key) const noexcept {
+        const ouster::sdk::pcap::StreamKey& key) const noexcept {
         return std::hash<std::string>{}(key.src_ip) ^
                (std::hash<std::string>{}(key.src_ip) << 1) ^
                (std::hash<int>{}(key.src_port << 2)) ^
@@ -51,7 +67,8 @@ struct OUSTER_API_CLASS std::hash<ouster::sensor_utils::stream_key> {
 };
 
 namespace ouster {
-namespace sensor_utils {
+namespace sdk {
+namespace pcap {
 
 using ts = std::chrono::microseconds;  ///< Microsecond timestamp
 
@@ -64,15 +81,21 @@ using ts = std::chrono::microseconds;  ///< Microsecond timestamp
  * @return The new output stream containing concatted stream_in and data.
  */
 OUSTER_API_FUNCTION
-std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
+std::ostream& operator<<(std::ostream& stream_in, const PacketInfo& data);
 
 /**
  * Structure representing a hash key/sorting key for a udp stream
  */
-struct OUSTER_API_CLASS guessed_ports {
+struct OUSTER_API_CLASS GuessedPorts {
     int lidar;  ///< Guessed lidar port
     int imu;    ///< Guessed imu port
 };
+
+/**
+ * @deprecated Use `GuessedPorts` instead.
+ */
+OUSTER_DEPRECATED_TYPE(guessed_ports, GuessedPorts,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
 
 /**
  * To string method for stream_key structs.
@@ -83,9 +106,15 @@ struct OUSTER_API_CLASS guessed_ports {
  * @return The new output stream containing concatted stream_in and data.
  */
 OUSTER_API_FUNCTION
-std::ostream& operator<<(std::ostream& stream_in, const stream_key& data);
+std::ostream& operator<<(std::ostream& stream_in, const StreamKey& data);
 
-struct OUSTER_API_CLASS stream_data {
+/**
+ * @brief Structure containing metadata for a single UDP stream.
+ *
+ * Holds packet counts, payload size distribution, fragmentation details,
+ * and IP version usage.
+ */
+struct OUSTER_API_CLASS StreamData {
     uint64_t count;  ///< Number of packets in a specified stream
     std::map<uint64_t, uint64_t>
         payload_size_counts;  ///< Packet sizes detected in a specified stream
@@ -102,6 +131,11 @@ struct OUSTER_API_CLASS stream_data {
 };
 
 /**
+ * @deprecated Use `StreamData` instead.
+ */
+OUSTER_DEPRECATED_TYPE(stream_data, StreamData,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
+/**
  * To string method for stream_data structs.
  *
  * @param[inout] stream_in The pre-existing ostream to concat with data.
@@ -110,12 +144,12 @@ struct OUSTER_API_CLASS stream_data {
  * @return The new output stream containing concatted stream_in and data.
  */
 OUSTER_API_FUNCTION
-std::ostream& operator<<(std::ostream& stream_in, const stream_data& data);
+std::ostream& operator<<(std::ostream& stream_in, const StreamData& data);
 
 /**
  * Structure representing the information about network streams in a pcap file
  */
-struct OUSTER_API_CLASS stream_info {
+struct OUSTER_API_CLASS StreamInfo {
     uint64_t total_packets;           ///< The total number of packets detected
     uint32_t encapsulation_protocol;  ///< The encapsulation protocol for the
                                       ///< pcap file
@@ -123,10 +157,16 @@ struct OUSTER_API_CLASS stream_info {
     ts timestamp_max;  ///< The latest timestamp detected
     ts timestamp_min;  ///< The earliest timestamp detected
 
-    std::unordered_map<stream_key, stream_data>
+    std::unordered_map<StreamKey, StreamData>
         udp_streams;  ///< Datastructure containing info on all of the different
                       ///< streams
 };
+
+/**
+ * @deprecated Use `StreamInfo` instead.
+ */
+OUSTER_DEPRECATED_TYPE(stream_info, StreamInfo,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
 
 /**
  * To string method for stream info structs.
@@ -137,25 +177,35 @@ struct OUSTER_API_CLASS stream_info {
  * @return The new output stream containing concatted stream_info and data.
  */
 OUSTER_API_FUNCTION
-std::ostream& operator<<(std::ostream& stream_in, const stream_info& data);
+std::ostream& operator<<(std::ostream& stream_in, const StreamInfo& data);
 
 /**
- * @struct playback_handle
+ * @struct PlaybackHandle
  *
  * @brief struct to hide the stepwise playback details.
  *
  * This struct handles stepwise playback details.
  */
-struct playback_handle;
+struct PlaybackHandle;
+/**
+ * @deprecated Use `PlaybackHandle` instead.
+ */
+OUSTER_DEPRECATED_TYPE(playback_handle, PlaybackHandle,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
 
 /**
- * @struct record_handle
+ * @struct RecordHandle
  *
  * @brief struct to hide the record details.
  *
  * This struct handles hiding the record details.
  */
-struct record_handle;
+struct RecordHandle;
+/**
+ * @deprecated Use `RecordHandle` instead.
+ */
+OUSTER_DEPRECATED_TYPE(record_handle, RecordHandle,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
 
 /**
  * Initialize the stepwise playback handle.
@@ -165,7 +215,7 @@ struct record_handle;
  * @return A handle to the initialized playback struct.
  */
 OUSTER_API_FUNCTION
-std::shared_ptr<playback_handle> replay_initialize(const std::string& file);
+std::shared_ptr<PlaybackHandle> replay_initialize(const std::string& file);
 
 /**
  * Uninitialize the stepwise playback handle.
@@ -173,7 +223,7 @@ std::shared_ptr<playback_handle> replay_initialize(const std::string& file);
  * @param[in] handle A handle to the initialized playback struct.
  */
 OUSTER_API_FUNCTION
-void replay_uninitialize(playback_handle& handle);
+void replay_uninitialize(PlaybackHandle& handle);
 
 /**
  * Restart playback from the beginning of the pcap file.
@@ -181,10 +231,10 @@ void replay_uninitialize(playback_handle& handle);
  * @param[in] handle A handle to the initialized playback struct.
  */
 OUSTER_API_FUNCTION
-void replay_reset(playback_handle& handle);
+void replay_reset(PlaybackHandle& handle);
 
 /**
- * Return the information on the next packet avaliable in the playback_handle.
+ * Return the information on the next packet avaliable in the PlaybackHandle.
  * This must be called BEFORE calling the read_next_packet function.
  *
  * @param[in] handle The playback handle.
@@ -193,10 +243,10 @@ void replay_reset(playback_handle& handle);
  * @return The status on whether there is a new packet or not.
  */
 OUSTER_API_FUNCTION
-bool next_packet_info(playback_handle& handle, packet_info& info);
+bool next_packet_info(PlaybackHandle& handle, PacketInfo& info);
 
 /**
- * Read the data from the next packet avaliable in the playback_handle.
+ * Read the data from the next packet avaliable in the PlaybackHandle.
  * This must be called AFTER calling the next_packet_info function.
  *
  * @param[in] handle The playback handle.
@@ -207,7 +257,7 @@ bool next_packet_info(playback_handle& handle, packet_info& info);
  * @return 0 on no new packet, > 0 the size of the bytes recieved.
  */
 OUSTER_API_FUNCTION
-size_t read_packet(playback_handle& handle, uint8_t* buf, size_t buffer_size);
+size_t read_packet(PlaybackHandle& handle, uint8_t* buf, size_t buffer_size);
 
 /**
  * Initialize the record handle for recording multi sensor pcap files. Source
@@ -216,10 +266,10 @@ size_t read_packet(playback_handle& handle, uint8_t* buf, size_t buffer_size);
  * @param[in] file The file path to the target pcap to record to.
  * @param[in] frag_size The size of the fragments for packet fragmentation.
  * @param[in] use_sll_encapsulation Whether to use sll encapsulation.
- * @return record_handle A handle to the initialized record.
+ * @return RecordHandle A handle to the initialized record.
  */
 OUSTER_API_FUNCTION
-std::shared_ptr<record_handle> record_initialize(
+std::shared_ptr<RecordHandle> record_initialize(
     const std::string& file, int frag_size, bool use_sll_encapsulation = false);
 
 /**
@@ -228,10 +278,10 @@ std::shared_ptr<record_handle> record_initialize(
  * @param[in] handle An initialized handle for the recording state.
  */
 OUSTER_API_FUNCTION
-void record_uninitialize(record_handle& handle);
+void record_uninitialize(RecordHandle& handle);
 
 /**
- * Record a buffer to a multi sensor record_handle pcap file.
+ * Record a buffer to a multi sensor RecordHandle pcap file.
  *
  * @param[in] handle The record handle that record_initialize has initted.
  * @param[in] src_ip The source address to label the packets with.
@@ -244,13 +294,13 @@ void record_uninitialize(record_handle& handle);
  *                                  microseconds.
  */
 OUSTER_API_FUNCTION
-void record_packet(record_handle& handle, const std::string& src_ip,
+void record_packet(RecordHandle& handle, const std::string& src_ip,
                    const std::string& dst_ip, int src_port, int dst_port,
                    const uint8_t* buf, size_t buffer_size,
                    uint64_t microsecond_timestamp);
 
 /**
- * Record a buffer to a multi sensor record_handle pcap file.
+ * Record a buffer to a multi sensor RecordHandle pcap file.
  *
  * @param[in] handle The record handle that record_initialize has initted.
  * @param[in] info The packet_info object to use for the packet.
@@ -258,7 +308,7 @@ void record_packet(record_handle& handle, const std::string& src_ip,
  * @param[in] buffer_size The size of the buffer to record to the pcap file.
  */
 OUSTER_API_FUNCTION
-void record_packet(record_handle& handle, const packet_info& info,
+void record_packet(RecordHandle& handle, const PacketInfo& info,
                    const uint8_t* buf, size_t buffer_size);
 
 /**
@@ -271,8 +321,8 @@ void record_packet(record_handle& handle, const packet_info& info,
  * @return A pointer to the resulting stream_info
  */
 OUSTER_API_FUNCTION
-std::shared_ptr<stream_info> get_stream_info(const std::string& file,
-                                             int packets_to_process = -1);
+std::shared_ptr<StreamInfo> get_stream_info(const std::string& file,
+                                            int packets_to_process = -1);
 
 /**
  * Return the information about network streams in a pcap file.
@@ -290,9 +340,9 @@ std::shared_ptr<stream_info> get_stream_info(const std::string& file,
  * @return A pointer to the resulting stream_info
  */
 OUSTER_API_FUNCTION
-std::shared_ptr<stream_info> get_stream_info(
+std::shared_ptr<StreamInfo> get_stream_info(
     const std::string& file,
-    std::function<void(uint64_t current, uint64_t delta, uint64_t total)>
+    const std::function<void(uint64_t current, uint64_t delta, uint64_t total)>&
         progress_callback,
     int packets_per_callback, int packets_to_process = -1);
 
@@ -313,9 +363,9 @@ std::shared_ptr<stream_info> get_stream_info(
  * @return A pointer to the resulting stream_info
  */
 OUSTER_API_FUNCTION
-std::shared_ptr<stream_info> get_stream_info(
+std::shared_ptr<StreamInfo> get_stream_info(
     PcapReader& pcap_reader,
-    std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
+    const std::function<void(uint64_t, uint64_t, uint64_t)>& progress_callback,
     int packets_per_callback, int packets_to_process = -1);
 /**
  * Return a guess of the correct ports located in a pcap file.
@@ -331,9 +381,10 @@ std::shared_ptr<stream_info> get_stream_info(
  * @return A vector (sorted by most likely to least likely) of the guessed ports
  */
 OUSTER_API_FUNCTION
-std::vector<guessed_ports> guess_ports(stream_info& info, int lidar_packet_size,
-                                       int imu_packet_size,
-                                       int expected_lidar_port,
-                                       int expected_imu_port);
-}  // namespace sensor_utils
+std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_size,
+                                      int imu_packet_size,
+                                      int expected_lidar_port,
+                                      int expected_imu_port);
+}  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

@@ -2,6 +2,7 @@
 #include <ouster/lidar_scan.h>
 #include <ouster/os_pcap.h>
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -12,6 +13,6 @@ int main(int argc, char** argv) {
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     const std::string pcap_file = argv[1];
-    auto stream_info = ouster::sensor_utils::get_stream_info(pcap_file);
+    auto stream_info = ouster::sdk::pcap::get_stream_info(pcap_file);
     std::cout << *stream_info << std::endl;
 }

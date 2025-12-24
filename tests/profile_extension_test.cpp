@@ -13,11 +13,11 @@
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
-using namespace ouster::sensor;
-using impl::FieldInfo;
+using namespace ouster::sdk::core;
+using ouster::sdk::core::impl::FieldInfo;
 
 TEST(ProfileExtension, ProfileExtensionTest) {
-    int profile_nr = 100;
+    int profile_nr = 101;
     std::string name = "DUAL_RETURNS_COPYCAT";
     // clang-format off
     std::vector<std::pair<std::string, FieldInfo>> fields{
@@ -40,7 +40,7 @@ TEST(ProfileExtension, ProfileExtensionTest) {
     UDPProfileLidar prof = static_cast<UDPProfileLidar>(profile_nr);
     EXPECT_EQ(udp_profile_lidar_of_string(name).value(), prof);
 
-    auto scan = ouster::LidarScan(40, 60, prof);
+    auto scan = LidarScan(40, 60, prof);
 
     for (const auto& field: fields)
     {
@@ -56,12 +56,12 @@ TEST(ProfileExtension, ProfileExtensionTest) {
         add_custom_profile(profile_nr, name, fields, chan_data_size),
         std::invalid_argument);
     EXPECT_THROW(
-        add_custom_profile(UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
+        add_custom_profile(static_cast<int>(UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL),
                            "NEW_NAME_DUALRETURNS", fields, chan_data_size),
         std::invalid_argument);
     EXPECT_THROW(
         add_custom_profile(110,
-                           to_string(UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL),
+                           to_string(UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL),
                            fields, chan_data_size),
         std::invalid_argument);
     // nr 0 is prohibited

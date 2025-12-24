@@ -1,6 +1,6 @@
 from ouster.sdk.core import dewarp, transform
 from ouster.sdk.util.parsing import scan_to_packets  # type: ignore
-from ouster.sdk import core
+from ouster.sdk import core, open_source
 import pytest
 import time
 import numpy as np
@@ -153,6 +153,59 @@ def test_perf_batching(scan: core.LidarScan, meta: core.SensorInfo, profile, hap
             num_batched = num_batched + 1
     profile.end(num_iters)
     assert num_batched == num_iters
+
+
+def _prepare_destaggered_returns():
+    """Return destaggered XYZ/range arrays and sensor origins for first/second returns."""
+    src = open_source(OSFS_DATA_DIR + "/single_scan_016.osf")
+    scans = next(iter(src))
+    scan = scans[0]
+    info = src.sensor_info[0]
+    xyzlut = core.XYZLut(info)
+    h, w = info.h, info.w
+
+    def destagger_return(field_name):
+        if not scan.has_field(field_name):
+            return None, None
+        field = scan.field(field_name)
+        xyz = xyzlut(field).reshape(h, w, 3)
+        xyz_destaggered = core.destagger(info, xyz)
+        range_destaggered = core.destagger(info, field)
+        return xyz_destaggered, range_destaggered
+
+    first_xyz, first_range = destagger_return(core.ChanField.RANGE)
+    second_xyz, second_range = destagger_return(core.ChanField.RANGE2)
+    sensor_origins_xyz = np.zeros((w, 3))
+    return info, sensor_origins_xyz, first_xyz, first_range, second_xyz, second_range
+
+
+@pytest.mark.performance
+def test_perf_normals_single_return(profile) -> None:
+    info, sensor_origins_xyz, first_xyz, first_range, _, _ = _prepare_destaggered_returns()
+    num_iters = profile.iterations(800)
+
+    profile.start()
+    for _ in range(num_iters):
+        _ = core.normals(first_xyz, first_range, sensor_origins_xyz=sensor_origins_xyz)
+    profile.end(num_iters)
+
+
+@pytest.mark.performance
+def test_perf_normals_dual_return(profile) -> None:
+    info, sensor_origins_xyz, first_xyz, first_range, second_xyz, second_range = (
+        _prepare_destaggered_returns())
+
+    num_iters = profile.iterations(800)
+    profile.start()
+    for _ in range(num_iters):
+        _ = core.normals(
+            first_xyz,
+            first_range,
+            second_xyz,
+            second_range,
+            sensor_origins_xyz=sensor_origins_xyz,
+        )
+    profile.end(num_iters)
 
 
 # now for each scan source type

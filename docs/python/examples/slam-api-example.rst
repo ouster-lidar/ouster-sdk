@@ -80,9 +80,10 @@ as well as for demonstration and feedback purposes.
    config.voxel_size = 1.0
    config.backend = "kiss"
 
+   slam = SlamEngine(data_source.sensor_info, config)
    scans_w_poses = map(lambda x: slam.update(x)[0], data_source)
 
-   SimpleViz(data_source.metadata, accum_max_num=10).run(scans_w_poses)
+   SimpleViz(data_source.sensor_info, accum_max_num=10).run(scans_w_poses)
 
 
 More details about the visualizer and accumulated scans can be found at the

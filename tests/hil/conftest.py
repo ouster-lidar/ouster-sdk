@@ -134,10 +134,11 @@ def hil_initial_config(hil_sensor_hostname) -> Iterator[core.SensorConfig]:
 
         # wake up sensor and update udp settings
         cfg = core.SensorConfig()
-        cfg.operating_mode = core.OperatingMode.OPERATING_NORMAL
+        cfg.operating_mode = core.OperatingMode.NORMAL
         cfg.udp_dest = None
         cfg.udp_port_lidar = 7502
         cfg.udp_port_imu = 7503
+        cfg.udp_profile_imu = core.UDPProfileIMU.LEGACY
         sensor.set_config(hil_sensor_hostname, cfg, udp_dest_auto=True)
 
         with closing(sensor.SensorPacketSource(hil_sensor_hostname,
@@ -165,7 +166,7 @@ def hil_sensor_config(hil_initial_config) -> core.SensorConfig:
 
 @pytest.fixture
 def hil_configured_sensor(hil_sensor_hostname, hil_sensor_config, request,
-                          hil_sensor_firmware, gen1_sensor,
+                          hil_sensor_firmware, gen1_sensor, vlp_sensor,
                           lowest_signal_multiplier_fw, lowest_eudp_fw,
                           lowest_lb_single_returns_fw, lowest_4096_fw,
                           lowest_signal_multiplier_double_fw,
@@ -187,7 +188,7 @@ def hil_configured_sensor(hil_sensor_hostname, hil_sensor_config, request,
         else:
             logger.debug(f"Updating config for: {request.node.name}")
 
-        if gen1_sensor and hil_sensor_config.udp_profile_lidar == UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
+        if gen1_sensor and hil_sensor_config.udp_profile_lidar == UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL:
             pytest.skip(f"Dual returns is not supported on Gen 1 sensors")
 
         # Run through and check compatibility
@@ -198,21 +199,26 @@ def hil_configured_sensor(hil_sensor_hostname, hil_sensor_config, request,
 
         if (hil_sensor_config.udp_profile_lidar is not None and
             hil_sensor_config.udp_profile_lidar
-            != UDPProfileLidar.PROFILE_LIDAR_LEGACY and hil_sensor_firmware
+            != UDPProfileLidar.LEGACY and hil_sensor_firmware
             < lowest_eudp_fw) or (hil_sensor_config.udp_profile_lidar in {
-            UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8,
-            UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16
+            UDPProfileLidar.RNG15_RFL8_NIR8,
+            UDPProfileLidar.RNG19_RFL8_SIG16_NIR16
         } and hil_sensor_firmware < lowest_lb_single_returns_fw) or (
                 hil_sensor_config.udp_profile_lidar
-                == UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL and
+                == UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL and
                 hil_sensor_firmware < lowest_fusa_profile_fw):
             pytest.skip(
                 f"Lidar profile {str(hil_sensor_config.udp_profile_lidar)} is not supported on FW {str(hil_sensor_firmware)}"
             )
 
-        if hil_sensor_config.lidar_mode == LidarMode.MODE_4096x5 and hil_sensor_firmware < lowest_4096_fw:
+        if hil_sensor_config.lidar_mode == LidarMode._4096x5 and hil_sensor_firmware < lowest_4096_fw:
             pytest.skip(
                 f"Lidar Mode 4096x5 is not supported on FW {str(hil_sensor_firmware)}"
+            )
+
+        if vlp_sensor and hil_sensor_config.lidar_mode not in {LidarMode._1024x20, LidarMode._2048x10}:
+            pytest.skip(
+                f"Lidar Modes other than 1024x20 and 2048x10 are not supported on VLP sensors"
             )
 
         # rely on exact precision representation
@@ -221,9 +227,9 @@ def hil_configured_sensor(hil_sensor_hostname, hil_sensor_config, request,
                 f"Signal multiplier {hil_sensor_config.signal_multiplier} not supported on FW {str(hil_sensor_firmware)}"
             )
 
-        if hil_sensor_firmware < lowest_full_speed_bloom_fw and hil_sensor_config.udp_profile_lidar == UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL and hil_sensor_config.lidar_mode in {
-            LidarMode.MODE_2048x10, LidarMode.MODE_1024x20,
-            LidarMode.MODE_4096x5
+        if hil_sensor_firmware < lowest_full_speed_bloom_fw and hil_sensor_config.udp_profile_lidar == UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL and hil_sensor_config.lidar_mode in {
+            LidarMode._2048x10, LidarMode._1024x20,
+            LidarMode._4096x5
         }:
             pytest.skip(
                 f"Dual return profile is not supported with 2048x10 or 1024x20 lidar modes on FW {str(hil_sensor_firmware)}"
@@ -250,10 +256,18 @@ def hil_sensor_firmware(hil_sensor_hostname):
 # TODO find a good place to store part numbers for these types of comparisons
 @pytest.fixture
 def gen1_sensor(hil_sensor_hostname):
-    with closing(sensor.SensorPacketSource(hil_sensor_hostname, lidar_port=7502, imu_port=7503)) as src:
-        prod_pn = src.metadata[0].prod_pn
+    with closing(sensor.SensorPacketSource(hil_sensor_hostname)) as src:
+        prod_pn = src.sensor_info[0].prod_pn
 
     return prod_pn in GEN1_PROD_PNS
+
+
+@pytest.fixture
+def vlp_sensor(hil_sensor_hostname):
+    with closing(sensor.SensorPacketSource(hil_sensor_hostname)) as src:
+        prod_pn = src.sensor_info[0].prod_pn
+
+    return "VLP" in prod_pn
 
 
 def deepcopy_iter(it):

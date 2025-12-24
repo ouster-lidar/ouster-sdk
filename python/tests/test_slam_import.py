@@ -6,7 +6,6 @@ is_mac_arm = platform.system() == 'Darwin' and platform.processor() == 'arm'
 
 
 @pytest.fixture
-@pytest.mark.skipif(is_mac_arm, reason="Skipping tests on MacBook with ARM architecture")
 def test_slam_import() -> None:
     """
     Test importing SlamConfig and SlamEngine from ouster.sdk.mapping

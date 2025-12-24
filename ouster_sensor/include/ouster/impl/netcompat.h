@@ -52,6 +52,7 @@
 #endif  // --------- End Platform Differentiation Block ---------
 
 namespace ouster {
+namespace sdk {
 namespace sensor {
 namespace impl {
 
@@ -105,4 +106,5 @@ int socket_set_rcvtimeout(SOCKET sock, int timeout_sec);
 
 }  // namespace impl
 }  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

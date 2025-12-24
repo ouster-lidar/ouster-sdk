@@ -9,7 +9,8 @@
 #include <string>
 
 namespace ouster {
-namespace sensor {
+namespace sdk {
+namespace core {
 namespace impl {
 
 class Logger {
@@ -113,13 +114,14 @@ class Logger {
     std::shared_ptr<Logger::format_builder> make_builder(
         const std::string& format_string);
 
-    static const std::string logger_name;
-    static const std::string logger_pattern;
+    static const std::string LOGGER_NAME;
+    static const std::string LOGGER_PATTERN;
     std::unique_ptr<internal_logger> internal_logger_;
 };
 }  // namespace impl
 
-ouster::sensor::impl::Logger& logger();
+ouster::sdk::core::impl::Logger& logger();
 
-}  // namespace sensor
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

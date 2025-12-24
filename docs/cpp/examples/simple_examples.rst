@@ -10,7 +10,7 @@ Sensor Configuration
 --------------------
 
 In this example we show various ways to work with the sensor configuration
-interface. The :cpp:type:`ouster::sensor::sensor_config` struct can be found
+interface. The :cpp:type:`ouster::sdk::core::SensorConfig` struct can be found
 defined in ``types.h``. ``get_config`` and ``set_config`` are in ``client.h``.
 
 To run this example:
@@ -30,7 +30,7 @@ Let's look at the first step, where we get the configuration of the sensor as it
     :dedent:
 
 
-The function ``get_config`` takes a ``sensor_config`` so we must declare it first. It returns true
+The function ``get_config`` takes a ``SensorConfig`` so we must declare it first. It returns true
 if it successfully retrieves the config, and false if an error occurs in connecting to the sensor and
 setting the config. The function ``set_config`` works similarly, returning true if it successfully
 sets the config, and false otherwise.
@@ -43,7 +43,7 @@ In the second step, we create a new config:
     :end-before: [doc-etag-cpp-make-config]
     :dedent:
 
-The ``sensor_config`` struct consists of several ``std::optional`` members, which can be set
+The ``SensorConfig`` struct consists of several ``std::optional`` members, which can be set
 directly. Members which are not set will not set sensor configuration parameters when sent to the
 sensor. In addition, there are two config flags, for automatic udp destination setting and config
 persistence which can be set as above. The automatic udp destination flag cannot be set when
@@ -56,14 +56,14 @@ persistence which can be set as above. The automatic udp destination flag cannot
 Working with LidarScans
 -----------------------
 
-The :cpp:class:`ouster::LidarScan` is explained in depth conceptually in the :ref:`LidarScan reference
+The :cpp:class:`ouster::sdk::core::LidarScan` is explained in depth conceptually in the :ref:`LidarScan reference
 <lidar-scan>`. Here we cover some specifics that will be useful for C++ developers.
 
 
 LidarScan constructors
 ++++++++++++++++++++++
 
-Of foremost interest when using a :cpp:class:`LidarScan` is constructing a ``LidarScan`` which suits
+Of foremost interest when using a :cpp:class:`ouster::sdk::core::LidarScan` is constructing a ``LidarScan`` which suits
 your needs.
 
 The simplest (and most common) method is to construct one to contain all data coming from your
@@ -149,7 +149,7 @@ Adjusting XYZLut With External Matrix
 
 Users may find that they wish to apply an extra transform while projecting to Cartesian coordinates.
 Such a transform, likely an extrinsics matrix of some sort, can be baked into the
-:cpp:struct:`ouster::XYZLut` created with :cpp:func:`ouster::make_xyz_lut`. 
+:cpp:struct:`ouster::sdk::core::XYZLut` created with :cpp:func:`ouster::sdk::core::make_xyz_lut`. 
 
 In the following code, ``transformation`` represents the extrinsincs transform:
 
@@ -188,4 +188,3 @@ Below you can see an example which creates a scan and writes it to an OSF File u
     :start-after: [doc-stag-osf-write-cpp]
     :end-before: [doc-etag-osf-write-cpp]
     :dedent:
-

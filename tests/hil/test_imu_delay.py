@@ -32,7 +32,7 @@ def timestamp_mode():
 
 @pytest.fixture
 def lidar_mode():
-    return LidarMode.MODE_1024x10
+    return LidarMode._1024x10
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def azimuth_window():
 
 @pytest.fixture
 def udp_profile_lidar():
-    return UDPProfileLidar.PROFILE_LIDAR_LEGACY
+    return UDPProfileLidar.LEGACY
 
 
 @pytest.fixture

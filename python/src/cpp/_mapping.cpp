@@ -1,3 +1,5 @@
+#define FMT_UNICODE 0
+
 #include <pybind11/eigen.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -5,104 +7,41 @@
 #include <pybind11/stl_bind.h>
 
 #include <Eigen/Dense>
-#include <iostream>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include "ouster/impl/preprocessing.h"
+#include "ouster/active_time_correction.h"
+#include "ouster/deskew_method.h"
+#include "ouster/localization_engine.h"
 #include "ouster/pose_optimizer.h"
-#include "ouster/pose_optimizer_enums.h"
+#include "ouster/pose_optimizer_constraint.h"
+#include "ouster/pose_optimizer_node.h"
+#include "ouster/slam_engine.h"
 
 namespace py = pybind11;
+using namespace ouster::sdk::mapping;
+using namespace ouster::sdk::core;
 
-namespace pybind11 {
+class PyDeskewMethod : public DeskewMethod {
+   public:
+    using DeskewMethod::DeskewMethod;
 
-template <typename Vector, typename holder_type = std::unique_ptr<Vector>,
-          typename... Args>
-py::class_<Vector, holder_type> bind_vector_without_repr(
-    py::module& m, std::string const& name, Args&&... args) {
-    // hack function to disable __repr__ for the convenient function
-    // bind_vector()
-    using Class_ = py::class_<Vector, holder_type>;
-    Class_ cl(m, name.c_str(), std::forward<Args>(args)...);
-    cl.def(py::init<>());
-    cl.def(
-        "__bool__", [](const Vector& v) -> bool { return !v.empty(); },
-        "Check whether the list is nonempty");
-    cl.def("__len__", &Vector::size);
-    return cl;
-}
-
-// - This function is used by Pybind for std::vector<SomeEigenType> constructor.
-//   This optional constructor is added to avoid too many Python <-> C++ API
-//   calls when the vector size is large using the default binding method.
-//   Pybind matches np.float64 array to py::array_t<double> buffer.
-// - Directly using templates for the py::array_t<double> and py::array_t<int>
-//   and etc. doesn't work. The current solution is to explicitly implement
-//   bindings for each py array types.
-template <typename EigenVector>
-std::vector<EigenVector> py_array_to_vectors_double(
-    py::array_t<double, py::array::c_style | py::array::forcecast> array) {
-    int64_t eigen_vector_size = EigenVector::SizeAtCompileTime;
-    if (array.ndim() != 2 || array.shape(1) != eigen_vector_size) {
-        throw py::cast_error();
+    void update(LidarScanSet& lidar_scan_set) override {
+        PYBIND11_OVERRIDE_PURE(void, DeskewMethod, update, lidar_scan_set);
     }
-    std::vector<EigenVector> eigen_vectors(array.shape(0));
-    auto array_unchecked = array.mutable_unchecked<2>();
-    for (auto i = 0; i < array_unchecked.shape(0); ++i) {
-        eigen_vectors[i] = Eigen::Map<EigenVector>(&array_unchecked(i, 0));
+
+    void set_last_pose(int64_t ts, const Matrix4dR& pose) override {
+        PYBIND11_OVERRIDE_PURE(void, DeskewMethod, set_last_pose, ts, pose);
     }
-    return eigen_vectors;
-}
+};
 
-}  // namespace pybind11
-
-template <typename EigenVector, typename Vector = std::vector<EigenVector>,
-          typename holder_type = std::unique_ptr<Vector>, typename InitFunc>
-py::class_<Vector, holder_type> pybind_eigen_vector_of_vector(
-    py::module& m, const std::string& bind_name, const std::string& repr_name,
-    InitFunc init_func) {
-    using Scalar = typename EigenVector::Scalar;
-    auto vec = py::bind_vector_without_repr<std::vector<EigenVector>>(
-        m, bind_name, py::buffer_protocol(), py::module_local());
-    vec.def(py::init(init_func));
-    vec.def_buffer([](std::vector<EigenVector>& v) -> py::buffer_info {
-        size_t rows = EigenVector::RowsAtCompileTime;
-        return py::buffer_info(
-            v.data(), sizeof(Scalar), py::format_descriptor<Scalar>::format(),
-            2, {v.size(), rows}, {sizeof(EigenVector), sizeof(Scalar)});
-    });
-    vec.def("__repr__", [repr_name](const std::vector<EigenVector>& v) {
-        return repr_name + std::string(" with ") + std::to_string(v.size()) +
-               std::string(" elements.\n") +
-               std::string("Use numpy.asarray() to access data.");
-    });
-    vec.def("__copy__", [](std::vector<EigenVector>& v) {
-        return std::vector<EigenVector>(v);
-    });
-    vec.def("__deepcopy__", [](std::vector<EigenVector>& v) {
-        return std::vector<EigenVector>(v);
-    });
-
-    // py::detail must be after custom constructor
-    using Class_ = py::class_<Vector, std::unique_ptr<Vector>>;
-    py::detail::vector_if_copy_constructible<Vector, Class_>(vec);
-    py::detail::vector_if_equal_operator<Vector, Class_>(vec);
-    py::detail::vector_modifiers<Vector, Class_>(vec);
-    py::detail::vector_accessor<Vector, Class_>(vec);
-
-    return vec;
-}
-
-using namespace ouster;
-using namespace mapping;
-
-PYBIND11_MAKE_OPAQUE(std::vector<Eigen::Vector3d>);
-
-void init_mapping(py::module& m, py::module&) {
-    auto vector3dvector = pybind_eigen_vector_of_vector<Eigen::Vector3d>(
-        m, "_Vector3dVector", "std::vector<Eigen::Vector3d>",
-        py::py_array_to_vectors_double<Eigen::Vector3d>);
-
-    m.doc() =
+void init_mapping(py::module& module, py::module& /*unused*/) {
+    module.doc() =
         "Python bindings for PoseOptimizer, enabling trajectory optimization "
         "using C++. This module provides tools for optimizing sensor "
         "trajectories "
@@ -110,7 +49,7 @@ void init_mapping(py::module& m, py::module&) {
         "mapping context.";
 
     //----- Wrap SolverConfig -------------------------------------------
-    py::class_<SolverConfig>(m, "SolverConfig", R"pbdoc(
+    py::class_<SolverConfig>(module, "SolverConfig", R"pbdoc(
     Configuration options for the non-linear optimization solver used in trajectory refinement.
 
     This class encapsulates the configuration options for the solver used in the PoseOptimizer.
@@ -124,8 +63,9 @@ void init_mapping(py::module& m, py::module&) {
         gradient_tolerance (float): The tolerance threshold for changes in the gradient. Solver stops when gradient magnitude falls below this value.
         parameter_tolerance (float): The tolerance threshold for changes in parameters. Solver stops when parameter changes fall below this value.
         process_printout (bool): Flag to enable or disable detailed printout of the optimization process.
-	loss_function (str): The name of the robust loss function to use (e.g., "HuberLoss", "CauchyLoss", "SoftLOneLoss", "ArctanLoss", "TrivialLoss").
+        loss_function (str): The name of the robust loss function to use (e.g., "HUBER_LOSS", "CAUCHY_LOSS", "SOFT_L_ONE_LOSS", "ARCTAN_LOSS", "TRIVIAL_LOSS").
         loss_scale (float): The scaling parameter for the chosen loss function. Higher values make the loss less sensitive to outliers.
+        fix_first_node (bool): Flag to fix the first node of the trajectory during optimization. Default is False.
     )pbdoc")
         .def(py::init<>(), "Initialize SolverConfig with default values.")
         .def_readwrite("key_frame_distance", &SolverConfig::key_frame_distance)
@@ -140,28 +80,202 @@ void init_mapping(py::module& m, py::module&) {
                        &SolverConfig::parameter_tolerance)
         .def_readwrite("process_printout", &SolverConfig::process_printout)
         .def_readwrite("loss_function", &SolverConfig::loss_function)
-        .def_readwrite("loss_scale", &SolverConfig::loss_scale);
+        .def_readwrite("loss_scale", &SolverConfig::loss_scale)
+        .def_readwrite("fix_first_node", &SolverConfig::fix_first_node);
 
-    py::enum_<SamplingMode>(m, "SamplingMode")
+    py::enum_<SamplingMode>(module, "SamplingMode")
         .value("KEY_FRAMES", SamplingMode::KEY_FRAMES)
         .value("COLUMNS", SamplingMode::COLUMNS);
 
-    py::enum_<LossFunction>(m, "LossFunction")
-        .value("HuberLoss", LossFunction::HuberLoss)
-        .value("CauchyLoss", LossFunction::CauchyLoss)
-        .value("SoftLOneLoss", LossFunction::SoftLOneLoss)
-        .value("ArctanLoss", LossFunction::ArctanLoss)
-        .value("TrivialLoss", LossFunction::TrivialLoss)
+    py::enum_<LossFunction>(module, "LossFunction")
+        .value("HUBER_LOSS", LossFunction::HUBER_LOSS)
+        .value("CAUCHY_LOSS", LossFunction::CAUCHY_LOSS)
+        .value("SOFT_L_ONE_LOSS", LossFunction::SOFT_L_ONE_LOSS)
+        .value("ARCTAN_LOSS", LossFunction::ARCTAN_LOSS)
+        .value("TRIVIAL_LOSS", LossFunction::TRIVIAL_LOSS)
 
-        .def_static("from_string", &from_string, py::arg("name"),
+        .def_static("from_string", &loss_function_from_string, py::arg("name"),
                     R"pbdoc(
-                Convert a string (e.g. "HuberLoss") to the corresponding LossFunction enum.
+                Convert a string (e.g. "HUBER_LOSS") to the corresponding LossFunction enum.
+
                 Args:
-		    name: one of "HuberLoss", "CauchyLoss", "SoftLOneLoss", "ArctanLoss", "TrivialLoss"
+       name: one of "HUBER_LOSS", "CAUCHY_LOSS", "SOFT_L_ONE_LOSS", "ARCTAN_LOSS", "TRIVIAL_LOSS"
             )pbdoc");
 
+    //----- Wrap PoseOptimizerNode (internal node) ---------------------------
+    py::class_<Node, std::shared_ptr<Node>>(module, "PoseOptimizerNode")
+        .def_property_readonly("ts", [](const Node& n) { return n.ts; })
+        .def_property_readonly(
+            "downsampled_pts",
+            [](const Node& n) { return n.downsampled_pts.matrix(); })
+        .def_property_readonly(
+            "ptp_constraint_pt",
+            [](const Node& n) { return n.ptp_constraint_pt.matrix(); })
+        .def_property_readonly(
+            "ap_constraint_pt",
+            [](const Node& n) { return n.ap_constraint_pt.matrix(); })
+        .def("get_pose", [](const Node& n) { return n.get_pose(); });
+
+    //----- Wrap constraint classes -------------------------------------------
+    // Base constraint class
+    py::class_<Constraint>(module, "Constraint", R"pbdoc(
+        Base class for all pose optimization constraints.
+
+        This is the abstract base class for all constraints used in pose optimization.
+        Use the specific constraint classes like AbsolutePoseConstraint, PoseToPoseConstraint,
+        or PointToPointConstraint instead of using this class directly.
+    )pbdoc")
+        .def_readwrite("translation_weights", &Constraint::translation_weights)
+        .def("get_constraint_id", &Constraint::get_constraint_id, R"pbdoc(
+            Get the unique constraint ID. Returns 0 for non-user constraints.
+
+            Returns:
+                int: The constraint ID, or 0 if not a user-added constraint.
+        )pbdoc");
+
+    py::class_<AbsolutePoseConstraint, Constraint>(module,
+                                                   "AbsolutePoseConstraint",
+                                                   R"pbdoc(
+        Absolute pose constraint - fixes a pose at a specific timestamp.
+
+        This constraint type enforces that the sensor pose at a given timestamp
+        matches a specific target pose.
+    )pbdoc")
+        .def(py::init<>(), "Default constructor")
+        .def(py::init<uint64_t, const Eigen::Matrix4d&, double,
+                      const Eigen::Array3d&>(),
+             py::arg("timestamp"), py::arg("pose"),
+             py::arg("rotation_weight") = 1.0,
+             py::arg("translation_weight") = Eigen::Array3d::Ones(),
+             R"pbdoc(
+                              Constructor for AbsolutePoseConstraint.
+
+               Args:
+                   timestamp (int): Timestamp of the pose to constrain (nanoseconds)
+                   pose: The 4x4 transformation matrix (SE3) to constrain to
+                   rotation_weight: Scalar weight applied to the quaternion axis-alignment residual
+                   translation_weight: Weight for translation constraints (x, y, z)
+               )pbdoc")
+        .def_readwrite("timestamp", &AbsolutePoseConstraint::timestamp)
+        .def_readwrite("pose", &AbsolutePoseConstraint::pose)
+        .def_readwrite("rotation_weight",
+                       &AbsolutePoseConstraint::rotation_weight)
+        .def_readwrite("translation_weights",
+                       &AbsolutePoseConstraint::translation_weights);
+
+    py::class_<PoseToPoseConstraint, Constraint>(module, "PoseToPoseConstraint",
+                                                 R"pbdoc(
+        Relative pose-to-pose constraint - enforces relative transformation between two poses.
+
+        This constraint type enforces a specific relative transformation between
+        two poses at different timestamps.
+    )pbdoc")
+        .def(py::init<>(), "Default constructor")
+        .def(py::init<uint64_t, uint64_t, const Eigen::Matrix4d&, double,
+                      const Eigen::Array3d&>(),
+             py::arg("timestamp1"), py::arg("timestamp2"),
+             py::arg("relative_pose") = Eigen::Matrix4d::Identity(),
+             py::arg("rotation_weight") = 1.0,
+             py::arg("translation_weight") = Eigen::Array3d::Ones(),
+             R"pbdoc(
+               Constructor for PoseToPoseConstraint.
+
+               Args:
+                   timestamp1 (int): Timestamp of the first pose (nanoseconds)
+                   timestamp2 (int): Timestamp of the second pose (nanoseconds)
+                   relative_pose: Expected relative transformation from pose1 to pose2.
+                                 Use the identity matrix to let PoseOptimizer auto-estimate it via ICP.
+                   rotation_weight: Scalar weight applied to the quaternion axis-alignment residual
+                   translation_weight: Weight for translation constraints (x, y, z)
+               )pbdoc")
+        .def_readwrite("timestamp1", &PoseToPoseConstraint::timestamp1)
+        .def_readwrite("timestamp2", &PoseToPoseConstraint::timestamp2)
+        .def_readwrite("relative_pose", &PoseToPoseConstraint::relative_pose)
+        .def_readwrite("rotation_weight",
+                       &PoseToPoseConstraint::rotation_weight)
+        .def_readwrite("translation_weights",
+                       &PoseToPoseConstraint::translation_weights);
+
+    py::class_<PointToPointConstraint, Constraint>(module,
+                                                   "PointToPointConstraint",
+                                                   R"pbdoc(
+        Point-to-point constraint - enforces correspondence between points.
+
+        This constraint type enforces that specific points in two different
+        lidar scans correspond to the same physical location.
+    )pbdoc")
+        .def(py::init<>(), "Default constructor")
+        .def(py::init<uint64_t, uint32_t, uint32_t, uint32_t, uint64_t,
+                      uint32_t, uint32_t, uint32_t, const Eigen::Array3d&>(),
+             py::arg("timestamp1"), py::arg("row1"), py::arg("col1"),
+             py::arg("return_idx1"), py::arg("timestamp2"), py::arg("row2"),
+             py::arg("col2"), py::arg("return_idx2"),
+             py::arg("translation_weight") = Eigen::Array3d::Ones(),
+             R"pbdoc(
+               Constructor for PointToPointConstraint.
+
+               Args:
+                   timestamp1 (int): Timestamp of the first point's pose (nanoseconds)
+                   row1 (int): Row index of the first point
+                   col1 (int): Column index of the first point
+                   return_idx1 (int): Return index of the first point (1 or 2)
+                   timestamp2 (int): Timestamp of the second point's pose (nanoseconds)
+                   row2 (int): Row index of the second point
+                   col2 (int): Column index of the second point
+                   return_idx2 (int): Return index of the second point (1 or 2)
+                   translation_weight: Weight for translation constraints (x, y, z)
+               )pbdoc")
+        .def_readwrite("timestamp1", &PointToPointConstraint::timestamp1)
+        .def_readwrite("timestamp2", &PointToPointConstraint::timestamp2)
+        .def_readwrite("row1", &PointToPointConstraint::row1)
+        .def_readwrite("col1", &PointToPointConstraint::col1)
+        .def_readwrite("return_idx1", &PointToPointConstraint::return_idx1)
+        .def_readwrite("row2", &PointToPointConstraint::row2)
+        .def_readwrite("col2", &PointToPointConstraint::col2)
+        .def_readwrite("return_idx2", &PointToPointConstraint::return_idx2)
+        .def_readwrite("translation_weights",
+                       &PointToPointConstraint::translation_weights);
+
+    py::class_<AbsolutePointConstraint, Constraint>(module,
+                                                    "AbsolutePointConstraint",
+                                                    R"pbdoc(
+        Absolute point constraint.
+
+        Constrains a single 3D point from a LiDAR scan, identified by its 2D
+        image coordinates (row, col) and return index at a given timestamp, to
+        match a user-defined absolute 3D position in the world frame. The 3D
+        point is computed the same way as in PointToPointConstraint (via RANGE/
+        RANGE2 and the XYZ LUT), but is compared to a provided global point
+        instead of another scan point.
+    )pbdoc")
+        .def(py::init<>(), "Default constructor")
+        .def(py::init<uint64_t, uint32_t, uint32_t, uint32_t,
+                      const Eigen::Vector3d&, const Eigen::Array3d&>(),
+             py::arg("timestamp"), py::arg("row"), py::arg("col"),
+             py::arg("return_idx"), py::arg("absolute_position"),
+             py::arg("translation_weight") = Eigen::Array3d::Ones(),
+             R"pbdoc(
+               Constructor for AbsolutePointConstraint.
+
+               Args:
+                   timestamp (int): Timestamp of the point's pose (nanoseconds)
+                   row (int): Row index of the point
+                   col (int): Column index of the point
+                   return_idx (int): Return index of the point (1 or 2)
+                   absolute_position: Target world position (x, y, z)
+                   translation_weight: Weight for translation constraints (x, y, z)
+               )pbdoc")
+        .def_readwrite("timestamp", &AbsolutePointConstraint::timestamp)
+        .def_readwrite("row", &AbsolutePointConstraint::row)
+        .def_readwrite("col", &AbsolutePointConstraint::col)
+        .def_readwrite("return_idx", &AbsolutePointConstraint::return_idx)
+        .def_readwrite("absolute_position",
+                       &AbsolutePointConstraint::absolute_position)
+        .def_readwrite("translation_weights",
+                       &AbsolutePointConstraint::translation_weights);
+
     //----- Wrap PoseOptimizer -------------------------------------------
-    py::class_<PoseOptimizer>(m, "PoseOptimizer", R"pbdoc(
+    py::class_<PoseOptimizer>(module, "PoseOptimizer", R"pbdoc(
         A class for optimizing LiDAR sensor trajectories using various geometric constraints.
 
         This class allows adding different types of constraints (pose-to-pose, absolute pose, point-to-point)
@@ -170,240 +284,150 @@ void init_mapping(py::module& m, py::module&) {
         a physically plausible trajectory.
     )pbdoc")
         // Constructors
-        .def(py::init<const std::string&, const SolverConfig&, bool>(),
+        .def(py::init<const std::string&, const SolverConfig&>(),
              py::arg("osf_filename"), py::arg("options"),
-             py::arg("fix_first_node") = false,
              R"pbdoc(
-             Initialize PoseOptimizer with an OSF file and solver options.
+                 Initialize PoseOptimizer with an OSF file and solver options.
 
-             Args:
-                 osf_filename (str): Path to the OSF file containing trajectory data.
-                 options (SolverConfig): Solver configuration options.
-		 fix_first_node (bool, optional): Flag to fix the first node in the trajectory. Default is False.
-             )pbdoc")
+                 Args:
+                     osf_filename (str): Path to the OSF file containing trajectory data.
+                     options (SolverConfig): Solver configuration options. Set options.fix_first_node to True to fix the first node.
+                 )pbdoc")
 
-        .def(py::init<const std::string&, double, bool>(),
-             py::arg("osf_filename"), py::arg("key_frame_distance"),
-             py::arg("fix_first_node") = false,
+        .def(py::init<const std::string&, const std::string&>(),
+             py::arg("osf_filename"), py::arg("config_filename"),
              R"pbdoc(
-             Initialize PoseOptimizer with an OSF file and a node gap.
+                 Initialize PoseOptimizer with an OSF file and solver options loaded from a config file.
 
-             Args:
-                 osf_filename (str): Path to the OSF file containing trajectory data.
-                 key_frame_distance (float): The gap distance between nodes in the trajectory.
-		 fix_first_node (bool, optional): Flag to fix the first node in the trajectory. Default is False.
-             )pbdoc")
+                 Args:
+                     osf_filename (str): Path to the OSF file containing trajectory data.
+                     config_filename: Path to the configuration file (JSON) containing solver options. Set fix_first_node in the config file to True to fix the first node.
+                 )pbdoc")
 
-        .def("add_pose_to_pose_constraint",
-             py::overload_cast<uint64_t, uint64_t,
-                               const Eigen::Matrix<double, 6, 1>&, double,
-                               double>(
-                 &PoseOptimizer::add_pose_to_pose_constraint),
-             py::arg("ts1"), py::arg("ts2"), py::arg("diff"),
-             py::arg("rotation_weight") = 1.0,
-             py::arg("translation_weight") = 1.0,
+        .def(py::init<const std::string&, double>(), py::arg("osf_filename"),
+             py::arg("key_frame_distance"),
              R"pbdoc(
-               Add a relative pose constraint between two frames with a known transformation.
-   
-               This constraint specifies that the relative transformation between poses at timestamps ts1 and ts2
-               should match the provided difference. Useful when you have externally computed transformations
-               (e.g., from ICP or visual odometry).
-   
+                 Initialize PoseOptimizer with an OSF file and a node gap.
+
+                 Args:
+                     osf_filename (str): Path to the OSF file containing trajectory data.
+                     key_frame_distance (float): The gap distance between nodes in the trajectory.
+                     To fix the first node, set fix_first_node in the SolverConfig after construction.
+                 )pbdoc")
+
+        // Methods for managing constraints
+        .def(
+            "add_constraint",
+            [](PoseOptimizer& self, Constraint& constraint) -> uint32_t {
+                // Create unique_ptr from the constraint object and add it to
+                // the optimizer
+                std::unique_ptr<Constraint> constraint_ptr;
+
+                // Attempt to cast to specific constraint types and clone them
+                if (auto* abs_constraint =
+                        dynamic_cast<AbsolutePoseConstraint*>(&constraint)) {
+                    constraint_ptr = std::make_unique<AbsolutePoseConstraint>(
+                        *abs_constraint);
+                } else if (auto* rel_pose_constraint =
+                               dynamic_cast<PoseToPoseConstraint*>(
+                                   &constraint)) {
+                    constraint_ptr = std::make_unique<PoseToPoseConstraint>(
+                        *rel_pose_constraint);
+                } else if (auto* rel_point_constraint =
+                               dynamic_cast<PointToPointConstraint*>(
+                                   &constraint)) {
+                    constraint_ptr = std::make_unique<PointToPointConstraint>(
+                        *rel_point_constraint);
+                } else if (auto* abs_point_constraint =
+                               dynamic_cast<AbsolutePointConstraint*>(
+                                   &constraint)) {
+                    constraint_ptr = std::make_unique<AbsolutePointConstraint>(
+                        *abs_point_constraint);
+                } else {
+                    throw std::invalid_argument("Unknown constraint type");
+                }
+
+                return self.add_constraint(std::move(constraint_ptr));
+            },
+            py::arg("constraint"),
+            R"pbdoc(
+               Add a constraint to the pose optimization problem.
+
+               This is the new unified API for adding constraints. Use the constraint class
+               constructors to create constraints, then pass them to this method.
+               The constraint will be assigned a unique ID for later removal if needed.
+
                Args:
-                   ts1 (int): Timestamp of the first frame.
-                   ts2 (int): Timestamp of the second frame.
-                   diff (Eigen::Matrix<double, 6, 1>): Pose difference between the two frames [rx,ry,rz,tx,ty,tz]
-                   rotation_weight (float, optional): Weight for rotation constraints. Default is 1.0.
-                   translation_weight (float, optional): Weight for translation constraints. Default is 1.0.
-   
+                   constraint: A constraint object created by one of the constraint constructors.
+
                Returns:
-                   bool: True if the constraint was successfully added, False otherwise.
+                   int: The unique constraint ID assigned to the added constraint.
+
+               Raises:
+                   RuntimeError: If the constraint cannot be added.
                )pbdoc")
 
-        .def("add_pose_to_pose_constraint",
-             py::overload_cast<uint64_t, uint64_t,
-                               const Eigen::Matrix<double, 4, 4>&, double,
-                               double>(
-                 &PoseOptimizer::add_pose_to_pose_constraint),
-             py::arg("ts1"), py::arg("ts2"), py::arg("diff"),
-             py::arg("rotation_weight") = 1.0,
-             py::arg("translation_weight") = 1.0,
+        .def("remove_constraint", &PoseOptimizer::remove_constraint,
+             py::arg("constraint_id"),
              R"pbdoc(
-               Add a relative pose constraint between two frames with a known transformation in 4x4 matrix.
-   
-               This constraint specifies that the relative transformation between poses at timestamps ts1 and ts2
-               should match the provided difference in 4x4 matrix form. Useful when you have externally computed transformations
-               (e.g., from ICP or visual odometry).
-   
+               Remove a constraint from the pose optimization problem.
+
                Args:
-                   ts1 (int): Timestamp of the first frame.
-                   ts2 (int): Timestamp of the second frame.
-                   diff (Eigen::Matrix<double, 4, 4>): Pose difference between the two frames as a 4x4 transformation matrix.
-                   rotation_weight (float, optional): Weight for rotation constraints. Default is 1.0.
-                   translation_weight (float, optional): Weight for translation constraints. Default is 1.0.
-   
-               Returns:
-                   bool: True if the constraint was successfully added, False otherwise.
+                   constraint_id (int): The unique ID of the constraint to remove.
+
+               Raises:
+                   RuntimeError: If the constraint ID is not found.
                )pbdoc")
 
-        .def("add_pose_to_pose_constraint",
-             py::overload_cast<uint64_t, uint64_t, double, double>(
-                 &PoseOptimizer::add_pose_to_pose_constraint),
-             py::arg("ts1"), py::arg("ts2"), py::arg("rotation_weight") = 1.0,
-             py::arg("translation_weight") = 1.0,
-             R"pbdoc(
-               Add a relative pose constraint between two frames using automatic alignment.
-   
-               This overload automatically computes the transformation between frames at ts1 and ts2
-               using the built-in ICP algorithm on the point clouds from these timestamps.
-   
-               Args:
-                   ts1 (int): Timestamp of the first frame.
-                   ts2 (int): Timestamp of the second frame.
-                   rotation_weight (float, optional): Weight for rotation constraints. Default is 1.0.
-                   translation_weight (float, optional): Weight for translation constraints. Default is 1.0.
-   
+        .def(
+            "get_constraints",
+            [](const PoseOptimizer& self) -> py::list {
+                auto constraints = self.get_constraints();
+                py::list result;
+
+                for (const auto& constraint : constraints) {
+                    if (auto* abs_constraint =
+                            dynamic_cast<const AbsolutePoseConstraint*>(
+                                constraint.get())) {
+                        result.append(*abs_constraint);
+                    } else if (auto* rel_pose_constraint =
+                                   dynamic_cast<const PoseToPoseConstraint*>(
+                                       constraint.get())) {
+                        result.append(*rel_pose_constraint);
+                    } else if (auto* rel_point_constraint =
+                                   dynamic_cast<const PointToPointConstraint*>(
+                                       constraint.get())) {
+                        result.append(*rel_point_constraint);
+                    } else if (auto* abs_point_constraint =
+                                   dynamic_cast<const AbsolutePointConstraint*>(
+                                       constraint.get())) {
+                        result.append(*abs_point_constraint);
+                    }
+                }
+
+                return result;
+            },
+            R"pbdoc(
+               Get all constraints currently added to the pose optimizer.
+
                Returns:
-                   bool: True if the constraint was successfully added, False otherwise.
+                   list: A list of constraint objects (copies) currently configured in the optimizer.
                )pbdoc")
 
-        .def("add_absolute_pose_constraint",
-             py::overload_cast<uint64_t, const Eigen::Matrix<double, 6, 1>&,
-                               double, double,
-                               const Eigen::Matrix<double, 6, 1>&>(
-                 &PoseOptimizer::add_absolute_pose_constraint),
-             py::arg("ts"), py::arg("target_pose"),
-             py::arg("rotation_weight") = 1.0,
-             py::arg("translation_weight") = 1.0,
-             py::arg("diff") = Eigen::Matrix<double, 6, 1>::Zero(),
+        .def("initialize_trajectory_alignment",
+             &PoseOptimizer::initialize_trajectory_alignment,
              R"pbdoc(
-               Add a constraint fixing a pose to an absolute position and orientation.
-   
-               This constraint anchors a pose at a specific timestamp to a known fixed position/orientation
-               in the global coordinate frame, such as from GPS or manual ground truth annotations.
-   
-               Args:
-                   ts (int): Timestamp at which the absolute pose constraint is applied.
-                   target_pose (Eigen::Matrix<double, 6, 1>): The target pose [rx,ry,rz,tx,ty,tz] in global coordinates.
-                   rotation_weight (float, optional): Weight for rotation constraints. Default is 1.0.
-                   translation_weight (float, optional): Weight for translation constraints. Default is 1.0.
-		   diff (Eigen::Matrix<double, 6, 1>, optional): The expected difference (rotation and translation) between the source and target. Default is zero.
-   
-               Returns:
-                   bool: True if the constraint was successfully added, False otherwise.
-               )pbdoc")
+                Initialize trajectory alignment using average absolute constraints.
 
-        .def("add_absolute_pose_constraint",
-             py::overload_cast<uint64_t, const Eigen::Matrix<double, 4, 4>&,
-                               double, double,
-                               const Eigen::Matrix<double, 4, 4>&>(
-                 &PoseOptimizer::add_absolute_pose_constraint),
-             py::arg("ts"), py::arg("target_pose"),
-             py::arg("rotation_weight") = 1.0,
-             py::arg("translation_weight") = 1.0,
-             py::arg("diff") = Eigen::Matrix<double, 4, 4>::Identity(),
-             R"pbdoc(
-               Add a constraint fixing a pose to an absolute position and orientation with a 4x4 matrix.
-   
-               This constraint anchors a pose at a specific timestamp to a known fixed position/orientation
-               in the global coordinate frame, such as from GPS or manual ground truth annotations,
-               using a 4x4 transformation matrix.
-   
-               Args:
-                   ts (int): Timestamp at which the absolute pose constraint is applied.
-                   target_pose (Eigen::Matrix<double, 4, 4>): The target pose as a 4x4 transformation matrix in global coordinates.
-                   rotation_weight (float, optional): Weight for rotation constraints. Default is 1.0.
-                   translation_weight (float, optional): Weight for translation constraints. Default is 1.0.
-		   diff (Eigen::Matrix<double, 4, 4>, optional): The expected difference (rotation and translation) between the source and target. Default is identity.
-   
-               Returns:
-                   bool: True if the constraint was successfully added, False otherwise.
-               )pbdoc")
-
-        .def("add_absolute_pose_constraint",
-             py::overload_cast<uint64_t, const Eigen::Matrix<double, 6, 1>&,
-                               const std::array<double, 3>&,
-                               const std::array<double, 3>&,
-                               const Eigen::Matrix<double, 6, 1>&>(
-                 &PoseOptimizer::add_absolute_pose_constraint),
-             py::arg("ts"), py::arg("target_pose"),
-             py::arg("rotation_weights") = std::array<double, 3>{1.0, 1.0, 1.0},
-             py::arg("translation_weights") =
-                 std::array<double, 3>{1.0, 1.0, 1.0},
-             py::arg("diff") = Eigen::Matrix<double, 6, 1>::Zero(),
-             R"pbdoc(
-               Adds an absolute pose constraint with a predefined pose difference for a given timestamp (6x1 form).
-
-               This function adds a constraint to enforce a specific pose (target_pose) at timestamp ts,
-               weighted by per-axis rotation and translation weights. The pose difference can further
-               adjust how the target pose is enforced.
-
-               Args:
-                   ts (int): Timestamp at which the absolute pose constraint is applied.
-                   target_pose (Eigen::Matrix<double, 6, 1>): The target pose [rx, ry, rz, tx, ty, tz].
-                   rotation_weights (List[float]): Rotational weight for each axis ([rx_weight, ry_weight, rz_weight]).
-                   translation_weights (List[float]): Translational weight for each axis ([tx_weight, ty_weight, tz_weight]).
-                   diff (Eigen::Matrix<double, 6, 1>, optional): The pose difference in 6x1 form. Default is zero.
-
-               Returns:
-                   bool: True if the constraint was successfully added, false otherwise.
-             )pbdoc")
-
-        .def("add_absolute_pose_constraint",
-             py::overload_cast<uint64_t, const Eigen::Matrix<double, 4, 4>&,
-                               const std::array<double, 3>&,
-                               const std::array<double, 3>&,
-                               const Eigen::Matrix<double, 4, 4>&>(
-                 &PoseOptimizer::add_absolute_pose_constraint),
-             py::arg("ts"), py::arg("target_pose"),
-             py::arg("rotation_weights") = std::array<double, 3>{1.0, 1.0, 1.0},
-             py::arg("translation_weights") =
-                 std::array<double, 3>{1.0, 1.0, 1.0},
-             py::arg("diff") = Eigen::Matrix<double, 4, 4>::Identity(),
-             R"pbdoc(
-                  Adds an absolute pose constraint with a predefined pose difference for a given timestamp (4x4 matrix form).
-   
-                  This function adds a constraint to enforce a specific pose (target_pose) at timestamp ts,
-                  weighted by per-axis rotation and translation weights. The pose difference can further
-                  adjust how the target pose is enforced using a 4x4 transformation matrix.
-   
-                  Args:
-                      ts (int): Timestamp at which the absolute pose constraint is applied.
-                      target_pose (Eigen::Matrix<double, 4, 4>): The target pose as a 4x4 transformation matrix.
-                      rotation_weights (List[float]): Rotational weight for each axis ([rx_weight, ry_weight, rz_weight]).
-                      translation_weights (List[float]): Translational weight for each direction ([tx_weight, ty_weight, tz_weight]).
-                      diff (Eigen::Matrix<double, 4, 4>, optional): The pose difference in 4x4 form. Default is identity.
-   
-                  Returns:
-                      bool: True if the constraint was successfully added, false otherwise.
-                )pbdoc")
-
-        // add_point_to_point_constraint
-        .def("add_point_to_point_constraint",
-             &PoseOptimizer::add_point_to_point_constraint, py::arg("ts1"),
-             py::arg("row1"), py::arg("col1"), py::arg("return_idx1"),
-             py::arg("ts2"), py::arg("row2"), py::arg("col2"),
-             py::arg("return_idx2"), py::arg("translation_weight") = 1.0,
-             R"pbdoc(
-                Add a constraint between two specific points that should represent the same physical location.
-
-                This constraint enforces that two LiDAR points from different frames, identified by their
-                row/column coordinates, should map to the same physical location in the world after applying
-                their respective pose transformations. Useful for manual feature correspondence.
-
-                Args:
-                    ts1 (int): Timestamp of the first frame.
-                    row1 (int): Row index of the point in the first frame's 2D point representation.
-                    col1 (int): Column index of the point in the first frame's 2D point representation.
-                    return_idx1 (int): Lidar return index for multi-return sensors (0 for first return).
-                    ts2 (int): Timestamp of the second frame.
-                    row2 (int): Row index of the point in the second frame's 2D point representation.
-                    col2 (int): Column index of the point in the second frame's 2D point representation.
-                    return_idx2 (int): Lidar return index for multi-return sensors (0 for first return).
-                    translation_weight (float, optional): Weight for this constraint. Default is 1.0.
+                Computes a weighted average SE(3) transform from the currently
+                loaded absolute pose and absolute point constraints (using their
+                weights in Lie algebra space) and left-multiplies the entire
+                trajectory by that transform as an initial alignment step before
+                optimization.
 
                 Returns:
-                    bool: True if the constraint was successfully added, False otherwise.
+                    bool: True if an alignment transform was applied, False if
+                        skipped (e.g. no absolute constraints or negligible delta).
             )pbdoc")
 
         .def("solve", &PoseOptimizer::solve, py::arg("steps") = 0,
@@ -417,22 +441,113 @@ void init_mapping(py::module& m, py::module&) {
              Args:
                  steps (int, optional): The number of iterations to run for this incremental
                      optimization. Defaults to 0 (uses whatever max_num_iterations was already set).
+	     Returns:
+                 float: The cost value from the last solve call.
          )pbdoc")
 
-	.def("get_timestamps",
-            [](const PoseOptimizer &self, SamplingMode type) {
-	        std::vector<uint64_t> vec = self.get_timestamps(type);
+        .def(
+            "set_solver_step_callback",
+            [](PoseOptimizer& self, py::function callback) {
+                // Wrap the Python callable in a C++ functor.
+                // The callback is invoked from the same thread as solve().
+                self.set_solver_step_callback([cb = std::move(callback)]() {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        cb();
+                    } catch (py::error_already_set& e) {
+                        // Avoid throwing through ceres callback; report error
+                        PyErr_WriteUnraisable(e.value().ptr());
+                    }
+                });
+            },
+            py::arg("callback"),
+            R"pbdoc(
+                Register a Python callable to be invoked at each solver iteration.
+
+                The callable runs on the same thread as ``solve()``, once per ceres
+                iteration. Use this to hook visualization or logging.
+
+                Args:
+                    callback (Callable[[], None]): Function to call each iteration.
+            )pbdoc")
+
+        .def("get_cost_value", &PoseOptimizer::get_cost_value,
+             R"pbdoc(
+                Get the last solver cost value (final cost from the last solve()).
+
+                Returns:
+                    float: The last recorded solver cost value.
+            )pbdoc")
+
+        .def("save_config", &PoseOptimizer::save_config,
+             py::arg("config_filename"),
+             R"pbdoc(
+        Save the current SolverConfig (including constraints) to a JSON file.
+
+        This method serializes the current solver configuration and all constraints
+        to a JSON file. The resulting file can be used later with Pose Optimizer
+        construction to restore the exact same optimization setup.
+
+        Args:
+            config_filename (str): Path where the JSON file should be saved.
+
+        Raises:
+            RuntimeError: If the file cannot be saved.
+        )pbdoc")
+
+        .def("get_total_iterations", &PoseOptimizer::get_total_iterations,
+             R"pbdoc(
+                Get the cumulative number of solver iterations executed so far.
+
+                Returns:
+                    int: Total iterations across all calls to solve().
+            )pbdoc")
+
+        .def(
+            "get_sampled_nodes",
+            [](PoseOptimizer& self, size_t count) {
+                auto nodes = self.get_sampled_nodes(count);
+                py::list out;
+                for (auto& node : nodes) {
+                    out.append(node);
+                }
+                return out;
+            },
+            py::arg("count") = 100,
+            R"pbdoc(
+               Retrieve up to `count` scan nodes evenly sampled across the OSF.
+
+               Each node is guaranteed to have a downsampled point cloud; nodes
+               are created on-demand if necessary.
+            )pbdoc")
+
+        .def(
+            "get_node",
+            [](const PoseOptimizer& self, uint64_t ts) {
+                auto n = self.get_node(ts);
+                return n;
+            },
+            py::arg("timestamp"),
+            R"pbdoc(
+               Get the node associated with a given timestamp (first-valid-column ts).
+               The node pose is updated before returning. Returns None if not found.
+            )pbdoc")
+
+        .def(
+            "get_timestamps",
+            [](const PoseOptimizer& self, SamplingMode type) {
+                std::vector<uint64_t> vec = self.get_timestamps(type);
 
                 py::array_t<uint64_t> arr(vec.size());
                 auto buf = arr.request();
-                uint64_t *ptr = static_cast<uint64_t*>(buf.ptr);
+                uint64_t* ptr = static_cast<uint64_t*>(buf.ptr);
 
                 std::memcpy(ptr, vec.data(), vec.size() * sizeof(uint64_t));
                 return arr;
             },
 
             py::arg("type"),
-	    R"pbdoc(
+            R"pbdoc(
                 Retrieve timestamps corresponding to the selected sampling mode.
 
                 Args:
@@ -444,26 +559,27 @@ void init_mapping(py::module& m, py::module&) {
                     numpy.ndarray[np.uint64]: A 1D array of timestamps (nanoseconds).
             )pbdoc")
 
-	.def("get_poses",
-             [](PoseOptimizer& self, SamplingMode type) {
-	 	auto mats = self.get_poses(type);
-         	py::ssize_t n = static_cast<py::ssize_t>(mats.size());
+        .def(
+            "get_poses",
+            [](PoseOptimizer& self, SamplingMode type) {
+                auto mats = self.get_poses(type);
+                py::ssize_t num_poses = static_cast<py::ssize_t>(mats.size());
 
-         	std::vector<py::ssize_t> shape = {n, 4, 4};
-         	py::array_t<double> arr(shape);
+                std::vector<py::ssize_t> shape = {num_poses, 4, 4};
+                py::array_t<double> arr(shape);
 
-         	auto buf = arr.mutable_unchecked<3>();
-         	for (py::ssize_t i = 0; i < n; ++i) {
-         	    for (int r = 0; r < 4; ++r) {
-         	        for (int c = 0; c < 4; ++c) {
-         	            buf(i, r, c) = mats[i](r, c);
-         	        }
-         	    }
-         	}
-         	return arr;
-             },
-             py::arg("type"),
-	     R"pbdoc(
+                auto buf = arr.mutable_unchecked<3>();
+                for (py::ssize_t i = 0; i < num_poses; ++i) {
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 4; ++col) {
+                            buf(i, row, col) = mats[i](row, col);
+                        }
+                    }
+                }
+                return arr;
+            },
+            py::arg("type"),
+            R"pbdoc(
                 Retrieve poses as a NumPy array of 4×4 transformation matrices.
 
                 Args:
@@ -475,7 +591,12 @@ void init_mapping(py::module& m, py::module&) {
                     numpy.ndarray[np.float64]: An (n, 4, 4) array of 4×4 poses.
             )pbdoc")
 
-        .def("save", &PoseOptimizer::save, py::arg("osf_name"),
+        .def("get_key_frame_distance", &PoseOptimizer::get_key_frame_distance,
+             R"pbdoc(
+                Return the configured key-frame distance (meters) used when constructing the trajectory.
+             )pbdoc")
+
+        .def("save", &PoseOptimizer::save, py::arg("osf_filename"),
              R"pbdoc(
                  Save the optimized trajectory to an OSF file.
 
@@ -483,40 +604,78 @@ void init_mapping(py::module& m, py::module&) {
                  preserving all other data from the original file.
 
                  Args:
-                     osf_name (str): The name of the output OSF file.
+                     osf_filename (str): The name of the output OSF file.
 
                  Returns:
                      bool: True if the file was successfully saved, False otherwise.
+             )pbdoc")
+
+        .def(
+            "get_constraints",
+            [](const PoseOptimizer& self) {
+                auto constraints = self.get_constraints();
+                py::list result;
+                for (const auto& constraint : constraints) {
+                    // Clone each constraint to prevents dangling pointers
+                    auto cloned = constraint->clone();
+                    result.append(
+                        py::cast(cloned.release(),
+                                 py::return_value_policy::take_ownership));
+                }
+                return result;
+            },
+            R"pbdoc(
+                 Get all constraints currently configured in the pose optimizer.
+
+                 This method returns a copy of all constraints that are currently
+                 configured in the pose optimizer, including both constraints loaded
+                 from JSON files during construction and constraints added later via
+                 add_constraint().
+
+                 Returns:
+                     List[Constraint]: A list of Constraint objects representing all currently
+                     configured constraints.
+             )pbdoc")
+
+        .def(
+            "set_constraints",
+            [](PoseOptimizer& self, py::list constraints) {
+                std::vector<std::unique_ptr<Constraint>> constraint_vec;
+                for (auto item : constraints) {
+                    auto* constraint_ptr = item.cast<Constraint*>();
+                    constraint_vec.push_back(constraint_ptr->clone());
+                }
+                self.set_constraints(std::move(constraint_vec));
+            },
+            py::arg("constraints"),
+            R"pbdoc(
+                 Set all constraints for the pose optimizer.
+
+                 This method replaces all existing constraints with the provided set
+                 of constraints. Any constraints previously loaded from JSON files or
+                 added via add_constraint() will be removed and replaced with the new
+                 constraint set.
+
+                 Args:
+                     constraints (List[Constraint]): A list of Constraint objects to set as the
+                     complete constraint set.
+
+                 Raises:
+                     RuntimeError: If the constraints cannot be set.
              )pbdoc");
 
-    py::class_<Preprocessor> internal_preprocessor(m, "_Preprocessor",
-                                                   "Don't use this");
-    internal_preprocessor
-        .def(py::init<double, double, bool, int>(), py::arg("max_range"),
-             py::arg("min_range"), py::arg("deskew"),
-             py::arg("max_num_threads"))
-        .def(
-            "_preprocess",
-            [](Preprocessor& self, const std::vector<Eigen::Vector3d>& points,
-               const std::vector<double>& timestamps,
-               const Eigen::Matrix4d& relative_motion) {
-                return self.Preprocess(points, timestamps, relative_motion);
-            },
-            py::arg("points"), py::arg("timestamps"),
-            py::arg("relative_motion"));
-
-    m.def(
+    module.def(
         "save_trajectory",
         [](const std::string& filename,
            py::array_t<uint64_t, py::array::c_style | py::array::forcecast>
                ts_arr,
            py::array_t<double, py::array::c_style | py::array::forcecast>
                poses_arr,
-           const std::string& file_type) -> bool {
+           const std::string& file_type) {
             auto ts_buf = ts_arr.unchecked<1>();
             py::ssize_t n_ts = ts_buf.shape(0);
             std::vector<uint64_t> timestamps;
-            timestamps.reserve((size_t)n_ts);
+            timestamps.reserve(static_cast<size_t>(n_ts));
             for (py::ssize_t i = 0; i < n_ts; ++i) {
                 timestamps.push_back(ts_buf(i));
             }
@@ -529,17 +688,250 @@ void init_mapping(py::module& m, py::module&) {
             }
             auto p_buf = poses_arr.unchecked<3>();
             std::vector<Eigen::Matrix<double, 4, 4>> poses;
-            poses.reserve((size_t)n_ts);
+            poses.reserve(static_cast<size_t>(n_ts));
             for (py::ssize_t i = 0; i < n_ts; ++i) {
-                Eigen::Matrix<double, 4, 4> M;
-                for (int r = 0; r < 4; ++r) {
-                    for (int c = 0; c < 4; ++c) M(r, c) = p_buf(i, r, c);
+                Eigen::Matrix<double, 4, 4> matrix;
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        matrix(row, col) = p_buf(i, row, col);
+                    }
                 }
-                poses.push_back(M);
+                poses.push_back(matrix);
             }
 
-            return save_trajectory(filename, timestamps, poses, file_type);
+            save_trajectory(filename, timestamps, poses, file_type);
         },
         py::arg("filename"), py::arg("timestamps"), py::arg("poses"),
         py::arg("file_type") = "csv");
+
+    py::class_<SlamConfig>(module, "SlamConfig", R"pbdoc(
+        Configuration options for the SLAM engine.
+    )pbdoc")
+        .def(py::init<>(), "...")
+        .def_readwrite("min_range", &SlamConfig::min_range)
+        .def_readwrite("max_range", &SlamConfig::max_range)
+        .def_readwrite("voxel_size", &SlamConfig::voxel_size)
+        .def_readwrite("initial_pose", &SlamConfig::initial_pose)
+        .def_readwrite("backend", &SlamConfig::backend)
+        .def_readwrite("deskew_method", &SlamConfig::deskew_method);
+
+    py::class_<SlamEngine>(module, "SlamEngine", R"pbdoc(
+        The SLAM engine for processing LiDAR scans and computing poses.
+    )pbdoc")
+        .def(py::init<const std::vector<std::shared_ptr<SensorInfo>>&,
+                      const SlamConfig&>(),
+             py::arg("infos"), py::arg("config"),
+             R"pbdoc(
+                SlamEngine constructor.
+
+                Args:
+                    infos (List[SensorInfo]): List of sensor info objects for each
+                        sensor in the system.
+                    config (SlamConfig): Configuration options for the SLAM engine.
+             )pbdoc")
+        .def(
+            "update",
+            [](SlamEngine& self, LidarScanSet& scans) -> LidarScanSet& {
+                self.update(scans);
+                return scans;
+            },
+            py::arg("scans"),
+            R"pbdoc(
+                Update the pose (per_column_global_pose) variable in scan and return
+
+                Args:
+                    scans (List[LidarScan]): List of scans to update with the latest pose.
+
+                Returns:
+                    List[LidarScan]: The updated scans with per_column_global_pose set.
+            )pbdoc")
+        .def("get_point_cloud", &SlamEngine::get_point_cloud,
+             R"pbdoc(
+                Get the current point cloud from the SLAM engine.
+
+                Returns:
+                    Nx3: The point cloud generated by the SLAM engine.
+            )pbdoc");
+
+    py::class_<LocalizationConfig>(module, "LocalizationConfig", R"pbdoc(
+        Configuration options for the Localization engine.
+    )pbdoc")
+        .def(py::init<>(), "...")
+        .def_readwrite("min_range", &LocalizationConfig::min_range)
+        .def_readwrite("max_range", &LocalizationConfig::max_range)
+        .def_readwrite("voxel_size", &LocalizationConfig::voxel_size)
+        .def_readwrite("initial_pose", &LocalizationConfig::initial_pose)
+        .def_readwrite("backend", &LocalizationConfig::backend)
+        .def_readwrite("deskew_method", &LocalizationConfig::deskew_method);
+
+    py::class_<LocalizationEngine>(module, "LocalizationEngine", R"pbdoc(
+        The Localization engine for processing LiDAR scans and computing poses based
+        on prebuilt pointcloud map.
+    )pbdoc")
+        .def(py::init<const std::vector<std::shared_ptr<SensorInfo>>&,
+                      const LocalizationConfig&, const std::string&>(),
+             py::arg("infos"), py::arg("config"), py::arg("map"),
+             R"pbdoc(
+                LocalizationEngine constructor.
+
+                Args:
+                    infos (List[SensorInfo]): List of sensor info objects for each
+                        sensor in the system.
+                    config (LocalizationConfig): Configuration options for the Localization engine.
+                    map_path (string): Path to the point cloud map.
+             )pbdoc")
+        .def(
+            "update",
+            [](LocalizationEngine& self, LidarScanSet& scans) -> LidarScanSet& {
+                self.update(scans);
+                return scans;
+            },
+            py::arg("scans"),
+            R"pbdoc(
+                Update the pose (per_column_global_pose) variable in scan and return
+
+                Args:
+                    scans (List[LidarScan]): List of scans to update with the latest pose.
+
+                Returns:
+                    List[LidarScan]: The updated scans with per_column_global_pose set
+            )pbdoc");
+
+    py::class_<DeskewMethod, PyDeskewMethod>(module, "DeskewMethod", R"pbdoc(
+        Base class for all deskewing methods.
+
+        This is the abstract base class for all deskewing methods. Use specific
+        derived classes like ConstantVelocityDeskewMethod instead of using this
+        class directly.
+    )pbdoc")
+        .def(py::init<const std::vector<std::shared_ptr<SensorInfo>>&>(),
+             py::arg("infos"),
+             R"pbdoc(
+                ConstantVelocityDeskewMethod constructor.
+
+                Args:
+                    infos (List[SensorInfo]): List of sensor info objects for each
+                        sensor in the system.
+             )pbdoc")
+        .def(
+            "update",
+            [](DeskewMethod& self, LidarScanSet& scans) -> LidarScanSet& {
+                self.update(scans);
+                return scans;
+            },
+            py::arg("scans"),
+            R"pbdoc(
+                Update the pose (per_column_global_pose) variable in scan.
+
+                Args:
+                    scans (LidarScanSet): a LidarScanSet.
+
+                Returns:
+                    LidarScanSet: The updated lidar scans with per_column_global_pose set
+            )pbdoc");
+
+    py::class_<ConstantVelocityDeskewMethod, DeskewMethod>(
+        module, "ConstantVelocityDeskewMethod", R"pbdoc(
+        Deskew method that assumes constant velocity motion between poses.
+    )pbdoc")
+        .def(py::init<const std::vector<std::shared_ptr<SensorInfo>>&>(),
+             py::arg("infos"),
+             R"pbdoc(
+                ConstantVelocityDeskewMethod constructor.
+
+                Args:
+                    infos (List[SensorInfo]): List of sensor info objects for each
+                        sensor in the system.
+             )pbdoc")
+        .def(
+            "set_last_pose",
+            [](ConstantVelocityDeskewMethod& self, uint64_t ts,
+               const py::array_t<double, py::array::c_style |
+                                             py::array::forcecast>& pose_arr) {
+                if (pose_arr.ndim() != 2 || pose_arr.shape(0) != 4 ||
+                    pose_arr.shape(1) != 4) {
+                    throw std::runtime_error(
+                        "pose must be a (4,4) array representing a "
+                        "transformation matrix");
+                }
+                auto buf = pose_arr.unchecked<2>();
+                Eigen::Matrix<double, 4, 4> pose;
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        pose(row, col) = buf(row, col);
+                    }
+                }
+                self.set_last_pose(ts, pose);
+            },
+            py::arg("ts"), py::arg("pose"),
+            R"pbdoc(
+                Set the current pose to use for deskewing.
+
+                This method allows setting the current pose that will be used
+                as a reference for deskewing incoming scans. The current pose
+                should represent the sensor's pose at the time of the most recent
+                scan.
+
+                Args:
+                    ts (int): The timestamp (nanoseconds) associated with the pose.
+                    pose (numpy.ndarray): A 4x4 transformation matrix representing
+                        the current pose.
+            )pbdoc");
+
+    py::class_<DeskewMethodFactory>(module, "DeskewMethodFactory", R"pbdoc(
+            Factory class for creating DeskewMethod instances.
+        )pbdoc")
+        .def_static(
+            "create",
+            [&](const std::string& method_name,
+                const std::vector<std::shared_ptr<SensorInfo>>& infos)
+                -> std::shared_ptr<DeskewMethod> {
+                return DeskewMethodFactory::create(method_name, infos);
+            },
+            py::arg("method_name"), py::arg("infos"),
+            R"pbdoc(
+                    Create a DeskewMethod instance based on the specified method name.
+
+                    Args:
+                        method_name (str): The name of the deskew method to create.
+                        infos (List[SensorInfo]): List of sensor info objects for each
+                            sensor in the system.
+
+                    Returns:
+                        DeskewMethod: A new instance of the specified deskew method.
+                 )pbdoc");
+
+    py::class_<ActiveTimeCorrection>(module, "ActiveTimeCorrection", R"pbdoc(
+        Class for correcting timestamps of LiDAR scans based on active time correction.
+    )pbdoc")
+        .def(py::init<const std::vector<std::shared_ptr<SensorInfo>>&>(),
+             py::arg("infos"),
+             R"pbdoc(
+                ActiveTimeCorrection constructor.
+                Args:
+                    infos (List[SensorInfo]): List of sensor info objects for each
+                        sensor in the system.
+             )pbdoc")
+        .def(
+            "update",
+            [](ActiveTimeCorrection& self,
+               LidarScanSet& scans) -> LidarScanSet& {
+                self.update(scans);
+                return scans;
+            },
+            py::arg("scans"),
+            R"pbdoc(
+                Update the timestamps in the provided LidarScanSet using active time correction.
+            )pbdoc")
+        .def(
+            "reset",
+            [](ActiveTimeCorrection& self,
+               LidarScanSet& scans) -> LidarScanSet& {
+                self.reset(scans);
+                return scans;
+            },
+            py::arg("scans"),
+            R"pbdoc(
+                Restore the timestamps in the provided LidarScanSet to their original values before active time correction was applied.
+            )pbdoc");
 }

@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
+// NOLINTBEGIN
 #ifndef TINS_IP_REASSEMBLER2_H
 #define TINS_IP_REASSEMBLER2_H
 
@@ -36,7 +36,10 @@
 #include <tins/pdu.h>
 
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace Tins {
@@ -47,7 +50,7 @@ namespace Tins {
 namespace Internals {
 class IPv4Fragment2 {
    public:
-    typedef PDU::serialization_type payload_type;
+    using payload_type = PDU::serialization_type;
 
     IPv4Fragment2() : offset_() {}
 
@@ -76,7 +79,7 @@ class IPv4Stream2 {
     const IP& first_fragment() const;
 
    private:
-    typedef std::vector<IPv4Fragment2> fragments_type;
+    using fragments_type = std::vector<IPv4Fragment2>;
 
     uint16_t extract_offset(const IP* ip);
     bool extract_more_frag(const IP* ip);
@@ -170,9 +173,9 @@ class IPv4Reassembler2 {
     PacketStatus process(const std::chrono::microseconds& timestamp, PDU& pdu);
 
    private:
-    typedef std::pair<IPv4Address, IPv4Address> address_pair;
-    typedef std::pair<uint16_t, address_pair> key_type;
-    typedef std::map<key_type, Internals::IPv4Stream2> streams_type;
+    using address_pair = std::pair<IPv4Address, IPv4Address>;
+    using key_type = std::pair<uint16_t, address_pair>;
+    using streams_type = std::map<key_type, Internals::IPv4Stream2>;
 
     key_type make_key(const IP* ip) const;
     address_pair make_address_pair(IPv4Address addr1, IPv4Address addr2) const;
@@ -183,3 +186,4 @@ class IPv4Reassembler2 {
 }  // namespace Tins
 
 #endif  // TINS_IP_REASSEMBLER2_H
+        // NOLINTEND

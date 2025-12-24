@@ -121,6 +121,9 @@ class AsyncServiceDiscovery:
 
     async def async_display_service_info(self, zeroconf: Zeroconf,
                                          service_type: str, name: str) -> None:
+        # wait a bit for any additional updates to come in
+        await asyncio.sleep(0.1)
+
         # try to get service info
         info = AsyncServiceInfo(service_type, name)
         await info.async_request(zeroconf, self.async_request_timeout_ms)
@@ -178,15 +181,15 @@ def get_output_for_sensor(sensor):
     sensor_hostname = sensor.get('hostname', undefined_value)
     prod_line = unknown
     udp_dest = undefined_value
+    udp_dest_zm = undefined_value
     udp_port_lidar = undefined_value
     udp_port_imu = undefined_value
+    udp_port_zm = undefined_value
     ipv4_address = None
     ipv4_link_local = None
     ipv6_address = None
     ipv6_link_local = None
-    # TODO: decide if we need to display the addresses obtained via mDNS.
-    # (Probably not.)
-    # addresses = sensor.get('addresses')
+    addresses = sensor.get('addresses')
     sensor_info = sensor.get('sensor_info')
     config = sensor.get('active_config')
     network = sensor.get('network')
@@ -195,14 +198,26 @@ def get_output_for_sensor(sensor):
     sn = sensor_info.get('prod_sn', unknown) if sensor_info else unknown
     warnings = sensor.get('warnings')
     color = 'white'
+
+    def extract_addr_port(config: dict, name: str):
+        overall_config = config.get(name, None)
+        if overall_config is not None:
+            udp_config = overall_config.get("udp", None)
+            if udp_config is not None:
+                addr = udp_config.get("addr", undefined_value)
+                port = udp_config.get("port", undefined_value)
+                return (addr, port)
+        return None
+
     if sensor_info:
         prod_line = sensor_info.get('prod_line', unknown)
     if config:
         udp_dest = config.get('udp_dest', undefined_value)
+        udp_dest_zm = config.get('udp_dest_zm', undefined_value)
         udp_port_lidar = config.get('udp_port_lidar', undefined_value)
         udp_port_imu = config.get('udp_port_imu', undefined_value)
+        udp_port_zm = config.get('udp_port_zm', undefined_value)
     if network:
-
         ipv4 = network.get('ipv4')
         ipv4_address_type = 'static' if ipv4.get('override') else 'DHCP'
         ipv4_address = ipv4.get('override') or ipv4.get('addr')
@@ -220,7 +235,10 @@ def get_output_for_sensor(sensor):
         out += click.style("* warnings:\n", fg='yellow')
         for warning in warnings:
             out += click.style(f"  * {warning}\n", fg='yellow')
-    out += f"* firmware: {firmware}\n* addresses:\n"
+    out += f"* firmware: {firmware}\n* discovered addresses:\n"
+    for address in addresses:
+        out += f"  * {address}\n"
+    out += "* reported addresses:\n"
     if ipv4_address:
         out += f"  * IPv4 {ipv4_address_type} {ipv4_address}\n"
     if ipv4_link_local:
@@ -229,8 +247,13 @@ def get_output_for_sensor(sensor):
         out += f"  * IPv6 {ipv6_address_type} {ipv6_address}\n"
     if ipv6_link_local:
         out += f"  * IPv6 link-local {ipv6_link_local}\n"
-    out += f"* UDP destination address: {udp_dest}\n"
-    out += f"* UDP port lidar, IMU: {udp_port_lidar}, {udp_port_imu}\n"
+    if udp_dest_zm == undefined_value:
+        out += f"* UDP destination address: {udp_dest}\n"
+        out += f"* UDP port lidar, IMU: {udp_port_lidar}, {udp_port_imu}\n"
+    else:
+        # < 3.2 FW output
+        out += f"* UDP destination address lidar, ZM: {udp_dest}, {udp_dest_zm}\n"
+        out += f"* UDP port lidar, IMU, ZM: {udp_port_lidar}, {udp_port_imu}, {udp_port_zm}\n"
     if user_data:
         out += f"* user data: {user_data}\n"
     return out, color

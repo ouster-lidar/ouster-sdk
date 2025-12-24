@@ -1,5 +1,4 @@
-#  type: ignore
-from typing import Optional, Iterable, Tuple, Union
+from typing import Optional, Iterable, List, Tuple, Union, MutableMapping, Any, Dict, cast, Callable
 import atexit
 import click
 import re
@@ -8,20 +7,24 @@ import importlib.metadata
 import threading
 import copy
 import numpy as np
+import glob as libglob
+import operator
 from itertools import islice
 from functools import partial
 from ouster.cli.core import cli
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
-from ouster.sdk import open_source, open_packet_source, SourceURLException
-from ouster.sdk.core import (LidarScan, ImuPacket, collate)
+from ouster.sdk import open_source, open_packet_source, SourceURLException, core, sensor
+from ouster.sdk.core import (ImuPacket, collate, ScanSource, MultiScanSource)
 from ouster.sdk.sensor import ClientTimeout
-from ouster.sdk.core import (extension_from_io_type, io_type, OusterIoType)
+from ouster.sdk.core import (extension_from_io_type, io_type, OusterIoType,
+                             ChanField, FieldClass, LidarScan, XYZLut, dewarp,
+                             normals, destagger, stagger, PacketSource)
 from ouster.sdk.pcap import PcapDuplicatePortException
 import ouster.cli.plugins.source_pcap as pcap_cli
 import ouster.cli.plugins.source_osf as osf_cli
-import ouster.cli.plugins.source_sensor as sensor_cli
 from ouster.sdk.util.extrinsics import parse_extrinsics_from_string
+from ouster.sdk.util import ProgressBar
 import ouster.sdk.util.pose_util as pu
 from .source_save import (SourceSaveCommand, source_save_raw)
 from .source_util import (CoupledTee,
@@ -31,9 +34,9 @@ from .source_util import (CoupledTee,
                           source_multicommand,
                           _join_with_conjunction,
                           _nanos_to_string)
-import ouster.sdk._bindings.mapping as mapping
+import ouster.sdk.mapping as mapping
+from .source_po_viz import PoseOptimizerViz
 from .source_bag import bag_info
-import ouster.sdk.mapping.json_parser as json_parser
 
 _source_arg_name: str = 'source'
 
@@ -107,6 +110,7 @@ def parse_resolution(click_ctx: Optional[click.core.Context],
 
 
 @click.command()
+@click.option("--fullscreen", is_flag=True, help="Put the viz into fullscreen mode.")
 @click.option("-p", "--pause", is_flag=True, help="Pause at first lidar scan")
 @click.option("-e", "--on-eof", default='loop', type=click.Choice(['loop', 'stop', 'exit']),
               help="Loop, stop or exit after reaching end of file")
@@ -155,6 +159,9 @@ def parse_resolution(click_ctx: Optional[click.core.Context],
               help="When set, the global map will be downsampled using the specified voxel size (meters)")
 @click.option("--global-map-point-size", default=1.0, type=float, show_default=True,
               help="Set the point size of the the global map")
+@click.option("--imu-plot-options", default='only_gyro',
+              type=click.Choice(['only_gyro', 'only_acc', 'both', 'none']),
+              help="Specifies which fields to display in IMU plots.")
 @click.option("-m", "--maximize", type=bool, is_flag=True, help="Maximize the window")
 @click.option("--screenshot-resolution", default=None, callback=parse_resolution,
               help="Specify a custom resolution as <width>x<height> (e.g. 1920x1080), a scale factor <scale_factor>x"
@@ -178,15 +185,18 @@ def source_viz(ctx: SourceCommandContext,
                global_map_flatten: bool,
                global_map_voxel_size: Optional[float],
                global_map_point_size: float,
+               imu_plot_options: str,
                screenshot_resolution: Optional[str],
-               maximize: bool) -> SourceCommandCallback:
+               maximize: bool,
+               fullscreen: bool) -> None:
     """Visualize LidarScans in a 3D viewer."""
     try:
-        from ouster.sdk.viz import SimpleViz
+        from ouster.sdk.viz import SimpleViz, ImuVisualizationConfig, Cloud
     except ImportError as e:
         raise click.ClickException(str(e))
 
     source = ctx.scan_source
+    assert source is not None
 
     # ugly workarounds ensue
     if on_eof == 'loop':
@@ -199,19 +209,21 @@ def source_viz(ctx: SourceCommandContext,
         pause_at = 0
 
     # Determine how to set the rate
+    viz_rate: Optional[float]
     if rate == "max":
-        rate = 0.0
+        viz_rate = 0.0
     else:
-        rate = float(rate)
+        viz_rate = float(rate)
     if source.is_live:
-        if rate != 1.0:
+        if viz_rate != 1.0:
             raise click.exceptions.UsageError("Can only set a rate of 1 for live sources")
-        rate = None
+        viz_rate = None
 
-    ctx.scan_iter, tees = CoupledTee.tee(ctx.scan_iter,
+    ctx.scan_iter, tees = CoupledTee.tee(ctx.scan_iter,  # type: ignore
                                          terminate=ctx.terminate_evt,
                                          loop=_viz_wants_cycle)
     scans = tees[0]
+    assert ctx.scan_source is not None
     metadata = ctx.scan_source.sensor_info
 
     # build the accumulator
@@ -248,7 +260,7 @@ def source_viz(ctx: SourceCommandContext,
     def viz_thread_fn():
         sv = SimpleViz(
             metadata,
-            rate=rate, pause_at=pause_at, on_eof=on_eof,
+            rate=viz_rate, pause_at=pause_at, on_eof=on_eof,
             accum_max_num=accum_num,
             accum_min_dist_num=accum_every,
             accum_min_dist_meters=accum_every_m,
@@ -256,14 +268,15 @@ def source_viz(ctx: SourceCommandContext,
             map_select_ratio=map_ratio,
             map_max_points=map_size,
             title="Ouster Viz: " + ctx.source_uri,
+            imu_viz_config=ImuVisualizationConfig(options=imu_plot_options),
             maximized=maximize,
+            fullscreen=fullscreen,
             screenshot_resolution=screenshot_resolution
         )
 
         map_path = ctx.get("localization.map", None) if global_map is None else global_map
 
         if map_path is not None:
-            from ouster.sdk.viz import Cloud
             from ouster.sdk.core import read_pointcloud, voxel_downsample
             click.echo("Start loading global points into VIZ")
             pts = read_pointcloud(map_path)
@@ -287,7 +300,7 @@ def source_viz(ctx: SourceCommandContext,
     if ctx.main_thread_fn is not None:
         raise RuntimeError(
             "A main-thread required function has already been set.")
-    ctx.main_thread_fn = viz_thread_fn
+    ctx.main_thread_fn = viz_thread_fn  # type: ignore
 
 
 # global to store slice argument for quick index
@@ -372,7 +385,7 @@ def tslice(scans_iter, start, stop, step):
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR)
 def source_slice(ctx: SourceCommandContext,
-                 indices: Tuple[Optional[int]]) -> SourceCommandCallback:
+                 indices: Tuple[Optional[int], Optional[int], Optional[int], bool]) -> None:
     """Slice LidarScans streamed from SOURCE. Use the form [start]:[stop][:step].
     Optionally can specify start and stop as times relative to the start of the file
     using the units h (hours), min (minutes), s (seconds), or ms (milliseconds).
@@ -385,7 +398,122 @@ def source_slice(ctx: SourceCommandContext,
     def slice_iterator():
         for scan in slice_method(scans_iter(), start, stop, step):
             yield scan
-    ctx.scan_iter = slice_iterator
+    ctx.scan_iter = slice_iterator  # type: ignore
+
+
+@click.command(name="normals")
+@click.option("--sensor-coord", is_flag=True, default=False,
+              help="Compute normals in the sensor coordinate")
+@click.option("--pixel-search-range", type=int, default=1, show_default=True,
+              help="Limit the neighbor pixel search to +/- this many pixels when estimating normals.")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.PROCESSOR)
+def source_normals(ctx: SourceCommandContext, sensor_coord: bool,
+                   pixel_search_range: int) -> None:
+    """Compute unit surface normals for each ``LidarScan``.
+
+    By default the point clouds are dewarped using per-column poses (when
+    available) so normals are expressed in the global coordinate. Pass
+    ``--sensor-coord`` to keep computations in the sensor coordinate instead.
+    """
+    if ctx.scan_iter is None or ctx.scan_source is None:
+        raise click.ClickException("'normals' must be used after a source is initialized.")
+    scan_iter = ctx.scan_iter
+    sensor_infos = ctx.scan_source.sensor_info
+    xyzluts: Dict[int, Callable[[Union[LidarScan, np.ndarray]], np.ndarray]] = {
+        idx: XYZLut(info, True) for idx, info in enumerate(sensor_infos)
+    }
+
+    def estimate_normals(scan: LidarScan, sensor_idx: int) -> None:
+        info = scan.sensor_info
+        xyzlut = xyzluts.get(sensor_idx)
+        if xyzlut is None:
+            xyzlut = XYZLut(info, True)
+            xyzluts[sensor_idx] = xyzlut
+        h, w = scan.h, scan.w
+
+        range_staggered = scan.field(ChanField.RANGE)
+        xyz_staggered = xyzlut(range_staggered).reshape(h, w, 3)
+
+        range_destaggered = destagger(info, range_staggered)
+        xyz_destaggered = destagger(info, xyz_staggered)
+        if not sensor_coord:
+            poses = scan.pose
+            xyz_destaggered = dewarp(xyz_destaggered, poses)
+            sensor_origins_xyz = (poses @ info.extrinsic)[:, :3, 3]
+        else:
+            sensor_origins_xyz = np.zeros((w, 3))
+
+        normals_destaggered: np.ndarray
+        normals2_destaggered: Optional[np.ndarray] = None
+        if scan.has_field(ChanField.RANGE2):
+            range2_staggered = scan.field(ChanField.RANGE2)
+            xyz2_staggered = xyzlut(range2_staggered).reshape(h, w, 3)
+
+            range2_destaggered = destagger(info, range2_staggered)
+            xyz2_destaggered = destagger(info, xyz2_staggered)
+            if not sensor_coord:
+                xyz2_destaggered = dewarp(xyz2_destaggered, poses)
+
+            normals_destaggered, normals2_destaggered = normals(
+                xyz_destaggered,
+                range_destaggered,
+                xyz2_destaggered,
+                range2_destaggered,
+                pixel_search_range=pixel_search_range,
+                sensor_origins_xyz=sensor_origins_xyz,
+            )
+        else:
+            normals_destaggered = normals(
+                xyz_destaggered,
+                range_destaggered,
+                pixel_search_range=pixel_search_range,
+                sensor_origins_xyz=sensor_origins_xyz,
+            )
+
+        normals_staggered = stagger(info, normals_destaggered).astype(np.float32, copy=False)
+
+        def update_scan_field(field_name: str, values: np.ndarray) -> None:
+            expected_shape = values.shape
+            per_pixel_shape = expected_shape[2:]
+            field_dtype = values.dtype.type
+            if scan.has_field(field_name):
+                field_view = scan.field(field_name)
+                if field_view.shape != expected_shape or field_view.dtype != values.dtype:
+                    scan.del_field(field_name)
+                    field_view = scan.add_field(field_name, field_dtype, per_pixel_shape)
+            else:
+                field_view = scan.add_field(field_name, field_dtype, per_pixel_shape)
+            field_view[:] = values
+
+        update_scan_field("NORMALS", normals_staggered)
+
+        if normals2_destaggered is not None:
+            normals2_staggered = stagger(info, normals2_destaggered).astype(np.float32, copy=False)
+            update_scan_field("NORMALS2", normals2_staggered)
+        elif scan.has_field("NORMALS2"):
+            scan.del_field("NORMALS2")
+
+    def normals_iter() -> Iterable[List[Optional[LidarScan]]]:
+        if scan_iter is None:
+            return
+
+        for scans in scan_iter():  # type: ignore[operator]
+            out: List[Optional[LidarScan]] = []
+            for idx, scan in enumerate(scans):
+                if scan is None:
+                    out.append(None)
+                    continue
+
+                try:
+                    estimate_normals(scan, idx)
+                except Exception as exc:
+                    click.secho(f"Warning: failed to compute normals for scan {idx}: {exc}", fg='yellow')
+
+                out.append(scan)
+            yield out
+
+    ctx.scan_iter = normals_iter  # type: ignore[assignment]
 
 
 def extract_clip_indices(click_ctx: Optional[click.core.Context],
@@ -419,8 +547,8 @@ def extract_clip_indices(click_ctx: Optional[click.core.Context],
               help="The value used when replacing out of range values")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR)
-def source_clip(ctx: SourceCommandContext, fields: Optional[str],
-                indices: Tuple[Optional[int]], out_of_range_value: int,
+def source_clip(ctx: SourceCommandContext, fields: str,
+                indices: Tuple[Optional[int], Optional[int]], out_of_range_value: int,
                 **kwargs) -> None:
     """
     Constraints the range of values of the specified fields to the range [lower, upper] inclusive.
@@ -442,20 +570,18 @@ def source_clip(ctx: SourceCommandContext, fields: Optional[str],
     scan_iter = ctx.scan_iter
     field_list = fields.strip().split(',')
     start, stop = indices
-    start = start if start is not None else float('-inf')
-    stop = stop if stop is not None else float('inf')
+    real_start = start if start is not None else float('-inf')
+    real_stop = stop if stop is not None else float('inf')
 
     def clip_iter():
         for scans in scan_iter():
-            out = [None] * len(scans)
-            for idx, scan in enumerate(scans):
+            out = copy.deepcopy(scans)
+            for scan in out:
                 if scan:
-                    result = LidarScan(scan)
-                    so.clip(result, field_list, start, stop, out_of_range_value)
-                    out[idx] = result
+                    so.clip(scan, field_list, real_start, real_stop, out_of_range_value)
             yield out
 
-    ctx.scan_iter = clip_iter
+    ctx.scan_iter = clip_iter  # type: ignore
 
 
 @click.command
@@ -468,7 +594,7 @@ def source_clip(ctx: SourceCommandContext, fields: Optional[str],
               help="The value to used for pixels that match the filter")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR)
-def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Optional[int]],
+def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Optional[int], Optional[int]],
                   filtered_fields: Optional[str], invalid_value: float, **kwargs) -> None:
     """
     Apply a filter to LidarScan data based on the specified axis/field and indices.
@@ -499,44 +625,41 @@ def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Opt
     """
     import ouster.sdk.core.scan_ops as so
 
-    min_v, max_v = indices
-    min_v = min_v if min_v is not None else float('-inf')
-    max_v = max_v if max_v is not None else float('inf')
+    raw_min_v, raw_max_v = indices
+    min_v = raw_min_v if raw_min_v is not None else float('-inf')
+    max_v = raw_max_v if raw_max_v is not None else float('inf')
 
     def filter_xyz_iter(scan_iter, axis_field, invalid_value, filtered_fields):
         axis_map = {'x': 0, 'y': 1, 'z': 2}
         axis_idx = axis_map.get(axis_field, None)
         # construct xyzlut per sensor
         from ouster.sdk.core import XYZLut
-        xyzluts = [XYZLut(s, use_extrinsics=True) for s in ctx.scan_source.metadata]
+        xyzluts = [XYZLut(s, use_extrinsics=True) for s in ctx.scan_source.sensor_info]
         for scans in scan_iter():
-            out = [None] * len(scans)
-            for idx, scan in enumerate(scans):
+            out = copy.deepcopy(scans)
+            for idx, scan in enumerate(out):
                 if scan:
-                    out[idx] = LidarScan(scan)
                     # we divide by 1000 since xyzlut values are measured in meters
-                    so.filter_xyz(out[idx], xyzluts[idx], axis_idx,
+                    so.filter_xyz(scan, xyzluts[idx], axis_idx,
                               min_v / 1000, max_v / 1000, invalid_value,
                               filtered_fields=filtered_fields)
             yield out
 
     def filter_field_uv(scan_iter, axis_field, invalid_value, filtered_fields):
         for scans in scan_iter():
-            out = [None] * len(scans)
-            for idx, scan in enumerate(scans):
+            out = copy.deepcopy(scans)
+            for scan in out:
                 if scan:
-                    out[idx] = LidarScan(scan)
-                    so.filter_uv(out[idx], axis_field, min_v, max_v, invalid_value,
+                    so.filter_uv(scan, axis_field, min_v, max_v, invalid_value,
                                  filtered_fields=filtered_fields)
             yield out
 
     def filter_field_iter(scan_iter, axis_field, invalid_value, filtered_fields):
         for scans in scan_iter():
-            out = [None] * len(scans)
-            for idx, scan in enumerate(scans):
+            out = copy.deepcopy(scans)
+            for scan in out:
                 if scan:
-                    out[idx] = LidarScan(scan)
-                    so.filter_field(out[idx], axis_field, min_v, max_v, invalid_value,
+                    so.filter_field(scan, axis_field, min_v, max_v, invalid_value,
                                     filtered_fields=filtered_fields)
             yield out
 
@@ -545,13 +668,13 @@ def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Opt
 
     if axis_field.lower() in 'xyz':
         ctx.scan_iter = partial(filter_xyz_iter, ctx.scan_iter, axis_field.lower(),
-                                invalid_value, field_list)
+                                invalid_value, field_list)  # type: ignore
     elif axis_field.lower() in 'uv':
         ctx.scan_iter = partial(filter_field_uv, ctx.scan_iter, axis_field.lower(),
-                                invalid_value, field_list)
+                                invalid_value, field_list)  # type: ignore
     else:   # assume it's a field name
         ctx.scan_iter = partial(filter_field_iter, ctx.scan_iter, axis_field,
-                                invalid_value, field_list)
+                                invalid_value, field_list)  # type: ignore
 
 
 @click.command
@@ -567,10 +690,10 @@ def default_source_metadata(ctx: SourceCommandContext, click_ctx: click.core.Con
     """
     Display sensor metadata about the SOURCE.
     """
-    src = open_source(ctx.source_uri, **ctx.source_options, collate=False)
+    src = open_source(ctx.source_uri or "", **ctx.source_options, collate=False)
 
     if n >= len(src.sensor_info) or n < 0:
-        raise click.ClickException(f"Sensor index {n} out of range. Must be between 0 and {len(src.metadata) - 1}")
+        raise click.ClickException(f"Sensor index {n} out of range. Must be between 0 and {len(src.sensor_info) - 1}")
 
     print(src.sensor_info[n].to_json_string())
 
@@ -579,7 +702,7 @@ _plumb_matrix = None
 
 
 def plumb_prerun(ctx: SourceCommandContext) -> None:
-    source_name = ctx.source_uri
+    source_name = ctx.source_uri or ""
     source_list = [url.strip() for url in source_name.split(',') if url.strip()]
 
     opts = copy.copy(ctx.source_options)
@@ -589,37 +712,59 @@ def plumb_prerun(ctx: SourceCommandContext) -> None:
         del opts['sensor_idx']
     else:
         sensor_idx = None
-    source = open_packet_source(source_list, **opts)
+
+    source: PacketSource
+    if io_type(source_list[0] or "") == OusterIoType.OSF:
+        from ouster.sdk.util import scan_to_packets
+
+        # simple class to make packets from an OSF
+        class ToPackets:
+            def __init__(self, src):
+                self._src = src
+                self.sensor_info = src.sensor_info
+
+            def close(self):
+                self._src.close()
+
+            def __iter__(self):
+                for scans in self._src:
+                    for idx, scan in enumerate(scans):
+                        if scan is None:
+                            continue
+                        pkts = scan_to_packets(scan, scan.sensor_info)
+                        for pkt in pkts:
+                            yield idx, pkt
+
+        source = ToPackets(open_source(source_list, **opts))  # type: ignore
+    else:
+        source = open_packet_source(source_list, **opts)
+    info = source.sensor_info
     if sensor_idx is not None and sensor_idx >= len(source.sensor_info):
         click.secho("ERROR: --sensor-idx must be less than the count of sensors in the source.", fg='red')
         exit(1)
+    else:
+        sums = []
+        length = len(info) if sensor_idx is None else 1
+        for i in range(0, length):
+            sums.append(np.array((0.0, 0.0, 0.0)))
+        count = np.array([0] * length)
 
-    info = source.sensor_info
+        for idx, packet in source:
+            if (count > 100).all():
+                break
 
-    sums = []
-    length = len(info) if sensor_idx is None else 1
-    for i in range(0, length):
-        sums.append(np.array((0.0, 0.0, 0.0)))
-    count = np.array([0] * length)
+            if isinstance(packet, ImuPacket):
+                valid = packet.status()
+                for m_idx, acc in enumerate(packet.accel()):
+                    if valid[m_idx]:
+                        sums[idx] += (acc[0], acc[1], acc[2])
+                        count[idx] += 1
 
-    for idx, packet in source:
-        if sensor_idx is not None:
-            if idx != sensor_idx:
-                continue
-            idx = 0
-
-        if (count > 100).all():
-            break
-
-        if isinstance(packet, ImuPacket):
-            sums[idx] += (packet.la_x(), packet.la_y(), packet.la_z())
-            count[idx] += 1
-
-    source.close()
+        source.close()
 
     if not (count > 0).all():
-        click.echo(f"ERROR: No IMU packet found in the source {source_name}")
-        exit(1)
+        click.secho(f"ERROR: No IMU packet found in the source {source_name}", fg="red")
+        exit()
         return
 
     exts = []
@@ -658,209 +803,89 @@ def source_plumb(ctx: SourceCommandContext, click_ctx: click.core.Context) -> No
     """Calculate the extrinsic matrix to align each sensor's Z-axis with the
     gravity vector using IMU data"""
 
+    assert ctx.scan_source is not None
+
     # just apply the plumb matrix we calculated above
     global _plumb_matrix
+    assert _plumb_matrix is not None
     for i, info in enumerate(ctx.scan_source.sensor_info):
         info.extrinsic = _plumb_matrix[i]
 
 
 @click.command
-@click.argument('constraints_json_file', required=True, type=str)
 @click.argument('output_osf_file', required=True, type=str)
+@click.option('--viz', is_flag=True,
+              help="Launch interactive pose optimization visualization instead of batch solving.")
+@click.option('--no-initial-align', is_flag=True, default=False,
+              help="Disable the initial alignment with absolute constraints in the visualizer.")
+@click.option('--config', 'constraints_json_file', required=False, type=str, default=None,
+              help="Constraints JSON configuration file to load.")
+@click.option('--auto-constraints', is_flag=True, default=False,
+              help="Automatically generate and add GPS absolute pose constraints "
+                   "(in addition to any constraints loaded from --config).")
+@click.option('--gps-constraints-every-m', type=click.FloatRange(min=0, min_open=True),
+              default=100.0, show_default=True,
+              help="Distance in meters between GPS absolute pose constraints to add when "
+                   "--auto-constraints is set. Distance is computed from lidar scan poses.")
+@click.option('--gps-constraints-weights', type=str, default="0.01,0.01,0.001", show_default=True,
+              help="Translation weights WX,WY,WZ for auto-generated GPS absolute pose constraints. "
+                   "The default value constrain GPS-derived position X,Y; and soft constrains Z with the "
+                   "lidar scan pose Z (from SLAM) when available.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED)
-def source_pose_optimize(ctx, constraints_json_file: str, output_osf_file: str) -> None:
+def source_pose_optimize(ctx, output_osf_file: str, viz: bool, no_initial_align: bool,
+                         constraints_json_file: Optional[str], auto_constraints: bool,
+                         gps_constraints_every_m: float,
+                         gps_constraints_weights: Optional[str]) -> None:
     """
     Optimizes the SLAM trajectory by refining the poses based on the provided constraints.
+
+    \b
+    Examples:
+      ouster-cli source <OSF_FILENAME> pose_optimize --viz --config <CONSTRAINT_JSON_FILE> <OUTPUT_OSF_FILENAME>
+      ouster-cli source <OSF_FILENAME> pose_optimize --viz --auto-constraints
+          <OUTPUT_OSF_FILENAME>
+      ouster-cli source <OSF_FILENAME> pose_optimize --viz --auto-constraints --config
+          <CONSTRAINT_JSON_FILE> <OUTPUT_OSF_FILENAME>
+      ouster-cli source <OSF_FILENAME> pose_optimize --auto-constraints --gps-constraints-weights
+          0.02,0.02,0.001 --gps-constraints-every-m 150 --viz <OUTPUT_OSF_FILENAME>
     """
 
-    def parse_absolute_constraint_weights(weight_data):
-        """
-        Utility to handle either a single float/int or a list of three floats/ints for weights.
-        Only for Absolute Pose Constraints.
-        """
-        if isinstance(weight_data, (float, int)):
-            return [float(weight_data)] * 3
-        elif isinstance(weight_data, list) and len(weight_data) == 3:
-            return [float(x) for x in weight_data]
-        else:
-            # Fallback to [1.0, 1.0, 1.0] if invalid
-            print("Invalid weight data. Must be a single float/int or list of length 3. Using default [1.0, 1.0, 1.0].")
-            return [1.0, 1.0, 1.0]
-
-    # Validate constraints JSON
-    data, fix_first_node, validation_errors = json_parser.validate_constraints_json(constraints_json_file)
-    if validation_errors:
-        print("The following validation errors were found:")
-        for err in validation_errors:
-            print(f"  - {err}")
+    # Get source from context (passed as SOURCE argument to the CLI)
+    source_name = ctx.source_uri
+    if not source_name:
+        print("Error: SOURCE must be specified as a command-line argument.")
         return
 
-    source_name = ctx.source_uri
+    if constraints_json_file is not None:
+        po = mapping.PoseOptimizer(source_name, constraints_json_file)
+    else:
+        po = mapping.PoseOptimizer(source_name, 1.0)
 
-    # Solver options
-    key_frame_distance = data.get("key_frame_distance", 1.0)
-    trajectory_rotation_weight = data.get("trajectory_rotation_weight", 1.0)
-    trajectory_translation_weight = data.get("trajectory_translation_weight", 1.0)
-    gradient_tolerance = data.get("gradient_tolerance", 1e-20)
-    max_num_iterations = data.get("max_num_iterations", 500)
-    process_printout = data.get("process_printout", True)
-    loss_function_string = data.get("loss_function", "HuberLoss")
-    loss_function = mapping.LossFunction.from_string(loss_function_string)
-    loss_scale = data.get("loss_scale", 1.0)
-
-    solver_config = mapping.SolverConfig()
-    solver_config.key_frame_distance = key_frame_distance
-    solver_config.traj_rotation_weight = trajectory_rotation_weight
-    solver_config.traj_translation_weight = trajectory_translation_weight
-    solver_config.gradient_tolerance = gradient_tolerance
-    solver_config.max_num_iterations = max_num_iterations
-    solver_config.process_printout = process_printout
-    solver_config.loss_function = loss_function
-    solver_config.loss_scale = loss_scale
-
-    po = mapping.PoseOptimizer(source_name, solver_config, fix_first_node)
-
-    # Add constraints
-    constraints = data.get("constraints", [])
-    for constraint in constraints:
-        constraint_type = constraint.get("type", "UNKNOWN")
-
-        # --------------------------- ABSOLUTE POSE CONSTRAINT ---------------------------
-        if constraint_type == "ABSOLUTE_POSE":
-            pose_ts = constraint.get("timestamp")
-            pose = constraint.get("pose")
-            transformation = constraint.get("transformation", None)
-
-            # Handle single or vector weights
-            rotation_weight_data = constraint.get("rotation_weight", 1.0)
-            translation_weight_data = constraint.get("translation_weight", 1.0)
-            rotation_weights = parse_absolute_constraint_weights(rotation_weight_data)
-            translation_weights = parse_absolute_constraint_weights(translation_weight_data)
-
-            if isinstance(pose, list) and len(pose) == 16:
-                # 4x4 matrix
-                target_pose_4x4 = np.array(pose, dtype=float).reshape(4, 4)
-                if transformation and isinstance(transformation, list) and len(transformation) == 16:
-                    transform_4x4 = np.array(transformation, dtype=float).reshape(4, 4)
-                    po.add_absolute_pose_constraint(
-                        pose_ts,
-                        target_pose_4x4,
-                        rotation_weights,
-                        translation_weights,
-                        transform_4x4
-                    )
-                else:
-                    po.add_absolute_pose_constraint(
-                        pose_ts,
-                        target_pose_4x4,
-                        rotation_weights,
-                        translation_weights
-                    )
-
-            else:
-                if not pose or any(k not in pose for k in ["rx", "ry", "rz", "x", "y", "z"]):
-                    print("Invalid or incomplete pose data, skipping constraint.")
-                    continue
-                target_pose_6x1 = np.array([
-                    pose["rx"], pose["ry"], pose["rz"],
-                    pose["x"], pose["y"], pose["z"]
-                ], dtype=float)
-
-                if transformation and isinstance(transformation, list) and len(transformation) == 16:
-                    transform_4x4 = np.array(transformation, dtype=float).reshape(4, 4)
-                    po.add_absolute_pose_constraint(
-                        pose_ts,
-                        target_pose_6x1,
-                        rotation_weights,
-                        translation_weights,
-                        transform_4x4
-                    )
-                elif transformation and all(k in transformation for k in ["rx", "ry", "rz", "x", "y", "z"]):
-                    transformation_py = np.array([
-                        transformation["rx"], transformation["ry"], transformation["rz"],
-                        transformation["x"], transformation["y"], transformation["z"]
-                    ], dtype=float)
-                    po.add_absolute_pose_constraint(
-                        pose_ts,
-                        target_pose_6x1,
-                        rotation_weights,
-                        translation_weights,
-                        transformation_py
-                    )
-                else:
-                    po.add_absolute_pose_constraint(
-                        pose_ts,
-                        target_pose_6x1,
-                        rotation_weights,
-                        translation_weights
-                    )
-
-        # --------------------------- POINT-TO-POINT CONSTRAINT ---------------------------
-        elif constraint_type == "RELATIVE_POINT_TO_POINT":
-            translation_weight = constraint.get("translation_weight", 1.0)
-            # For point-to-point, we only need translation weights
-
-            point_a = constraint.get("point_a")
-            point_b = constraint.get("point_b")
-            if not point_a or not point_b:
-                print("Invalid point-to-point constraint, missing 'point_a' or 'point_b'.")
-                continue
-            point_a_ts = point_a.get("timestamp")
-            point_a_row = point_a.get("row")
-            point_a_col = point_a.get("col")
-            point_a_ret = point_a.get("return_idx")
-            point_b_ts = point_b.get("timestamp")
-            point_b_row = point_b.get("row")
-            point_b_col = point_b.get("col")
-            point_b_ret = point_b.get("return_idx")
-
-            po.add_point_to_point_constraint(
-                point_a_ts, point_a_row, point_a_col, point_a_ret,
-                point_b_ts, point_b_row, point_b_col, point_b_ret,
-                translation_weight
+    if auto_constraints:
+        try:
+            click.echo("Generating GPS constraints ...")
+            from ouster.cli.plugins.source_mapping import add_auto_gps_constraints
+            gps_constraints_count = add_auto_gps_constraints(
+                po,
+                source_name,
+                gps_constraints_every_m,
+                gps_constraints_weights,
             )
+            click.echo(f"Added {gps_constraints_count} GPS absolute pose constraints.")
+        except Exception as error:
+            click.secho(f"ERROR: Failed to add GPS constraints: {error}", fg="red")
+            return
 
-        # --------------------------- RELATIVE POSE-TO-POSE CONSTRAINT ---------------------------
-        elif constraint_type == "RELATIVE_POSE_TO_POSE":
-            pose_a = constraint.get("pose_a")
-            pose_b = constraint.get("pose_b")
-            if not pose_a or not pose_b:
-                print("Invalid relative pose-to-pose constraint, missing 'pose_a' or 'pose_b'.")
-                continue
-            pose_a_ts = pose_a.get("timestamp")
-            pose_b_ts = pose_b.get("timestamp")
+    if viz:
+        viewer = PoseOptimizerViz(
+            po,
+            output_osf_file,
+            align_with_absolute_constraints=not no_initial_align,
+        )
+        viewer.run()
+        return
 
-            rotation_weight = constraint.get("rotation_weight", 1.0)
-            translation_weight = constraint.get("translation_weight", 1.0)
-
-            transformation = constraint.get("transformation")
-            if isinstance(transformation, list) and len(transformation) == 16:
-                transform_4x4 = np.array(transformation, dtype=float).reshape(4, 4)
-                po.add_pose_to_pose_constraint(
-                    pose_a_ts, pose_b_ts, transform_4x4,
-                    rotation_weight, translation_weight
-                )
-            elif isinstance(transformation, dict) and len(transformation) == 6:
-                transform_6x1 = np.array([
-                                transformation['rx'],
-                                transformation['ry'],
-                                transformation['rz'],
-                                transformation['x'],
-                                transformation['y'],
-                                transformation['z']
-                            ], dtype=float)
-                po.add_pose_to_pose_constraint(
-                    pose_a_ts, pose_b_ts, transform_6x1,
-                    rotation_weight, translation_weight
-                )
-            else:
-                # Use built-in ICP
-                po.add_pose_to_pose_constraint(
-                    pose_a_ts, pose_b_ts, rotation_weight, translation_weight
-                )
-
-    # --------------------------- RUN OPTIMIZATION ---------------------------
     po.solve()
     po.save(output_osf_file)
     print("\nPose Optimization Completed Successfully")
@@ -870,9 +895,10 @@ def source_pose_optimize(ctx, constraints_json_file: str, output_osf_file: str) 
 @click.option("-v", "--verbose", is_flag=True, help="Print out additional stats info.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
-def source_stats(ctx: SourceCommandContext, verbose: bool) -> SourceCommandCallback:
+def source_stats(ctx: SourceCommandContext, verbose: bool) -> None:
     """Calculate and output various statistics about the scans at this point in the pipeline."""
     windows = []
+    assert ctx.scan_source is not None
     for m in ctx.scan_source.sensor_info:
         windows.append(m.format.column_window)
     scans = ctx.scan_iter
@@ -882,27 +908,42 @@ def source_stats(ctx: SourceCommandContext, verbose: bool) -> SourceCommandCallb
     missing_columns = 0
     start = None
     end = None
+    start_sensor = None
+    end_sensor = None
     incomplete_scans = []
     dimensions = {}
+    n_sensors = 0
 
     def stats_iter():
         nonlocal count, incomplete_count, windows, verbose, start, end, incomplete_scans
-        nonlocal dimensions, missing_packets, missing_columns
+        nonlocal start_sensor, end_sensor
+        nonlocal dimensions, missing_packets, missing_columns, n_sensors
         ns_to_sec = 1.0 / 1000000000.0
         for l in scans():
             for i, scan in enumerate(l):
                 if scan is None:
                     continue
+                n_sensors = len(l)
                 time = scan.get_first_valid_packet_timestamp()
                 if time != 0.0:
                     if start is None or time < start:
                         start = time
+                time = scan.get_last_valid_packet_timestamp()
+                if time != 0.0:
                     if end is None or time > end:
                         end = time
+                sensor_time = scan.get_first_valid_column_timestamp()
+                if sensor_time != 0.0:
+                    if start_sensor is None or sensor_time < start_sensor:
+                        start_sensor = sensor_time
+                sensor_time = scan.get_last_valid_column_timestamp()
+                if sensor_time != 0.0:
+                    if end_sensor is None or sensor_time > end_sensor:
+                        end_sensor = sensor_time
                 dimensions[(scan.w, scan.h)] = True
                 if not scan.complete(windows[i]):
                     expected_columns = scan.sensor_info.format.valid_columns_per_frame()
-                    expected_packets = scan.sensor_info.format.packets_per_frame()
+                    expected_packets = scan.sensor_info.format.lidar_packets_per_frame()
                     incomplete_count = incomplete_count + 1
                     received_columns = np.count_nonzero(scan.status & 1)
                     received_packets = np.count_nonzero(scan.packet_timestamp)
@@ -915,25 +956,33 @@ def source_stats(ctx: SourceCommandContext, verbose: bool) -> SourceCommandCallb
                                                 f" missing packets, {m_columns} missing columns")
                 count = count + 1
             yield l
-    ctx.scan_iter = stats_iter
+    ctx.scan_iter = stats_iter  # type: ignore
 
     def exit_handler():
         nonlocal count, incomplete_count, start, end, incomplete_scans, dimensions
+        nonlocal start_sensor, end_sensor
         ns_to_sec = 1.0 / 1000000000.0
         print("Scan Statistics:")
         print(f"  Count: {count}")
+        print(f"  Sensors: {n_sensors}")
         dstring = ""
         for k in dimensions:
             dstring = dstring + f" {k[0]}x{k[1]}"
         print(f"  Sizes:{dstring}")
         if start is None:
-            print("  First Time: No Valid Timestamps")
-            print("  Last Time: No Valid Timestamps")
+            print("  First Receive Time: No Valid Timestamps")
+            print("  Last Receive Time: No Valid Timestamps")
             print("  Duration: Unknown")
         else:
-            print(f"  First Time: {start * ns_to_sec} ({_nanos_to_string(start)})")
-            print(f"  Last Time: {end * ns_to_sec} ({_nanos_to_string(end)})")
+            print(f"  First Receive Time: {start * ns_to_sec} ({_nanos_to_string(start)})")
+            print(f"  Last Receive Time: {end * ns_to_sec} ({_nanos_to_string(end)})")
             print(f"  Duration: {(end - start) * ns_to_sec} seconds")
+        if start_sensor is None:
+            print("  First Sensor Time: No Valid Timestamps")
+            print("  Last Sensor Time: No Valid Timestamps")
+        else:
+            print(f"  First Sensor Time: {start_sensor * ns_to_sec} ({_nanos_to_string(start_sensor)})")
+            print(f"  Last Sensor Time: {end_sensor * ns_to_sec} ({_nanos_to_string(end_sensor)})")
         print(f"  Incomplete Scans: {incomplete_count}, {missing_packets} missing packets,"
               f" {missing_columns} missing columns")
         if verbose:
@@ -947,13 +996,14 @@ def source_stats(ctx: SourceCommandContext, verbose: bool) -> SourceCommandCallb
 
 @click.command
 @click.argument('beams', required=True,
-              type=click.Choice(['8', '16', '32', '64', '128']))
+              type=click.Choice(['1', '2', '4', '8', '16', '32', '64', '128']))
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR_UNREPEATABLE)
 def source_reduce(ctx: SourceCommandContext, beams: str, **kwargs) -> None:
     """
-    reduce the number of beams for each source to the specified beam count
+    Reduce the number of beams for each source to the specified beam count
     """
+    assert ctx.scan_source is not None
     # validate input
     for i, m in enumerate(ctx.scan_source.sensor_info):
         if int(beams) > m.format.columns_per_frame:
@@ -963,24 +1013,67 @@ def source_reduce(ctx: SourceCommandContext, beams: str, **kwargs) -> None:
 
 
 @click.command
+@click.option("--axes", is_flag=True, help="Show the coordinate system axes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED)
-def model_viz(ctx: SourceCommandContext, **kwargs) -> None:
+def model_viz(ctx: SourceCommandContext, axes: bool, **kwargs) -> None:
     """
-    View a pointcloud file.
+    View a pointcloud or stl file.
     """
     from ouster.sdk import viz
     from ouster.sdk.core import read_pointcloud
-    pts = read_pointcloud(ctx.source_uri)
+    from ouster.sdk.zone_monitor import Stl
+
     pviz = viz.PointViz("Model Viewer")
     viz.add_default_controls(pviz)
 
-    cld = viz.Cloud(pts.shape[0])
-    cld.set_xyz(pts[:, 0:3])
-    cld.set_point_size(3)
-    pviz.add(cld)
+    uri = ctx.source_uri or ""
+
+    if ".stl" in uri:
+        mesh = Stl(uri).to_mesh()
+        m = viz.Mesh.from_simple_mesh(mesh)
+        pviz.add(m)
+    else:
+        pts = read_pointcloud(uri)
+        cld = viz.Cloud(pts.shape[0])
+        cld.set_xyz(pts[:, 0:3])
+        cld.set_point_size(3)
+        cld.set_key(np.mod(pts[:, 2], 1))
+        pviz.add(cld)
+
+    if axes:
+        helper = viz.util.AxisWithLabel(pviz)  # noqa: F841
+
     pviz.update()
     pviz.run()
+
+
+@click.command
+@click.pass_context
+@click.argument("filename", required=True)
+@click.option('-d', '--downsample', default=None, type=float,
+              help="Downsample voxel size in meters.")
+@click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED)
+def model_save(ctx: SourceCommandContext, filename: str, downsample: Optional[float],
+               overwrite: bool, **kwargs) -> None:
+    """
+    Resave a pointcloud file with optional downsampling.
+    """
+    import os
+    from ouster.sdk.core import read_pointcloud, voxel_downsample
+    from ouster.cli.plugins.source_mapping import save_pointcloud
+
+    if not overwrite and os.path.isfile(filename):
+        click.echo(f"Error: File '{filename}' already exists. Add --overwrite "
+                   "flag to overwrite and continue anyways.")
+        exit(2)
+    pts = read_pointcloud(ctx.source_uri or "")
+
+    # todo save/downsample other fields when read_pointcloud supports them
+    if downsample is not None:
+        pts, _ = voxel_downsample(downsample, pts, np.array([]))
+    save_pointcloud(filename, pts)
 
 
 @click.command
@@ -999,7 +1092,9 @@ def source_mask(ctx: SourceCommandContext, image_path: str, fields: str, **kwarg
     import ouster.sdk.core.scan_ops as so
     from ouster.sdk.core.data import destagger
 
-    image = Image.open(image_path)
+    assert ctx.scan_source is not None
+
+    image: Image.Image = Image.open(image_path)
 
     if image.mode != 'L':
         click.secho(f"image [{image_path}] is not an 8-bit grayscale,"
@@ -1027,12 +1122,103 @@ def source_mask(ctx: SourceCommandContext, image_path: str, fields: str, **kwarg
 
     def mask_iter():
         for scans in scan_iter():
-            for idx, scan in enumerate(scans):
+            out = copy.deepcopy(scans)
+            for idx, scan in enumerate(out):
                 if scan:
                     so.mask(scan, field_list, masks[idx])
+            yield out
+
+    ctx.scan_iter = mask_iter  # type: ignore
+
+
+@click.command
+@click.option(
+    '-c', '--config', default=None, type=click.Path(),
+    help="Path to zone configuration zip to use. If not provided uses configuration"
+    " from the underlying source."
+)
+@click.option('-l', '--live', default=None, type=str, help="Comma separated list of zones to make live.")
+@click.option('--no-render', is_flag=True, default=False,
+              help="If true, do not render zones and use those stored in configuration.")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.PROCESSOR)
+def source_emulate_zones(
+    ctx: SourceCommandContext,
+    config: Optional[str],
+    live: Optional[str],
+    no_render: bool
+):
+    """
+    Emulate zone monitoring off-sensor.
+    """
+    assert ctx.scan_source is not None
+    assert ctx.scan_iter is not None
+    scan_iter = ctx.scan_iter
+
+    # TODO[tws] figure out what to do with Multi
+    from ouster.sdk.zone_monitor import EmulatedZoneMon, ZoneSet, ZONE_OCCUPANCY_FIELDNAME, \
+        ZONE_STATES_FIELDNAME
+    sensor_info = ctx.scan_source.sensor_info[0]
+
+    # TODO[tws] also support a directory
+    zone_set: Optional[ZoneSet]
+    if config is not None:
+        zone_set = ZoneSet(config)
+    else:
+        zone_set = sensor_info.zone_set
+
+    if not zone_set:
+        print("emulate_zones: No zone monitor configuration available.")
+        exit(1)
+
+    # setting live zones by parameter
+    if live is not None:
+        live_zones = []
+        for id in live.split(','):
+            try:
+                live_zones.append(int(id))
+            except ValueError:
+                raise click.exceptions.BadParameter("List of live zones must be a comma separated list of integers")
+        zone_set.power_on_live_ids = live_zones
+
+    # set a port and dest on the zm output if there isnt one
+    if sensor_info.config.udp_port_zm is None:
+        sensor_info.config.udp_port_zm = 7504
+    if sensor_info.config.udp_dest_zm is None:
+        sensor_info.config.udp_dest_zm = "127.0.0.1"
+    sensor_info.format.zone_monitoring_enabled = True
+
+    # render zones
+    sensor_info.zone_set = zone_set
+    if not no_render:
+        print("Rendering zones....")
+        zone_set.render(sensor_info)
+        print("Finished rendering zones.")
+
+    # update the source's configuration, which the viz uses for zone geometry
+    sensor_info.zone_set = zone_set
+    ctx.emulated_zone_monitoring_configuration = zone_set
+    emulator = EmulatedZoneMon(ctx.emulated_zone_monitoring_configuration)
+
+    def emulate_zones_iter() -> Iterable[List[Optional[LidarScan]]]:
+        for scans in scan_iter():  # type: ignore
+            # TODO[tws] figure out what to do with Multi
+            scan = scans[0]
+            if scan.has_field(ZONE_STATES_FIELDNAME):
+                scan.del_field(ZONE_STATES_FIELDNAME)
+            if scan.has_field(ZONE_OCCUPANCY_FIELDNAME):
+                scan.del_field(ZONE_OCCUPANCY_FIELDNAME)
+            if scan.has_field("ZONE_PACKET_TIMESTAMP"):
+                scan.del_field("ZONE_PACKET_TIMESTAMP")
+            scan.add_field(ZONE_OCCUPANCY_FIELDNAME, np.uint16)
+            emulator.calc_triggers(scan.field(ChanField.RANGE), scan.field(ZONE_OCCUPANCY_FIELDNAME))
+            zone_monitor_update = emulator.get_packet()
+            scan.add_field(ZONE_STATES_FIELDNAME, zone_monitor_update, FieldClass.SCAN_FIELD)
+            ts = scan.get_last_valid_packet_timestamp()
+            scan.add_field("ZONE_PACKET_TIMESTAMP", np.array([ts], np.uint64), FieldClass.SCAN_FIELD)
             yield scans
 
-    ctx.scan_iter = mask_iter
+    ctx.scan_iter = emulate_zones_iter  # type: ignore
 
 
 class SourceMultiCommand(click.MultiCommand):
@@ -1043,75 +1229,67 @@ class SourceMultiCommand(click.MultiCommand):
     The source is also added to the click context so that sub commands that use
     @click.pass_context have access to it."""
 
+    commands: MutableMapping[Any, MutableMapping[str, click.Command]]
+
     def __init__(self, *args, **kwargs):
         kwargs['no_args_is_help'] = True
 
         super().__init__(*args, **kwargs)
         self.commands = {
             'ANY': {
-                'slice': source_slice,
                 'clip': source_clip,
+                'emulate_zones': source_emulate_zones,
                 'filter': source_filter,
-                'reduce': source_reduce,
                 'mask': source_mask,
-                'stats': source_stats
+                'normals': source_normals,
+                'plumb': source_plumb,
+                'reduce': source_reduce,
+                'save': SourceSaveCommand('save',
+                                          context_settings=dict(ignore_unknown_options=True,
+                                                                allow_extra_args=True)),
+                'slice': source_slice,
+                'stats': source_stats,
+                'viz': source_viz,
             },
             OusterIoType.SENSOR: {
-                'viz': source_viz,
-                'config': sensor_cli.sensor_config,
-                'metadata': sensor_cli.sensor_metadata,
-                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
-                                                                        allow_extra_args=True)),
-                'userdata': sensor_cli.sensor_userdata,
                 'save_raw': source_save_raw,
-                'plumb': source_plumb,
-                'network': sensor_cli.sensor_network,
-                'diagnostics': sensor_cli.sensor_diagnostics,
+                # other sensor specific things are added in source_sensor.py
             },
             OusterIoType.PCAP: {
-                'viz': source_viz,
                 'info': pcap_cli.pcap_info,
                 'metadata': default_source_metadata,
-                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
-                                                                        allow_extra_args=True)),
                 'save_raw': source_save_raw,
-                'plumb': source_plumb,
             },
             OusterIoType.OSF: {
-                'viz': source_viz,
                 'dump': osf_cli.osf_dump,
                 'info': osf_cli.osf_info,
                 'metadata': default_source_metadata,
                 'parse': osf_cli.osf_parse,
-                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
-                                                                        allow_extra_args=True)),
                 'pose_optimize': source_pose_optimize,
             },
             OusterIoType.BAG: {
-                'viz': source_viz,
                 'info': bag_info,
-                'plumb': source_plumb,
                 'metadata': default_source_metadata,
-                'save_raw': source_save_raw,
-                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
-                                                                        allow_extra_args=True)),
+                'save_raw': source_save_raw
             },
             OusterIoType.MCAP: {
-                'viz': source_viz,
                 'info': bag_info,
                 'metadata': default_source_metadata,
-                'plumb': source_plumb,
-                'save_raw': source_save_raw,
-                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
-                                                                        allow_extra_args=True)),
+                'save_raw': source_save_raw
             },
             OusterIoType.PCD: {
+                'save': model_save,
                 'viz': model_viz,
             },
             OusterIoType.PLY: {
+                'save': model_save,
+                'viz': model_viz,
+            },
+            OusterIoType.STL: {
                 'viz': model_viz,
             }
         }
+        self.non_scan_sources = [OusterIoType.PLY, OusterIoType.PCD, OusterIoType.STL]
 
     def get_supported_source_types(self):
         return [iotype for iotype in self.commands.keys() if isinstance(iotype, OusterIoType)]
@@ -1127,17 +1305,22 @@ class SourceMultiCommand(click.MultiCommand):
         """Get the source type from the click context
         and return the list of appropriate sub command names"""
         source = click_ctx.params.get(_source_arg_name)
-        source = source.split(',')[0] if source else None
+        if source and click_ctx.params.get("glob"):
+            source = libglob.glob(source)[0]
+        else:
+            source = source.split(',')[0] if source else None
 
         if not source and CliArgs().has_any_of(click_ctx.help_option_names):
             # Build a map from command name to command
-            command_to_types = {}
+            command_to_types: Dict[str, Dict[Any, click.core.Command]] = {}
             for src_type in self.commands.keys():
                 for command_name in self.commands[src_type].keys():
                     if command_name not in command_to_types:
                         command_to_types[command_name] = {}
                     if src_type == "ANY":
                         for supported_src_type in self.get_supported_source_types():
+                            if supported_src_type in self.non_scan_sources:
+                                continue
                             command_to_types[command_name][supported_src_type] = self.commands[src_type][command_name]
                     else:
                         command_to_types[command_name][src_type] = self.commands[src_type][command_name]
@@ -1158,6 +1341,9 @@ class SourceMultiCommand(click.MultiCommand):
             raise click.exceptions.MissingParameter(
                 None, click_ctx, param=param)
         try:
+            src_type = io_type(source)
+            if src_type in self.non_scan_sources:
+                return {**self.commands[io_type(source)]}
             return {**self.commands[io_type(source)], **self.commands["ANY"]}
         except ValueError as e:  # noqa: F841
             click.echo(click_ctx.get_usage())
@@ -1178,11 +1364,22 @@ class SourceMultiCommand(click.MultiCommand):
 
     def get_command(self, click_ctx: click.core.Context, name: str):
         """Get the click.Command object for the given command name"""
-        source = click_ctx.params.get(_source_arg_name)
+        source = click_ctx.params.get(_source_arg_name) or ""
+        do_glob = click_ctx.params.get("glob")
         click_ctx.ensure_object(SourceCommandContext)
         ctx: SourceCommandContext = click_ctx.obj
         # add source to context so the command can access it
-        ctx.source_uri = source
+
+        if do_glob:
+            source_list = libglob.glob(source.strip())
+            string = ""
+            for source in source_list:
+                if len(string):
+                    string = string + ","
+                string = string + source
+            ctx.source_uri = string
+        else:
+            ctx.source_uri = source
 
         command_list = self.list_commands(click_ctx)
         if name in command_list:
@@ -1205,8 +1402,14 @@ class SourceMultiCommand(click.MultiCommand):
         super().invoke(click_ctx)
 
 
-@cli.group(cls=SourceMultiCommand, chain=True)
+source: SourceMultiCommand
+
+
+@cli.group(cls=SourceMultiCommand, chain=True)  # type: ignore[no-redef]
 @click.argument(_source_arg_name, required=True)
+@click.option('-g', '--glob', is_flag=True, default=False,
+              help="If set, glob the source URI and if multiple files are found"
+                   " play them one after another if compatible.")
 # TODO[UN]: should we implement this as options instead of flag similar to `on_eof`?
 @click.option('--loop', is_flag=True, default=False, hidden=True,
               help="Restart from begining when the end of the file is reached")
@@ -1246,13 +1449,21 @@ class SourceMultiCommand(click.MultiCommand):
                    " If not specified all (OSF) or defaults based on the packet format"
                    " (PCAP, Sensor, BAG) are loaded.")
 @click.option('--allow-major-version-mismatch', is_flag=True, default=False)
+@click.option('--no-progress', is_flag=True, default=False,
+              help="If set, hide the progress bar.")
+@click.option('--reuse-ports', is_flag=True, default=False,
+              help="If true, allow other programs to bind to the same sockets."
+                   " Must be set on each listening program.")
+@click.option('--no-defaults', is_flag=True, default=False,
+              help="If true, do not change sensor settings other than operating mode and UDP destinations to defaults.")
 def source(source, loop: bool, meta: Tuple[str, ...],
            lidar_port: int, imu_port: int,
            extrinsics: Optional[str], initial_pose: Optional[str],
            do_not_reinitialize: bool, no_auto_udp_dest: bool,
            soft_id_check: bool, timeout: int, filter: bool,
            fields: Optional[str], allow_major_version_mismatch: bool,
-           sensor_idx: Optional[int]):
+           sensor_idx: Optional[int], glob: bool, no_progress: bool, reuse_ports: bool,
+           no_defaults: bool):
     """Run a command with the specified source (SENSOR, PCAP, BAG, or OSF) as SOURCE.
     For example, a sensor source: ouster-cli source os1-992xxx.local viz.
     To connect to multiple sensors you can provide them as a comma separated list.
@@ -1270,9 +1481,9 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                      source: str, loop: bool, sensor_idx: Optional[int],
                      meta: Optional[Tuple[str, ...]], lidar_port: int, imu_port: int,
                      extrinsics: Optional[str], initial_pose: Optional[str],
-                     do_not_reinitialize: bool, no_auto_udp_dest: bool,
+                     do_not_reinitialize: bool, no_auto_udp_dest: bool, allow_major_version_mismatch: bool,
                      soft_id_check: bool, timeout: int, filter: bool, fields: Optional[str],
-                     allow_major_version_mismatch: bool) -> None:
+                     glob: bool, no_progress: bool, reuse_ports: bool, no_defaults: bool) -> None:
     """Process all commands in a SourceMultiCommand, using each command's callback"""
 
     callbacks = list(callbacks)
@@ -1306,6 +1517,8 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
     ctx.source_options["lidar_port"] = lidar_port
     ctx.source_options["imu_port"] = imu_port
     ctx.source_options["timeout"] = timeout
+    if reuse_ports:
+        ctx.source_options["reuse_ports"] = reuse_ports
     # negative or None sensor-index indicates all sensors
     if sensor_idx is not None and sensor_idx >= 0:
         ctx.source_options["sensor_idx"] = sensor_idx
@@ -1327,7 +1540,8 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
             set_list[name] = ctx.source_options[name]
     ctx.source_options = set_list
 
-    ctx.other_options["initial_pose"] = resolved_initial_pose
+    if resolved_initial_pose is not None:
+        ctx.other_options["initial_pose"] = resolved_initial_pose
 
     # ---- Lint commands ----
     # Ensure that no commands are duplicated unless command type is PROCESSOR
@@ -1382,9 +1596,54 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                 c.prerun_fn(ctx)
 
         # Open source
-        source_list = [url.strip() for url in source.split(',') if url.strip()]
+        source_list = [url.strip() for url in (ctx.source_uri or "").split(',') if url.strip()]
+
+        is_sensor = io_type(source_list[0] or "") == OusterIoType.SENSOR
+
+        # configure new imu format on 3.2 sensors
+        if is_sensor and (not do_not_reinitialize) and (not no_defaults):
+            configs = []
+            for uri in source_list:
+                config = core.SensorConfig()
+                old_config = sensor.get_config(uri, active=True)
+                if old_config.imu_packets_per_frame is not None:
+                    if old_config.udp_profile_lidar != core.UDPProfileLidar.LEGACY and \
+                        old_config.udp_profile_imu == core.UDPProfileIMU.LEGACY:
+                        print("Will change udp_profile_imu to ACCEL32_GYRO32_NMEA."
+                              " To disable this provide the --no-defaults argument.")
+                        config.udp_profile_imu = core.UDPProfileIMU.ACCEL32_GYRO32_NMEA
+                    if old_config.accel_fsr != core.FullScaleRange.EXTENDED:
+                        print("Will change accel_fsr to EXTENDED."
+                              " To disable this provide the --no-defaults argument.")
+                        config.accel_fsr = core.FullScaleRange.EXTENDED
+                    if old_config.gyro_fsr != core.FullScaleRange.EXTENDED:
+                        print("Will change gyro_fsr to EXTENDED."
+                              " To disable this provide the --no-defaults argument.")
+                        config.gyro_fsr = core.FullScaleRange.EXTENDED
+                configs.append(config)
+            ctx.source_options["sensor_config"] = configs
+
+        # Decide how to play back multiple source if we get them
+        already_collated = False
+
         try:
-            source = open_source(source_list, **ctx.source_options, collate=False)
+            # singled sources dont need additional collation
+            if ctx.source_options.get("sensor_idx") is not None:
+                already_collated = True
+
+            if glob and len(source_list) > 1:
+                # need to not set sensor_idx on the original sources for this case
+                idx = cast(int, ctx.source_options.get("sensor_idx"))
+                if idx is not None:
+                    del ctx.source_options["sensor_idx"]
+                l = []
+                for src in source_list:
+                    l.append(open_source(src, **ctx.source_options, collate=False))
+                scan_source: ScanSource = MultiScanSource(l)
+                if idx is not None:
+                    scan_source = scan_source.single(idx)
+            else:
+                scan_source = open_source(source_list, **ctx.source_options, collate=False)
 
             # HACK: We need to redesign how the ScanSource is passed is passed and
             # used, the current pipeline skips the scan_source and simply uses the
@@ -1392,16 +1651,26 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
             # may affect the scan_source isn't taking effect such as the reduce
             if command_names[0] == "reduce":
                 beams_idx = sys.argv.index("reduce")
-                beams = [int(sys.argv[beams_idx + 1])] * source.sensors_count
+                beams = [int(sys.argv[beams_idx + 1])] * len(scan_source.sensor_info)
                 from ouster.sdk.core import ReducedScanSource
                 ctx.scan_source = ReducedScanSource(
-                    source, beams=beams)
+                    scan_source, beams=beams)
             else:
                 if "reduce" in command_names[1:]:
                     click.secho("ERROR: reduce needs to be the first command after source.",
                                 fg="red")
                     return
-                ctx.scan_source = source
+                ctx.scan_source = scan_source
+
+            # Fill in default UDP ports if missing (e.g., when loading from OSF)
+            # This ensures downstream operations (replay, save, etc.) have valid ports
+            DEFAULT_LIDAR_PORT = 7502
+            DEFAULT_IMU_PORT = 7503
+            for info in ctx.scan_source.sensor_info:
+                if info.config.udp_port_lidar is None:
+                    info.config.udp_port_lidar = DEFAULT_LIDAR_PORT
+                if info.config.udp_port_imu is None:
+                    info.config.udp_port_imu = DEFAULT_IMU_PORT
 
         except SourceURLException as e:
             sub_exception = e.get_sub_exception()
@@ -1414,6 +1683,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                 raise
 
         slice_range = None
+        slice_hint = None
         # speed up slicing on indexed OSF if slicing comes first
         global _last_slice
         if command_names[0] == "slice" and _last_slice:
@@ -1426,6 +1696,9 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                     # TODO: revist when we revist cycle/loop
                     slice_range = _last_slice
                     callbacks = callbacks[1:]  # remove the callback since we dont need it now
+            else:
+                if type(_last_slice[0]) is not float and type(_last_slice[1]) is not float:
+                    slice_hint = _last_slice
             _last_slice = None  # globals are the root of all evil
 
         # print any timeout exceptions we get and lazily instantiate the scan
@@ -1433,34 +1706,60 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
         def catch_iter():
             last_dropped = 0
 
-            # slice if asked
-            src = collate(ctx.scan_source)
+            # slice and collate if asked
+            if not already_collated:
+                src = collate(ctx.scan_source)
+            else:
+                src = ctx.scan_source
+
+            # if this is a sensor source drop the first of each scan to avoid an almost
+            # guaranteed partial scan
+            if is_sensor:
+                next(iter(src))
+
             if slice_range:
                 src = src[slice(slice_range[0], slice_range[1], slice_range[2])]
 
-            for scan in src:
-                # drop incomplete scans
-                nonlocal filter
-                if filter:
-                    for i in range(0, len(scan)):
-                        if not scan[i].complete():
-                            scan[i] = None
-                    # skip rather than return empty array if somehow all were incomplete
-                    all_none = True
-                    for s in scan:
-                        if s is not None:
-                            all_none = False
-                    if all_none:
-                        continue
-                if hasattr(ctx.scan_source, "dropped_scans"):
-                    dropped = ctx.scan_source.dropped_scans
-                    if dropped > last_dropped:
-                        click.echo(click.style(f"Warning: Dropped {dropped - last_dropped} lidar scans.",
-                                               fg="yellow"))
-                        last_dropped = dropped
-                yield scan
-            return
-        ctx.scan_iter = catch_iter
+            total = operator.length_hint(src, 0)
+
+            # adjust total based on slice for unindexed sources
+            # note this ignores the increment factor and start because we cant skip on unindexed sources
+            if slice_hint is not None and slice_hint[1] is not None:
+                # fake the the length for a sensor if we set an upper limit in the slice
+                if is_sensor:
+                    total = slice_hint[1]
+
+                # length is just the min of the request or estimated size
+                total = min(slice_hint[1], total)
+
+            with ProgressBar(total, unit="scans") as bar:
+                for idx, scan in enumerate(src):
+                    if not no_progress:
+                        bar.update(idx)
+                    # drop incomplete scans
+                    nonlocal filter
+                    if filter:
+                        for i in range(0, len(scan)):
+                            if not scan[i].complete():
+                                scan[i] = None
+                        # skip rather than return empty array if somehow all were incomplete
+                        all_none = True
+                        for s in scan:
+                            if s is not None:
+                                all_none = False
+                        if all_none:
+                            continue
+                    if hasattr(ctx.scan_source, "dropped_scans"):
+                        dropped = ctx.scan_source.dropped_scans
+                        if dropped > last_dropped:
+                            click.echo(click.style(f"Warning: Dropped {dropped - last_dropped} lidar scans.",
+                                                fg="yellow"))
+                            last_dropped = dropped
+                    yield scan
+                return
+        ctx.scan_iter = catch_iter  # type: ignore
+
+        assert ctx.scan_source is not None
 
         try:
             # Execute multicommand callbacks
@@ -1487,7 +1786,6 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
             #   3. set ctx.scan_iter to a new iterator, and register a processing thread in ctx.thread_fns
             #   4. create a CoupledTee from ctx.scan_iter, and re-set ctx.scan_iter to one of the resultant tees
 
-            ctx.thread_fns = []
             ctx.main_thread_fn = None
             ctx.terminate_evt = threading.Event()
             for c in callbacks:
@@ -1538,18 +1836,19 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                         continue
 
             # TODO: https://ouster.atlassian.net/browse/FLEETSW-6470
-            if "id_error_count" in dir(ctx.scan_source) and ctx.scan_source.id_error_count > 0:
-                print(f"WARNING: {ctx.scan_source.id_error_count} lidar_packets with "
+            if hasattr(ctx.scan_source, "id_error_count") and ctx.scan_source.id_error_count > 0:
+                print(f"WARNING: {ctx.scan_source.id_error_count} packets with "
                       f"mismatched init_id/sn were detected.")
                 if not soft_id_check:
                     print("NOTE: To disable strict init_id/sn checking use "
                           "--soft-id-check option (may lead to parsing "
                           "errors)")
-            if "size_error_count" in dir(ctx.scan_source) and ctx.scan_source.size_error_count > 0:
-                print(f"WARNING: {ctx.scan_source.size_error_count} lidar_packets with unexpected"
+            if hasattr(ctx.scan_source, "size_error_count") and ctx.scan_source.size_error_count > 0:
+                print(f"WARNING: {ctx.scan_source.size_error_count} packets with unexpected"
                       f" size detected and discarded. You may have the incorrect udp_profile_lidar in your metadata.")
         except KeyboardInterrupt:
             print("Termination requested, shutting down...")
+            assert ctx.terminate_evt is not None
             ctx.terminate_evt.set()
         finally:
             try:

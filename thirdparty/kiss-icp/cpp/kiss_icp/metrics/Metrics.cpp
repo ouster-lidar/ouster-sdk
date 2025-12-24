@@ -136,7 +136,8 @@ std::vector<errors> CalcSequenceErrors(const std::vector<Eigen::Matrix4d> &poses
 }
 }  // namespace
 
-namespace kiss_icp::metrics {
+namespace kiss_icp {
+namespace metrics {
 
 std::tuple<float, float> SeqError(const std::vector<Eigen::Matrix4d> &poses_gt,
                                   const std::vector<Eigen::Matrix4d> &poses_result) {
@@ -187,4 +188,6 @@ std::tuple<float, float> AbsoluteTrajectoryError(const std::vector<Eigen::Matrix
     ATE_trans /= static_cast<double>(num_poses);
     return std::make_tuple(std::sqrt(ATE_rot), std::sqrt(ATE_trans));
 }
-}  // namespace kiss_icp::metrics
+
+}   // namespace metrics
+}   // namespace kiss_icp

@@ -6,7 +6,6 @@ All rights reserved.
 from copy import copy, deepcopy
 
 import pytest
-import warnings
 import inspect
 import json
 
@@ -21,8 +20,8 @@ invalid_signal_multiplier_values = [0, 0.3, 1.3, 5, 5.5]
 
 
 @pytest.mark.parametrize("mode, string", [
-    (core.OperatingMode.OPERATING_NORMAL, "NORMAL"),
-    (core.OperatingMode.OPERATING_STANDBY, "STANDBY"),
+    (core.OperatingMode.NORMAL, "NORMAL"),
+    (core.OperatingMode.STANDBY, "STANDBY"),
 ])
 def test_operating_mode(mode, string) -> None:
     """Check operating mode (un)parsing."""
@@ -33,23 +32,25 @@ def test_operating_mode(mode, string) -> None:
 
 def test_operating_mode_misc() -> None:
     """Check some misc properties of operating modes."""
+    # the number of OperatingMode members is set to 4 because we are keeping
+    # the deprecated constants for the time being.
     assert len(
-        core.OperatingMode.__members__) == 2, "Don't forget to update tests!"
+        core.OperatingMode.__members__) == 4, "Don't forget to update tests!"
     assert core.OperatingMode.from_string("foo") is None
-    assert core.OperatingMode(1) == core.OperatingMode.OPERATING_NORMAL
+    assert core.OperatingMode(1) == core.OperatingMode.NORMAL
 
 
 @pytest.mark.parametrize("mode, string", [
-    (core.MultipurposeIOMode.MULTIPURPOSE_OFF, "OFF"),
-    (core.MultipurposeIOMode.MULTIPURPOSE_INPUT_NMEA_UART,
+    (core.MultipurposeIOMode.OFF, "OFF"),
+    (core.MultipurposeIOMode.INPUT_NMEA_UART,
      "INPUT_NMEA_UART"),
-    (core.MultipurposeIOMode.MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC,
+    (core.MultipurposeIOMode.OUTPUT_FROM_INTERNAL_OSC,
      "OUTPUT_FROM_INTERNAL_OSC"),
-    (core.MultipurposeIOMode.MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN,
+    (core.MultipurposeIOMode.OUTPUT_FROM_SYNC_PULSE_IN,
      "OUTPUT_FROM_SYNC_PULSE_IN"),
-    (core.MultipurposeIOMode.MULTIPURPOSE_OUTPUT_FROM_PTP_1588,
+    (core.MultipurposeIOMode.OUTPUT_FROM_PTP_1588,
      "OUTPUT_FROM_PTP_1588"),
-    (core.MultipurposeIOMode.MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE,
+    (core.MultipurposeIOMode.OUTPUT_FROM_ENCODER_ANGLE,
      "OUTPUT_FROM_ENCODER_ANGLE"),
 ])
 def test_multipurpose_io_mode(mode, string) -> None:
@@ -61,16 +62,18 @@ def test_multipurpose_io_mode(mode, string) -> None:
 
 def test_multipurpose_io_mode_misc() -> None:
     """Check some misc properties of multipurpose mode."""
+    # the number of MultipurposeIOMode members is set to 12 because we are keeping
+    # the deprecated constants for the time being.
     assert len(core.MultipurposeIOMode.__members__
-               ) == 6, "Don't forget to update tests!"
+               ) == 12, "Don't forget to update tests!"
     assert core.MultipurposeIOMode.from_string("foo") is None
     assert core.MultipurposeIOMode(
-        1) == core.MultipurposeIOMode.MULTIPURPOSE_OFF
+        1) == core.MultipurposeIOMode.OFF
 
 
 @pytest.mark.parametrize("polarity, string", [
-    (core.Polarity.POLARITY_ACTIVE_HIGH, "ACTIVE_HIGH"),
-    (core.Polarity.POLARITY_ACTIVE_LOW, "ACTIVE_LOW"),
+    (core.Polarity.ACTIVE_HIGH, "ACTIVE_HIGH"),
+    (core.Polarity.ACTIVE_LOW, "ACTIVE_LOW"),
 ])
 def test_polarity(polarity, string) -> None:
     """Check polarity (un)parsing."""
@@ -81,10 +84,13 @@ def test_polarity(polarity, string) -> None:
 
 def test_polarity_misc() -> None:
     """Check some misc properties of polarity."""
+    # the number of Polairty members is set to 4 because we are keeping
+    # the deprecated POLARITY_ACTIVE_HIGH and POLARITY_ACTIVE_LOW constants
+    # for the time being.
     assert len(
-        core.Polarity.__members__) == 2, "Don't forget to update tests!"
+        core.Polarity.__members__) == 4, "Don't forget to update tests!"
     assert core.Polarity.from_string("foo") is None
-    assert core.Polarity(1) == core.Polarity.POLARITY_ACTIVE_LOW
+    assert core.Polarity(1) == core.Polarity.ACTIVE_LOW
 
 
 @pytest.mark.parametrize("nmea_baud_rate, string", [
@@ -112,6 +118,7 @@ def test_optional_config() -> None:
 
     # make sure all the values are empty
     assert config.accel_fsr is None
+    assert config.lidar_frame_azimuth_offset is None
     assert config.azimuth_window is None
     assert config.lidar_mode is None
     assert config.gyro_fsr is None
@@ -133,55 +140,66 @@ def test_optional_config() -> None:
     assert config.sync_pulse_out_polarity is None
     assert config.timestamp_mode is None
     assert config.udp_dest is None
+    assert config.udp_dest_zm is None
     assert config.udp_port_imu is None
     assert config.udp_port_lidar is None
+    assert config.udp_port_zm is None
+    assert config.udp_multicast_ttl is None
+    assert config.udp_multicast_ttl_zm is None
     assert config.udp_profile_lidar is None
     assert config.columns_per_packet is None
+    assert config.imu_packets_per_frame is None
+    assert config.header_type is None
+    assert config.bloom_reduction_optimization is None
     assert len(config.extra_options) == 0
 
 
 def test_write_config() -> None:
     """Check modifying config."""
     config = core.SensorConfig()
+    config.lidar_frame_azimuth_offset = 0
     config.azimuth_window = (0, 0)
-    config.lidar_mode = core.LidarMode.MODE_512x10
-    config.multipurpose_io_mode = core.MultipurposeIOMode.MULTIPURPOSE_INPUT_NMEA_UART
+    config.lidar_mode = core.LidarMode._512x10
+    config.multipurpose_io_mode = core.MultipurposeIOMode.INPUT_NMEA_UART
     config.nmea_baud_rate = core.NMEABaudRate.BAUD_9600
-    config.nmea_in_polarity = core.Polarity.POLARITY_ACTIVE_LOW
+    config.nmea_in_polarity = core.Polarity.ACTIVE_LOW
     config.nmea_ignore_valid_char = True
     config.nmea_leap_seconds = 20
-    config.operating_mode = core.OperatingMode.OPERATING_STANDBY
+    config.operating_mode = core.OperatingMode.STANDBY
     config.phase_lock_enable = True
     config.phase_lock_offset = 180000
     config.signal_multiplier = 2.0
     config.sync_pulse_out_pulse_width = 5
     config.sync_pulse_out_frequency = 2
-    config.sync_pulse_in_polarity = core.Polarity.POLARITY_ACTIVE_HIGH
+    config.sync_pulse_in_polarity = core.Polarity.ACTIVE_HIGH
     config.sync_pulse_out_angle = 300
-    config.sync_pulse_out_polarity = core.Polarity.POLARITY_ACTIVE_LOW
+    config.sync_pulse_out_polarity = core.Polarity.ACTIVE_LOW
     config.timestamp_mode = core.TimestampMode.TIME_FROM_PTP_1588
     config.udp_dest = "udp-dest"
     config.udp_port_imu = 84
     config.udp_port_lidar = 3827
-    config.udp_profile_lidar = core.UDPProfileLidar.PROFILE_LIDAR_LEGACY
-    config.udp_profile_imu = core.UDPProfileIMU.PROFILE_IMU_LEGACY
+    config.udp_port_zm = 789
+    config.udp_profile_lidar = core.UDPProfileLidar.LEGACY
+    config.udp_profile_imu = core.UDPProfileIMU.LEGACY
     config.columns_per_packet = 8
-    config.return_order = core.ReturnOrder.ORDER_FARTHEST_TO_NEAREST
-    config.gyro_fsr = core.FullScaleRange.FSR_NORMAL
-    config.accel_fsr = core.FullScaleRange.FSR_EXTENDED
+    config.return_order = core.ReturnOrder.FARTHEST_TO_NEAREST
+    config.gyro_fsr = core.FullScaleRange.NORMAL
+    config.accel_fsr = core.FullScaleRange.EXTENDED
     config.min_range_threshold_cm = 30
+    config.bloom_reduction_optimization = core.BloomReductionOptimization.BALANCED
     config.extra_options = {"hi": '"hello"'}
 
     with pytest.raises(TypeError):
         config.lidar_mode = 1  # type: ignore
     with pytest.raises(TypeError):
-        config.sync_pulse_in_polarity = core.MultipurposeIOMode.MULTIPURPOSE_OFF  # type: ignore
+        config.sync_pulse_in_polarity = core.MultipurposeIOMode.OFF  # type: ignore
 
 
 @pytest.fixture()
 def complete_config_string() -> str:
     complete_config_string = """
         {"accel_fsr": "EXTENDED",
+        "lidar_frame_azimuth_offset": 100,
         "azimuth_window": [0, 360000],
         "columns_per_packet": 8,
         "gyro_fsr": "EXTENDED",
@@ -204,11 +222,18 @@ def complete_config_string() -> str:
         "sync_pulse_out_pulse_width": 10,
         "timestamp_mode": "TIME_FROM_INTERNAL_OSC",
         "udp_dest": "",
+        "udp_dest_zm": "",
         "udp_port_imu": 7503,
         "udp_port_lidar": 7502,
+        "udp_port_zm": 7504,
+        "udp_multicast_ttl": 156,
+        "udp_multicast_ttl_zm": 157,
         "udp_profile_imu": "LEGACY",
         "udp_profile_lidar": "LEGACY",
-        "unknown_parameter": "hello"}
+        "unknown_parameter": "hello",
+        "imu_packets_per_frame": 1,
+        "header_type": "FUSA",
+        "bloom_reduction_optimization": "BALANCED"}
     """
     return complete_config_string
 
@@ -218,6 +243,7 @@ def all_different_config_string() -> str:
     """All different from complete_config_string except for udp_profile_imu"""
     all_different_config_string = """
         {"accel_fsr": "NORMAL",
+        "lidar_frame_azimuth_offset": 0,
         "azimuth_window": [180000, 360000],
         "columns_per_packet": 16,
         "gyro_fsr": "NORMAL",
@@ -240,11 +266,18 @@ def all_different_config_string() -> str:
         "sync_pulse_out_pulse_width": 1,
         "timestamp_mode": "TIME_FROM_SYNC_PULSE_IN",
         "udp_dest": "1.1.1.1",
+        "udp_dest_zm": "2.2.2.2",
         "udp_port_imu": 8503,
         "udp_port_lidar": 8502,
-        "udp_profile_imu": "LEGACY",
+        "udp_port_zm": 8504,
+        "udp_multicast_ttl": 56,
+        "udp_multicast_ttl_zm": 57,
+        "udp_profile_imu": "ACCEL32_GYRO32_NMEA",
         "udp_profile_lidar": "RNG15_RFL8_NIR8",
-        "unknown_parameter": "hi"}
+        "unknown_parameter": "hi",
+        "imu_packets_per_frame": 2,
+        "header_type": "STANDARD",
+        "bloom_reduction_optimization": "MINIMIZE_FALSE_POSITIVES"}
     """
     return all_different_config_string
 
@@ -254,34 +287,44 @@ def test_read_config(complete_config_string: str) -> None:
     config = core.SensorConfig(complete_config_string)  # read from string
 
     # make sure all the values are correct
-    assert config.accel_fsr == core.FullScaleRange.FSR_EXTENDED
+    assert config.accel_fsr == core.FullScaleRange.EXTENDED
+    assert config.lidar_frame_azimuth_offset == 100
     assert config.azimuth_window == (0, 360000)
-    assert config.gyro_fsr == core.FullScaleRange.FSR_EXTENDED
-    assert config.lidar_mode == core.LidarMode.MODE_1024x10
+    assert config.gyro_fsr == core.FullScaleRange.EXTENDED
+    assert config.lidar_mode == core.LidarMode._1024x10
     assert config.min_range_threshold_cm == 30
-    assert config.multipurpose_io_mode == core.MultipurposeIOMode.MULTIPURPOSE_OFF
+    assert config.multipurpose_io_mode == core.MultipurposeIOMode.OFF
     assert config.nmea_baud_rate == core.NMEABaudRate.BAUD_9600
-    assert config.nmea_in_polarity == core.Polarity.POLARITY_ACTIVE_HIGH
+    assert config.nmea_in_polarity == core.Polarity.ACTIVE_HIGH
     assert config.nmea_ignore_valid_char is False
     assert config.nmea_leap_seconds == 0
-    assert config.operating_mode == core.OperatingMode.OPERATING_NORMAL
+    assert config.operating_mode == core.OperatingMode.NORMAL
     assert config.phase_lock_enable is False
     assert config.phase_lock_offset == 0
-    assert config.return_order == core.ReturnOrder.ORDER_STRONGEST_TO_WEAKEST
+    assert config.return_order == core.ReturnOrder.STRONGEST_TO_WEAKEST
     assert config.signal_multiplier == 2
     assert config.sync_pulse_out_pulse_width == 10
     assert config.sync_pulse_out_frequency == 1
-    assert config.sync_pulse_in_polarity == core.Polarity.POLARITY_ACTIVE_HIGH
+    assert config.sync_pulse_in_polarity == core.Polarity.ACTIVE_HIGH
     assert config.sync_pulse_out_angle == 360
-    assert config.sync_pulse_out_polarity == core.Polarity.POLARITY_ACTIVE_HIGH
+    assert config.sync_pulse_out_polarity == core.Polarity.ACTIVE_HIGH
     assert config.timestamp_mode == core.TimestampMode.TIME_FROM_INTERNAL_OSC
     assert config.udp_dest == ""
+    assert config.udp_dest_zm == ""
     assert config.udp_port_imu == 7503
     assert config.udp_port_lidar == 7502
-    assert config.udp_profile_lidar == core.UDPProfileLidar.PROFILE_LIDAR_LEGACY
-    assert config.udp_profile_imu == core.UDPProfileIMU.PROFILE_IMU_LEGACY
+    assert config.udp_port_zm == 7504
+    assert config.udp_multicast_ttl == 156
+    assert config.udp_multicast_ttl_zm == 157
+    assert config.udp_profile_lidar == core.UDPProfileLidar.LEGACY
+    assert config.udp_profile_imu == core.UDPProfileIMU.LEGACY
+
+    assert config.imu_packets_per_frame == 1
+    assert config.header_type == core.HeaderType.FUSA
 
     assert config.columns_per_packet == 8
+
+    assert config.bloom_reduction_optimization == core.BloomReductionOptimization.BALANCED
 
     assert config.extra_options == {"unknown_parameter": '"hello"'}
 
@@ -304,19 +347,19 @@ def test_equality_config(complete_config_string: str, all_different_config_strin
     complete_config_2 = core.SensorConfig(complete_config_string)
     assert complete_config_1 == complete_config_2
 
-    complete_config_2.multipurpose_io_mode = core.MultipurposeIOMode.MULTIPURPOSE_OUTPUT_FROM_PTP_1588
+    complete_config_2.multipurpose_io_mode = core.MultipurposeIOMode.OUTPUT_FROM_PTP_1588
     assert complete_config_1 != complete_config_2
 
     partial_config_1 = core.SensorConfig()
     partial_config_1.nmea_baud_rate = core.NMEABaudRate.BAUD_115200
-    partial_config_1.operating_mode = core.OperatingMode.OPERATING_STANDBY
+    partial_config_1.operating_mode = core.OperatingMode.STANDBY
 
     partial_config_2 = core.SensorConfig()
     partial_config_2.nmea_baud_rate = core.NMEABaudRate.BAUD_115200
-    partial_config_2.operating_mode = core.OperatingMode.OPERATING_STANDBY
+    partial_config_2.operating_mode = core.OperatingMode.STANDBY
     assert partial_config_1 == partial_config_2
 
-    partial_config_2.operating_mode = core.OperatingMode.OPERATING_NORMAL
+    partial_config_2.operating_mode = core.OperatingMode.NORMAL
     assert partial_config_1 != partial_config_2
 
     empty_config_1 = core.SensorConfig()
@@ -330,6 +373,7 @@ def test_equality_config(complete_config_string: str, all_different_config_strin
     assert partial_config_2 != empty_config_1
 
     config_attributes = inspect.getmembers(core.SensorConfig, lambda a: not inspect.isroutine(a))
+    assert 'zone_set_config' not in [a[0] for a in config_attributes]
     config_properties = [a for a in config_attributes if not a[0].startswith('__')]
 
     base_config = core.SensorConfig(complete_config_string)
@@ -337,15 +381,13 @@ def test_equality_config(complete_config_string: str, all_different_config_strin
 
     for config_property in config_properties:
         copy_config = deepcopy(base_config)  # reset to initial
+        assert copy_config == base_config
         property_name = config_property[0]  # config_property is a tuple of (property_name as string, property)
-        if property_name == "udp_profile_imu":
-            warnings.warn(UserWarning("Skipping equality check on udp profile IMU while eUDP IMU is not implemented"))
-        else:
-            property_value = getattr(different_config, property_name)
-            setattr(copy_config, property_name, property_value)
-            assert copy_config != base_config
+        property_value = getattr(different_config, property_name)
+        setattr(copy_config, property_name, property_value)
+        assert copy_config != base_config, f"Failed for property {property_name}"
 
-    assert len(config_properties) == 28, "Don't forget to update tests and the config == operator!"
+    assert len(config_properties) == 36, "Don't forget to update tests and the config == operator!"
 
 
 def test_copy_config(complete_config_string: str) -> None:
@@ -446,4 +488,4 @@ def test_deprecated_config(deprecated_params_config) -> None:
     """Check that deprecated params are properly translated."""
     print(deprecated_params_config)
     assert deprecated_params_config.udp_dest == "169.254.148.183"
-    assert deprecated_params_config.operating_mode == core.OperatingMode.OPERATING_NORMAL
+    assert deprecated_params_config.operating_mode == core.OperatingMode.NORMAL

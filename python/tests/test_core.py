@@ -3,9 +3,11 @@ Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
 """
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import socket
 import random
+import sys
+import copy
 from os import path
 
 import numpy as np
@@ -20,9 +22,41 @@ pytest.register_assert_rewrite('ouster.sdk.core._digest')
 import ouster.sdk.core._digest as digest  # noqa
 
 
+def _reserve_socket(allow_reuse: bool) -> socket.socket:
+    """Create a UDP socket bound to localhost, optionally allowing reuse."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if allow_reuse:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except OSError:
+                pass
+    sock.bind(("127.0.0.1", 0))
+    return sock
+
+
+@contextmanager
+def _meta_with_reserved_ports(base_meta: core.SensorInfo,
+                              allow_reuse: bool = True):
+    """Yield a copy of meta with ports reserved for the duration."""
+    sockets = []
+    try:
+        meta = copy.copy(base_meta)
+        lidar_sock = _reserve_socket(allow_reuse)
+        imu_sock = _reserve_socket(allow_reuse)
+        sockets.extend([lidar_sock, imu_sock])
+        meta.config.udp_port_lidar = lidar_sock.getsockname()[1]
+        meta.config.udp_port_imu = imu_sock.getsockname()[1]
+        yield meta
+    finally:
+        for sock in sockets:
+            sock.close()
+
+
 @pytest.fixture
 def default_meta():
-    meta = core.SensorInfo.from_default(core.LidarMode.MODE_1024x10)
+    meta = core.SensorInfo.from_default(core.LidarMode._1024x10)
     meta.config.udp_port_imu = random.randint(10000, 65000)
     meta.config.udp_port_lidar = random.randint(10000, 65000)
     return meta
@@ -30,41 +64,70 @@ def default_meta():
 
 def test_sensor_init(default_meta: core.SensorInfo) -> None:
     """Initializing a data stream with metadata makes no network calls."""
-    with closing(sensor.SensorPacketSource("localhost", sensor_info=[default_meta])) as source:
-        assert source.sensor_info == [default_meta]
+    with _meta_with_reserved_ports(default_meta) as meta:
+        with closing(sensor.SensorPacketSource("localhost", sensor_info=[meta],
+                                   reuse_ports=True)) as source:
+            assert source.sensor_info == [meta]
 
 
 def test_sensor_timeout(default_meta: core.SensorInfo) -> None:
     """Setting a zero timeout reliably raises an exception."""
-    with closing(sensor.SensorPacketSource("localhost", sensor_info=[default_meta],
-                               timeout=0.1)) as source:
-        with pytest.raises(sensor.ClientTimeout):
-            next(iter(source))
+    with _meta_with_reserved_ports(default_meta) as meta:
+        with closing(sensor.SensorPacketSource("localhost", sensor_info=[meta],
+                                   timeout=0.1, reuse_ports=True)) as source:
+            with pytest.raises(sensor.ClientTimeout):
+                next(iter(source))
 
 
 def test_sensor_closed(default_meta: core.SensorInfo) -> None:
     """Check reading from a closed source raises an exception."""
-    with closing(sensor.SensorPacketSource("localhost", sensor_info=[default_meta])) as source:
-        source.close()
-        with pytest.raises(RuntimeError):
-            next(iter(source))
+    with _meta_with_reserved_ports(default_meta) as meta:
+        with closing(sensor.SensorPacketSource("localhost", sensor_info=[meta],
+                                   reuse_ports=True)) as source:
+            source.close()
+            with pytest.raises(RuntimeError):
+                next(iter(source))
 
 
-def test_sensor_port_in_use(default_meta: core.SensorInfo) -> None:
+def test_sensor_port_in_use_reuse(default_meta: core.SensorInfo) -> None:
     """Instantiating clients listening to the same port does not fail."""
-    with closing(sensor.SensorPacketSource("localhost", sensor_info=[default_meta])) as _:
-        with closing(
-                sensor.SensorPacketSource("localhost",
-                              sensor_info=[default_meta])) as _:
-            pass
+    with _meta_with_reserved_ports(default_meta) as meta:
+        with closing(sensor.SensorPacketSource("localhost", sensor_info=[meta], reuse_ports=True)) as _:
+            with closing(
+                    sensor.SensorPacketSource("localhost",
+                                  sensor_info=[meta], reuse_ports=True)) as _:
+                pass
+
+
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Broken on Windows")
+def test_sensor_port_in_use_no_reuse(default_meta: core.SensorInfo) -> None:
+    """Instantiating clients listening to the same port does fail."""
+    with _meta_with_reserved_ports(default_meta, allow_reuse=False) as meta:
+        with pytest.raises(RuntimeError):
+            with closing(
+                    sensor.SensorPacketSource("localhost",
+                                              sensor_info=[meta])) as _:
+                pass
 
 
 def test_sensor_packet2(default_meta: core.SensorInfo) -> None:
     """Check that the client will read single properly-sized IMU/LIDAR packet."""
+    # Reserve an ephemeral port by binding to '0'.
+    tmp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    tmp_socket.bind(('127.0.0.1', 0))
+    tmp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    # Use the reserved port for our dummy sensor
+    reserved_port = tmp_socket.getsockname()[1]
+
+    meta = copy.copy(default_meta)
+    meta.config.udp_port_lidar = reserved_port
+    meta.config.udp_port_imu = reserved_port
     with closing(
             sensor.SensorPacketSource("127.0.0.1",
-                          sensor_info=[default_meta],
-                          timeout=5.0)) as source:
+                          sensor_info=[meta],
+                          timeout=5.0, reuse_ports=True)) as source:
+        tmp_socket.close()
         pf = PacketFormat(source.sensor_info[0])
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         data = np.random.randint(255,
@@ -86,10 +149,21 @@ def test_sensor_packet2(default_meta: core.SensorInfo) -> None:
 
 def test_sensor_packet_bad_size(default_meta: core.SensorInfo) -> None:
     """Check that the client will ignore improperly-sized packets."""
+    # Reserve an ephemeral port by binding to '0'.
+    tmp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    tmp_socket.bind(('127.0.0.1', 0))
+    tmp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    # Use the reserved port for our dummy sensor
+    reserved_port = tmp_socket.getsockname()[1]
+
+    meta = copy.copy(default_meta)
+    meta.config.udp_port_lidar = reserved_port
     with closing(
             sensor.SensorPacketSource("127.0.0.1",
-                          sensor_info=[default_meta],
-                          timeout=1.0)) as source:
+                          sensor_info=[meta],
+                          timeout=1.0, reuse_ports=True)) as source:
+        tmp_socket.close()
         pf = PacketFormat.from_info(source.sensor_info[0])
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # send packet too small
@@ -118,11 +192,13 @@ def test_scans_simple(packets: core.PacketSource) -> None:
 
 def test_scans_closed(default_meta: core.SensorInfo) -> None:
     """Check reading from closed scans raises an exception."""
-    with closing(sensor.SensorPacketSource("localhost", sensor_info=[default_meta])) as source:
-        scans = core.Scans(source)
-        scans.close()
-        with pytest.raises(ValueError):
-            next(iter(scans))
+    with _meta_with_reserved_ports(default_meta) as meta:
+        with closing(sensor.SensorPacketSource("localhost", sensor_info=[meta],
+                                   reuse_ports=True)) as source:
+            scans = core.Scans(source)
+            scans.close()
+            with pytest.raises(ValueError):
+                next(iter(scans))
 
 
 def test_scans_meta(packets: core.PacketSource) -> None:
@@ -146,7 +222,7 @@ def test_scans_meta(packets: core.PacketSource) -> None:
     assert np.count_nonzero(scan.timestamp) == scan.w
 
     if (packets.sensor_info[0].format.udp_profile_lidar ==
-            core.UDPProfileLidar.PROFILE_LIDAR_LEGACY):
+            core.UDPProfileLidar.LEGACY):
         # check that all columns are valid
         assert (scan.status == 0xffffffff).all()
     else:
@@ -166,7 +242,7 @@ def test_scans_first_packet(packet: core.LidarPacket,
     w = pf.columns_per_packet
 
     is_low_data_rate_profile = (packets.sensor_info[0].format.udp_profile_lidar ==
-                                core.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+                                core.UDPProfileLidar.RNG15_RFL8_NIR8)
 
     if not is_low_data_rate_profile:  # low data rate profile RANGE is scaled up
         assert np.array_equal(pf.packet_field(ChanField.RANGE, packet.buf),
@@ -208,7 +284,33 @@ def test_scans_dual(packets: core.PacketSource) -> None:
     scans = core.Scans(packets)
 
     assert (packets.sensor_info[0].format.udp_profile_lidar ==
-            core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+            core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
+
+    ls = list(scans)
+
+    assert len(ls) == 1
+    assert ls[0][0] is not None
+    assert set(ls[0][0].fields) == {
+        ChanField.RANGE,
+        ChanField.RANGE2,
+        ChanField.REFLECTIVITY,
+        ChanField.REFLECTIVITY2,
+        ChanField.SIGNAL,
+        ChanField.SIGNAL2,
+        ChanField.FLAGS,
+        ChanField.FLAGS2,
+        ChanField.NEAR_IR
+    }
+
+
+@pytest.mark.parametrize('test_key', ['dual-2.2'])
+def test_scans_dual_3_2(packets: core.PacketSource) -> None:
+    """Test scans from dual returns data from 3.2 FW."""
+    packets.sensor_info[0].image_rev = "3.2.0"
+    scans = core.Scans(packets)
+
+    assert (packets.sensor_info[0].format.udp_profile_lidar ==
+            core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
 
     ls = list(scans)
 
@@ -224,6 +326,7 @@ def test_scans_dual(packets: core.PacketSource) -> None:
         ChanField.FLAGS,
         ChanField.FLAGS2,
         ChanField.NEAR_IR,
+        ChanField.WINDOW
     }
 
 

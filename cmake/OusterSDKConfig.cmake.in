@@ -43,6 +43,7 @@ if(OUSTER_SDK_COMPONENT_STATIC)
   SET(OUSTER_SKIP_FIND_PACKAGE_STANDARD TRUE)
   include("${CMAKE_CURRENT_LIST_DIR}/FindEigen3.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/Findlibtins.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/Findlibzip.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/FindPcap.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/FindCURL.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/Findglfw3.cmake")
@@ -60,7 +61,6 @@ endif()
 if(OUSTER_SDK_COMPONENT_SHARED)
   SET(OUSTER_SKIP_FIND_PACKAGE_STANDARD TRUE)
   include("${CMAKE_CURRENT_LIST_DIR}/FindEigen3.cmake")
-  include("${CMAKE_CURRENT_LIST_DIR}/FindFlatbuffers.cmake")
   SET(OUSTER_SKIP_FIND_PACKAGE_STANDARD FALSE)
 
   add_library(shared_library SHARED IMPORTED)
@@ -93,7 +93,6 @@ if(OUSTER_SDK_COMPONENT_SHARED)
   target_include_directories(shared_library INTERFACE
     ${OUSTER_INCLUDE_DIRS}
     ${OUSTER_INCLUDE_DIRS}/optional-lite
-    ${OUSTER_INCLUDE_DIRS}/fb_generated
   )
   add_library(OusterSDK::shared_library ALIAS shared_library)
 endif()

@@ -1,18 +1,16 @@
-"""Ouster sensor Python client.
-
+"""
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
 
-This module contains more idiomatic wrappers around the lower-level module
-generated using pybind11.
+This module contains wrappers for packet sources, frame borders, and pose validation.
+Defines how to read packets, manage frames, and check pose validity.
 """
 from typing import (Iterable, Iterator, List, Callable, Tuple, Union)
 import logging
 import numpy as np
-import warnings
 
 from ouster.sdk._bindings.client import (SensorInfo, PacketFormat, LidarScan,
-                      LidarPacket, ImuPacket, Packet, PacketSource)
+                      LidarPacket, ImuPacket, ZonePacket, Packet, PacketSource)
 
 logger = logging.getLogger("ouster.sdk.core.core")
 
@@ -20,10 +18,10 @@ logger = logging.getLogger("ouster.sdk.core.core")
 class Packets(PacketSource):
     """Create a :class:`PacketSource` from an existing iterator."""
 
-    _it: Iterable[Union[LidarPacket, ImuPacket]]
+    _it: Iterable[Union[LidarPacket, ImuPacket, ZonePacket]]
     _metadata: List[SensorInfo]
 
-    def __init__(self, it: Iterable[Union[LidarPacket, ImuPacket]], metadata: SensorInfo):
+    def __init__(self, it: Iterable[Union[LidarPacket, ImuPacket, ZonePacket]], metadata: SensorInfo):
         """
         Args:
             it: A stream of packets
@@ -37,7 +35,7 @@ class Packets(PacketSource):
     def sensor_info(self) -> List[SensorInfo]:
         return self._metadata
 
-    def __iter__(self) -> Iterator[Tuple[int, Union[LidarPacket, ImuPacket]]]:
+    def __iter__(self) -> Iterator[Tuple[int, Union[LidarPacket, ImuPacket, ZonePacket]]]:
         """Return the underlying iterator."""
         for packet in self._it:
             yield (0, packet)
@@ -72,50 +70,6 @@ class FrameBorder:
             self._last_f_id = f_id
             return self._last_packet_res
         return False
-
-
-def first_valid_column(scan: LidarScan) -> int:
-    """Return first valid column of a LidarScan"""
-    warnings.warn("`first_valid_column` is deprecated, use `scan.get_first_valid_column` instead.",
-                  DeprecationWarning, stacklevel=2)
-    return int(np.bitwise_and(scan.status, 1).argmax())
-
-
-def last_valid_column(scan: LidarScan) -> int:
-    """Return last valid column of a LidarScan"""
-    warnings.warn("`last_valid_column` is deprecated, use `scan.get_last_valid_column` instead.",
-                  DeprecationWarning, stacklevel=2)
-    return int(scan.w - 1 - np.bitwise_and(scan.status, 1)[::-1].argmax())
-
-
-def first_valid_column_ts(scan: LidarScan) -> int:
-    """Return first valid column timestamp of a LidarScan"""
-    warnings.warn("`first_valid_column_ts` is deprecated, use `scan.get_first_valid_column_timestamp` instead.",
-                  DeprecationWarning, stacklevel=2)
-    return scan.timestamp[scan.get_first_valid_column()]
-
-
-def first_valid_packet_ts(scan: LidarScan) -> int:
-    """Return first valid packet timestamp of a LidarScan"""
-    warnings.warn("`first_valid_packet_ts` is deprecated, use `scan.get_first_valid_packet_timestamp` instead.",
-                  DeprecationWarning, stacklevel=2)
-    columns_per_packet = scan.w // scan.packet_timestamp.shape[0]
-    return scan.packet_timestamp[scan.get_first_valid_column() // columns_per_packet]
-
-
-def last_valid_packet_ts(scan: LidarScan) -> int:
-    """Return first valid packet timestamp of a LidarScan"""
-    warnings.warn("`last_valid_packet_ts` is deprecated, use `scan.get_last_valid_packet_timestamp` instead.",
-                  DeprecationWarning, stacklevel=2)
-    columns_per_packet = scan.w // scan.packet_timestamp.shape[0]
-    return scan.packet_timestamp[scan.get_last_valid_column() // columns_per_packet]
-
-
-def last_valid_column_ts(scan: LidarScan) -> int:
-    """Return last valid column timestamp of a LidarScan"""
-    warnings.warn("`last_valid_column_ts` is deprecated, use `scan.get_last_valid_column_timestamp` instead.",
-                  DeprecationWarning, stacklevel=2)
-    return scan.timestamp[scan.get_last_valid_column()]
 
 
 def first_valid_column_pose(scan: LidarScan) -> np.ndarray:

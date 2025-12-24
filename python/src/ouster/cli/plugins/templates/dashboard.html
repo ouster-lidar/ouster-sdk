@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="top-banner" id="topBanner" style="display:flex;justify-content:center;align-items:center;gap:12px;position:relative;">
+        <a href="/disclaimer" style="color:#fff;text-decoration:underline;flex:1;text-align:center;">Important Disclaimer: Read this before developing applications using this emulator!</a>
+        <button type="button" id="dismissBanner" aria-label="Dismiss" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">×</button>
+    </div>
+    <script>
+        (function() {
+            var btn = document.getElementById('dismissBanner');
+            var banner = document.getElementById('topBanner');
+            if (btn && banner) {
+                btn.addEventListener('click', function() {
+                    banner.style.display = 'none';
+                });
+            }
+        })();
+    </script>
+    <div class="navbar">
+        <div class="logo">OUSTER</div>
+        <a href="/">Dashboard</a>
+        <a href="/diag">Diagnostics</a>
+        <a href="/config">Configuration</a>
+        <a href="#">Documentation</a>
+    </div>
+
+    <div class="container">
+        <h1>Dashboard</h1>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2>System Information</h2>
+                <table class="info-table">
+                    {% for key, value in system_info.items() %}
+                    <tr>
+                        <td>{{ key }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>Firmware Update</h2>
+                <table class="info-table">
+                    {% for key, value in firmware_update.items() %}
+                    <tr>
+                        <td>{{ key }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                <div class="firmware-upload">
+                    <input type="file" id="firmwareFile" accept=".img">
+                    <label for="firmwareFile" class="browse-button">Browse</label>
+                    <button class="update-button">Update</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>System Status</h2>
+                <table class="info-table">
+                    {% for key, value in system_status.items() %}
+                    <tr>
+                        <td>{{ key }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>Configuration</h2>
+                <table class="info-table">
+                    {% for key, value in configuration.items() %}
+                    <tr>
+                        <td>{{ key }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+
+        <div class="footer-buttons">
+            <a href="/diag" class="button">Go to diagnostics page...</a>
+            <a href="/config" class="button">Edit sensor configuration...</a>
+        </div>
+    </div>
+</body>
+</html>

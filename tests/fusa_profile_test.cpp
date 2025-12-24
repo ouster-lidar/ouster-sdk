@@ -10,7 +10,8 @@
 #include "ouster/os_pcap.h"
 #include "ouster/pcap.h"
 
-using namespace ouster;
+using namespace ouster::sdk::core;
+using namespace ouster::sdk::pcap;
 
 namespace sensor {
 
@@ -24,14 +25,13 @@ inline std::string getenvs(const std::string& var) {
 TEST(FusaProfileTest, packet_size) {
     auto data_dir = getenvs("DATA_DIR");
     std::string dataset = "OS-1-128_767798045_1024x10_20230712_120049";
-    sensor_utils::PcapReader pcap(data_dir + "/" + dataset + ".pcap");
+    PcapReader pcap(data_dir + "/" + dataset + ".pcap");
     std::string metadata_path = data_dir + "/" + dataset + ".json";
-    auto info = ouster::sensor::metadata_from_json(metadata_path);
+    auto info = metadata_from_json(metadata_path);
 
     // The profile in the corresponding metadata should be
     // identified correctly as PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL
-    ASSERT_EQ(info.format.udp_profile_lidar,
-              ouster::sensor::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL);
+    ASSERT_EQ(info.format.udp_profile_lidar, PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL);
 
     size_t packet_size = pcap.next_packet();
     ASSERT_EQ(packet_size, 16640L);
@@ -45,24 +45,22 @@ TEST(FusaProfileTest, fields) {
     // https://imhex.werwolv.net/
     auto data_dir = getenvs("DATA_DIR");
     std::string dataset = "OS-1-128_767798045_1024x10_20230712_120049";
-    sensor_utils::PcapReader pcap(data_dir + "/" + dataset + ".pcap");
+    PcapReader pcap(data_dir + "/" + dataset + ".pcap");
     std::string metadata_path = data_dir + "/" + dataset + ".json";
-    auto info = ouster::sensor::metadata_from_json(metadata_path);
-    auto pf = ouster::sensor::get_format(info);
+    auto info = metadata_from_json(metadata_path);
+    auto pf = get_format(info);
 
     // check preconditions for the test
     constexpr int pixels_per_column = 128u;
-    ASSERT_EQ(info.config.lidar_mode, ouster::sensor::MODE_1024x10);
+    ASSERT_EQ(info.config.lidar_mode, LidarMode::_1024x10);
     ASSERT_EQ(info.format.udp_profile_lidar,
-              ouster::sensor::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL);
+              UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
     ASSERT_EQ(pf.pixels_per_column, pixels_per_column);
 
     // check field widths
     int expected_cols = 16;
-    ASSERT_EQ(pf.field_type(ouster::sensor::ChanField::RANGE),
-              ouster::sensor::UINT32);
-    ASSERT_EQ(pf.field_type(ouster::sensor::ChanField::RANGE2),
-              ouster::sensor::UINT32);
+    ASSERT_EQ(pf.field_type(ChanField::RANGE), UINT32);
+    ASSERT_EQ(pf.field_type(ChanField::RANGE2), UINT32);
     ASSERT_EQ(pf.columns_per_packet, expected_cols);
 
     // check packet header values
@@ -107,11 +105,11 @@ TEST(FusaProfileTest, fields) {
                                   480, 0, 0, 0, 448, 0, 0, 0};
 
     uint32_t range_array[pixels_per_column];
-    pf.col_field(col, ouster::sensor::ChanField::RANGE, range_array);
+    pf.col_field(col, ChanField::RANGE, range_array);
     for (int range_idx = 0; range_idx < pixels_to_test; range_idx++) {
         EXPECT_EQ(range_array[range_idx], expected_range[range_idx]);
     }
-    pf.col_field(col, ouster::sensor::ChanField::RANGE2, range_array);
+    pf.col_field(col, ChanField::RANGE2, range_array);
     for (int range_idx = 0; range_idx < pixels_to_test; range_idx++) {
         EXPECT_EQ(range_array[range_idx], expected_range2[range_idx]);
     }
@@ -119,7 +117,7 @@ TEST(FusaProfileTest, fields) {
     uint16_t expected_nearir[] = {320, 544, 528, 496, 400, 464, 496, 560,
                                   368, 512, 640, 640, 400, 672, 688, 608};
     uint16_t nearir_array[pixels_per_column];
-    pf.col_field(col, ouster::sensor::ChanField::NEAR_IR, nearir_array);
+    pf.col_field(col, ChanField::NEAR_IR, nearir_array);
     for (int nearir_idx = 0; nearir_idx < pixels_to_test; nearir_idx++) {
         EXPECT_EQ(nearir_array[nearir_idx], expected_nearir[nearir_idx]);
     }
@@ -128,19 +126,19 @@ TEST(FusaProfileTest, fields) {
                                1, 58, 60, 61, 1,  67, 68, 72};
     uint8_t expected_refl2[] = {0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0};
     uint8_t refl_array[pixels_per_column];
-    pf.col_field(col, ouster::sensor::ChanField::REFLECTIVITY, refl_array);
+    pf.col_field(col, ChanField::REFLECTIVITY, refl_array);
     for (int refl_idx = 0; refl_idx < pixels_to_test; refl_idx++) {
         EXPECT_EQ(refl_array[refl_idx], expected_refl[refl_idx]);
     }
-    pf.col_field(col, ouster::sensor::ChanField::REFLECTIVITY2, refl_array);
+    pf.col_field(col, ChanField::REFLECTIVITY2, refl_array);
     for (int refl_idx = 0; refl_idx < pixels_to_test; refl_idx++) {
         EXPECT_EQ(refl_array[refl_idx], expected_refl2[refl_idx]);
     }
 
     uint32_t raw_words[pixels_per_column];
     uint32_t raw_words2[pixels_per_column];
-    pf.col_field(col, ouster::sensor::ChanField::RAW32_WORD1, raw_words);
-    pf.col_field(col, ouster::sensor::ChanField::RAW32_WORD2, raw_words2);
+    pf.col_field(col, ChanField::RAW32_WORD1, raw_words);
+    pf.col_field(col, ChanField::RAW32_WORD2, raw_words2);
 
     // check raw words against known range values
     // to confirm raw word offsets are correct

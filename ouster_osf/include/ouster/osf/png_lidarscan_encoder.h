@@ -4,11 +4,14 @@
  */
 #pragma once
 
+#include <vector>
+
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/lidarscan_encoder.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
@@ -26,9 +29,23 @@ namespace osf {
  */
 static constexpr int DEFAULT_PNG_OSF_ZLIB_COMPRESSION_LEVEL = 1;
 
+/**
+ * @brief Encoder for lidar scan fields into PNG format.
+ *
+ * This class implements the LidarScanEncoder interface to encode lidar scan
+ * fields into PNG format, supporting various bit depths and destaggering
+ * options.
+ */
 class OUSTER_API_CLASS PngLidarScanEncoder
-    : public ouster::osf::LidarScanEncoder {
+    : public ouster::sdk::osf::LidarScanEncoder {
    public:
+    /**
+     * @brief Construct a PngLidarScanEncoder with a specified compression
+     * level.
+     *
+     * @param[in] compression_amount Compression level passed to zlib (0 = none,
+     * 9 = max).
+     */
     OUSTER_API_FUNCTION
     PngLidarScanEncoder(int compression_amount)
         : compression_amount_{compression_amount} {}
@@ -38,8 +55,8 @@ class OUSTER_API_CLASS PngLidarScanEncoder
     // FIXME[tws] method should be private, but "friend class/FRIEND_TEST" for
     // the unit test isn't working for some reason
     OUSTER_API_IGNORE
-    ScanChannelData encodeField(
-        const ouster::Field& field,
+    ScanChannelData encode_field(
+        const ouster::sdk::core::Field& field,
         const std::vector<int>& px_offset = {}) const override;
 
    private:
@@ -61,14 +78,16 @@ class OUSTER_API_CLASS PngLidarScanEncoder
      * @param[in] px_offset Pixel shift per row used to destagger img data.
      */
     template <typename T>
-    bool encode8bitImage(ScanChannelData& res_buf,
-                         const Eigen::Ref<const img_t<T>>& img,
-                         const std::vector<int>& px_offset) const;
+    bool encode_8bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img,
+        const std::vector<int>& px_offset) const;
 
     /** @copydoc OSFPngEncode8 */
     template <typename T>
-    bool encode8bitImage(ScanChannelData& res_buf,
-                         const Eigen::Ref<const img_t<T>>& img) const;
+    bool encode_8bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img) const;
 
     /**
      * Encode img object into a 16 bit, Gray, PNG buffer.
@@ -81,9 +100,10 @@ class OUSTER_API_CLASS PngLidarScanEncoder
      * @return false (0) if operation is successful, true (1) if error occured
      */
     template <typename T>
-    bool encode16bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img,
-                          const std::vector<int>& px_offset) const;
+    bool encode_16bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img,
+        const std::vector<int>& px_offset) const;
 
     /**
      * Encode 2D image of a typical lidar scan field channel into a 16 bit,
@@ -96,8 +116,9 @@ class OUSTER_API_CLASS PngLidarScanEncoder
      * @return false (0) if operation is successful, true (1) if error occured
      */
     template <typename T>
-    bool encode16bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img) const;
+    bool encode_16bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img) const;
 
     /**
      * @defgroup OSFPngEncode32 Encoding Functionality.
@@ -116,14 +137,16 @@ class OUSTER_API_CLASS PngLidarScanEncoder
      * @param[in] px_offset Pixel shift per row used to destagger img data.
      */
     template <typename T>
-    bool encode32bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img,
-                          const std::vector<int>& px_offset) const;
+    bool encode_32bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img,
+        const std::vector<int>& px_offset) const;
 
     /** @copydoc OSFPngEncode32 */
     template <typename T>
-    bool encode32bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img) const;
+    bool encode_32bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img) const;
 
     /**
      * @defgroup OSFPngEncode24 Encoding Functionality.
@@ -142,14 +165,16 @@ class OUSTER_API_CLASS PngLidarScanEncoder
      * @param[in] px_offset Pixel shift per row used to destagger img data.
      */
     template <typename T>
-    bool encode24bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img,
-                          const std::vector<int>& px_offset) const;
+    bool encode_24bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img,
+        const std::vector<int>& px_offset) const;
 
     /** @copydoc OSFPngEncode24 */
     template <typename T>
-    bool encode24bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img) const;
+    bool encode_24bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img) const;
 
     /**
      * @defgroup OSFPngEncode64 Encoding Functionality.
@@ -168,14 +193,17 @@ class OUSTER_API_CLASS PngLidarScanEncoder
      * @param[in] px_offset Pixel shift per row used to destagger img data.
      */
     template <typename T>
-    bool encode64bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img,
-                          const std::vector<int>& px_offset) const;
+    bool encode_64bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img,
+        const std::vector<int>& px_offset) const;
 
     /** @copydoc OSFPngEncode64 */
     template <typename T>
-    bool encode64bitImage(ScanChannelData& res_buf,
-                          const Eigen::Ref<const img_t<T>>& img) const;
+    bool encode_64bit_image(
+        ScanChannelData& res_buf,
+        const Eigen::Ref<const ouster::sdk::core::img_t<T>>& img) const;
 };
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

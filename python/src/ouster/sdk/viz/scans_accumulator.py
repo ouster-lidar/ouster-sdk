@@ -5,11 +5,13 @@ All rights reserved.
 
 from typing import List, Optional
 import ouster.sdk.core as core
+from ouster.sdk.core import LidarScanSet
 from ouster.sdk._bindings.viz import Cloud, PointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
 from ouster.sdk.viz.model import LidarScanVizModel, SensorModel
 from ouster.sdk.viz.track import ScanRecord, MultiTrack, Track
 from ouster.sdk.viz.view_mode import CloudPaletteItem
+import numpy as np
 
 
 class SensorClouds:
@@ -118,6 +120,7 @@ class ScansAccumulator(AccumulatorBase):
         self._previous_cloud_mode_name: Optional[str] = None
         super().__init__(model, point_viz, track._tracks[0])  # TODO multitrack
         self._accum_mode_accum = True
+        self._black_palette = CloudPaletteItem("Black", np.zeros((256, 3), dtype=np.float32))
 
         self._sensor_clouds = [
             SensorClouds(point_viz, sensor, track) for sensor, track in zip(model._sensors, track._tracks)
@@ -129,7 +132,7 @@ class ScansAccumulator(AccumulatorBase):
             sensor_clouds.update_point_size(self._cloud_pt_size)
 
     def update(self,
-               scan: List[Optional[core.LidarScan]],
+               scan: LidarScanSet,
                scan_num: Optional[int] = None, force_update: bool = False) -> None:
         super().update(scan, scan_num)
         for sensor_clouds in self._sensor_clouds:
@@ -153,9 +156,12 @@ class ScansAccumulator(AccumulatorBase):
             if mode:
                 palette = self.get_palette(mode)
                 sensor_clouds._update_cloud_mode(self.active_cloud_mode, palette)
+            else:
+                # show the cloud as black if chanfield is missing
+                sensor_clouds._update_cloud_mode(self.active_cloud_mode, self._black_palette)
         self._previous_cloud_mode_name = self.active_cloud_mode
 
-    def _update_cloud_palette(self):  # TODO don't return anything
+    def _update_cloud_palette(self):
         """Switch the palette for the accumulated scans."""
         # TODO[tws] deduplicate this logic with map accum somehow
         for (sensor, sensor_clouds) in zip(self._model._sensors, self._sensor_clouds):
@@ -164,6 +170,9 @@ class ScansAccumulator(AccumulatorBase):
                 sensor_clouds.set_palette(
                     self.get_palette(cloud_mode)
                 )
+            else:
+                # show the cloud as black if chanfield is missing
+                sensor_clouds.set_palette(self._black_palette)
 
     def toggle_sensor(self, sensor_idx: int, state: bool):
         sensor_cloud = self._sensor_clouds[sensor_idx]

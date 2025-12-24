@@ -10,27 +10,27 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
-    - name: install deps
-      uses: ./.github/actions/install_deps
     - name: install python
-      run: sudo apt install python3 python3-pip
+      run: sudo apt install python3 python3-pip python3-venv
     - name: install python-deps one
       run: cd python && python3 setup.py egg_info && pip3 install `grep -v '^\[' src/*.egg-info/requires.txt`
+    - name: install deps
+      run: python3 ./scripts/dev.py utils install-system-packages --clangformat
     - name: install python-deps
       run: pip3 install --force-reinstall mypy==1.14.1 flake8==7.1.2 clang-format==14.0.0
     - name: cpp-lint
-      run: ./scripts/./clang-linting.sh
+      run: python3 ./scripts/dev.py lint clang-format
     - name: python-lint
       run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
       continue-on-error: true
   linux-2204-build:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
+    - name: install python
+      run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
-      uses: ./.github/actions/install_deps
-    - name: install clang-format
-      run: sudo apt install -y clang-format
+      run: python3 ./scripts/dev.py utils install-system-packages
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
@@ -40,11 +40,11 @@ jobs:
   linux-2404-build:
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
+    - name: install python
+      run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
-      uses: ./.github/actions/install_deps
-    - name: install clang-format
-      run: sudo apt install -y clang-format
+      uses: python3 ./scripts/dev.py utils install-system-packages
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
@@ -56,11 +56,9 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install python
-      run: sudo apt install python3 python3-pip
+      run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
-      uses: ./.github/actions/install_deps
-    - name: install clang-format
-      run: sudo apt install -y clang-format   
+      run: python3 ./scripts/dev.py utils install-system-package
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
     - name: build python
@@ -72,9 +70,9 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install python
-      run: sudo apt install python3 python3-pip
+      run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
-      uses: ./.github/actions/install_deps
+      run: python3 ./scripts/dev.py utils install-system-packages
     - name: setup venv
       run: python3 -m venv venv
     - name: Activate virtual environment
@@ -137,7 +135,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: brew install cmake pkg-config eigen curl libtins glfw flatbuffers googletest ceres-solver robin-map
+      run: python3 ./scripts/dev.py utils install-system-packages
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
@@ -148,12 +146,12 @@ jobs:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v1
-    - name: install deps
-      run: brew install cmake pkg-config eigen curl libtins glfw flatbuffers ceres-solver robin-map
     - name: install python-deps
       run: python3.12 -m pip install pytest pytest-xdist --break-system-packages
     - name: build python
       run: cd python && python3.12 -m pip install -e .[test] --break-system-packages
+    - name: install deps
+      run: python3 ./scripts/dev.py utils install-system-packages
     - name: set netparams
       run: sudo sysctl -w net.inet.udp.maxdgram=65535
     - name: run tests

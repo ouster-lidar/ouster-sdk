@@ -1,0 +1,18 @@
+include "common.fbs";
+
+namespace ouster.sdk.osf.v2;
+
+// Sensor info about a lidar scan
+table SensorInfo {
+    lidar_sensor_id:uint32; // referenced to metadata.entry[].id with LidarSensor
+    scan_stream_id:uint32; // referenced to metadata.entry[].id with LidarScan
+    sensor_info:[uint8]; // zstd compressed sensor info json
+}
+
+table SensorInfoStream {
+    // empty
+}
+
+// MetadataEntry.type: ouster/v1/os_sensor/SensorInfoStream
+root_type SensorInfoStream;
+file_identifier "oSIS";

@@ -1,0 +1,20 @@
+include "common.fbs";
+
+namespace ouster.sdk.osf.v2;
+
+struct ScanID {
+    sensor_id:uint32;
+    scan_idx:uint64;
+}
+
+table CollationMsg {
+    scan_ids:[ScanID];
+    fields:[Field];
+}
+
+table CollationStream {
+}
+
+// MetadataEntry.type: ouster/v1/os_sensor/CollationStream
+root_type CollationStream;
+file_identifier "oCSt";

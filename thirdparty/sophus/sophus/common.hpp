@@ -13,6 +13,11 @@
 
 #undef SOPHUS_COMPILE_TIME_FMT
 
+// HARDCODED remove fmt as a dependency
+#if !defined(SOPHUS_USE_BASIC_LOGGING)
+#define SOPHUS_USE_BASIC_LOGGING
+#endif
+
 #ifdef SOPHUS_USE_BASIC_LOGGING
 
 #define SOPHUS_FMT_CSTR(description, ...) description

@@ -7,13 +7,13 @@
 
 #include <zlib.h>
 
-#include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 const uint32_t CRC_INITIAL_VALUE = 0L;
@@ -29,4 +29,5 @@ uint32_t crc32(uint32_t initial_crc, const uint8_t* buf, uint32_t size) {
 }
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

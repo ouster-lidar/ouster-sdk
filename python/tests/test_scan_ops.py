@@ -60,6 +60,7 @@ def test_reduce_raises_exception_on_invalid_factor_values(scan_source_path, beam
 
 
 @pytest.mark.parametrize("beams", [
+    (1),
     (8),
     (16),
     (32),
@@ -81,7 +82,7 @@ def test_reduce(scan_source_path, beams) -> None:
         assert nt.w == rt.w and rt.h == beams
 
 
-def test_reduce_raises_exception_on_invalid_range(scan_source_path) -> None:
+def test_clip_raises_exception_on_invalid_range(scan_source_path) -> None:
     normal_src = open_source(scan_source_path)
     normal_src = cast(ScanSource, normal_src)
     with pytest.raises(ValueError) as ex:

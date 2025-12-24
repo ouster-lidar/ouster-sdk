@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.10...3.22)
+
 if (WIN32)
   set(CMAKE_OBJECT_PATH_MAX 260)
 endif ()
@@ -15,11 +16,26 @@ include(DefaultBuildType)
 # configure vcpkg from environment variables, if present
 include(VcpkgEnv)
 
-# ==== Project Name ====
-project(ouster-sdk VERSION 0.15.1)
+# Extract version
+set(VERSION_FILE_PATH "${CMAKE_CURRENT_LIST_DIR}/VERSION")
 
-# generate version header
-set(OusterSDK_VERSION_STRING 0.15.1)
+if(EXISTS ${VERSION_FILE_PATH})
+    # Read the version from VERSION file
+    file(READ ${VERSION_FILE_PATH} VERSION_FILE_CONTENT)
+    string(REGEX MATCH "__cpp_version__ = \'([^\']+)\'" _ ${VERSION_FILE_CONTENT})
+    # ==== Set OusterSDK_VERSION_STRING ====
+    set(OusterSDK_VERSION_STRING "${CMAKE_MATCH_1}")
+    if(OusterSDK_VERSION_STRING)
+      # ==== Project Name ====
+      project(ouster-sdk VERSION "${OusterSDK_VERSION_STRING}")
+      message(STATUS "Using OusterSDK version from VERSION file: ${OusterSDK_VERSION_STRING}")
+    else()
+      message(FATAL_ERROR "Error: Unable to extract version from VERSION file.")
+    endif()
+else()
+    message(FATAL_ERROR "Error: VERSION file not found.")
+endif()
+
 include(VersionGen)
 
 # ==== Options ====
@@ -35,7 +51,6 @@ option(BUILD_EXAMPLES "Build C++ examples" OFF)
 option(OUSTER_USE_EIGEN_MAX_ALIGN_BYTES_32 "Eigen max aligned bytes." OFF)
 option(BUILD_SHARED_LIBRARY "Build shared Library." OFF)
 option(BUILD_DEBIAN_FOR_GITHUB "Build debian for github ci" OFF)
-
 # when building as a top-level project
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -73,16 +88,18 @@ if(BUILD_SENSOR)
 endif()
 
 if(BUILD_PCAP)
+  message(STATUS "Building PCAP support")
   add_subdirectory(ouster_pcap)
 endif()
 
 if(BUILD_OSF)
   add_subdirectory(ouster_osf)
+  add_subdirectory(thirdparty/zpng)
 endif()
 
 if(BUILD_VIZ)
+    message(STATUS "Building Ouster visualizer")
   add_subdirectory(ouster_viz)
-  add_subdirectory(thirdparty/glad)
 endif()
 
 if(BUILD_MAPPING)
@@ -162,6 +179,8 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
 install(FILES "cmake/FindEigen3.cmake"
   DESTINATION lib/cmake/OusterSDK)
 install(FILES "cmake/Findlibtins.cmake"
+  DESTINATION lib/cmake/OusterSDK)
+install(FILES "cmake/Findlibzip.cmake"
   DESTINATION lib/cmake/OusterSDK)
 install(FILES "cmake/FindCURL.cmake"
   DESTINATION lib/cmake/OusterSDK)

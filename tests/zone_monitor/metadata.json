@@ -1,0 +1,88 @@
+{
+   "version": {
+        "metadata" : 1,
+        "file_naming" : 1
+   },
+   "sensor_to_body_transform" : [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      1
+   ],
+   "power_on_active_ids" : [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+   ],
+   "zones" : {
+      "0" : {
+         "frame_count" : 2,
+         "mode" : "OCCUPANCY",
+         "point_count" : 50,
+         "stl" : {
+            "file_name" : "0.stl",
+            "coordinate_frame" : "BODY"
+         }
+      },
+      "1" : {
+         "frame_count" : 2,
+         "mode" : "VACANCY",
+         "point_count" : 50,
+         "stl" : {
+            "file_name" : "0.stl",
+            "coordinate_frame" : "BODY"
+         }
+      },
+      "2" : {
+         "frame_count" : 2,
+         "mode" : "OCCUPANCY",
+         "point_count" : 50,
+         "stl" : {
+            "file_name" : "0.stl",
+            "coordinate_frame" : "BODY"
+         }
+      },
+      "3" : {
+         "frame_count" : 2,
+         "mode" : "VACANCY",
+         "point_count" : 50,
+         "stl" : {
+            "file_name" : "0.stl",
+            "coordinate_frame" : "BODY"
+         }
+      },
+      "4" : {
+         "frame_count" : 4,
+         "mode" : "OCCUPANCY",
+         "point_count" : 50,
+         "stl" : {
+            "file_name" : "0.stl",
+            "coordinate_frame" : "BODY"
+         }
+      },
+      "5" : {
+         "frame_count" : 2,
+         "mode" : "VACANCY",
+         "point_count" : 50,
+         "stl" : {
+            "file_name" : "0.stl",
+            "coordinate_frame" : "BODY"
+         }
+      }
+   }
+}

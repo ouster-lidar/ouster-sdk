@@ -1,0 +1,263 @@
+@font-face {
+    font-family: 'body-font';
+    src: local('Roboto'), sans-serif;
+    font-weight: 400;
+}
+
+/* Base */
+body {
+    font-family: 'body-font', sans-serif;
+    margin: 0;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 28px;
+    font-weight: 500;
+}
+
+h2 {
+    color: #333;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+/* Layout */
+.container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 20px auto;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* Banner */
+.top-banner {
+    background-color: #ff9800;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    font-size: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+}
+
+.top-banner a {
+    color: #fff;
+    text-decoration: underline;
+    flex: 1;
+    text-align: center;
+}
+
+.top-banner button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+/* Navbar */
+.navbar {
+    background-color: #333;
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+}
+
+.navbar .logo {
+    font-weight: 700;
+    font-size: 20px;
+    margin-right: 30px;
+}
+
+.navbar a {
+    color: white;
+    text-decoration: none;
+    padding: 5px 10px;
+    font-size: 14px;
+}
+
+.navbar a:hover {
+    background-color: #575757;
+    border-radius: 4px;
+}
+
+/* Cards */
+.card {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card h2 {
+    margin-top: 0;
+    color: #333;
+    font-size: 20px;
+    font-weight: 500;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+/* Tables */
+.info-table,
+.alert-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.info-table td,
+.alert-table th,
+.alert-table td {
+    padding: 8px 0;
+    font-size: 14px;
+    vertical-align: top;
+}
+
+.info-table td:first-child {
+    font-weight: 500;
+    width: 40%;
+    color: #555;
+}
+
+/* Alert tables */
+.alert-table-wrapper {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow-x: auto;
+    max-height: 250px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.alert-table {
+    min-width: 800px;
+}
+
+.alert-table th, .alert-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+    vertical-align: top;
+}
+
+.alert-table th {
+    background-color: #f8f8f8;
+    font-weight: 500;
+    color: #555;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.alert-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.alert-table td:first-child {
+    width: 50px;
+    text-align: center;
+}
+
+.alert-table td:last-child {
+    width: 150px;
+}
+
+/* Firmware upload */
+.firmware-upload {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.firmware-upload input[type="file"] {
+    display: none;
+}
+
+.browse-button {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.browse-button:hover {
+    background-color: #e0e0e0;
+}
+
+.update-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.update-button:hover {
+    background-color: #0056b3;
+}
+
+/* Buttons */
+.footer-buttons {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.footer-buttons .button,
+.diag-button {
+    background-color: #6c757d;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-block;
+    font-weight: 500;
+    border: none;
+}
+
+.footer-buttons .button:hover {
+    background-color: #5a6268;
+}
+
+.diag-button {
+    background-color: #007bff;
+    padding: 10px 20px;
+}
+
+.diag-button:hover {
+    background-color: #0056b3;
+}
+
+/* Diagnostic info */
+.diag-info p {
+    font-size: 14px;
+    margin-bottom: 15px;
+}

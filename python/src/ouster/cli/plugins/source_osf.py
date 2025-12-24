@@ -15,9 +15,6 @@ from .source_util import (SourceCommandContext,
 def osf_group(ctx) -> None:
     """Commands for working with OSF files and converting data to OSF."""
     ctx.ensure_object(dict)
-    sdk_log_level = ctx.obj.get('SDK_LOG_LEVEL', None)
-    if sdk_log_level:
-        osf.init_logger(sdk_log_level)
 
 
 @click.command
@@ -31,12 +28,6 @@ def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
     Parses all metadata entries, output is in JSON format.
     """
     file = ctx.source_uri or ""
-
-    if not click_ctx.obj.get('SDK_LOG_LEVEL', None):
-        # If not SDK_LOG_LEVEL passed we set to "error" logging so to ensure
-        # that json output is not interferred with other SDK logging messages
-        # and thus ruining valid json structure
-        osf.init_logger("error")
 
     print(osf.dump_metadata(file, not short))
 
@@ -94,6 +85,9 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
             obj["count"] = stats.message_count
             obj["start"] = stats.start_ts
             obj["end"] = stats.end_ts
+            rts = stats.sensor_timestamps
+            obj["sensor_start"] = rts[0] if len(rts) > 0 else 0
+            obj["sensor_end"] = rts[-1] if len(rts) > 0 else 0
             if not hasattr(parent, "sensor_meta_id"):
                 obj["type"] = reader.meta_store[id].type
                 other_streams[id] = obj
@@ -160,7 +154,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
                         obj["fields"] = None
 
     print(f"Filename: {file}\nLayout: {orig_layout}")
-    print(f"OSF Version: {reader.version}")
+    print(f"OSF Version: {reader.version.major}.{reader.version.minor}.{reader.version.patch}")
     print(f"Metadata ID: '{reader.metadata_id}'")
     print(f"Size: {size/1000000} MB")
     print(f"Start: {start/1000000000.0} ({_nanos_to_string(start)})")
@@ -174,11 +168,15 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         count = stream["count"]
         start = stream['start'] / 1000000000.0
         end = stream['end'] / 1000000000.0
+        sensor_start = stream['sensor_start'] / 1000000000.0
+        sensor_end = stream['sensor_end'] / 1000000000.0
         sensor = stream["sensor"]
         print(f"Stream {k} {stream['type']}: ")
         print(f"  Scan Count: {count}")
         print(f"  Start: {start} ({_nanos_to_string(stream['start'])})")
         print(f"  End: {end} ({_nanos_to_string(stream['end'])})")
+        print(f"  Sensor Start: {sensor_start} ({_nanos_to_string(stream['sensor_start'])})")
+        print(f"  Sensor End: {sensor_end} ({_nanos_to_string(stream['sensor_end'])})")
         print(f"  Duration: {end-start} seconds")
         if end == start:
             print("  Rate: N/A")
@@ -206,7 +204,8 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         print(f"  Start: {start} ({_nanos_to_string(stream['start'])})")
         print(f"  End: {end} ({_nanos_to_string(stream['end'])})")
         print(f"  Duration: {end-start} seconds")
-        print(f"  Rate: {count/(end-start)} Hz")
+        if end - start:
+            print(f"  Rate: {count/(end-start)} Hz")
 
 
 @click.command

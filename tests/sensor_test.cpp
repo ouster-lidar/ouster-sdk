@@ -8,9 +8,9 @@
 const std::string test_string = "TEST STRING HERE";
 
 TEST(Sensor, SmokeTests) {
-    ouster::sensor::sensor_config config;
+    ouster::sdk::core::SensorConfig config;
     config.udp_dest = test_string;
-    ouster::sensor::Sensor test(test_string, config);
+    ouster::sdk::sensor::Sensor test(test_string, config);
 
     EXPECT_EQ(test.hostname(), test_string);
     EXPECT_EQ(test.desired_config().udp_dest, test_string);

@@ -1,6 +1,6 @@
 include "common.fbs";
 
-namespace ouster.osf.v2;
+namespace ouster.sdk.osf.v2;
 
 // sensor::ChanField enum mapping
 enum CHAN_FIELD:uint8 {

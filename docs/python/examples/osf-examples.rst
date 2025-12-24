@@ -18,13 +18,13 @@ All examples below assume that a user has an ``osf_file`` variable with a path t
 
 .. code::
 
-    import ouster.osf as osf
+    from ouster.sdk import osf
     
     osf_file = 'path/to/osf_file.osf'
 
 You can use ``ouster-cli source .... save`` commands to generate a test OSF file to test any of the examples.
 
-Every example is wrapped into a CLI and available for quick tests by running 
+Every example is wrapped into a CLI and available for quick tests by running
 ``python3 -m ouster.sdk.examples.osf <OSF_FILE.osf> <EXAMPLE_NAME>``:
 
 .. code:: bash
@@ -41,7 +41,7 @@ Every example is wrapped into a CLI and available for quick tests by running
 For example to execute the ``read-scans`` example you can run:
 
 .. code:: bash
-    
+
     $ python3 -m ouster.sdk.examples.osf <OSF_FILE.osf> read-scans
 
 

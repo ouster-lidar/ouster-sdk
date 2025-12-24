@@ -6,20 +6,30 @@
 #include "ouster/osf/file.h"
 
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <utility>
 
-#include "compat_ops.h"
-#include "fb_utils.h"
-#include "ouster/impl/logging.h"
+#include "ouster/deprecation.h"
+#include "ouster/osf/file.h"
+// Nolint this because logger comes in when debugging
+#include "ouster/impl/logging.h"  // NOLINT(misc-include-cleaner)
+#include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
+#include "ouster/osf/impl/compat_ops.h"
+#include "ouster/osf/impl/fb_utils.h"
+#include "ouster/osf/offset.h"
+#include "ouster/version.h"
 
-using namespace ouster::sensor;
+using namespace ouster::sdk::core;
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 namespace {
@@ -27,116 +37,59 @@ namespace {
 // Print errors only in DEBUG mode
 #ifndef NDEBUG
 inline void print_error(const std::string& filename, const std::string& msg) {
-    logger().error("ERROR: Osf[{}]: {}", filename, msg);
+    ouster::sdk::core::logger().error("ERROR: Osf[{}]: {}", filename, msg);
 }
 #else
-#define print_error(a, b) ((void)0)
+inline void print_error(const std::string& /*filename*/,
+                        const std::string& /*msg*/) {}
 #endif
 
 }  // namespace
 
-// ======== Construction ============
+/// ============ OsfFile ============
 
-OsfFile::OsfFile()
-    : filename_(),
-      offset_(0),
-      size_(0),
-      file_buf_(nullptr),
-      file_stream_{},
-      header_chunk_{nullptr},
-      metadata_chunk_{nullptr},
-      chunk_cache_{nullptr},
-      chunk_cache_offset_{std::numeric_limits<uint64_t>::max()},
-      state_(FileState::BAD) {}
+OsfFile::OsfFile(const std::string& path)
+    : state_(FileState::BAD), path_(path) {}
 
-OsfFile::OsfFile(const std::string& filename, OpenMode mode) : OsfFile() {
-    filename_ = filename;
+std::string OsfFile::path() const { return path_; }
 
-    // TODO[pb]: Extract to open function
-    if (mode == OpenMode::READ) {
-        if (is_dir(filename_)) {
-            error("got a dir, but expected a file");
-            return;
-        }
+OsfOffset OsfFile::metadata_offset() { return metadata_offset_; }
 
-        int64_t sz = file_size(filename_);
-        if (sz < 0) {
-            error("unable to get file size");
-            return;
-        } else if (sz == 0) {
-            error("empty file");
-            return;
-        }
-        // TODO[pb]: This leads to incorrect file size for 4Gb+ files on the
-        //           32 bit systems like Emscripten/WASM. We need to check
-        //           size_t everywhere and replace it so it can hold file
-        //           sizes and file offsets bigger than 4Gb in 32 bit systems.
-        size_ = static_cast<uint64_t>(sz);
-
-#ifdef OUSTER_OSF_NO_MMAP
-        // TODO[pb]: Maybe consider adding a runtime parameter to open file
-        // with mmap or open/read? Also better handling/removing of class
-        // members for OsfFile can be done so we are not copying empty
-        // values when NO_MMAP is absent... But I can't make my mind
-        // about RUNTIME/COMPILATION time parametrization and for now
-        // will leave it in a half backed state: COMPILE time directive
-        // but some fields will be left empty and copied/check during runtime
-        // there is no hit in performance/memory due to this leftovers
-        // that I could spot.
-        file_stream_ =
-            std::ifstream(filename_, std::ios::in | std::ios::binary);
-        if (!file_stream_.good()) {
-            error();
-            return;
-        }
-#else
-        file_buf_ = mmap_open(filename_, memmap_handle_);
-        if (!file_buf_) {
-            error();
-            return;
-        }
-#endif
-
-        state_ = FileState::GOOD;
-    } else {
-        // Write is not yet implemented within this class. And other modes
-        // too.
-        error("write mode not implemented");
-        return;
-    }
+// NOTE - this computes chunk sizes with the assumption that chunks are
+// contiguous and continue up to the beginning of the metadata.
+OsfOffset OsfFile::chunks_offset() {
+    auto temp_offset = header_chunk_.size();
+    return {temp_offset, metadata_offset().offset() - temp_offset};
 }
 
-uint64_t OsfFile::size() const { return size_; };
-
-std::string OsfFile::filename() const { return filename_; }
-
-static ouster::util::version deserialized_version(uint64_t integer_version) {
+static Version deserialized_version(uint64_t integer_version) {
     // this method handles converting from the integer representation
     // which includes values in the OSF_VERSION enum (now considered "legacy"
     // code)
-    switch (integer_version) {
-        case V_INVALID:
+    using ouster::sdk::core::Version;
+    switch (OsfVersion(integer_version)) {
+        case OsfVersion::V_INVALID:
             throw std::runtime_error("Invalid file version.");
-        case V_1_0:
-            return ouster::util::version{1, 0, 0};
-        case V_1_1:
-            return ouster::util::version{1, 1, 0};
-        case V_1_2:
-            return ouster::util::version{1, 2, 0};
-        case V_1_3:
-            return ouster::util::version{1, 3, 0};
-        case V_1_4:
-            return ouster::util::version{1, 4, 0};
-        case V_2_0:
-            return ouster::util::version{2, 0, 0};
-        case V_2_1:
-            return ouster::util::version{2, 1, 0};
+        case OsfVersion::V_1_0:
+            return Version{1, 0, 0};
+        case OsfVersion::V_1_1:
+            return Version{1, 1, 0};
+        case OsfVersion::V_1_2:
+            return Version{1, 2, 0};
+        case OsfVersion::V_1_3:
+            return Version{1, 3, 0};
+        case OsfVersion::V_1_4:
+            return Version{1, 4, 0};
+        case OsfVersion::V_2_0:
+            return Version{2, 0, 0};
+        case OsfVersion::V_2_1:
+            return Version{2, 1, 0};
         default:
             uint16_t major = (integer_version >> 48) & 0xffff;
             uint16_t minor = (integer_version >> 32) & 0xffff;
             uint16_t patch = (integer_version >> 16) & 0xffff;
-            auto vers = ouster::util::version{major, minor, patch};
-            if (vers < ouster::util::version{2, 1, 0}) {
+            auto vers = Version{major, minor, patch};
+            if (vers < Version{2, 1, 0}) {
                 // the version occurs before 2.1.0 but isn't defined in the
                 // legacy version enum
                 throw std::logic_error("Invalid file version.");
@@ -145,37 +98,37 @@ static ouster::util::version deserialized_version(uint64_t integer_version) {
     }
 }
 
-const ouster::util::version OsfFile::current_version =
-    deserialized_version(V_2_1);
+OUSTER_DIAGNOSTIC_PUSH
+OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
+const ouster::sdk::core::Version OsfFile::current_version{2, 1, 0};
+OUSTER_DIAGNOSTIC_POP
 
-ouster::util::version OsfFile::version() {
-    if (!good()) {
-        throw std::runtime_error("Invalid file version.");
-    }
-    auto osf_header = get_osf_header_from_buf(get_header_chunk_ptr());
-    auto header_version = static_cast<OSF_VERSION>(osf_header->version());
-    return deserialized_version(header_version);
+const ouster::sdk::core::Version OsfFile::CURRENT_VERSION{2, 1, 0};
+
+ouster::sdk::core::Version OsfFile::version() {
+    return deserialized_version(static_cast<uint64_t>(version_));
 }
 
-uint64_t OsfFile::serialized_version(ouster::util::version parsed_version) {
+uint64_t OsfFile::serialized_version(Version parsed_version) {
     // this method handles converting a semver version back to the integer
     // representation including values defined previously in the OSF_VERSION
     // enum
-    if (parsed_version == ouster::util::version{1, 0, 0}) {
-        return V_1_0;
-    } else if (parsed_version == ouster::util::version{1, 1, 0}) {
-        return V_1_1;
-    } else if (parsed_version == ouster::util::version{1, 2, 0}) {
-        return V_1_2;
-    } else if (parsed_version == ouster::util::version{1, 3, 0}) {
-        return V_1_3;
-    } else if (parsed_version == ouster::util::version{1, 4, 0}) {
-        return V_1_4;
-    } else if (parsed_version == ouster::util::version{2, 0, 0}) {
-        return V_2_0;
-    } else if (parsed_version == ouster::util::version{2, 1, 0}) {
-        return V_2_1;
-    } else if (parsed_version < ouster::util::version{2, 1, 0}) {
+    using ouster::sdk::core::Version;
+    if (parsed_version == Version{1, 0, 0}) {
+        return static_cast<uint64_t>(OsfVersion::V_1_0);
+    } else if (parsed_version == Version{1, 1, 0}) {
+        return static_cast<uint64_t>(OsfVersion::V_1_1);
+    } else if (parsed_version == Version{1, 2, 0}) {
+        return static_cast<uint64_t>(OsfVersion::V_1_2);
+    } else if (parsed_version == Version{1, 3, 0}) {
+        return static_cast<uint64_t>(OsfVersion::V_1_3);
+    } else if (parsed_version == Version{1, 4, 0}) {
+        return static_cast<uint64_t>(OsfVersion::V_1_4);
+    } else if (parsed_version == Version{2, 0, 0}) {
+        return static_cast<uint64_t>(OsfVersion::V_2_0);
+    } else if (parsed_version == Version{2, 1, 0}) {
+        return static_cast<uint64_t>(OsfVersion::V_2_1);
+    } else if (parsed_version < Version{2, 1, 0}) {
         // the version occurs before 2.1.0 but isn't defined in the legacy
         // version enum
         throw std::logic_error("Invalid file version.");
@@ -185,285 +138,177 @@ uint64_t OsfFile::serialized_version(ouster::util::version parsed_version) {
             (static_cast<uint64_t>(parsed_version.patch) << 16));
 }
 
-uint64_t OsfFile::metadata_offset() {
-    if (!good()) throw std::logic_error("bad osf file");
-    auto osf_header = get_osf_header_from_buf(get_header_chunk_ptr());
-    return osf_header->metadata_offset();
+bool OsfFile::good() const {
+    bool result = true;
+    if (state_ == FileState::BAD) {
+        print_error(path_, "Filestate is bad");
+        result = false;
+    }
+    return result;
 }
-
-uint64_t OsfFile::chunks_offset() {
-    if (!good()) throw std::logic_error("bad osf file");
-    const uint32_t header_size = get_prefixed_size(get_header_chunk_ptr());
-    if (version() < ouster::util::version{2, 0}) {
-        throw std::logic_error("bad osf file: only version >= 2.0 supported");
-    }
-    return FLATBUFFERS_PREFIX_LENGTH + header_size + osf::CRC_BYTES_SIZE;
-}
-
-bool OsfFile::valid() {
-    if (!good()) {
-        return false;
-    }
-
-    uint32_t header_size =
-        get_prefixed_size(get_header_chunk_ptr()) + FLATBUFFERS_PREFIX_LENGTH;
-
-    // Check flatbuffers osfHeader validity
-    if (!verify_osf_header_buf(get_header_chunk_ptr(), header_size)) {
-        print_error(filename_, "OSF header verification has failed.");
-        return false;
-    }
-
-    if (!check_prefixed_size_block_crc(get_header_chunk_ptr(),
-                                       header_size + CRC_BYTES_SIZE)) {
-        print_error(filename_, "OSF header data is corrupt.");
-        return false;
-    }
-
-    auto osf_header = get_osf_header_from_buf(get_header_chunk_ptr());
-    if (osf_header->status() != v2::HEADER_STATUS::VALID) {
-        print_error(filename_, "OSF header is not valid.");
-        return false;
-    }
-
-    if (osf_header->file_length() != size_) {
-        std::stringstream ss;
-        ss << "OSF file size does not match the stored value";
-        ss << " Expected: " << size_;
-        ss << " Actual: " << osf_header->file_length();
-        print_error(filename_, ss.str());
-        return false;
-    }
-
-    uint64_t metadata_offset = osf_header->metadata_offset();
-
-    if (osf_header->version() < OSF_VERSION::V_2_0) {
-        // Check flatbuffers osfSession validity [V1]
-        print_error(filename_, "OSF prior version 2.0 is not supported!");
-        return false;
-    }
-
-    // Check flatbuffers metadata validity
-    if (!ouster::osf::check_osf_metadata_buf(get_metadata_chunk_ptr(),
-                                             size_ - metadata_offset)) {
-        print_error(filename_, "OSF metadata verification has failed.");
-        return false;
-    }
-
-    return true;
-}
-
-bool OsfFile::good() const { return state_ == FileState::GOOD; }
 
 bool OsfFile::operator!() const { return !good(); };
 
 OsfFile::operator bool() const { return good(); };
-
-uint64_t OsfFile::offset() const { return offset_; }
-// ========= Geneal Data Access =============
-
-OsfFile& OsfFile::seek(uint64_t pos) {
-    if (!good()) throw std::logic_error("bad osf file");
-    if (pos > size_) {
-        std::stringstream ss;
-        ss << "seek for " << pos << " but the file size is " << size_;
-        throw std::out_of_range(ss.str());
-    }
-    if (file_stream_.is_open()) {
-        file_stream_.seekg(pos);
-    }
-    offset_ = pos;
-    return *this;
-}
-
-OsfFile& OsfFile::read(uint8_t* buf, const uint64_t count) {
-    // TODO[pb]: Check for errors in full implementation
-    // and set error flags
-    // TODO[pb]: Read from disk if it's not mmap? (buffering, etc to be
-    // considered later)
-
-    // Now we just copy from the mapped region from the current offset
-    // and advance offset further.
-    if (!good()) throw std::logic_error("bad osf file");
-    if (offset_ + count > size_) {
-        std::stringstream ss;
-        ss << "read till " << (offset_ + count) << " but the file size is "
-           << size_;
-        throw std::out_of_range(ss.str());
-    }
-    if (file_stream_.is_open()) {
-        file_stream_.read(reinterpret_cast<char*>(buf), count);
-        offset_ = file_stream_.tellg();
-    } else if (file_buf_ != nullptr) {
-        std::memcpy(buf, file_buf_ + offset_, count);
-        offset_ += count;
-    }
-    return *this;
-}
-
-// ===== Mmapped access to the file content memory =====
-
-const uint8_t* OsfFile::buf(const uint64_t offset) const {
-    if (!good()) throw std::logic_error("bad osf file");
-    if (!is_memory_mapped()) throw std::logic_error("not a mmap file");
-    if (offset >= size_)
-        throw std::out_of_range("out of range osf file access");
-    return file_buf_ + offset;
-}
-
-bool OsfFile::is_memory_mapped() const { return file_buf_ != nullptr; }
 
 // ======= Helpers =============
 
 void OsfFile::error(const std::string& msg) {
     state_ = FileState::BAD;
     if (!msg.empty()) {
-        print_error(filename_, msg);
+        print_error(path_, msg);
     } else {
-        print_error(filename_, get_last_error());
+        print_error(path_, get_last_error());
     }
 }
 
 std::string OsfFile::to_string() {
+    // TODO[tws] an OSF that has been moved won't have a buffer, but the version
+    // is derived from this, technically
     std::string version_string;
     try {
         version_string = version().simple_version_string();
-    } catch (const std::runtime_error& e) {
+    } catch (const std::runtime_error&) {
         version_string = "INVALID";
     }
-    std::stringstream ss;
-    ss << "OsfFile [filename = '" << filename_ << "', "
-       << "state = " << static_cast<int>(state_) << ", "
-       << "version = " << version_string << ", "
-       << "size = " << size_ << ", offset = " << offset_;
+    std::stringstream string_stream;
+    string_stream << "OsfFile [path = '" << path_ << "', "
+                  << "state = " << static_cast<int>(state_) << ", "
+                  << "version = " << version_string << ", ";
     if (this->good()) {
-        auto osf_header = get_osf_header_from_buf(get_header_chunk_ptr());
-        ss << ", osf.file_length = " << osf_header->file_length() << ", "
-           << "osf.metadata_offset = " << osf_header->metadata_offset() << ", "
-           << "osf.status = " << static_cast<int>(osf_header->status());
+        auto osf_header = impl::get_osf_header_from_buf(header_chunk_.data());
+        string_stream << ", osf.file_length = " << osf_header->file_length()
+                      << ", "
+                      << "osf.metadata_offset = "
+                      << osf_header->metadata_offset() << ", "
+                      << "osf.status = "
+                      << static_cast<int>(osf_header->status());
     }
-    ss << "]";
-    return ss.str();
+    string_stream << "]";
+    return string_stream.str();
 }
 
 // ======= Move semantics ===================
 
 OsfFile::OsfFile(OsfFile&& other)
-    : filename_(other.filename_),
-      offset_(other.offset_),
-      size_(other.size_),
-      file_buf_(other.file_buf_),
-      file_stream_(std::move(other.file_stream_)),
+    : state_(other.state_),
+      path_(other.path_),
+      version_(other.version_),
       header_chunk_(std::move(other.header_chunk_)),
       metadata_chunk_(std::move(other.metadata_chunk_)),
-      state_(other.state_) {
-    other.file_buf_ = nullptr;
+      header_offset_(std::move(other.header_offset_)),
+      metadata_offset_(std::move(other.metadata_offset_)) {
     other.state_ = FileState::BAD;
+    other.version_ = OsfVersion::V_INVALID;
 }
 
 OsfFile& OsfFile::operator=(OsfFile&& other) {
     if (this != &other) {
-        close();
-        filename_ = other.filename_;
-        offset_ = other.offset_;
-        size_ = other.size_;
-        file_buf_ = other.file_buf_;
-        file_stream_ = std::move(other.file_stream_);
+        path_ = other.path_;
+        state_ = other.state_;
+        version_ = other.version_;
         header_chunk_ = std::move(other.header_chunk_);
         metadata_chunk_ = std::move(other.metadata_chunk_);
-        state_ = other.state_;
-        other.file_buf_ = nullptr;
+        header_offset_ = std::move(other.header_offset_);
+        metadata_offset_ = std::move(other.metadata_offset_);
         other.state_ = FileState::BAD;
+        other.version_ = OsfVersion::V_INVALID;
     }
     return *this;
-};
+}
 
 // ========= Release resources =================
 
-void OsfFile::close() {
-    if (file_buf_) {
-        if (!mmap_close(file_buf_, size_, memmap_handle_)) {
-            error();
-            return;
-        }
-        file_buf_ = nullptr;
-        state_ = FileState::BAD;
+void OsfFile::close() { state_ = FileState::BAD; }
+
+OsfFile::~OsfFile() = default;
+
+void OsfFile::initialize_header_and_metadata() {
+    // TODO[tws] consider doing the following in the OsfFile initializer list,
+    // since doing so would obviate the need for OsfOffset::valid
+    state_ = FileState::GOOD;
+
+    OsfOffset prefix_sized_offset{0, 4};
+    OsfBuffer prefix_sized_buf = read(prefix_sized_offset);
+    const uint32_t header_size = get_prefixed_size(prefix_sized_buf);
+
+    OsfOffset header_offset{
+        prefix_sized_offset.offset(),
+        FLATBUFFERS_PREFIX_LENGTH + header_size + osf::CRC_BYTES_SIZE};
+    header_offset_ = header_offset;
+    header_chunk_ = read(header_offset);
+
+    // Check flatbuffers osfHeader validity
+    if (!impl::verify_osf_header_buf(
+            header_chunk_.data(), header_chunk_.size() - osf::CRC_BYTES_SIZE)) {
+        throw std::runtime_error("OSF header verification has failed.");
     }
-    if (file_stream_.is_open()) {
-        file_stream_.close();
-        if (file_stream_.fail()) {
-            error();
-            return;
-        }
-        state_ = FileState::BAD;
+
+    if (!check_prefixed_size_block_crc(header_chunk_, header_chunk_.size())) {
+        throw std::runtime_error("OSF header has an invalid CRC.");
+    }
+
+    // Get the parsed header and check its contents
+    auto osf_header = impl::get_osf_header_from_buf(header_chunk_.data());
+
+    version_ = static_cast<OsfVersion>(osf_header->version());
+    if (version_ < OsfVersion::V_2_0) {
+        // Check flatbuffers osfSession validity [V1]
+        throw std::runtime_error("OSF prior version 2.0 is not supported!");
+    }
+
+    if (osf_header->status() !=
+        v2::HEADER_STATUS::VALID) {  // NOLINT(misc-include-cleaner)
+        ouster::sdk::core::logger().warn(
+            "Osf: File metadata not marked as valid in header.");
+        return;
+    }
+
+    // check that we have enough space for the metadata
+    auto metadata_size =
+        osf_header->file_length() - osf_header->metadata_offset();
+    if (osf_header->metadata_offset() + metadata_size > size()) {
+        ouster::sdk::core::logger().warn(
+            "Osf: Not enough space in file for metadata.");
+        return;
+    }
+
+    // Get the metadata offset and chunk
+    OsfOffset metadata_offset{osf_header->metadata_offset(), metadata_size};
+    metadata_offset_ = metadata_offset;
+    metadata_chunk_ = read(metadata_offset);
+
+    // Check flatbuffers metadata validity
+    if (!ouster::sdk::osf::impl::check_osf_metadata_buf(metadata_chunk_)) {
+        metadata_chunk_ = {};
+        ouster::sdk::core::logger().warn(
+            "Osf: Metadata verification has failed.");
+        return;
+    }
+
+    if (!check_prefixed_size_block_crc(metadata_chunk_,
+                                       metadata_chunk_.size())) {
+        metadata_chunk_ = {};
+        ouster::sdk::core::logger().warn(
+            "Osf: CRC check of OSF metadata failed.");
+        return;
     }
 }
 
-OsfFile::~OsfFile() {
-    // Release file memory mapping
-    close();
-}
+OsfOffset OsfFile::get_header_chunk_offset() { return header_offset_; }
 
-std::shared_ptr<ChunkBuffer> OsfFile::read_chunk(const uint64_t offset) {
-    if (!good()) {
-        return nullptr;
-    }
-    // check whether it was read last and we have it in cache already
-    if (chunk_cache_offset_ == offset && chunk_cache_) {
-        return chunk_cache_;
-    }
-    auto chunk_buf = std::make_shared<ChunkBuffer>(FLATBUFFERS_PREFIX_LENGTH);
-    seek(offset);
-    read(chunk_buf->data(), FLATBUFFERS_PREFIX_LENGTH);
-    uint32_t full_chunk_size = get_prefixed_size(chunk_buf->data()) +
-                               FLATBUFFERS_PREFIX_LENGTH + CRC_BYTES_SIZE;
-    if (offset + full_chunk_size > size_) {
-        std::stringstream ss;
-        ss << "read till " << (offset + full_chunk_size)
-           << " but the file size is " << size_;
-        throw std::out_of_range(ss.str());
-    }
-    chunk_buf->resize(full_chunk_size);
-    read(chunk_buf->data() + FLATBUFFERS_PREFIX_LENGTH,
-         full_chunk_size - FLATBUFFERS_PREFIX_LENGTH);
+OsfOffset OsfFile::get_metadata_chunk_offset() { return metadata_offset_; }
 
-    // update cached chunk
-    if (chunk_cache_) {
-        chunk_cache_.swap(chunk_buf);
-    } else {
-        chunk_cache_ = std::move(chunk_buf);
-    }
-    chunk_cache_offset_ = offset;
+const OsfBuffer& OsfFile::get_header_chunk() { return header_chunk_; }
 
-    return chunk_cache_;
-}
-
-uint8_t* OsfFile::get_header_chunk_ptr() {
-    if (!file_stream_.good()) {
-        if (header_chunk_) header_chunk_.reset();
-        return nullptr;
-    }
-    if (header_chunk_) return header_chunk_->data();
-
-    auto tmp_offset = offset_;
-    header_chunk_ = read_chunk(0);
-    seek(tmp_offset);
-    return header_chunk_->data();
-}
-
-uint8_t* OsfFile::get_metadata_chunk_ptr() {
-    uint64_t meta_offset = metadata_offset();
-    if (!file_stream_.good()) {
-        if (metadata_chunk_) metadata_chunk_.reset();
-        return nullptr;
-    }
-    if (metadata_chunk_) return metadata_chunk_->data();
-
-    auto tmp_offset = offset_;
-    metadata_chunk_ = read_chunk(meta_offset);
-    seek(tmp_offset);
-    return metadata_chunk_->data();
-}
+const OsfBuffer& OsfFile::get_metadata_chunk() { return metadata_chunk_; }
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster
+
+std::size_t std::hash<ouster::sdk::osf::OsfOffset>::operator()(
+    const ouster::sdk::osf::OsfOffset& key) const {
+    return std::hash<uint64_t>()(key.offset()) ^
+           std::hash<uint64_t>()(key.size());
+}

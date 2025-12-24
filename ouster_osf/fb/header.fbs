@@ -1,4 +1,4 @@
-namespace ouster.osf.v2;
+namespace ouster.sdk.osf.v2;
 
 
 enum HEADER_STATUS:uint8 {

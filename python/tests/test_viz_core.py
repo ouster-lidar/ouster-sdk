@@ -1,6 +1,6 @@
 import numpy as np
 from .conftest import MockPointViz
-from ouster.sdk.core import ChanField, LidarScan, SensorInfo, LidarMode, Version, FieldClass
+from ouster.sdk.core import ChanField, LidarScan, SensorInfo, LidarMode, Version, FieldClass, LidarScanSet
 from ouster.sdk.viz import WindowCtx, MouseButtonEvent, MouseButton, EventModifierKeys
 from ouster.sdk.viz.model import LidarScanVizModel, SensorModel, Palettes
 from ouster.sdk.viz.core import LidarScanViz, _Seekable
@@ -9,8 +9,9 @@ from ouster.sdk.viz.view_mode import SimpleMode, RGBMode
 
 def test_use_default_view_modes_1():
     """It will pick sensible default view modes depending on what's in the first scan."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    model = LidarScanVizModel(viz, [meta], _img_aspect_ratio=0)
     scan = LidarScan(meta.h, meta.w)
     model._amend_view_modes_all([scan])
     assert model._cloud_mode_name == ChanField.REFLECTIVITY
@@ -20,8 +21,9 @@ def test_use_default_view_modes_1():
 
 def test_use_default_view_modes_2():
     """It won't try to initialize default view modes until a scan with fields has been added."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    model = LidarScanVizModel(viz, [meta], _img_aspect_ratio=0)
     scan = LidarScan(meta.h, meta.w, [])
     model._amend_view_modes_all([scan])
     assert model._cloud_mode_name == ''
@@ -30,8 +32,9 @@ def test_use_default_view_modes_2():
 
 def test_use_default_view_modes_3():
     """It'll pick whatever's available if REFLECTIVITY/REFLECTIVITY2/NEAR_IR aren't present."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    model = LidarScanVizModel(viz, [meta], _img_aspect_ratio=0)
     scan = LidarScan(meta.h, meta.w, [])
     scan.add_field("customfield", np.ndarray((meta.h, meta.w), dtype=np.uint8))
     model._amend_view_modes_all([scan])
@@ -42,8 +45,9 @@ def test_use_default_view_modes_3():
 def test_create_view_mode_for_field_1():
     """Because the view mode depends on the scan dimensions,
     it should not add a view mode for a field that doesn't exist in the provided scan."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
     scan = LidarScan(meta.h, meta.w, [])
     assert not scan.fields
 
@@ -55,8 +59,9 @@ def test_create_view_mode_for_field_2():
     """It should not add a view mode for 2nd-return fields because these are
     handled by the view modes of the 1st-return fields. While this may sound weird,
     it's because the first and second return fields share autoexposure state."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
     scan = LidarScan(meta.h, meta.w, [])
     assert sensor._create_view_mode_for_field(ChanField.FLAGS2, scan) is None
     assert sensor._create_view_mode_for_field(ChanField.RANGE2, scan) is None
@@ -66,8 +71,9 @@ def test_create_view_mode_for_field_2():
 
 def test_create_view_mode_for_field_3():
     """It should add a SimpleMode with BeamUniformityCorrector for a NEAR_IR field."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
     scan = LidarScan(meta.h, meta.w, [])
     assert not scan.fields
     scan.add_field(ChanField.NEAR_IR, np.ndarray((meta.h, meta.w), dtype=np.uint8))
@@ -80,8 +86,9 @@ def test_create_view_mode_for_field_3():
 
 def test_create_view_mode_for_field_4():
     """It should add an RGBMode for a field with a 3rd dimension of length 3."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
     scan = LidarScan(meta.h, meta.w, [])
     assert not scan.fields
     scan.add_field("rgb", np.ndarray((meta.h, meta.w, 3), dtype=np.uint8))
@@ -92,8 +99,9 @@ def test_create_view_mode_for_field_4():
 def test_create_view_mode_for_field_5():
     """It should add a regular SimpleMode with AutoExposure but without
     BeamUniformityCorrector for a 2d field."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
     scan = LidarScan(meta.h, meta.w, [])
     assert not scan.fields
     scan.add_field("customfield", np.ndarray((meta.h, meta.w), dtype=np.uint16))
@@ -108,8 +116,9 @@ def test_amend_view_modes_1():
     """It should add image and cloud view modes for the sensor
     for each new field name (provided as a list) and the given scan.
     """
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
 
     # By default it has no cloud or image modes.
     assert [m for m in sensor._cloud_modes] == ['RING']
@@ -152,11 +161,12 @@ def test_amend_view_modes_2():
     """It should add image and cloud view modes for all sensors
     given a list of scans.
     """
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
-    meta2 = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor2 = SensorModel(meta2)
-    model = LidarScanVizModel([meta, meta2], _img_aspect_ratio = 0)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
+    meta2 = SensorInfo.from_default(LidarMode._1024x10)
+    sensor2 = SensorModel(viz, meta2)
+    model = LidarScanVizModel(viz, [meta, meta2], _img_aspect_ratio = 0)
     model._sensors = [sensor, sensor2]
 
     # Let's create a test scan
@@ -184,11 +194,12 @@ def test_amend_view_modes_2():
 def test_amend_view_modes_3():
     """It should add image and cloud view modes to a sensor
     even if a previous scan didn't have the necessary fields."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
-    meta2 = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor2 = SensorModel(meta2)
-    model = LidarScanVizModel([meta, meta2], _img_aspect_ratio = 0)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
+    meta2 = SensorInfo.from_default(LidarMode._1024x10)
+    sensor2 = SensorModel(viz, meta2)
+    model = LidarScanVizModel(viz, [meta, meta2], _img_aspect_ratio = 0)
     model._sensors = [sensor, sensor2]
 
     # Let's create a test scan
@@ -282,7 +293,7 @@ def test_seekable_next():
     assert seekable.seek(0)
     assert (scan,) == next(seekable)
     assert (scan2,) == next(seekable)
-    assert [] == next(seekable)
+    assert LidarScanSet() == next(seekable)
     assert (scan,) == next(seekable)
 
 
@@ -312,7 +323,7 @@ def test_lidarscanviz_update_sets_default_view_mode():
     """
     It should set a default view mode when update is called.
     """
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    meta = SensorInfo.from_default(LidarMode._1024x10)
     scan = LidarScan(meta)
     assert ChanField.REFLECTIVITY in scan.fields  # a precondition
     viz = LidarScanViz([meta], MockPointViz())
@@ -329,6 +340,7 @@ def test_lidarscanviz_cycle_img_mode_updates_images():
         TWS 20241007: this kind of mock would be unnecessary
         if we bind the various properties of the viz::Image class.
         """
+
         def __init__(self):
             self.set_image_called = False
 
@@ -338,7 +350,7 @@ def test_lidarscanviz_cycle_img_mode_updates_images():
         def set_image(self, *args, **kwargs):
             self.set_image_called = True
 
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    meta = SensorInfo.from_default(LidarMode._1024x10)
     scan = LidarScan(meta)
     assert ChanField.REFLECTIVITY in scan.fields  # a precondition
     viz = LidarScanViz([meta], MockPointViz())
@@ -362,7 +374,7 @@ def test_lidarscanviz_highlight_second_doesnt_crash_with_no_scan():
     """
     Highlighting the second return should not cause a crash if there is no scan yet.
     """
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    meta = SensorInfo.from_default(LidarMode._1024x10)
     viz = LidarScanViz([meta], MockPointViz())
     # check preconditions
     assert not viz._scans
@@ -373,7 +385,7 @@ def test_lidarscanviz_highlight_second_doesnt_crash_with_no_second_return():
     """
     Highlighting the second return should not cause a crash if there is no second return.
     """
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    meta = SensorInfo.from_default(LidarMode._1024x10)
     scan = LidarScan(meta)
     # check preconditions
     assert ChanField.REFLECTIVITY in scan.fields
@@ -385,7 +397,7 @@ def test_lidarscanviz_highlight_second_doesnt_crash_with_no_second_return():
 
 def test_osd_state():
     """Hiding the help should reset the OSD to its previous state."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    meta = SensorInfo.from_default(LidarMode._1024x10)
     viz = LidarScanViz([meta], MockPointViz())
     assert viz.osd_state == LidarScanViz.OsdState.DEFAULT
     viz.toggle_osd()
@@ -410,8 +422,9 @@ def test_osd_state():
 
 def test_create_view_mode_for_field_6():
     """It should only create a view mode for pixel fields."""
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor = SensorModel(meta)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
 
     scan = LidarScan(meta.h, meta.w, [])
     scan.add_field("customfield", np.zeros((1024, 1024)), FieldClass.COLUMN_FIELD)
@@ -425,15 +438,16 @@ def test_setup_sensor_toggle_keys():
     """It should only set up toggle keys for the keys 1 through 9."""
 
     # there's only one toggle key for a single sensor
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    sensor_model_1 = [SensorModel(meta)]
+    mockviz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
     viz = LidarScanViz([meta], MockPointViz())
+    sensor_model_1 = [SensorModel(mockviz, meta)]
     key_bindings = {}
     viz._setup_sensor_toggle_keys(sensor_model_1, key_bindings)
     assert list(key_bindings.keys()) == [(ord('1'), 2)]
 
     # there's only MAX_SENSOR_TOGGLE_KEYS for > MAX_SENSOR_TOGGLE_KEYS sensors
-    sensor_model_2 = [SensorModel(meta) for _ in range(LidarScanViz.MAX_SENSOR_TOGGLE_KEYS + 1)]
+    sensor_model_2 = [SensorModel(mockviz, meta) for _ in range(LidarScanViz.MAX_SENSOR_TOGGLE_KEYS + 1)]
     viz = LidarScanViz([meta] * (LidarScanViz.MAX_SENSOR_TOGGLE_KEYS + 1), MockPointViz())
     viz._setup_sensor_toggle_keys(sensor_model_2, key_bindings)
     assert len(key_bindings.keys()) == LidarScanViz.MAX_SENSOR_TOGGLE_KEYS
@@ -457,8 +471,9 @@ def test_update_model_even_for_sensors_not_enabled():
         nonlocal update_image_called
         update_image_called = True
 
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    model = LidarScanVizModel(viz, [meta], _img_aspect_ratio=0)
     scan = LidarScan(meta.h, meta.w)
     sensor = model._sensors[0]
     sensor.update_cloud = update_cloud_mock
@@ -475,8 +490,9 @@ def test_update_model_even_for_sensors_not_enabled():
 
 
 def test_viz_doesnt_crash_when_image_sizes_zero():
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
-    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    model = LidarScanVizModel(viz, [meta], _img_aspect_ratio=0)
     image = model._sensors[0]._images[0]
     image.set_position(0, 0, 0, 0)
     model._img_size_fraction = 0
@@ -491,7 +507,14 @@ def test_viz_doesnt_crash_when_image_sizes_zero():
 def test_viz_doesnt_crash_when_scans_none():
     # OSDK-108: don't crash if no scans have been received yet
     # and some element (e.g. the OSD) is redrawn.
-    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    meta = SensorInfo.from_default(LidarMode._1024x10)
     viz = LidarScanViz([meta], MockPointViz())
-    assert viz._scans == []
+    assert viz._scans == LidarScanSet()
     viz._draw_update_camera_pose()
+
+
+def test_viz_imu_when_a_scan_is_none():
+    # OSDK-300: don't crash if a scan is None
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    viz = LidarScanViz([meta], MockPointViz())
+    viz.imu_plot([[None]], viz._imu_viz_config)

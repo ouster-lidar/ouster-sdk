@@ -486,3 +486,105 @@ def test_interp_pose():
         assert np.allclose(computed_pose, expected_pose, atol=1e-4), (
             f"Mismatch at pose index {idx}:\nComputed:\n{computed_pose}\nExpected:\n{expected_pose}"
         )
+
+
+def test_interp_pose_unsorted():
+    """Test interpolation with unsorted inquiring timestamps."""
+    prev_ts = 101000
+    curr_ts = 102000
+    next_ts = 103000
+
+    prev_pose = np.identity(4)
+    curr_pose = np.array([
+        [0.950564, -0.29552, -0.0953745, 5],
+        [0.294044, 0.955336, -0.0295028, 3],
+        [0.0998334, 0, 0.995004, 2],
+        [0.0, 0.0, 0.0, 1.0]
+    ])
+    next_pose = np.array([
+        [0.879923, -0.389418, -0.272192, 0],
+        [0.372026, 0.921061, -0.115081, 0],
+        [0.29552, 0, 0.955336, 0],
+        [0.0, 0.0, 0.0, 1.0]
+    ])
+
+    tss = np.array([prev_ts, curr_ts, next_ts])
+    poses = np.array([prev_pose, curr_pose, next_pose])
+
+    # Unsorted inquiring timestamps - note the swapped order at indices 3 and 5
+    inquiring_ts = np.array([
+        100000, 100500, 101000, 102500,  # 102500 moved to index 3
+        102000, 101500, 103000, 103500   # 101500 moved to index 5
+    ])
+
+    # Expected poses with 4th and 6th swapped from the original test
+    expected_poses = np.array([
+        # Index 0: 100000 (same as original)
+        np.array([
+            [9.50563566e-01, 2.94044472e-01, 9.98336350e-02, -5.83461852e+00],
+            [-2.95520849e-01, 9.55336290e-01, -2.79214613e-08, -1.38840457e+00],
+            [-9.53747027e-02, -2.95028941e-02, 9.95004143e-01, -1.42462609e+00],
+            [0.0, 0.0, 0.0, 1.0]
+        ]),
+        # Index 1: 100500 (same as original)
+        np.array([
+            [0.98756338, 0.149066, 0.04997893, -2.84746798],
+            [-0.14943741, 0.98876405, 0.00375782, -0.91059756],
+            [-0.0488572, -0.01117981, 0.9987432, -0.7874577],
+            [0.0, 0.0, 0.0, 1.0]
+        ]),
+        # Index 2: 101000 (same as original)
+        np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ]),
+        # Index 3: 102500 (was index 5 in original - the 6th pose)
+        np.array([
+            [0.9208184, -0.34289665, -0.18578365, 2.41554879],
+            [0.33559594, 0.93936924, -0.07042739, 1.5451861],
+            [0.1986689, 0.00250261, 0.98006331, 1.14334982],
+            [0.0, 0.0, 0.0, 1.0]
+        ]),
+        # Index 4: 102000 (same as original)
+        np.array([
+            [9.50563566e-01, -2.95520849e-01, -9.53747027e-02, 5.00000000e+00],
+            [2.94044472e-01, 9.55336290e-01, -2.95028941e-02, 3.00000000e+00],
+            [9.98336350e-02, -2.79214613e-08, 9.95004143e-01, 2.00000000e+00],
+            [0.0, 0.0, 0.0, 1.0]
+        ]),
+        # Index 5: 101500 (was index 3 in original - the 4th pose)
+        np.array([
+            [0.98756338, -0.14943741, -0.0488572, 2.63750479],
+            [0.149066, 0.98876405, -0.01117981, 1.31602317],
+            [0.04997893, 0.00375782, 0.9987432, 0.93220328],
+            [0.0, 0.0, 0.0, 1.0]
+        ]),
+        # Index 6: 103000 (same as original)
+        np.array([
+            [8.79923149e-01, -3.89418384e-01, -2.72192394e-01, -2.23569899e-07],
+            [3.72025983e-01, 9.21060403e-01, -1.15081184e-01, -1.19328240e-06],
+            [2.95520591e-01, -1.60280748e-08, 9.55336219e-01, 3.73615875e-06],
+            [0.0, 0.0, 0.0, 1.0]
+        ]),
+        # Index 7: 103500 (same as original)
+        np.array([
+            [0.82838856, -0.43450466, -0.35352245, -2.21632003],
+            [0.40287952, 0.90063797, -0.16290697, -1.61678417],
+            [0.38917989, -0.00747664, 0.9211313, -1.41550338],
+            [0.0, 0.0, 0.0, 1.0]
+        ])
+    ])
+
+    interp_poses = core.interp_pose(inquiring_ts, tss, poses)
+
+    assert len(interp_poses) == len(expected_poses), (
+        f"Pose count mismatch: expected {len(expected_poses)}, got {len(interp_poses)}"
+    )
+
+    for idx, (computed_pose, expected_pose) in enumerate(zip(interp_poses, expected_poses)):
+        assert np.allclose(computed_pose, expected_pose, atol=1e-4), (
+            f"Mismatch at pose index {idx} (timestamp {inquiring_ts[idx]}):\n"
+            f"Computed:\n{computed_pose}\nExpected:\n{expected_pose}"
+        )

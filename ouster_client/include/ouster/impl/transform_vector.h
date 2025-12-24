@@ -1,8 +1,12 @@
 #pragma once
 
+#include <cmath>
+
 #include "ouster/impl/transform_typedefs.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 namespace impl {
 
 class RotH;
@@ -17,7 +21,7 @@ class PoseH;
  */
 class RotV : public Eigen::Vector3d {
    public:
-    RotV() {}
+    RotV() = default;
     RotV(const double x, const double y, const double z)
         : Eigen::Vector3d(x, y, z) {}
 
@@ -98,4 +102,6 @@ class PoseV : public Eigen::Vector6d {
 };
 
 }  // namespace impl
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

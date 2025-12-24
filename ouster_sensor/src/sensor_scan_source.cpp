@@ -6,24 +6,34 @@
 #include "ouster/sensor_scan_source.h"
 
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "ouster/impl/logging.h"
 #include "ouster/open_source.h"
 
-using ouster::sensor::impl::Logger;
+using ouster::sdk::core::impl::Logger;
+using namespace ouster::sdk::core;
 
 namespace ouster {
+namespace sdk {
 namespace sensor {
 
 class SensorScanSource;
-class SensorScanIteratorImpl : public ouster::core::ScanIteratorImpl {
+class SensorScanIteratorImpl : public ouster::sdk::core::ScanIteratorImpl {
     SensorScanSource* source_;
-    std::vector<std::shared_ptr<LidarScan>> scan_;
+    std::shared_ptr<LidarScan> scan_;
     int sensor_idx_ = -1;
 
    public:
-    SensorScanIteratorImpl(SensorScanSource* ss, int sensor_idx = -1) {
-        source_ = ss;
+    SensorScanIteratorImpl(SensorScanSource* source, int sensor_idx = -1) {
+        source_ = source;
         sensor_idx_ = sensor_idx < 0 ? -1 : sensor_idx;
     }
 
@@ -53,10 +63,10 @@ class SensorScanIteratorImpl : public ouster::core::ScanIteratorImpl {
                 }
 
                 int i = 0;
-                for (const auto t : source_->last_receive_times_) {
-                    if (now - t > source_->timeout_ns_) {
+                for (const auto time : source_->last_receive_times_) {
+                    if (now - time > source_->timeout_ns_) {
                         const auto& metadata = source_->sensor_info()[i];
-                        throw ouster::sensor::ClientTimeout(
+                        throw ouster::sdk::sensor::ClientTimeout(
                             "No valid scans received within " +
                             std::to_string(source_->timeout_) +
                             " from sensor " + std::to_string(metadata->sn) +
@@ -81,23 +91,23 @@ class SensorScanIteratorImpl : public ouster::core::ScanIteratorImpl {
                 continue;
             }
 
-            scan_ = {std::shared_ptr<LidarScan>(scan.second.release())};
+            scan_.reset(scan.second.release());
         }
         return false;
     }
 
-    std::vector<std::shared_ptr<LidarScan>>& value() override { return scan_; }
+    LidarScanSet value() override { return LidarScanSet{{scan_}}; }
 };
 
 SensorScanSource::SensorScanSource(
     const std::string& source,
     const std::function<void(SensorScanSourceOptions&)>& options)
-    : SensorScanSource(source, ouster::impl::get_scan_options(options)) {}
+    : SensorScanSource(source, ouster::sdk::impl::get_scan_options(options)) {}
 
 SensorScanSource::SensorScanSource(
     const std::vector<std::string>& source,
     const std::function<void(SensorScanSourceOptions&)>& options)
-    : SensorScanSource(source, ouster::impl::get_scan_options(options)) {}
+    : SensorScanSource(source, ouster::sdk::impl::get_scan_options(options)) {}
 
 SensorScanSource::SensorScanSource(const std::string& source,
                                    SensorScanSourceOptions options)
@@ -111,11 +121,12 @@ SensorScanSource::SensorScanSource(const std::vector<std::string>& source,
       timeout_ns_(options.timeout.retrieve() * 1e9) {
     id_error_count_ = 0;
 
-    fields_ = ouster::resolve_field_types(
-        sensor_info(), options.raw_headers.retrieve(),
-        options.raw_fields.retrieve(), options.field_names.retrieve());
+    fields_ = resolve_field_types(sensor_info(), options.raw_headers.retrieve(),
+                                  options.raw_fields.retrieve(),
+                                  options.field_names.retrieve());
 
-    start_thread(options.queue_size.retrieve(), false);
+    start_thread(options.queue_size.retrieve(),
+                 options.soft_id_check.retrieve());
 
     options.check("SensorScanSource");
 }
@@ -126,16 +137,15 @@ SensorScanSource::SensorScanSource(const std::vector<Sensor>& sensors,
     : SensorScanSource(sensors, {}, {}, config_timeout, queue_size,
                        soft_id_check) {}
 
-SensorScanSource::SensorScanSource(
-    const std::vector<Sensor>& sensors,
-    const std::vector<ouster::sensor::sensor_info>& infos,
-    double config_timeout, unsigned int queue_size, bool soft_id_check)
+SensorScanSource::SensorScanSource(const std::vector<Sensor>& sensors,
+                                   const std::vector<SensorInfo>& infos,
+                                   double config_timeout,
+                                   unsigned int queue_size, bool soft_id_check)
     : SensorScanSource(sensors, infos, {}, config_timeout, queue_size,
                        soft_id_check) {}
 
 SensorScanSource::SensorScanSource(
-    const std::vector<Sensor>& sensors,
-    const std::vector<ouster::sensor::sensor_info>& infos,
+    const std::vector<Sensor>& sensors, const std::vector<SensorInfo>& infos,
     const std::vector<LidarScanFieldTypes>& fields, double config_timeout,
     unsigned int queue_size, bool soft_id_check)
     : client_(sensors, infos, config_timeout) {
@@ -144,20 +154,20 @@ SensorScanSource::SensorScanSource(
         throw std::invalid_argument("The queue_size cannot be less than 1.");
     }
 
-    if (infos.size() && infos.size() != sensors.size()) {
+    if ((!infos.empty()) && infos.size() != sensors.size()) {
         throw std::invalid_argument(
             "If sensor_infos are provided, must provide one for each sensor.");
     }
 
-    if (fields.size() && fields.size() != sensors.size()) {
+    if ((!fields.empty()) && fields.size() != sensors.size()) {
         throw std::invalid_argument(
             "If fields are provided, must provide one for each sensor.");
     }
 
     fields_ = fields;
-    if (fields_.size() == 0) {
+    if (fields_.empty()) {
         for (const auto& meta : client_.sensor_info()) {
-            fields_.push_back(get_field_types(meta->format.udp_profile_lidar));
+            fields_.push_back(get_field_types(*meta));
         }
     }
 
@@ -178,51 +188,45 @@ void SensorScanSource::start_thread(unsigned int queue_size,
         auto infos = sensor_info();
         for (size_t i = 0; i < infos.size(); i++) {
             const auto& info = infos[i];
-            batchers.push_back(ScanBatcher(info));
-            size_t w = info->format.columns_per_frame;
-            size_t h = info->format.pixels_per_column;
-            scans.push_back(std::make_unique<LidarScan>(
-                w, h, fields_[i].begin(), fields_[i].end(),
-                info->format.columns_per_packet));
+            batchers.emplace_back(info);
+            scans.push_back(std::make_unique<LidarScan>(info, fields_[i]));
         }
         while (run_thread_) {
-            auto p = client_.get_packet(0.05);
-            if (p.type == ClientEvent::Packet &&
-                p.packet().type() == PacketType::Lidar) {
-                const auto& info = infos[p.source];
-                const auto& lp = static_cast<LidarPacket&>(p.packet());
-                auto result = lp.validate(*info);
+            auto packet_event = client_.get_packet(0.05);
+            if (packet_event.type == ClientEvent::PACKET) {
+                const auto& info = infos[packet_event.source];
+                const auto& packet = packet_event.packet();
+
+                auto result = packet.validate(*info);
                 if (result == PacketValidationFailure::ID) {
                     id_error_count_++;
                     if (!soft_id_check) {
                         logger().warn(
-                            "Metadata init_id/sn does not match: expected by "
-                            "metadata - {}/{}, but got from packet buffer - "
-                            "{}/{}",
-                            info->init_id, info->sn, lp.init_id(),
-                            lp.prod_sn());
+                            "Metadata init_id/sn does not match: expected "
+                            "by metadata - {}/{}, but got from packet "
+                            "buffer - {}/{}",
+                            info->init_id, info->sn, packet.init_id(),
+                            packet.prod_sn());
                         continue;
                     }
                 }
 
                 // Add the packet to the batch
-                if (batchers[p.source](lp, *scans[p.source])) {
+                if (batchers[packet_event.source](
+                        packet, *scans[packet_event.source])) {
                     {
                         std::unique_lock<std::mutex> lock(buffer_mutex_);
-                        buffer_.push_back(
-                            {p.source, std::move(scans[p.source])});
+                        buffer_.emplace_back(
+                            packet_event.source,
+                            std::move(scans[packet_event.source]));
                         while (buffer_.size() > queue_size) {
                             buffer_.pop_front();
                             dropped_scans_++;
                         }
                         buffer_cv_.notify_one();
                     }
-                    size_t w = info->format.columns_per_frame;
-                    size_t h = info->format.pixels_per_column;
-                    scans[p.source] = std::make_unique<LidarScan>(
-                        w, h, fields_[p.source].begin(),
-                        fields_[p.source].end(),
-                        info->format.columns_per_packet);
+                    scans[packet_event.source] = std::make_unique<LidarScan>(
+                        info, fields_[packet_event.source]);
                 }
             }
         }
@@ -235,7 +239,7 @@ std::pair<int, std::unique_ptr<LidarScan>> SensorScanSource::get_scan(
     double timeout_sec) {
     std::unique_lock<std::mutex> lock(buffer_mutex_);
     // if theres anything in the queue, just pop it and leave
-    if (buffer_.size()) {
+    if (!buffer_.empty()) {
         auto result = std::move(buffer_.front());
         buffer_.pop_front();
         return result;
@@ -262,6 +266,8 @@ void SensorScanSource::flush() {
     buffer_.clear();
 }
 
+size_t SensorScanSource::size_hint() const { return 0; }
+
 void SensorScanSource::close() {
     run_thread_ = false;
     buffer_cv_.notify_all();
@@ -273,16 +279,32 @@ void SensorScanSource::close() {
 
 core::ScanIterator SensorScanSource::begin() const {
     return core::ScanIterator(
-        this, new SensorScanIteratorImpl((SensorScanSource*)this));
+        this, new SensorScanIteratorImpl(const_cast<SensorScanSource*>(this)));
 }
 
 core::ScanIterator SensorScanSource::begin(int sensor_index) const {
-    if (sensor_index >= (int)sensor_info().size()) {
+    if (sensor_index >= static_cast<int>(sensor_info().size())) {
         throw std::runtime_error("Invalid index");
     }
-    return core::ScanIterator(this, new SensorScanIteratorImpl(
-                                        (SensorScanSource*)this, sensor_index));
+    return core::ScanIterator(
+        this, new SensorScanIteratorImpl(const_cast<SensorScanSource*>(this),
+                                         sensor_index));
 }
 
+std::unique_ptr<core::ScanSource> SensorScanSource::create(
+    const std::vector<std::string>& sources, const ScanSourceOptions& options,
+    bool collate, int sensor_idx) {
+    std::unique_ptr<core::ScanSource> source =
+        std::make_unique<SensorScanSource>(sources, options);
+    if (sensor_idx >= 0) {
+        source = std::make_unique<Singler>(std::move(source), sensor_idx);
+    } else if (collate) {
+        source = std::make_unique<Collator>(std::move(source));
+    }
+
+    return source;
+};
+
 }  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

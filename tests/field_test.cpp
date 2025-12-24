@@ -14,7 +14,7 @@
 
 #include "gtest/gtest.h"
 
-using namespace ouster;
+using namespace ouster::sdk::core;
 
 TEST(Field_tests, comparison_test) {
     Field a(fd_array<int>(100));
@@ -38,56 +38,131 @@ TEST(Field_tests, comparison_test) {
 }
 
 TEST(Field_tests, type_safety_test) {
-    // clang-format off
     Field type_checking_ptr = Field{fd_array<uint8_t>(128)};
 
-    EXPECT_NO_THROW({ uint8_t*    u8ptr = type_checking_ptr; });
-    EXPECT_NO_THROW({ void*       vptr  = type_checking_ptr; });
+    EXPECT_NO_THROW({
+        uint8_t* ptr = type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        void* ptr = type_checking_ptr;
+        (void)ptr;
+    });
     EXPECT_NO_THROW({ type_checking_ptr.get<uint8_t>(); });
     EXPECT_NO_THROW({ type_checking_ptr.get(); });
 
-    EXPECT_THROW({ uint16_t*  u16ptr  = type_checking_ptr; }, std::invalid_argument);
-    EXPECT_THROW({ uint32_t*  u32ptr  = type_checking_ptr; }, std::invalid_argument);
-    EXPECT_THROW({ int8_t*    i8ptr   = type_checking_ptr; }, std::invalid_argument);
-    EXPECT_THROW({ int16_t*   i16ptr  = type_checking_ptr; }, std::invalid_argument);
-    EXPECT_THROW({ int32_t*   i32ptr  = type_checking_ptr; }, std::invalid_argument);
-    EXPECT_THROW({ int64_t*   i64ptr  = type_checking_ptr; }, std::invalid_argument);
-    EXPECT_THROW({ float*     fptr    = type_checking_ptr; }, std::invalid_argument);
-    EXPECT_THROW({ double*    dptr    = type_checking_ptr; }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            uint16_t* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            uint32_t* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            int8_t* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            int16_t* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            int32_t* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            int64_t* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            float* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            double* ptr = type_checking_ptr;
+            (void)ptr;
+        },
+        std::invalid_argument);
 
     EXPECT_THROW({ type_checking_ptr.get<uint16_t>(); }, std::invalid_argument);
     EXPECT_THROW({ type_checking_ptr.get<uint32_t>(); }, std::invalid_argument);
-    EXPECT_THROW({ type_checking_ptr.get<int8_t>();   }, std::invalid_argument);
-    EXPECT_THROW({ type_checking_ptr.get<int16_t>();  }, std::invalid_argument);
-    EXPECT_THROW({ type_checking_ptr.get<int32_t>();  }, std::invalid_argument);
-    EXPECT_THROW({ type_checking_ptr.get<int64_t>();  }, std::invalid_argument);
-    EXPECT_THROW({ type_checking_ptr.get<float>();    }, std::invalid_argument);
-    EXPECT_THROW({ type_checking_ptr.get<double>();   }, std::invalid_argument);
+    EXPECT_THROW({ type_checking_ptr.get<int8_t>(); }, std::invalid_argument);
+    EXPECT_THROW({ type_checking_ptr.get<int16_t>(); }, std::invalid_argument);
+    EXPECT_THROW({ type_checking_ptr.get<int32_t>(); }, std::invalid_argument);
+    EXPECT_THROW({ type_checking_ptr.get<int64_t>(); }, std::invalid_argument);
+    EXPECT_THROW({ type_checking_ptr.get<float>(); }, std::invalid_argument);
+    EXPECT_THROW({ type_checking_ptr.get<double>(); }, std::invalid_argument);
 
     Field non_type_checking_ptr = Field{FieldDescriptor::memory(128)};
 
-    EXPECT_NO_THROW({ void*      vptr    = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ uint8_t*   u8ptr   = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ uint16_t*  u16ptr  = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ uint32_t*  u32ptr  = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ int8_t*    i8ptr   = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ int16_t*   i16ptr  = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ int32_t*   i32ptr  = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ int64_t*   i64ptr  = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ float*     fptr    = non_type_checking_ptr; });
-    EXPECT_NO_THROW({ double*    dptr    = non_type_checking_ptr; });
+    EXPECT_NO_THROW({
+        void* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        uint8_t* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        uint16_t* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        uint32_t* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        int8_t* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        int16_t* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        int32_t* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        int64_t* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        float* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
+    EXPECT_NO_THROW({
+        double* ptr = non_type_checking_ptr;
+        (void)ptr;
+    });
 
-    auto convert_uint8  = [](uint8_t*   ptr) { return ptr; };
-    auto convert_uint16 = [](uint16_t*  ptr) { return ptr; };
-    auto convert_uint32 = [](uint32_t*  ptr) { return ptr; };
-    auto convert_uint64 = [](uint64_t*  ptr) { return ptr; };
-    auto convert_int8   = [](int8_t*    ptr) { return ptr; };
-    auto convert_int16  = [](int16_t*   ptr) { return ptr; };
-    auto convert_int32  = [](int32_t*   ptr) { return ptr; };
-    auto convert_int64  = [](int64_t*   ptr) { return ptr; };
-    auto convert_float  = [](float*     ptr) { return ptr; };
-    auto convert_double = [](double*    ptr) { return ptr; };
-    auto convert_void   = [](void*      ptr) { return ptr; };
+    auto convert_uint8 = [](uint8_t* ptr) { return ptr; };
+    auto convert_uint16 = [](uint16_t* ptr) { return ptr; };
+    auto convert_uint32 = [](uint32_t* ptr) { return ptr; };
+    auto convert_uint64 = [](uint64_t* ptr) { return ptr; };
+    auto convert_int8 = [](int8_t* ptr) { return ptr; };
+    auto convert_int16 = [](int16_t* ptr) { return ptr; };
+    auto convert_int32 = [](int32_t* ptr) { return ptr; };
+    auto convert_int64 = [](int64_t* ptr) { return ptr; };
+    auto convert_float = [](float* ptr) { return ptr; };
+    auto convert_double = [](double* ptr) { return ptr; };
+    auto convert_void = [](void* ptr) { return ptr; };
 
     EXPECT_NO_THROW(convert_uint8(non_type_checking_ptr));
     EXPECT_NO_THROW(convert_uint16(non_type_checking_ptr));
@@ -103,27 +178,27 @@ TEST(Field_tests, type_safety_test) {
 
     EXPECT_NO_THROW(convert_void(type_checking_ptr));
     EXPECT_NO_THROW(convert_uint8(type_checking_ptr));
-    EXPECT_THROW(convert_uint16(type_checking_ptr),  std::invalid_argument);
-    EXPECT_THROW(convert_uint32(type_checking_ptr),  std::invalid_argument);
-    EXPECT_THROW(convert_uint64(type_checking_ptr),  std::invalid_argument);
-    EXPECT_THROW(convert_int8(type_checking_ptr),    std::invalid_argument);
-    EXPECT_THROW(convert_int16(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_int32(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_int64(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_float(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_double(type_checking_ptr),  std::invalid_argument);
+    EXPECT_THROW(convert_uint16(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_uint32(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_uint64(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_int8(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_int16(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_int32(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_int64(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_float(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_double(type_checking_ptr), std::invalid_argument);
 
-    auto convert_const_uint8  = [](const uint8_t*   ptr) { return ptr; };
-    auto convert_const_uint16 = [](const uint16_t*  ptr) { return ptr; };
-    auto convert_const_uint32 = [](const uint32_t*  ptr) { return ptr; };
-    auto convert_const_uint64 = [](const uint64_t*  ptr) { return ptr; };
-    auto convert_const_int8   = [](const int8_t*    ptr) { return ptr; };
-    auto convert_const_int16  = [](const int16_t*   ptr) { return ptr; };
-    auto convert_const_int32  = [](const int32_t*   ptr) { return ptr; };
-    auto convert_const_int64  = [](const int64_t*   ptr) { return ptr; };
-    auto convert_const_float  = [](const float*     ptr) { return ptr; };
-    auto convert_const_double = [](const double*    ptr) { return ptr; };
-    auto convert_const_void   = [](const void*      ptr) { return ptr; };
+    auto convert_const_uint8 = [](const uint8_t* ptr) { return ptr; };
+    auto convert_const_uint16 = [](const uint16_t* ptr) { return ptr; };
+    auto convert_const_uint32 = [](const uint32_t* ptr) { return ptr; };
+    auto convert_const_uint64 = [](const uint64_t* ptr) { return ptr; };
+    auto convert_const_int8 = [](const int8_t* ptr) { return ptr; };
+    auto convert_const_int16 = [](const int16_t* ptr) { return ptr; };
+    auto convert_const_int32 = [](const int32_t* ptr) { return ptr; };
+    auto convert_const_int64 = [](const int64_t* ptr) { return ptr; };
+    auto convert_const_float = [](const float* ptr) { return ptr; };
+    auto convert_const_double = [](const double* ptr) { return ptr; };
+    auto convert_const_void = [](const void* ptr) { return ptr; };
 
     EXPECT_NO_THROW(convert_const_uint8(non_type_checking_ptr));
     EXPECT_NO_THROW(convert_const_uint16(non_type_checking_ptr));
@@ -139,44 +214,124 @@ TEST(Field_tests, type_safety_test) {
 
     EXPECT_NO_THROW(convert_const_void(type_checking_ptr));
     EXPECT_NO_THROW(convert_const_uint8(type_checking_ptr));
-    EXPECT_THROW(convert_const_uint16(type_checking_ptr),  std::invalid_argument);
-    EXPECT_THROW(convert_const_uint32(type_checking_ptr),  std::invalid_argument);
-    EXPECT_THROW(convert_const_uint64(type_checking_ptr),  std::invalid_argument);
-    EXPECT_THROW(convert_const_int8(type_checking_ptr),    std::invalid_argument);
-    EXPECT_THROW(convert_const_int16(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_const_int32(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_const_int64(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_const_float(type_checking_ptr),   std::invalid_argument);
-    EXPECT_THROW(convert_const_double(type_checking_ptr),  std::invalid_argument);
-    // clang-format on
+    EXPECT_THROW(convert_const_uint16(type_checking_ptr),
+                 std::invalid_argument);
+    EXPECT_THROW(convert_const_uint32(type_checking_ptr),
+                 std::invalid_argument);
+    EXPECT_THROW(convert_const_uint64(type_checking_ptr),
+                 std::invalid_argument);
+    EXPECT_THROW(convert_const_int8(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_const_int16(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_const_int32(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_const_int64(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_const_float(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_const_double(type_checking_ptr),
+                 std::invalid_argument);
 }
 
 TEST(Field_tests, array_view_test) {
     Field p4d{fd_array<float>(128, 128, 64, 3)};
-    EXPECT_NO_THROW({ ArrayView4<float> a = p4d; });
-    EXPECT_THROW({ ArrayView3<float> a = p4d; }, std::invalid_argument);
-    EXPECT_THROW({ ArrayView2<float> a = p4d; }, std::invalid_argument);
-    EXPECT_THROW({ ArrayView1<float> a = p4d; }, std::invalid_argument);
+    EXPECT_NO_THROW({
+        ArrayView4<float> a = p4d;
+        (void)a;
+    });
+    EXPECT_THROW(
+        {
+            ArrayView3<float> a = p4d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView2<float> a = p4d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView1<float> a = p4d;
+            (void)a;
+        },
+        std::invalid_argument);
 
-    EXPECT_THROW({ ArrayView4<int> a = p4d; }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView4<int> a = p4d;
+            (void)a;
+        },
+        std::invalid_argument);
 
     Field p3d{fd_array<int>(128, 64, 3)};
-    EXPECT_THROW({ ArrayView4<int> a = p3d; }, std::invalid_argument);
-    EXPECT_NO_THROW({ ArrayView3<int> a = p3d; });
-    EXPECT_THROW({ ArrayView2<int> a = p3d; }, std::invalid_argument);
-    EXPECT_THROW({ ArrayView1<int> a = p3d; }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView4<int> a = p3d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_NO_THROW({
+        ArrayView3<int> a = p3d;
+        (void)a;
+    });
+    EXPECT_THROW(
+        {
+            ArrayView2<int> a = p3d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView1<int> a = p3d;
+            (void)a;
+        },
+        std::invalid_argument);
 
     Field p2d{fd_array<size_t>(64, 3)};
-    EXPECT_THROW({ ArrayView4<size_t> a = p2d; }, std::invalid_argument);
-    EXPECT_THROW({ ArrayView4<size_t> a = p2d; }, std::invalid_argument);
-    EXPECT_NO_THROW({ ArrayView2<size_t> a = p2d; });
-    EXPECT_THROW({ ArrayView1<size_t> a = p2d; }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView4<size_t> a = p2d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView4<size_t> a = p2d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_NO_THROW({
+        ArrayView2<size_t> a = p2d;
+        (void)a;
+    });
+    EXPECT_THROW(
+        {
+            ArrayView1<size_t> a = p2d;
+            (void)a;
+        },
+        std::invalid_argument);
 
     Field p1d{fd_array<uint8_t>(64)};
-    EXPECT_THROW({ ArrayView4<uint8_t> a = p1d; }, std::invalid_argument);
-    EXPECT_THROW({ ArrayView3<uint8_t> a = p1d; }, std::invalid_argument);
-    EXPECT_THROW({ ArrayView2<uint8_t> a = p1d; }, std::invalid_argument);
-    EXPECT_NO_THROW({ ArrayView1<uint8_t> a = p1d; });
+    EXPECT_THROW(
+        {
+            ArrayView4<uint8_t> a = p1d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView3<uint8_t> a = p1d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView2<uint8_t> a = p1d;
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_NO_THROW({
+        ArrayView1<uint8_t> a = p1d;
+        (void)a;
+    });
 }
 
 TEST(Field_tests, proxy_subview_test) {
@@ -185,45 +340,111 @@ TEST(Field_tests, proxy_subview_test) {
     Field& p = ptr;
     const Field& cp = ptr;
 
-    EXPECT_NO_THROW({ ArrayView2<float> a = p.subview(1); });
-    EXPECT_NO_THROW({ ArrayView1<float> a = p.subview(1, 50); });
-    EXPECT_THROW({ ArrayView2<float> a = p.subview(3); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ArrayView1<float> a = p.subview(3, 50); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ArrayView1<float> a = p.subview(1, 110); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ArrayView1<float> a = p.subview(3, 110); },
-                 std::invalid_argument);
+    EXPECT_NO_THROW({
+        ArrayView2<float> a = p.subview(1);
+        (void)a;
+    });
+    EXPECT_NO_THROW({
+        ArrayView1<float> a = p.subview(1, 50);
+        (void)a;
+    });
+    EXPECT_THROW(
+        {
+            ArrayView2<float> a = p.subview(3);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView1<float> a = p.subview(3, 50);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView1<float> a = p.subview(1, 110);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ArrayView1<float> a = p.subview(3, 110);
+            (void)a;
+        },
+        std::invalid_argument);
 
-    EXPECT_NO_THROW({ ConstArrayView2<float> a = cp.subview(1); });
-    EXPECT_NO_THROW({ ConstArrayView1<float> a = cp.subview(1, 50); });
-    EXPECT_THROW({ ConstArrayView2<float> a = cp.subview(3); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ConstArrayView1<float> a = cp.subview(3, 50); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ConstArrayView1<float> a = cp.subview(1, 110); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ConstArrayView1<float> a = cp.subview(3, 110); },
-                 std::invalid_argument);
+    EXPECT_NO_THROW({
+        ConstArrayView2<float> a = cp.subview(1);
+        (void)a;
+    });
+    EXPECT_NO_THROW({
+        ConstArrayView1<float> a = cp.subview(1, 50);
+        (void)a;
+    });
+    EXPECT_THROW(
+        {
+            ConstArrayView2<float> a = cp.subview(3);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ConstArrayView1<float> a = cp.subview(3, 50);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ConstArrayView1<float> a = cp.subview(1, 110);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ConstArrayView1<float> a = cp.subview(3, 110);
+            (void)a;
+        },
+        std::invalid_argument);
 
-    EXPECT_NO_THROW({ ConstArrayView2<float> a = p.subview(1); });
-    EXPECT_NO_THROW({ ConstArrayView1<float> a = p.subview(1, 50); });
-    EXPECT_THROW({ ConstArrayView2<float> a = p.subview(3); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ConstArrayView1<float> a = p.subview(3, 50); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ConstArrayView1<float> a = p.subview(1, 110); },
-                 std::invalid_argument);
-    EXPECT_THROW({ ConstArrayView1<float> a = p.subview(3, 110); },
-                 std::invalid_argument);
+    EXPECT_NO_THROW({
+        ConstArrayView2<float> a = p.subview(1);
+        (void)a;
+    });
+    EXPECT_NO_THROW({
+        ConstArrayView1<float> a = p.subview(1, 50);
+        (void)a;
+    });
+    EXPECT_THROW(
+        {
+            ConstArrayView2<float> a = p.subview(3);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ConstArrayView1<float> a = p.subview(3, 50);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ConstArrayView1<float> a = p.subview(1, 110);
+            (void)a;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            ConstArrayView1<float> a = p.subview(3, 110);
+            (void)a;
+        },
+        std::invalid_argument);
 
     ArrayView3<float> view = ptr;
 
     int i = 0;
-    for (int ss = 0; ss < view.shape[0]; ++ss) {
-        for (int xx = 0; xx < view.shape[1]; ++xx) {
-            for (int yy = 0; yy < view.shape[2]; ++yy) {
+    for (size_t ss = 0; ss < view.shape[0]; ++ss) {
+        for (size_t xx = 0; xx < view.shape[1]; ++xx) {
+            for (size_t yy = 0; yy < view.shape[2]; ++yy) {
                 view(ss, xx, yy) = i++;
             }
         }
@@ -231,7 +452,7 @@ TEST(Field_tests, proxy_subview_test) {
 
     ArrayView1<float> subview1 = ptr.subview(1, 90);
     ArrayView1<float> subview2 = view.subview(1, 90);
-    for (int j = 0; j < subview1.shape[0]; ++j) {
+    for (size_t j = 0; j < subview1.shape[0]; ++j) {
         EXPECT_EQ(subview1(j), subview2(j));
     }
 }
@@ -415,10 +636,11 @@ TEST(Field_tests, eigen_conversion_test) {
     Field ptr2d{fd_array<int>(100, 200)};
 
     ArrayView2<int> view2d = ptr2d;
-    for (int y = 0; y < view2d.shape[0]; ++y)
-        for (int x = 0; x < view2d.shape[1]; ++x) {
+    for (size_t y = 0; y < view2d.shape[0]; ++y) {
+        for (size_t x = 0; x < view2d.shape[1]; ++x) {
             view2d(y, x) = y * 1000 + x;
         }
+    }
 
     {
         Eigen::Ref<img_t<int>> ref = ptr2d;
@@ -426,9 +648,11 @@ TEST(Field_tests, eigen_conversion_test) {
         EXPECT_EQ(ref.rows(), 100);
         EXPECT_EQ(ref.cols(), 200);
 
-        for (int y = 0; y < ref.rows(); ++y)
-            for (int x = 0; x < ref.cols(); ++x)
+        for (int y = 0; y < ref.rows(); ++y) {
+            for (int x = 0; x < ref.cols(); ++x) {
                 EXPECT_EQ(ref(y, x), y * 1000 + x);
+            }
+        }
     }
 
     {
@@ -437,15 +661,17 @@ TEST(Field_tests, eigen_conversion_test) {
         EXPECT_EQ(ref.rows(), 100);
         EXPECT_EQ(ref.cols(), 200);
 
-        for (int y = 0; y < ref.rows(); ++y)
-            for (int x = 0; x < ref.cols(); ++x)
+        for (int y = 0; y < ref.rows(); ++y) {
+            for (int x = 0; x < ref.cols(); ++x) {
                 EXPECT_EQ(ref(y, x), y * 1000 + x);
+            }
+        }
     }
 
     Field ptr1d{fd_array<int>(100)};
     ArrayView1<int> view1d = ptr1d;
 
-    for (int x = 0; x < view1d.shape[0]; ++x) {
+    for (size_t x = 0; x < view1d.shape[0]; ++x) {
         view1d(x) = x * 15;
     }
 
@@ -454,7 +680,9 @@ TEST(Field_tests, eigen_conversion_test) {
         EXPECT_EQ(ref.data(), ptr1d.get<int>());
         EXPECT_EQ(ref.rows(), 100);
 
-        for (int x = 0; x < ref.cols(); ++x) EXPECT_EQ(ref(x), x * 15);
+        for (int x = 0; x < ref.cols(); ++x) {
+            EXPECT_EQ(ref(x), x * 15);
+        }
     }
 
     {
@@ -462,34 +690,114 @@ TEST(Field_tests, eigen_conversion_test) {
         EXPECT_EQ(ref.data(), ptr1d.get<int>());
         EXPECT_EQ(ref.rows(), 100);
 
-        for (int x = 0; x < ref.cols(); ++x) EXPECT_EQ(ref(x), x * 15);
+        for (int x = 0; x < ref.cols(); ++x) {
+            EXPECT_EQ(ref(x), x * 15);
+        }
     }
 
-    // clang-format off
-    EXPECT_THROW({ Eigen::Ref<img_t<float>> r = ptr2d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<img_t<double>> r = ptr2d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<img_t<uint64_t>> r = ptr2d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<const img_t<float>> r = ptr2d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<const img_t<double>> r = ptr2d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<const img_t<uint64_t>> r = ptr2d; }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<img_t<float>> r = ptr2d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<img_t<double>> r = ptr2d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<img_t<uint64_t>> r = ptr2d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<const img_t<float>> r = ptr2d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<const img_t<double>> r = ptr2d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<const img_t<uint64_t>> r = ptr2d;
+            (void)r;
+        },
+        std::invalid_argument);
 
-    EXPECT_THROW({ Eigen::Ref<Header<float>> r = ptr1d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<Header<double>> r = ptr1d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<Header<uint64_t>> r = ptr1d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<const Header<float>> r = ptr1d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<const Header<double>> r = ptr1d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<const Header<uint64_t>> r = ptr1d; }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<Header<float>> r = ptr1d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<Header<double>> r = ptr1d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<Header<uint64_t>> r = ptr1d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<const Header<float>> r = ptr1d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<const Header<double>> r = ptr1d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<const Header<uint64_t>> r = ptr1d;
+            (void)r;
+        },
+        std::invalid_argument);
 
-    EXPECT_THROW({ Eigen::Ref<img_t<int>> r = ptr1d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<Header<int>> r = ptr2d; }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<img_t<int>> r = ptr1d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<Header<int>> r = ptr2d;
+            (void)r;
+        },
+        std::invalid_argument);
 
     FieldView sparse1d = ptr2d.subview(keep(), 10);
     FieldView sparse2d = ptr2d.subview(keep(), keep(2, 5));
     ASSERT_TRUE(sparse1d.sparse());
     ASSERT_TRUE(sparse2d.sparse());
-    EXPECT_THROW({ Eigen::Ref<img_t<int>> r = sparse2d; }, std::invalid_argument);
-    EXPECT_THROW({ Eigen::Ref<Header<int>> r = sparse1d; }, std::invalid_argument);
-    // clang-format on
+    EXPECT_THROW(
+        {
+            Eigen::Ref<img_t<int>> r = sparse2d;
+            (void)r;
+        },
+        std::invalid_argument);
+    EXPECT_THROW(
+        {
+            Eigen::Ref<Header<int>> r = sparse1d;
+            (void)r;
+        },
+        std::invalid_argument);
 }
 
 TEST(Field_tests, reshape_test) {
@@ -507,103 +815,117 @@ TEST(Field_tests, reshape_test) {
      */
     {
         int i = 0;
-        for (auto& v : vec) v = i++;
+        for (auto& v : vec) {
+            v = i++;
+        }
     }
     {
         ConstArrayView2<int> reshaped = view.reshape(200 * 100, 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a) {
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) {
                 EXPECT_EQ(reshaped(a, b), i++);
+            }
+        }
     }
     {
         ConstArrayView2<int> reshaped = view.reshape(2, 100 * 100 * 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a) {
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) {
                 EXPECT_EQ(reshaped(a, b), i++);
+            }
+        }
     }
     {
         ConstArrayView2<int> reshaped = view.reshape(100 * 50, 4 * 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a) {
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) {
                 EXPECT_EQ(reshaped(a, b), i++);
+            }
+        }
     }
     {
         ConstArrayView3<int> reshaped = view.reshape(200 * 10, 5, 2 * 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a) {
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) {
+                for (size_t c = 0; c < reshaped.shape[2]; ++c) {
                     EXPECT_EQ(reshaped(a, b, c), i++);
+                }
+            }
+        }
     }
     {
         ConstArrayView4<int> reshaped = view.reshape(2, 50, 200, 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
-                    for (int d = 0; d < reshaped.shape[3]; ++d)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a) {
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) {
+                for (size_t c = 0; c < reshaped.shape[2]; ++c) {
+                    for (size_t d = 0; d < reshaped.shape[3]; ++d) {
                         EXPECT_EQ(reshaped(a, b, c, d), i++);
+                    }
+                }
+            }
+        }
     }
     {
         ConstArrayView4<int> reshaped = view.reshape(100, 50, 4, 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
-                    for (int d = 0; d < reshaped.shape[3]; ++d)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a) {
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) {
+                for (size_t c = 0; c < reshaped.shape[2]; ++c) {
+                    for (size_t d = 0; d < reshaped.shape[3]; ++d) {
                         EXPECT_EQ(reshaped(a, b, c, d), i++);
+                    }
+                }
+            }
+        }
     }
     {
         ConstArrayView4<int> reshaped = view.reshape(100, 200, 100, 3);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
-                    for (int d = 0; d < reshaped.shape[3]; ++d)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a) {
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) {
+                for (size_t c = 0; c < reshaped.shape[2]; ++c) {
+                    for (size_t d = 0; d < reshaped.shape[3]; ++d) {
                         EXPECT_EQ(reshaped(a, b, c, d), i++);
+                    }
+                }
+            }
+        }
     }
 }
 
 TEST(Field_tests, tag_tests) {
-    EXPECT_EQ(FieldDescriptor::memory<void>(128).tag(),
-              sensor::ChanFieldType::VOID);
-    EXPECT_EQ(fd_array<uint8_t>(10).tag(), sensor::ChanFieldType::UINT8);
-    EXPECT_EQ(fd_array<uint16_t>(10).tag(), sensor::ChanFieldType::UINT16);
-    EXPECT_EQ(fd_array<uint32_t>(10).tag(), sensor::ChanFieldType::UINT32);
-    EXPECT_EQ(fd_array<uint64_t>(10).tag(), sensor::ChanFieldType::UINT64);
-    EXPECT_EQ(fd_array<int8_t>(10).tag(), sensor::ChanFieldType::INT8);
-    EXPECT_EQ(fd_array<int16_t>(10).tag(), sensor::ChanFieldType::INT16);
-    EXPECT_EQ(fd_array<int32_t>(10).tag(), sensor::ChanFieldType::INT32);
-    EXPECT_EQ(fd_array<int64_t>(10).tag(), sensor::ChanFieldType::INT64);
-    EXPECT_EQ(fd_array<float>(10).tag(), sensor::ChanFieldType::FLOAT32);
-    EXPECT_EQ(fd_array<double>(10).tag(), sensor::ChanFieldType::FLOAT64);
+    EXPECT_EQ(FieldDescriptor::memory<void>(128).tag(), ChanFieldType::VOID);
+    EXPECT_EQ(fd_array<uint8_t>(10).tag(), ChanFieldType::UINT8);
+    EXPECT_EQ(fd_array<uint16_t>(10).tag(), ChanFieldType::UINT16);
+    EXPECT_EQ(fd_array<uint32_t>(10).tag(), ChanFieldType::UINT32);
+    EXPECT_EQ(fd_array<uint64_t>(10).tag(), ChanFieldType::UINT64);
+    EXPECT_EQ(fd_array<int8_t>(10).tag(), ChanFieldType::INT8);
+    EXPECT_EQ(fd_array<int16_t>(10).tag(), ChanFieldType::INT16);
+    EXPECT_EQ(fd_array<int32_t>(10).tag(), ChanFieldType::INT32);
+    EXPECT_EQ(fd_array<int64_t>(10).tag(), ChanFieldType::INT64);
+    EXPECT_EQ(fd_array<float>(10).tag(), ChanFieldType::FLOAT32);
+    EXPECT_EQ(fd_array<double>(10).tag(), ChanFieldType::FLOAT64);
 
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::UINT8, 10).tag(),
-              sensor::ChanFieldType::UINT8);
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::UINT16, 10).tag(),
-              sensor::ChanFieldType::UINT16);
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::UINT32, 10).tag(),
-              sensor::ChanFieldType::UINT32);
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::UINT64, 10).tag(),
-              sensor::ChanFieldType::UINT64);
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::INT8, 10).tag(),
-              sensor::ChanFieldType::INT8);
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::INT16, 10).tag(),
-              sensor::ChanFieldType::INT16);
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::INT32, 10).tag(),
-              sensor::ChanFieldType::INT32);
-    EXPECT_EQ(fd_array(sensor::ChanFieldType::INT64, 10).tag(),
-              sensor::ChanFieldType::INT64);
+    EXPECT_EQ(fd_array(ChanFieldType::UINT8, 10).tag(), ChanFieldType::UINT8);
+    EXPECT_EQ(fd_array(ChanFieldType::UINT16, 10).tag(), ChanFieldType::UINT16);
+    EXPECT_EQ(fd_array(ChanFieldType::UINT32, 10).tag(), ChanFieldType::UINT32);
+    EXPECT_EQ(fd_array(ChanFieldType::UINT64, 10).tag(), ChanFieldType::UINT64);
+    EXPECT_EQ(fd_array(ChanFieldType::INT8, 10).tag(), ChanFieldType::INT8);
+    EXPECT_EQ(fd_array(ChanFieldType::INT16, 10).tag(), ChanFieldType::INT16);
+    EXPECT_EQ(fd_array(ChanFieldType::INT32, 10).tag(), ChanFieldType::INT32);
+    EXPECT_EQ(fd_array(ChanFieldType::INT64, 10).tag(), ChanFieldType::INT64);
 }
 
 template <typename T>
@@ -615,16 +937,16 @@ void uint_view_test() {
     EXPECT_EQ(view.shape(), uint_v.shape());
     switch (sizeof(T)) {
         case 1:
-            EXPECT_EQ(uint_v.tag(), sensor::ChanFieldType::UINT8);
+            EXPECT_EQ(uint_v.tag(), ChanFieldType::UINT8);
             break;
         case 2:
-            EXPECT_EQ(uint_v.tag(), sensor::ChanFieldType::UINT16);
+            EXPECT_EQ(uint_v.tag(), ChanFieldType::UINT16);
             break;
         case 4:
-            EXPECT_EQ(uint_v.tag(), sensor::ChanFieldType::UINT32);
+            EXPECT_EQ(uint_v.tag(), ChanFieldType::UINT32);
             break;
         case 8:
-            EXPECT_EQ(uint_v.tag(), sensor::ChanFieldType::UINT64);
+            EXPECT_EQ(uint_v.tag(), ChanFieldType::UINT64);
             break;
     }
 }

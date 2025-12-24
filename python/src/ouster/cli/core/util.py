@@ -11,7 +11,7 @@ TODO:
 from io import FileIO
 import hashlib
 import click
-import requests  # type: ignore
+import requests
 from more_itertools import consume
 import glob
 from itertools import product
@@ -20,7 +20,7 @@ import json
 import os
 import re
 import time
-from typing import Optional, Tuple, List, cast
+from typing import Optional, Tuple, List, Union, Iterator, Any, cast
 import tempfile
 import zipfile
 import numpy as np
@@ -49,11 +49,11 @@ def util_group(ctx) -> None:
 
 def get_system_info() -> dict:
     """Collect system information."""
-    import pkg_resources  # type: ignore
     import platform
+    from ouster.sdk import __version__
 
     try:
-        import cpuinfo  # type: ignore
+        import cpuinfo
     except ModuleNotFoundError:
         click.echo(
             "This command requires the py-cpuinfo package. Try running "
@@ -75,19 +75,9 @@ def get_system_info() -> dict:
 
     res['cpuinfo'] = cpuinfo.get_cpu_info()
 
-    # TODO: try importlib_metadata again?
-    sdk = pkg_resources.get_distribution('ouster-sdk')
-
     res['packages'] = {
-        sdk.project_name: sdk.version
+        'ouster-sdk': __version__
     }
-
-    try:
-        deps = [pkg_resources.get_distribution(r) for r in sdk.requires()]
-        res['packages'].update({d.project_name: d.version for d in deps})
-    except Exception:
-        if _rethrow_exceptions:
-            raise
 
     return res
 
@@ -117,8 +107,9 @@ def download_sample_data(url: str,
 
             n_chunks = int(res.headers['Content-Length']) // chunk_size
             chunks = res.iter_content(chunk_size)
-            # ignored since an annotation is missing in click
-            with click.progressbar(chunks, length=n_chunks) as progress:  # type: ignore
+            # defining as Any since ProgressBar annotation is missing in click
+            progress: Any
+            with click.progressbar(chunks, length=n_chunks) as progress:
                 for chunk in progress:
                     tmpfile.write(chunk)
 
@@ -382,7 +373,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                      xyz: bool, xyz_mean: bool, no_viz: bool) -> None:
     """Reads from the sensor and measure packet drops, cpu load etc."""
     # no types exist for psutil
-    import psutil as psu  # type: ignore
+    import psutil as psu
 
     hostnames: List[str] = [x.strip() for x in hostname.split(",") if x.strip()]
 
@@ -428,11 +419,11 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
         scan_batch_flag = "SRR"
 
     flags = "N" if not copy_data else "C"
-
+    data_source: Optional[Union[sensor.SensorPacketSource, Scans]] = None
     if scan_batch or xyz or xyz_mean:
         scan_src = Scans(packet_source, fields=fields)
         # type ignored because type is overloaded
-        data_source = scan_src  # type: ignore
+        data_source = scan_src
         is_scan_source = True
         flags = f"{scan_batch_flag}" if not copy_data else f"C {scan_batch_flag}"
         if xyz_mean:
@@ -441,7 +432,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
             flags += " XYZ"
     else:
         # type ignored because type is overloaded
-        data_source = packet_source  # type: ignore
+        data_source = packet_source
         is_scan_source = False
 
     frame_bound = [core.FrameBorder(m) for m in data_source.sensor_info]
@@ -467,8 +458,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     def status_str(sl: List[PacketStatus]) -> str:
         return "".join([str(ps) for ps in sl])
 
-    # type ignored to save time
-    status_line = [[] for _ in data_source.sensor_info]  # type: ignore
+    status_line: List[List[PacketStatus]] = [[] for _ in data_source.sensor_info]
     status_line_init: List[List[PacketStatus]] = [[] for _ in data_source.sensor_info]
 
     frames_cnt = [0] * len(data_source.sensor_info)
@@ -477,10 +467,10 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     missed_packets = [0] * len(data_source.sensor_info)
     ooo_packets = [0] * len(data_source.sensor_info)  # out-of-order packets
 
-    total_avg_cpu = 0
+    total_avg_cpu: float = 0.0
     total_max_cpu = 0
 
-    cpu_percent = 0
+    cpu_percent: float = 0.0
     max_cpu_percent = 0
 
     for idx, info in enumerate(data_source.sensor_info):
@@ -501,11 +491,9 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     try:
         # this is a bit hacky, but benchmark logic works well with Tuple[int, LidarScan] iterator
         # TODO: rework with proper iterator instead
-        it = to_scans(data_source) if is_scan_source else iter(data_source)
-
+        it: Iterator[Any] = to_scans(data_source) if is_scan_source else iter(data_source)
         while True:
-            # type ignored because overloaded
-            idx, obj = next(it)  # type: ignore
+            idx, obj = next(it)
 
             # imu_packets are not accounted
             if not (isinstance(obj, core.LidarPacket)
@@ -554,7 +542,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                 scan = obj if not copy_data else deepcopy(obj)
 
                 status = scan.status & 0x1
-                status_split = np.array(np.split(status, packets_per_frame[idx]))  # type: ignore
+                status_split = np.array(np.split(status, int(packets_per_frame[idx])))
                 # any valid column from a packet means that we received the packet
                 status_per_packet = np.any(status_split, axis=1)
 
@@ -578,7 +566,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
             if idx == 0:
                 cpu_percents = psu.cpu_percent(percpu=True)
                 max_cpu_percent = np.max(cpu_percents)
-                cpu_percent = np.mean(cpu_percents)
+                cpu_percent = float(np.mean(cpu_percents))
                 total_avg_cpu += cpu_percent
                 total_max_cpu += max_cpu_percent
 

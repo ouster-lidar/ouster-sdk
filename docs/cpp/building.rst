@@ -32,21 +32,30 @@ Installation with apt or brew
 
 To install build dependencies on Ubuntu:20.04+, run:
 
+.. apt-install-linux-start
+
 .. code:: console
 
    $ sudo apt install build-essential cmake libeigen3-dev libcurl4-openssl-dev \
                       libtins-dev libpcap-dev libglfw3-dev libpng-dev \
-                      libflatbuffers-dev libceres-dev libtbb-dev \
-                      robin-map-dev
+                      libflatbuffers-dev libceres-dev libtbb-dev libssl-dev \
+                      libzip-dev libzstd-dev \
+                      robin-map-dev zlib1g-dev
+
+.. apt-install-linux-end
 
 You may also install curl with a different ssl backend, for example libcurl4-gnutls-dev or
 libcurl4-nss-dev.
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run:
 
+.. brew-install-macos-start
+
 .. code:: console
 
-   $ brew install cmake pkg-config eigen curl libtins glfw libpng flatbuffers libomp ceres-solver robin-map
+   $ brew install cmake pkg-config eigen curl libtins glfw libpng flatbuffers libomp ceres-solver robin-map openssl@3 tbb zstd libzip zlib
+
+.. brew-install-macos-end
 
 To build on macOS and Ubuntu:20.04+ run the following commands:
 

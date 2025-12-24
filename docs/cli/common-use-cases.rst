@@ -77,12 +77,11 @@ But what if you want to specify the ports and lidar_mode? You can use the ``sens
     Multiple ``<PARAM> <VALUE>`` pairs can be passed this way!
 
 You may have a configuration that you want to use repeatedly. Typing these in at the command line
-every time would be annoying. You can instead save your config to a json, named CONFIG_JSON, here,
-and run:
+every time would be annoying. You can instead set the config from a json, such as CONFIG_JSON, by running:
 
 .. code:: bash
 
-    $ ouster-cli source <SENSOR_HOSTNAME> config -c <CONFIG JSON>
+    $ ouster-cli source <SENSOR_HOSTNAME> config -c <CONFIG_JSON>
 
 And finally, you may wish to save a configuration after setting your sensor up perfectly. To do so:
 

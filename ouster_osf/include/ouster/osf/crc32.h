@@ -8,13 +8,12 @@
  */
 #pragma once
 
-#include <stddef.h>
-
 #include <cstdint>
 
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
@@ -51,4 +50,5 @@ OUSTER_API_FUNCTION
 uint32_t crc32(uint32_t initial_crc, const uint8_t* buf, uint32_t size);
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

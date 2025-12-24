@@ -7,8 +7,10 @@
  */
 #pragma once
 
+#include <Eigen/Core>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -16,10 +18,12 @@
 #include <utility>
 #include <vector>
 
-#include "nonstd/optional.hpp"
+#include "ouster/deprecation.h"
+#include "ouster/mesh.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 
 /**
@@ -30,11 +34,55 @@ using mat4d = std::array<double, 16>;
 /**
  * 4x4 identity matrix
  */
-constexpr mat4d identity4d = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+constexpr mat4d IDENTITY4D = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+/**
+ * @deprecated This is deprecated and will be removed in future versions.
+ */
+OUSTER_DEPRECATED_CONSTEXP(identity4d, IDENTITY4D,                  // NOLINT
+                           OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
+/** 4D vector of floats */
 using vec4f = std::array<float, 4>;
+/** 3D vector of floats */
+using vec3f = std::array<float, 3>;
+
+/** 3D vector of doubles */
 using vec3d = std::array<double, 3>;
+/** 2D vector of doubles */
 using vec2d = std::array<double, 2>;
+
+/**
+ * A vertex with position and normal
+ */
+struct OUSTER_API_CLASS Vertex3f {
+    Eigen::Vector3f position;  ///< Vertex position
+    Eigen::Vector3f normal;    ///< Vertex normal
+    /** Constructor with position and normal
+     * @param[in] pos vertex position
+     * @param[in] norm vertex normal
+     */
+    OUSTER_API_FUNCTION
+    Vertex3f(const Eigen::Vector3f& pos, const Eigen::Vector3f& norm)
+        : position(pos), normal(norm) {}
+    /** Constructor with position only, normal set to 0
+     * @param[in] x X coordinate of vertex position
+     * @param[in] y Y coordinate of vertex position
+     * @param[in] z Z coordinate of vertex position
+     */
+    OUSTER_API_FUNCTION
+    Vertex3f(float x, float y, float z) : position{x, y, z}, normal{0, 0, 0} {}
+    /** Constructor with position and normal components
+     * @param[in] x X coordinate of vertex position
+     * @param[in] y Y coordinate of vertex position
+     * @param[in] z Z coordinate of vertex position
+     * @param[in] nx X coordinate of vertex normal
+     * @param[in] ny Y coordinate of vertex normal
+     * @param[in] nz Z coordinate of vertex normal
+     */
+    OUSTER_API_FUNCTION
+    Vertex3f(float x, float y, float z, float nx, float ny, float nz)
+        : position{x, y, z}, normal{nx, ny, nz} {}
+};
 
 // TODO: messes up lidar_scan_viz
 namespace impl {
@@ -43,6 +91,7 @@ class Framebuffer;
 class GLCloud;
 class GLImage;
 class GLCuboid;
+class GLMesh;
 class GLLabel;
 class GLRings;
 class GLLines;
@@ -51,6 +100,7 @@ class GLLines;
 /**
  * @brief A mouse button enum, for use in mouse button event handlers
  */
+/// @cond DOXYGEN_SHOULD_SKIP_THIS
 enum class MouseButton : int {
     // Note, this purposefully duplicates GLFW's enum
     // so that we can provide our own symbols without
@@ -69,12 +119,15 @@ enum class MouseButton : int {
     MOUSE_BUTTON_RIGHT = MOUSE_BUTTON_2,
     MOUSE_BUTTON_MIDDLE = MOUSE_BUTTON_3,
 };
+/// @endcond
 
 /**
  * @brief A mouse button event enum, for use in mouse button event handlers
  */
 enum class MouseButtonEvent : int {
+    /** Indicates the mouse button was released */
     MOUSE_BUTTON_RELEASED = 0,
+    /** Indicates the mouse button was pressed */
     MOUSE_BUTTON_PRESSED = 1,
 };
 
@@ -82,17 +135,25 @@ enum class MouseButtonEvent : int {
  * @brief An enum for modifier keys, for use in mouse button event handlers
  */
 enum class EventModifierKeys : int {
+    /** No modifier key pressed */
     MOD_NONE = 0,
+    /** Shift key is pressed */
     MOD_SHIFT = 0x0001,
+    /** Control key is pressed */
     MOD_CONTROL = 0x0002,
+    /** Alt key is pressed */
     MOD_ALT = 0x0004,
+    /** Super key (Windows/Command) is pressed */
     MOD_SUPER = 0x0008,
+    /** Caps Lock is active */
     MOD_CAPS_LOCK = 0x0010,
+    /** Num Lock is active */
     MOD_NUM_LOCK = 0x0020,
 };
 
 class Camera;
 class Cloud;
+class Mesh;
 class Cuboid;
 class Image;
 class Label;
@@ -103,12 +164,24 @@ struct WindowCtx;
 /**
  * Sets the default_window_width to 800
  */
-constexpr int default_window_width = 800;
+constexpr int DEFAULT_WINDOW_WIDTH = 800;
+/**
+ * @deprecated This is deprecated and will be removed in future versions.
+ */
+OUSTER_DEPRECATED_CONSTEXP(default_window_width,                    // NOLINT
+                           DEFAULT_WINDOW_WIDTH,                    // NOLINT
+                           OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /**
  * Sets the default_window_height to 600
  */
-constexpr int default_window_height = 600;
+constexpr int DEFAULT_WINDOW_HEIGHT = 600;
+/**
+ * @deprecated This is deprecated and will be removed in future versions.
+ */
+OUSTER_DEPRECATED_CONSTEXP(default_window_height,                   // NOLINT
+                           DEFAULT_WINDOW_HEIGHT,                   // NOLINT
+                           OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /**
  * @brief A basic visualizer for sensor data
@@ -156,12 +229,15 @@ class OUSTER_API_CLASS PointViz {
      *            else uses the default_window_height
      * @param[in] maximized If true, the window will be maximized to fit the
      * screen.
+     * @param[in] fullscreen If true, the window will be fullscreened.
+     * @param[in] borderless If true, the window will be borderless.
      */
     OUSTER_API_FUNCTION
     explicit PointViz(const std::string& name, bool fix_aspect = false,
-                      int window_width = default_window_width,
-                      int window_height = default_window_height,
-                      bool maximized = false);
+                      int window_width = DEFAULT_WINDOW_WIDTH,
+                      int window_height = DEFAULT_WINDOW_HEIGHT,
+                      bool maximized = false, bool fullscreen = false,
+                      bool borderless = false);
 
     // Because PointViz uses the PIMPL pattern
     // and the Impl owns the window context,
@@ -230,6 +306,14 @@ class OUSTER_API_CLASS PointViz {
     void update();
 
     /**
+     * Show or hide the mouse cursor when over this window
+     *
+     * @param[in] state true to show
+     */
+    OUSTER_API_FUNCTION
+    void cursor_visible(bool state);
+
+    /**
      * Add a callback for handling keyboard input
      *
      * @param[in] callback the callback. The second argument is the ascii value
@@ -255,10 +339,9 @@ class OUSTER_API_CLASS PointViz {
      */
     OUSTER_API_FUNCTION
     void push_mouse_button_handler(
-        std::function<bool(const WindowCtx& ctx,
-                           ouster::viz::MouseButton button,
-                           ouster::viz::MouseButtonEvent event,
-                           ouster::viz::EventModifierKeys mods)>&& callback);
+        std::function<bool(const WindowCtx& ctx, MouseButton button,
+                           MouseButtonEvent event, EventModifierKeys mods)>&&
+            callback);
 
     /**
      * Add a callback for handling mouse scrolling input
@@ -291,26 +374,6 @@ class OUSTER_API_CLASS PointViz {
         std::function<bool(const WindowCtx&, double x, double y)>&& callback);
 
     /**
-     * Add a callback for processing every new draw frame buffer.
-     *
-     * NOTE: Any processing in the callback slows the renderer update loop
-     *       dramatically. Primary use to store frame buffer images to disk
-     *       for further processing.
-     *
-     * @param[in] callback function callback of a form f(fb_data, fb_width,
-     * fb_height) The callback's return value determines whether the remaining
-     * frame buffer callbacks should be called.
-     */
-    // clang-format off
-    [[deprecated(
-        "For screenshots or screen recording, use get_screenshot(), "
-        "save_screenshot() or toggle_screen_recording(). "
-        "push_frame_buffer_handler() is planned to be removed in Q2 2025.")]]
-    OUSTER_API_FUNCTION void push_frame_buffer_handler(
-    std::function<bool(const std::vector<uint8_t>&, int, int)>&& callback);
-    // clang-format on
-
-    /**
      * Remove the last added callback for handling keyboard events
      */
     OUSTER_API_FUNCTION
@@ -333,18 +396,6 @@ class OUSTER_API_CLASS PointViz {
      */
     OUSTER_API_FUNCTION
     void pop_mouse_pos_handler();
-
-    /**
-     * Remove the last added callback for handling frame buffer events
-     */
-    // clang-format off
-    [[deprecated(
-        "For screenshots or screen recording, use get_screenshot(), "
-        "save_screenshot() or toggle_screen_recording(). "
-        "pop_frame_buffer_handler() is planned to be removed in Q2 2025.")]]
-    OUSTER_API_FUNCTION 
-    void pop_frame_buffer_handler();
-    // clang-format on
 
     /**
      * Add a callback for handling frame buffer resize events.
@@ -398,6 +449,14 @@ class OUSTER_API_CLASS PointViz {
     /**
      * Add an object to the scene
      *
+     * @param[in] mesh Adds a mesh to the scene
+     */
+    OUSTER_API_FUNCTION
+    void add(const std::shared_ptr<Mesh>& mesh);
+
+    /**
+     * Add an object to the scene
+     *
      * @param[in] cuboid Adds a cuboid to the scene
      */
     OUSTER_API_FUNCTION
@@ -438,6 +497,16 @@ class OUSTER_API_CLASS PointViz {
      */
     OUSTER_API_FUNCTION
     bool remove(const std::shared_ptr<Image>& image);
+
+    /**
+     * Remove an object from the scene
+     *
+     * @param[in] mesh Remove a mesh from the scene
+     *
+     * @return true if successfully removed else false
+     */
+    OUSTER_API_FUNCTION
+    bool remove(const std::shared_ptr<Mesh>& mesh);
 
     /**
      * Remove an object from the scene
@@ -518,6 +587,14 @@ class OUSTER_API_CLASS PointViz {
     double fps() const;
 
     /**
+     * Set the background color of the viz.
+     *
+     * @param[in] rgba color
+     */
+    OUSTER_API_FUNCTION
+    void set_background_color(const vec4f& rgba);
+
+    /**
      * @brief Gets a screenshot with the specified size
      * @param[in] width Screenshot width in pixels.
      * @param[in] height Screenshot height in pixels.
@@ -591,18 +668,34 @@ class OUSTER_API_CLASS PointViz {
     OUSTER_API_FUNCTION
     std::pair<uint32_t, uint32_t> get_scaled_viewport_size(double scale_factor);
 
+    /**
+     * @brief Sets a notification message to be displayed in the top-right
+     * corner of the window.
+     * @param[in] msg The message to be displayed.
+     * @param[in] duration The duration in seconds for which the message will be
+     * displayed (default: 2.0 seconds).
+     */
+    OUSTER_API_FUNCTION
+    void set_notification(const std::string& msg, double duration = 2.0);
+
+    /** Whether to show notifications */
+    bool notifications_enabled{false};
+
+    /**
+     * Returns true if there is an active notification being displayed.
+     * @return true if there is an active notification being displayed, false
+     * otherwise.
+     */
+    OUSTER_API_FUNCTION
+    bool notification_active() const;
+
    private:
-    std::unique_ptr<Impl> pimpl;
+    std::unique_ptr<Impl> pimpl_;
 
     /**
      * @brief Counts the fps while on the rendering loop.
      */
     void count_fps();
-
-    /**
-     * @brief Calls all registered framebuffer handlers if any.
-     */
-    void call_framebuffer_handlers();
 
     /**
      * @brief Draws to the currently bound framebuffer.
@@ -1034,7 +1127,7 @@ class OUSTER_API_CLASS Cloud {
      *        homogeneous transformation matrix
      */
     OUSTER_API_FUNCTION
-    explicit Cloud(size_t n, const mat4d& extrinsic = identity4d);
+    explicit Cloud(size_t n, const mat4d& extrinsic = IDENTITY4D);
 
     /**
      * Structured point cloud for visualization.
@@ -1050,7 +1143,7 @@ class OUSTER_API_CLASS Cloud {
      */
     OUSTER_API_FUNCTION
     Cloud(size_t w, size_t h, const float* dir, const float* off,
-          const mat4d& extrinsic = identity4d);
+          const mat4d& extrinsic = IDENTITY4D);
 
     /**
      * Updates this cloud's state with the state of other,
@@ -1267,6 +1360,14 @@ class OUSTER_API_CLASS Image {
     void clear();
 
     /**
+     * Set all dirty flags.
+     *
+     * Re-sets everything so the object is always redrawn.
+     */
+    OUSTER_API_FUNCTION
+    void dirty();
+
+    /**
      * Set the image data.
      *
      * @param[in] width width of the image data in pixels
@@ -1418,6 +1519,106 @@ class OUSTER_API_CLASS Image {
 };
 
 /**
+ * @brief Manages the state of a single mesh.
+ */
+class OUSTER_API_CLASS Mesh {
+    bool transform_changed_{false};
+    mat4d transform_{};
+    std::vector<Vertex3f> vertices_;
+    std::vector<unsigned int> face_indices_;
+    std::vector<unsigned int> edge_indices_;
+    bool rgba_changed_{false};
+    vec4f face_rgba_{};
+    vec4f edge_rgba_{};
+
+   public:
+    /**
+     * Initialize a Mesh from a vector of vertices, face indices, and edge
+     * indices.
+     * @param[in] vertices the mesh vertices
+     * @param[in] indices the mesh face indices
+     * @param[in] edge_indices the mesh edge indices
+     */
+    OUSTER_API_FUNCTION
+    Mesh(std::vector<Vertex3f>&& vertices, std::vector<unsigned int>&& indices,
+         std::vector<unsigned int>&& edge_indices);
+    /**
+     * Initialize a Mesh from a vector of vertices, face indices, edge indices,
+     * face colors, and edge colors.
+     * @param[in] vertices the mesh vertices
+     * @param[in] face_indices the mesh face indices
+     * @param[in] edge_indices the mesh edge indices
+     * @param[in] face_rgba the mesh face color in RGBA format
+     * @param[in] edge_rgba the mesh edge color in RGBA format
+     *
+     * TODO[tws] consider replacing colors with a material instance.
+     */
+    OUSTER_API_FUNCTION
+    Mesh(const std::vector<Vertex3f>& vertices,
+         const std::vector<unsigned int>& face_indices,
+         const std::vector<unsigned int>& edge_indices, vec4f face_rgba,
+         vec4f edge_rgba);
+
+    /**
+     * Initialize a ouster::sdk::viz::Mesh from a ouster::sdk::core::Mesh.
+     * @param[in] mesh the ouster::sdk::core::Mesh
+     * @return a new ouster::sdk::viz::Mesh
+     */
+    OUSTER_API_FUNCTION
+    static Mesh from_simple_mesh(const ouster::sdk::core::Mesh& mesh);
+
+    /**
+     * Clear dirty flags.
+     *
+     * Resets any changes since the last call to PointViz::update()
+     */
+    OUSTER_API_FUNCTION
+    void clear();
+
+    /**
+     * Set all dirty flags.
+     *
+     * Re-sets everything so the object is always redrawn.
+     */
+    OUSTER_API_FUNCTION
+    void dirty();
+
+    /**
+     * Updates this mesh's state with the state of other.
+     *
+     * @param[in] other the object to update the state from.
+     */
+    OUSTER_API_FUNCTION
+    void update_from(const Mesh& other);
+
+    /**
+     * Set the transform of the mesh.
+     *
+     * @param[in] pose @todo document me
+     */
+    OUSTER_API_FUNCTION
+    void set_transform(const mat4d& pose);
+
+    /**
+     * Set the color of the mesh faces.
+     *
+     * @param[in] rgba @todo document me
+     */
+    OUSTER_API_FUNCTION
+    void set_face_rgba(const vec4f& rgba);
+
+    /**
+     * Set the color of the mesh edges.
+     *
+     * @param[in] rgba @todo document me
+     */
+    OUSTER_API_FUNCTION
+    void set_edge_rgba(const vec4f& rgba);
+
+    friend class impl::GLMesh;
+};
+
+/**
  * @brief Manages the state of a single cuboid.
  */
 class OUSTER_API_CLASS Cuboid {
@@ -1455,6 +1656,14 @@ class OUSTER_API_CLASS Cuboid {
      */
     OUSTER_API_FUNCTION
     void clear();
+
+    /**
+     * Set all dirty flags.
+     *
+     * Re-sets everything so the object is always redrawn.
+     */
+    OUSTER_API_FUNCTION
+    void dirty();
 
     /**
      * Set the transform defining the cuboid.
@@ -1517,6 +1726,13 @@ class OUSTER_API_CLASS Lines {
     OUSTER_API_FUNCTION
     void clear();
 
+    /**
+     * Set all dirty flags.
+     *
+     * Re-sets everything so the object is always redrawn.
+     */
+    OUSTER_API_FUNCTION
+    void dirty();
     /**
      * Set the 3D points defining the lines. Each line is defined by 2 points, a
      * start and an end.
@@ -1657,88 +1873,97 @@ class OUSTER_API_CLASS Label {
     OUSTER_API_FUNCTION
     void set_rgba(const vec4f& rgba);
 
+    /**
+     * Get the text height of the label.
+     *
+     * @return height of text
+     */
+    OUSTER_API_FUNCTION
+    float get_text_height() const;
+
     friend class impl::GLLabel;
 };
 /**
  * Spezia palette size in number of colors.
  */
-extern const size_t spezia_n;
+extern const size_t SPEZIA_N;
 /**
  * Spezia palette, RGB values per element.
  */
-extern const float spezia_palette[][3];
+extern const float SPEZIA_PALETTE[][3];
 
 /**
  * Spezia Cal Ref palette size in number of colors.
  */
-extern const size_t spezia_cal_ref_n;
+extern const size_t SPEZIA_CAL_REF_N;
 /**
  * Spezia Cal Ref palette, RGB values per element.
  */
-extern const float spezia_cal_ref_palette[][3];
+extern const float SPEZIA_CAL_REF_PALETTE[][3];
 
 /**
  * Calibrated reflectifiy palette size in number of colors.
  */
-extern const size_t calref_n;
+extern const size_t CALREF_N;
 /**
  * Calibrated reflectifiy, RGB values per element.
  */
-extern const float calref_palette[][3];
+extern const float CALREF_PALETTE[][3];
 
 /**
  * Greyscale palette size in number of colors.
  */
-extern const size_t grey_n;
+extern const size_t GREY_N;
 /**
  * Greyscale palette, RGB values per element.
  */
-extern const float grey_palette[][3];
+extern const float GREY_PALETTE[][3];
 
 /**
  * Greyscale Cal Ref palette size in number of colors.
  */
-extern const size_t grey_cal_ref_n;
+extern const size_t GREY_CAL_REF_N;
 /**
  * Greyscale Cal Ref palette, RGB values per element.
  */
-extern const float grey_cal_ref_palette[][3];
+extern const float GREY_CAL_REF_PALETTE[][3];
 
 /**
  * Viridis palette size in number of colors.
  */
-extern const size_t viridis_n;
+extern const size_t VIRIDIS_N;
 /**
  * Viridis palette, RGB values per element.
  */
-extern const float viridis_palette[][3];
+extern const float VIRIDIS_PALETTE[][3];
 
 /**
  * Viridis Cal Ref palette size in number of colors.
  */
-extern const size_t viridis_cal_ref_n;
+extern const size_t VIRIDIS_CAL_REF_N;
 /**
  * Viridis Cal Ref palette, RGB values per element.
  */
-extern const float viridis_cal_ref_palette[][3];
+extern const float VIRIDIS_CAL_REF_PALETTE[][3];
 
 /**
  * Magma palette size in number of colors.
  */
-extern const size_t magma_n;
+extern const size_t MAGMA_N;
 /**
  * Magma palette, RGB values per element.
  */
-extern const float magma_palette[][3];
+extern const float MAGMA_PALETTE[][3];
 
 /**
  * Magma Cal Ref palette size in number of colors.
  */
-extern const size_t magma_cal_ref_n;
+extern const size_t MAGMA_CAL_REF_N;
 /**
  * Magma Cal Ref palette, RGB values per element.
  */
-extern const float magma_cal_ref_palette[][3];
+extern const float MAGMA_CAL_REF_PALETTE[][3];
 
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

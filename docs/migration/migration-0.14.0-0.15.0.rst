@@ -246,6 +246,33 @@ From 0.15.0, ``ScanSource.metadata`` and ``PacketSource.metadata`` have been dep
 
 Please use ``ScanSource.sensor_info`` and ``PacketSource.sensor_info`` for the same information.
 
+**Important**: The return type has changed to ensure consistency between single and multi-sensor sources:
+
+In 0.14.0, there were two different classes with different return types:
+
+.. code:: python
+
+   # 0.14.0 - Single sensor (ScanSource)
+   metadata = single_source.metadata     # Returns: SensorInfo (single object)
+   serial_number = metadata.sn
+
+   # 0.14.0 - Multi sensor (MultiScanSource)
+   metadata = multi_source.metadata      # Returns: List[SensorInfo] (list)
+   serial_number = metadata[0].sn
+
+In 0.15.0, the unified ``ScanSource`` always returns a list for consistency:
+
+.. code:: python
+
+   # 0.15.0 - All sources (unified ScanSource)
+   sensor_info = source.sensor_info       # Always returns: List[SensorInfo]
+   serial_number = sensor_info[0].sn      # Index required even for single sensors
+
+**Migration guide**:
+
+- If your 0.14.0 code used ``ScanSource`` (single sensor): Change ``source.metadata.property`` to ``source.sensor_info[0].property``
+- If your 0.14.0 code used ``MultiScanSource`` (multi sensor): Change ``source.metadata`` to ``source.sensor_info`` (no other changes needed)
+
 
 Deprecated ``sensors_count``
 +++++++++++++++++++++++++++++

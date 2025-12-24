@@ -17,7 +17,7 @@ from packaging import version
 logger = logging.getLogger("HIL")
 
 # http takes a long time to start after reboot, esp on FW 2.1
-reboot_time = 40
+reboot_time = 60
 # reinit should be almost instantaneous
 reinit_time = 1
 
@@ -71,15 +71,15 @@ def test_config_basic(hil_sensor_hostname) -> None:
 def test_config_operating_mode(hil_sensor_hostname, hil_initial_config) -> None:
     """Test that operating mode specifically gets set since it has duplicated fields in the config settings which complicate its story."""
 
-    # initial config sets it to OPERATING_NORMAL
+    # initial config sets it to OperatingMode.NORMAL
     sensor.set_config(hil_sensor_hostname, hil_initial_config)
 
     cfg0 = core.SensorConfig()
-    cfg0.operating_mode = core.OperatingMode.OPERATING_STANDBY
+    cfg0.operating_mode = core.OperatingMode.STANDBY
     sensor.set_config(hil_sensor_hostname, cfg0)
 
     cfg1 = sensor.get_config(hil_sensor_hostname)
-    assert cfg1.operating_mode == core.OperatingMode.OPERATING_STANDBY
+    assert cfg1.operating_mode == core.OperatingMode.STANDBY
 
 
 def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
@@ -113,7 +113,6 @@ def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
     logger.debug(f"Sanity check new config (New UDP dest: {cfg1.udp_dest})")
     assert no_udp_cfg.udp_dest != cfg1.udp_dest
     cfg1.udp_dest = ""
-
     # clear out extra options so we dont compare them unnecessarily
     # this is likely to break the test on new/odd FW
     no_udp_cfg.extra_options = {}
@@ -183,21 +182,22 @@ def skip_by_fw(request, hil_sensor_firmware, signal_multiplier, lowest_signal_mu
 @pytest.mark.skip_under_fw()
 @pytest.mark.parametrize('signal_multiplier', [0.25, 0.5, 1, 2, 3]) # all possible sig mult values
 def test_good_signal_multiplier_values(hil_sensor_hostname,
-                                  signal_multiplier, gen1_sensor) -> None:
+                                  signal_multiplier, gen1_sensor, vlp_sensor) -> None:
     """Test that all valid values of signal multiplier can be get and set using SDK for FW 3.0+"""
 
     cfg0 = core.SensorConfig()
     # make sure azimuth window is small enough for everything
     cfg0.azimuth_window = (0, 10000)
     # make sure lidar mode is not "full res" in case it is a Rev 6 or under sensor
-    cfg0.lidar_mode = core.LidarMode.MODE_1024x10
+    if not vlp_sensor:
+        cfg0.lidar_mode = core.LidarMode._1024x10
     cfg0.signal_multiplier = signal_multiplier
 
-    if gen1_sensor and signal_multiplier != 1:
+    if (gen1_sensor and signal_multiplier != 1) or (vlp_sensor and (signal_multiplier > 1 or signal_multiplier == 0.25)):
         with pytest.raises(RuntimeError):
             # expect RuntimeError because of Invalid Configuration Value
             sensor.set_config(hil_sensor_hostname, cfg0)
-        # Return since the rest of the test is for non gen1
+        # Return since the rest of the test is not relevant
         return
 
     sensor.set_config(hil_sensor_hostname, cfg0)
@@ -212,7 +212,7 @@ def test_bad_signal_multiplier_values(hil_sensor_hostname, signal_multiplier) ->
     # make sure azimuth window is small enough for everything
     cfg0.azimuth_window = (0, 10000)
     # make sure lidar mode is not "full res" in case it is a Rev 6 or under sensor
-    cfg0.lidar_mode = core.LidarMode.MODE_1024x10
+    cfg0.lidar_mode = core.LidarMode._1024x10
 
     cfg0.signal_multiplier = signal_multiplier
 
