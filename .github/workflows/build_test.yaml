@@ -45,8 +45,10 @@ jobs:
     - uses: actions/checkout@v4
     - name: install python
       run: sudo apt install python3 python3-pip python3-venv
+    - name: install python deps
+      run: python3 -m pip install flufl.lock gitpython click tqdm libclang flake8 mypy pybind11
     - name: install deps
-      run: python3 ./scripts/dev.py utils install-system-packages
+      run: sudo python3 ./scripts/dev.py utils install-system-packages
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
@@ -60,7 +62,7 @@ jobs:
     - name: install python
       run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
-      run: python3 ./scripts/dev.py utils install-system-package
+      run: sudo python3 ./scripts/dev.py utils install-system-package
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
     - name: build python
@@ -74,7 +76,7 @@ jobs:
     - name: install python
       run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
-      run: python3 ./scripts/dev.py utils install-system-packages
+      run: sudo python3 ./scripts/dev.py utils install-system-packages
     - name: setup venv
       run: python3 -m venv venv
     - name: Activate virtual environment
