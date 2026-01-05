@@ -13,4 +13,4 @@ rosbags == 0.9.23
 importlib-resources >=5.0; python_version < "3.9"
 setuptools; python_version >= "3.12"
 flask == 3.0
-waitress == 3.0.1
+waitress == 3.0.0
