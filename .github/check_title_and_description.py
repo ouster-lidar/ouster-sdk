@@ -13,9 +13,9 @@ new_title = title + " (#" + pr_number_string + ")"
 
 error = False
 print(f"Checking PR title {repr(new_title)}...")
-if not re.fullmatch(title_re, new_title):
+if not re.match(title_re, new_title):
     print(f"Error: Please revise the PR title {new_title} "
-            "to match the regex {title_re} where:\n"
+            f"to match the regex {title_re} where:\n"
             "* the first letter is a capital letter")
     error = True
 
