@@ -37,7 +37,7 @@ For support of the Ouster SDK, please use `Github Issues <https://github.com/ous
 
 For community discussions and questions, visit the `Ouster Community Forum <https://community.ouster.com/>`_.
 
-For support of Ouster products outside of the SDK, please use `Ouster Customer Support <https://ouster.atlassian.net/servicedesk/customer/portal/8/group/22/create/86>`_.
+For support of Ouster products outside of the SDK, please use `Ouster Customer Support <https://ouster1234567.my.site.com/customers>`_.
 
 For suspected security problems, please contact us at security@ouster.io.
 
