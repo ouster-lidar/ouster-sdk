@@ -35,7 +35,9 @@ Contact
 
 For support of the Ouster SDK, please use `Github Issues <https://github.com/ouster-lidar/ouster-sdk/issues>`_ in this repo.
 
-For support of Ouster products outside of the SDK, please use `Ouster customer support <https://ouster.atlassian.net/servicedesk/customer/portal/8/group/22/create/86>`_.
+For community discussions and questions, visit the `Ouster Community Forum <https://community.ouster.com/>`_.
+
+For support of Ouster products outside of the SDK, please use `Ouster Customer Support <https://ouster1234567.my.site.com/customers>`_.
 
 For suspected security problems, please contact us at security@ouster.io.
 
