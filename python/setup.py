@@ -225,7 +225,7 @@ class sdk_sdist(sdist):
 class sdk_bdist_wheel(bdist_wheel):
     """Copy files needed by wheel from SDK dir."""
 
-    FILES = ["LICENSE", "LICENSE-bin", "COPYRIGHT", "VERSION"]
+    FILES = ["LICENSE", "THIRD-PARTY-NOTICES", "COPYRIGHT", "VERSION"]
 
     def run(self):
         try:
