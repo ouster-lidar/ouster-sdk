@@ -236,8 +236,9 @@ class mDNSService:
 
 class HttpServer():
 
-    def __init__(self, sensor, http_port):
+    def __init__(self, sensor, http_addr, http_port):
         self._sensor = sensor
+        self._http_addr = http_addr
         self._http_port = http_port
 
         def _sensor_info_as_json(sensor_info):
@@ -635,10 +636,10 @@ class HttpServer():
     def start(self):
         self._service_status = {"status": 0}
 
-        def serve_flask_app(http_port, service_status):
+        def serve_flask_app(http_addr, http_port, service_status):
             from waitress import serve
             try:
-                serve(app, host="localhost", port=http_port)
+                serve(app, host=http_addr, port=http_port)
             except PermissionError:
                 click.secho("Permission error!",
                             fg='red')
@@ -648,7 +649,7 @@ class HttpServer():
                 service_status['status'] = -2
 
         self._flask_thread = threading.Thread(target=serve_flask_app,
-                                              args=(self._http_port, self._service_status,),
+                                              args=(self._http_addr, self._http_port, self._service_status,),
                                               daemon=True)
 
         self._flask_thread.start()
@@ -678,7 +679,7 @@ class HttpServer():
 
 class ScanSourceUdpReplay():
 
-    def __init__(self, source_url, http_port, loop, rate, soft_id_check, lidar_port=-1,
+    def __init__(self, source_url, http_addr, http_port, loop, rate, soft_id_check, lidar_port=-1,
                  imu_port=-1, udp_dest="127.0.0.1", operating_mode="NORMAL", sensor_sn="",
                  hide_diagnostics=False):
 
@@ -708,7 +709,7 @@ class ScanSourceUdpReplay():
         self._show_diagnostics = not hide_diagnostics
         self._first_diagnostics_message = True
 
-        self._http_server = HttpServer(self, http_port)
+        self._http_server = HttpServer(self, http_addr, http_port)
         self._mdns = mDNSService(self._sensor_info)
         self.start()
 
@@ -866,6 +867,8 @@ def build_ouster_cli_sensor_replay_image(ouster_sdk: str):
               help="Run the sensor replay inside a Docker container")
 @click.option('-p', '--http-port', type=int, default=80, show_default=True,
               help="Change the port used by the sensor HTTP server")
+@click.option('--http-addr', type=str, default="127.0.0.1", show_default=True,
+              help="Change the listening address used by the sensor HTTP server")
 @click.option('--lidar-port', type=int, default=-1, show_default=True,
               help="lidar port")
 @click.option('--imu-port', type=int, default=-1, show_default=True,
@@ -886,7 +889,7 @@ def build_ouster_cli_sensor_replay_image(ouster_sdk: str):
               help="Hide diagnostic information.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED)
-def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_port: int,
+def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: str, http_port: int,
                          lidar_port: Optional[int], imu_port: Optional[int],
                          loop: bool, rate: float, ouster_sdk: str, udp_dest: str,
                          operating_mode: str, sensor_sn: str, hide_diagnostics: bool) -> None:
@@ -898,7 +901,7 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_port: 
 
     if not dockerize:
         try:
-            ScanSourceUdpReplay(ctx.source_uri, http_port, loop, rate, soft_id_check, lidar_port, imu_port,
+            ScanSourceUdpReplay(ctx.source_uri, http_addr, http_port, loop, rate, soft_id_check, lidar_port, imu_port,
                                 udp_dest, operating_mode, sensor_sn, hide_diagnostics)
         except RuntimeError:
             click.secho("Failed to start the service, this is likely due trying to run with the default"
@@ -951,6 +954,7 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_port: 
                 "ouster-cli",
                 "source", source_url,
                 "sensor_replay",
+                "--http-addr", str(http_addr),
                 "--http-port", str(http_port),
                 "--lidar-port", str(lidar_port),
                 "--imu-port", str(imu_port),
