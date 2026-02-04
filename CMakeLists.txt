@@ -193,5 +193,5 @@ if(BUILD_OSF)
     DESTINATION lib/cmake/OusterSDK)
 endif()
 
-install(FILES LICENSE LICENSE-bin
+install(FILES LICENSE THIRD-PARTY-NOTICES
   DESTINATION share)
