@@ -36,4 +36,4 @@ We prefer all communications to be in English.
 ### Response time 
 You should receive a response within 3 business days. 
 
-If for some reason you do not, please follow up via email to ensure we received your original message.
+If for some reason you do not, please follow up via [email](mailto:security@ouster.io) to ensure we received your original message.
