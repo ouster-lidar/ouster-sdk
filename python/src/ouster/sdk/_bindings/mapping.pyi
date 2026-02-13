@@ -54,6 +54,7 @@ class Constraint:
 
 
             Get the unique constraint ID. Returns 0 for non-user constraints.
+            IDs are assigned when constraint objects are constructed.
 
             Returns:
                 int: The constraint ID, or 0 if not a user-added constraint.
@@ -428,13 +429,14 @@ Overloaded function.
 
                This is the new unified API for adding constraints. Use the constraint class
                constructors to create constraints, then pass them to this method.
-               The constraint will be assigned a unique ID for later removal if needed.
+               The constraint must already have a unique ID for later removal.
+               Adding a constraint with a duplicate ID will fail.
 
                Args:
                    constraint: A constraint object created by one of the constraint constructors.
 
                Returns:
-                   int: The unique constraint ID assigned to the added constraint.
+                   int: The unique constraint ID of the added constraint.
 
                Raises:
                    RuntimeError: If the constraint cannot be added.

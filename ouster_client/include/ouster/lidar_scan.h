@@ -552,7 +552,7 @@ class OUSTER_API_CLASS LidarScan {
     ConstArrayView1<ZoneState> zones() const;
 
     /**
-     * Return the first valid packet timestamp
+     * Return the first valid packet timestamp from any packet type.
      *
      * @return the first valid packet timestamp, 0 if none available
      */
@@ -560,12 +560,28 @@ class OUSTER_API_CLASS LidarScan {
     uint64_t get_first_valid_packet_timestamp() const;
 
     /**
-     * Return the last valid packet timestamp
+     * Return the last valid packet timestamp from any packet type.
      *
      * @return the last valid packet timestamp, 0 if none available
      */
     OUSTER_API_FUNCTION
     uint64_t get_last_valid_packet_timestamp() const;
+
+    /**
+     * Return the first valid lidar packet timestamp
+     *
+     * @return the first valid lidar packet timestamp, 0 if none available
+     */
+    OUSTER_API_FUNCTION
+    uint64_t get_first_valid_lidar_packet_timestamp() const;
+
+    /**
+     * Return the last valid lidar packet timestamp
+     *
+     * @return the last valid lidar packet timestamp, 0 if none available
+     */
+    OUSTER_API_FUNCTION
+    uint64_t get_last_valid_lidar_packet_timestamp() const;
 
     /**
      * Return the first valid column timestamp

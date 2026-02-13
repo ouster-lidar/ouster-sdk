@@ -149,11 +149,8 @@ bool check_prefixed_size_block_crc(const OsfBuffer& buf,
     uint32_t prefixed_size = get_prefixed_size(buf);
     if (buf_length <
         prefixed_size + FLATBUFFERS_PREFIX_LENGTH + CRC_BYTES_SIZE) {
-        throw std::runtime_error(
-            "CRC32 validation failed!"
-            " (Prefix Size " +
-            std::to_string(prefixed_size) + "[bytes] Buf Length " +
-            std::to_string(buf_length) + "[bytes])");
+        // prefixed size doesnt match buffer size, the data is corrupt
+        return false;
     }
 
     const uint32_t crc_stored = get_prefixed_size(

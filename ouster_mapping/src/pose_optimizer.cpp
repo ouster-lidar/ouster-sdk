@@ -53,6 +53,10 @@ using ouster::sdk::core::logger;
 namespace ouster {
 namespace sdk {
 namespace mapping {
+
+// It starts at 1 because 0 is reserved for traj constraints
+std::atomic<uint32_t> Constraint::next_constraint_id_{1};
+
 namespace {
 
 PoseH run_icp(std::shared_ptr<Node> node_first,
@@ -137,9 +141,6 @@ class PoseOptimizer::Impl {
     // Map constraint ID to residual block ID for individual constraint removal
     std::unordered_map<uint32_t, ceres::ResidualBlockId>
         constraint_id_to_residual_map;
-
-    // Counter for assigning unique constraint IDs
-    uint32_t next_constraint_id = 1;
 
     // Downsample voxel size for point clouds used in ICP
     const double downsample_voxel_size = 0.05;
@@ -443,9 +444,9 @@ class PoseOptimizer::Impl {
             release_first_node_anchor();
 
             logger().info(
-                "Successfully processed absolute pose constraint for timestamp "
-                "{}",
-                abs_constraint->timestamp);
+                "Successfully processed absolute pose constraint id {} for "
+                "timestamp {}",
+                abs_constraint->get_constraint_id(), abs_constraint->timestamp);
         } catch (const std::exception& e) {
             logger().error(
                 "Error creating absolute pose constraint for timestamp {}: {}",
@@ -545,8 +546,9 @@ class PoseOptimizer::Impl {
                     add_constraint_with_id(
                         constraint_impl, pose_constraint->get_constraint_id());
                     logger().info(
-                        "Successfully added pose to pose constraint between {} "
-                        "and {}",
+                        "Successfully added pose to pose constraint id {} "
+                        "between {} and {}",
+                        pose_constraint->get_constraint_id(),
                         pose_constraint->timestamp1,
                         pose_constraint->timestamp2);
                 } else {
@@ -577,8 +579,9 @@ class PoseOptimizer::Impl {
                     add_constraint_with_id(
                         constraint_impl, pose_constraint->get_constraint_id());
                     logger().info(
-                        "Successfully added stored pose constraint between {} "
-                        "and {}",
+                        "Successfully added stored pose constraint id {} "
+                        "between {} and {}",
+                        pose_constraint->get_constraint_id(),
                         pose_constraint->timestamp1,
                         pose_constraint->timestamp2);
                 } else {
@@ -684,9 +687,10 @@ class PoseOptimizer::Impl {
                                    pt_constraint->get_constraint_id());
 
             logger().info(
-                "Successfully added point to point constraint between {} and "
-                "{}",
-                pt_constraint->timestamp1, pt_constraint->timestamp2);
+                "Successfully added point to point constraint id {} between "
+                "{} and {}",
+                pt_constraint->get_constraint_id(), pt_constraint->timestamp1,
+                pt_constraint->timestamp2);
         } catch (const std::exception& e) {
             logger().error(
                 "Error creating point to point constraint between timestamps "
@@ -750,8 +754,9 @@ class PoseOptimizer::Impl {
             release_first_node_anchor();
 
             logger().info(
-                "Successfully processed absolute point constraint for "
+                "Successfully processed absolute point constraint id {} for "
                 "timestamp {}",
+                abs_pt_constraint->get_constraint_id(),
                 abs_pt_constraint->timestamp);
         } catch (const std::exception& e) {
             logger().error(
@@ -1068,14 +1073,32 @@ class PoseOptimizer::Impl {
             throw std::invalid_argument("Cannot add null constraint");
         }
 
-        // Assign unique ID to constraint for tracking
+        // Checks if an ID is already taken by an existing user constraint.
+        // We look at both the active residual map and stored config
+        // constraints (id 0 is reserved for internal/trajectory constraints).
+        auto constraint_id_in_use = [&](uint32_t id) {
+            if (id == 0) {
+                return false;
+            }
+            if (constraint_id_to_residual_map.find(id) !=
+                constraint_id_to_residual_map.end()) {
+                return true;
+            }
+            for (const auto& constraint : config.constraints) {
+                if (!constraint || constraint.get() == base_constraint) {
+                    continue;
+                }
+                if (constraint->get_constraint_id() == id) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
         uint32_t constraint_id = base_constraint->get_constraint_id();
-        if (constraint_id == 0) {
-            base_constraint->set_constraint_id(next_constraint_id++);
-            constraint_id = base_constraint->get_constraint_id();
-        } else {
-            next_constraint_id =
-                std::max(next_constraint_id, constraint_id + 1);
+        if (constraint_id_in_use(constraint_id)) {
+            throw std::runtime_error("Constraint ID already in use: " +
+                                     std::to_string(constraint_id));
         }
         // Dispatch to appropriate handler based on constraint type
         switch (base_constraint->get_type()) {
@@ -1452,8 +1475,13 @@ class PoseOptimizer::Impl {
         // Remove residual block from Ceres
         auto residual_it = constraint_id_to_residual_map.find(constraint_id);
         if (residual_it != constraint_id_to_residual_map.end()) {
-            problem.RemoveResidualBlock(residual_it->second);
+            const auto residual_id = residual_it->second;
+            problem.RemoveResidualBlock(residual_id);
             constraint_id_to_residual_map.erase(residual_it);
+            user_constraint_residual_blocks.erase(
+                std::remove(user_constraint_residual_blocks.begin(),
+                            user_constraint_residual_blocks.end(), residual_id),
+                user_constraint_residual_blocks.end());
         } else {
             logger().error("Constraint ID {} not found in residual map",
                            constraint_id);
@@ -1795,12 +1823,13 @@ uint32_t PoseOptimizer::add_constraint(std::unique_ptr<Constraint> constraint) {
     }
 
     try {
-        // Store the Constraint in Impl's config for saving
         Constraint* constraint_ptr = constraint.get();
-        pimpl_->config.constraints.push_back(std::move(constraint));
+        const uint32_t constraint_id =
+            pimpl_->add_base_constraint(constraint_ptr);
 
-        // Create and add the implementation directly
-        return pimpl_->add_base_constraint(constraint_ptr);
+        // Store the Constraint in Impl's config for saving
+        pimpl_->config.constraints.push_back(std::move(constraint));
+        return constraint_id;
 
     } catch (const std::exception& e) {
         logger().error("Failed to add constraint: {}", e.what());

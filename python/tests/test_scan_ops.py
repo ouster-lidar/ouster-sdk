@@ -6,7 +6,7 @@ This module verifies that a sliced ScanSource matches the original ScanSource
 but limits the interaction with the source to the scope.
 """
 
-from typing import cast
+from typing import cast, Union
 import os
 import pytest
 import sys
@@ -16,6 +16,7 @@ from ouster.sdk import open_source, osf, core
 from ouster.sdk.core import ChanField, LidarScan
 from ouster.sdk.core import (ScanSource, ReducedScanSource,
                              ClippedScanSource, MaskedScanSource)
+import ouster.sdk.core.scan_ops as scan_ops
 import numpy as np
 
 from tests.conftest import OSFS_DATA_DIR
@@ -228,3 +229,97 @@ def test_chain(scan_source_path) -> None:
         got_scan = True
         break
     assert got_scan
+
+
+def test_lidarscan_field_types_writable(scan_source_path) -> None:
+    """Create LidarScan, add all supported field types, verify they are writable."""
+    src = open_source(scan_source_path)
+    info = src.sensor_info[0]
+
+    ls = LidarScan(info.format.columns_per_frame,
+                   info.format.pixels_per_column,
+                   info.format.udp_profile_lidar)
+
+    # Attempt to add fields of all possible numpy scalar types
+    dtypes = [
+        np.uint8, np.uint16, np.uint32, np.uint64,
+        np.int8, np.int16, np.int32, np.int64,
+        np.float32, np.float64
+    ]
+
+    for dtype in dtypes:
+        try:
+            ls.add_field(f"test_field_{dtype.__name__}", dtype)
+        except (TypeError, ValueError):
+            # Not all types might be supported by the bindings
+            pass
+
+    ls.add_field("X",
+                 np.array([b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7'],
+                          dtype='|S8').view(np.recarray),
+                core.FieldClass.SCAN_FIELD)
+
+    for field_name in ls.fields:
+        arr = ls.field(field_name)
+        # Check that it is a numpy array (or convertible/workable) and writable
+        assert isinstance(arr, np.ndarray)
+        assert arr.flags.writeable, f"Field {field_name} (dtype: {arr.dtype}) is not writable"
+
+
+def test_filter_xyz_dewarp_points_changes_spatial_mask(scan_source_path) -> None:
+    """Dewarping should change the XYZ mask when non-identity per-column poses are used."""
+    src = cast(ScanSource, open_source(scan_source_path))
+    try:
+        first = next(iter(src))[0]
+        assert first is not None
+        scan = copy.deepcopy(cast(LidarScan, first))
+    finally:
+        src.close()
+
+    assert scan.has_field(ChanField.RANGE), "RANGE field is required for XYZ filtering test"
+
+    scan.field(ChanField.RANGE)[:] = 1000
+    scan.pose[:] = np.repeat(np.eye(4, dtype=np.float64)[None, :, :], scan.w, axis=0)
+
+    poses = np.repeat(np.eye(4, dtype=np.float64)[None, :, :], scan.w, axis=0)
+    poses[:scan.w // 2, 0, 3] = 2.0
+
+    def zero_xyz(scan_or_range: Union[LidarScan, np.ndarray]) -> np.ndarray:
+        range_image = (
+            scan_or_range.field(ChanField.RANGE)
+            if isinstance(scan_or_range, LidarScan)
+            else scan_or_range
+        )
+        h, w = range_image.shape
+        return np.zeros((h, w, 3), dtype=np.float64)
+
+    scan_body = copy.deepcopy(scan)
+    scan_world = copy.deepcopy(scan)
+    scan_world.pose[:] = poses
+
+    scan_ops.filter_xyz(
+        scan_body,
+        zero_xyz,
+        axis_idx=0,
+        lower=1.5,
+        upper=2.5,
+        invalid=0,
+        filtered_fields=[ChanField.RANGE],
+        dewarp_points=False,
+    )
+    scan_ops.filter_xyz(
+        scan_world,
+        zero_xyz,
+        axis_idx=0,
+        lower=1.5,
+        upper=2.5,
+        invalid=0,
+        filtered_fields=[ChanField.RANGE],
+        dewarp_points=True,
+    )
+
+    body_zeroed = np.count_nonzero(scan_body.field(ChanField.RANGE) == 0)
+    world_zeroed = np.count_nonzero(scan_world.field(ChanField.RANGE) == 0)
+
+    assert body_zeroed == 0
+    assert world_zeroed == scan.h * (scan.w // 2)

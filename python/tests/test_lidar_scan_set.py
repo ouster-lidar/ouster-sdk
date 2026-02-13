@@ -37,3 +37,11 @@ def test_lidar_scan_set_with_missing_scans() -> None:
     assert (collation[0].w, collation[0].h) == (10, 10)  # type: ignore
     assert collation[1] is None
     assert len(collation) == 3
+
+
+def test_lidar_scan_set_assignment() -> None:
+    scans_in = [LidarScan(10, 10), None]
+    collation = LidarScanSet(scans_in)
+    collation[0] = None
+    assert len(collation) == 2
+    assert collation[0] is None

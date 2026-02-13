@@ -5,7 +5,7 @@ from re import escape
 import pytest
 import tempfile
 from ouster.sdk.util import resolve_metadata_multi
-from ouster.sdk.core import SensorInfo
+from ouster.sdk.core import SensorInfo, FieldClass
 from ouster.sdk import open_source, open_packet_source, SourceURLException
 from tests.conftest import PCAPS_DATA_DIR, BAGS_DATA_DIR, OSFS_DATA_DIR
 
@@ -152,6 +152,24 @@ def test_open_packet_source_bag() -> None:
         got_packet = True
         break
     assert got_packet
+
+
+def test_source_no_lidar() -> None:
+    """Validate that we can load a source with no lidar data and see no lidar fields"""
+    file_path = os.path.join(PCAPS_DATA_DIR, 'imu_zm_no_lidar.pcap')
+
+    src = open_source(file_path)
+    scan = next(iter(src))[0]
+    assert scan is not None
+    ft_names = [ft.name for ft in scan.field_types]
+    assert "IMU_PACKET_TIMESTAMP" in ft_names
+    assert "ZONE_PACKET_TIMESTAMP" in ft_names
+    # assert none are pixel fields
+    for ft in scan.field_types:
+        assert ft.field_class != FieldClass.PIXEL_FIELD
+
+    # also assert that we see 0 lidar packets per frame
+    assert scan.sensor_info.format.lidar_packets_per_frame() == 0
 
 
 def test_open_source_collating_osf() -> None:

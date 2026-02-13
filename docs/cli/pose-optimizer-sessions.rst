@@ -43,8 +43,8 @@ Optional Config Parameters
 
 The constraint JSON file may also include the following optional parameters to fine-tune the optimization process:
 
-- ``traj_rotation_weight`` (float): The weight for rotational constraints during trajectory optimization (default: ``10.0``). Higher values enforce stronger rotation consistency.
-- ``traj_translation_weight`` (float): The weight for translational constraints during trajectory optimization (default: ``10.0``). Higher values enforce stronger position consistency.
+- ``traj_rotation_weight`` (float): The weight for rotational constraints during trajectory optimization (default: ``10.0``). Higher values enforce stronger rotation consistency. Must be a float ``> 0``.
+- ``traj_translation_weight`` (float): The weight for translational constraints during trajectory optimization (default: ``10.0``). Higher values enforce stronger position consistency. Must be a float ``> 0``.
 - ``max_num_iterations`` (int): The maximum number of iterations the solver will perform before terminating.
 - ``loss_function`` (str): The name of the robust loss function to use (e.g., ``HUBER_LOSS``, ``CAUCHY_LOSS``, ``SOFT_L_ONE_LOSS``, ``ARCTAN_LOSS``, ``TRIVIAL_LOSS``).
 - ``loss_scale`` (float): The scaling parameter for the chosen loss function. Higher values make the loss less sensitive to outliers.
@@ -67,6 +67,7 @@ Several constraint types (explained later) support optional weight fields that e
 **rotation weight**
 
 - ``rotation_weight`` (single float) scales the quaternion axis-alignment residual for ``ABSOLUTE_POSE`` and ``POSE_TO_POSE`` constraints. Higher values enforce the orientation more strongly; set it to ``0`` to ignore the rotational component.
+- Must be a single float value ``>= 0``.
 
 **Example (rotation_weight for ABSOLUTE_POSE):**
 
@@ -78,7 +79,7 @@ This doubles the strength of the orientation penalty for that absolute pose.
 
 **translation_weight**
 
-- Must be a list of three numbers.
+- Must be a list of three float values ``>= 0``.
 - Applies to the positional components: **x**, **y**, and **z**.
 - Higher values signal stronger confidence in the position, and lower values give the optimizer more freedom to adjust.
 - Values are treated as relative weights for each axis.
@@ -132,9 +133,10 @@ Defines an absolute pose measurement relative to the world coordinate frame.
 
   * Scales the quaternion axis-alignment residual applied to this pose.
   * Higher values increase sensitivity to rotational deviations; setting it to ``0`` disables the rotational penalty.
+  * Must be a float value ``>= 0``.
 - ``translation_weight``:
   
-  * A list of three values.
+  * A list of three float values ``>= 0``.
   * Corresponds to confidence in the **x**, **y**, and **z** position.
 
 See :ref:`weight-fields` for a detailed explanation.
@@ -178,13 +180,13 @@ Fixes a single point from a scan to known coordinates in the trajectory map fram
 - ``type``: Must be exactly ``"ABSOLUTE_POINT"``.
 - ``timestamp``: Lidar frame timestamp (first valid column timestamp).
 - ``row``: Row index of the point (>= 0 && < scan.h).
-- ``col``: Column index of the point (>= 0 && scan.w).
+- ``col``: Column index of the point (>= 0 && < scan.w).
 - ``return_idx``: Which range return to use (1 or 2).
 - ``absolute_position``: Either an object with keys ``x``, ``y``, ``z`` or a list of three numbers ``[x, y, z]``.
 
 **Optional fields:**
 
-- ``translation_weight``: List of three values describing confidence along ``x``, ``y``, and ``z``.
+- ``translation_weight``: List of three float values ``>= 0`` describing confidence along ``x``, ``y``, and ``z``.
 
 .. note::
 
@@ -230,7 +232,7 @@ This constraint uses 2D image coordinates to select points from the lidar scans:
 
 **Optional field:**
 
-- ``translation_weight``: A list of three numbers.
+- ``translation_weight``: A list of three float values ``>= 0``.
 
 See :ref:`weight-fields` for a detailed explanation.
 
@@ -297,8 +299,8 @@ The ``POSE_TO_POSE`` constraint defines a constraint between two poses in the tr
   * A dictionary (with ``rx``, ``ry``, ``rz``, ``x``, ``y``, ``z``), or
   * A 16-element list (4x4 matrix)
   * If omitted, transformation is auto-estimated using ICP matching.
-- ``rotation_weight`` (float): Scales the quaternion axis-alignment residual for the relative pose. Setting it higher enforces the measured rotation more strongly; setting it to ``0`` disables the rotational penalty.
-- ``translation_weight``: List of three values.
+- ``rotation_weight`` (float): Scales the quaternion axis-alignment residual for the relative pose. Setting it higher enforces the measured rotation more strongly; setting it to ``0`` disables the rotational penalty. Must be a float value ``>= 0``.
+- ``translation_weight``: List of three float values ``>= 0``.
 
 See :ref:`weight-fields` for a detailed explanation.
 
@@ -457,11 +459,13 @@ addition to any constraints loaded from ``--config``). Remember the ``--config``
 To record a dataset, connect your sensor to receive GPS data over a serial interface and set
 the udp_profile_imu to ACCEL32_GYRO32_NMEA. Detailed instructions for configuring the sensor to accept
 GPS input can be found in the `Sensor Time Sync`_ documentation:
+Note: ``ACCEL32_GYRO32_NMEA`` is only available in firmware 3.2 or later.
 
 - ``--auto-constraints``: Automatically generate and add GPS absolute pose constraints.
 - ``--gps-constraints-every-m``: Approximate spacing in meters between constraints,
   computed from distance traveled using lidar scan poses.
-- ``--gps-constraints-weights``: Translation weights ``WX,WY,WZ``. ``WX`` and ``WY``
+- ``--gps-constraints-weights``: Translation weights ``WX,WY,WZ`` (three
+  comma-separated numbers >= 0).
 - ``--no-initial-align``: In ``--viz`` mode, disables the initial alignment step
   using absolute constraints.
 

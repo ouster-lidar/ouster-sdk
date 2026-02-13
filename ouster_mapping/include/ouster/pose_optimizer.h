@@ -96,11 +96,12 @@ class OUSTER_API_CLASS PoseOptimizer {
      * @brief Add a constraint to the optimization problem.
      *
      * This is the main method for adding constraints to the pose optimizer.
-     * It accepts any constraint derived from Constraint. The constraint will
-     * be assigned and return a unique ID for later removal if needed.
+     * It accepts any constraint derived from Constraint. The constraint object
+     * carries its own ID assigned at construction; adding will fail if the ID
+     * is already in use.
      *
      * @param[in] constraint A constraint object derived from Constraint.
-     * @return The unique ID assigned to the constraint.
+     * @return The unique ID of the constraint.
      * @throws std::runtime_error if the constraint cannot be added.
      */
     OUSTER_API_FUNCTION

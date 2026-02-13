@@ -797,6 +797,13 @@ class Label:
                                """
         ...
 
+
+class PointVizNotRunningError(Exception):
+    """Exception raised when attempting to run PointViz methods while not running."""
+    def __init__(self) -> None:
+        ...
+
+
 class PointViz:
 
     def __init__(self, name: str, fix_aspect: bool=..., window_width: int=..., window_height: int=..., maximized: bool=..., fullscreen: bool=..., borderless: bool=...) -> None:

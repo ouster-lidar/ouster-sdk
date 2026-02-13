@@ -3705,6 +3705,9 @@ Overloaded function.
 """
         ...
 
+    def __setitem__(self, index: int, value: Optional[LidarScan]) -> None:
+        ...
+
     def __len__(self) -> int:
         """__len__(self: ouster.sdk._bindings.client.LidarScanSet) -> int
 """

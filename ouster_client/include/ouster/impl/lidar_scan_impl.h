@@ -86,9 +86,11 @@ void visit_field_2d(FieldView& field, OP&& op, Args&&... args) {
                                    std::forward<Args>(args)...);
             break;
         case ChanFieldType::ZONE_STATE:
-            // IMPORTANT: ZoneState is not an Eigen scalar type,
-            // so many of the operations provide as the template parameter OP
-            // will cause compilation errors if we try to apply them.
+        case ChanFieldType::CHAR:
+        case ChanFieldType::VOID:
+        case ChanFieldType::UNREGISTERED:
+            // These types are not Eigen scalar types or are not supported,
+            // so we silently skip them rather than crash.
             break;
         default:
             throw std::invalid_argument("Invalid field for LidarScan");
@@ -140,9 +142,11 @@ void visit_field_2d(const FieldView& field, OP&& op, Args&&... args) {
                                    std::forward<Args>(args)...);
             break;
         case ChanFieldType::ZONE_STATE:
-            // IMPORTANT: ZoneState is not an Eigen scalar type,
-            // so many of the operations provide as the template parameter OP
-            // will cause compilation errors if we try to apply them.
+        case ChanFieldType::CHAR:
+        case ChanFieldType::VOID:
+        case ChanFieldType::UNREGISTERED:
+            // These types are not Eigen scalar types or are not supported,
+            // so we silently skip them rather than crash.
             break;
         default:
             throw std::invalid_argument("Invalid field for LidarScan");

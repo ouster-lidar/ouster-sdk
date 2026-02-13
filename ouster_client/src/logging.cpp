@@ -23,7 +23,7 @@ struct Logger::internal_logger {
 
     internal_logger(const std::string& logger_name, const std::string& pattern)
         : logger_(std::make_unique<spdlog::logger>(
-              logger_name, std::make_shared<spdlog::sinks::stdout_sink_mt>())),
+              logger_name, std::make_shared<spdlog::sinks::stderr_sink_mt>())),
           pattern_(pattern) {}
 
     void configure_generic_sink(spdlog::sink_ptr sink,
@@ -69,6 +69,19 @@ bool Logger::configure_stdout_sink(const std::string& log_level) {
     try {
         internal_logger_->configure_generic_sink(
             std::make_shared<spdlog::sinks::stdout_sink_mt>(), log_level);
+    } catch (const spdlog::spdlog_ex& ex) {
+        std::cerr << LOGGER_NAME << " init_logger failed: " << ex.what()
+                  << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+bool Logger::configure_stderr_sink(const std::string& log_level) {
+    try {
+        internal_logger_->configure_generic_sink(
+            std::make_shared<spdlog::sinks::stderr_sink_mt>(), log_level);
     } catch (const spdlog::spdlog_ex& ex) {
         std::cerr << LOGGER_NAME << " init_logger failed: " << ex.what()
                   << std::endl;

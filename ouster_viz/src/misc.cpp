@@ -150,6 +150,7 @@ void GLRings::uninitialize() {
     GLRings::initialized = false;
     glDeleteProgram(ring_program_id);
     glDeleteVertexArrays(1, &GLRings::ring_vao);
+    glDeleteBuffers(1, &GLRings::xyz_buffer);
 }
 
 /*
@@ -192,7 +193,11 @@ GLCuboid::GLCuboid()
 // for Indexed<T, U>, arg ignored
 GLCuboid::GLCuboid(const Cuboid& /*unused*/) : GLCuboid{} {}
 
-GLCuboid::~GLCuboid() { glDeleteBuffers(1, &xyz_buffer_); }
+GLCuboid::~GLCuboid() {
+    glDeleteBuffers(1, &xyz_buffer_);
+    glDeleteBuffers(1, &indices_buffer_);
+    glDeleteBuffers(1, &edge_indices_buffer_);
+}
 
 /*
  * Draws the cuboids from the point of view of the camera.

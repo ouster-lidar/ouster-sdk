@@ -592,10 +592,15 @@ def source_clip(ctx: SourceCommandContext, fields: str,
                    "If not provided, the filter will be applied to all fields.")
 @click.option('--invalid-value', default=0, type=float, show_default=True,
               help="The value to used for pixels that match the filter")
+@click.option('--coord-frame', default="BODY", show_default=True,
+              type=click.Choice(["SENSOR", "BODY", "WORLD"], case_sensitive=False),
+              help="Coordinate frame for XYZ filtering (SENSOR=no extrinsics, "
+                   "BODY=extrinsics, WORLD=dewarped)")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR)
 def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Optional[int], Optional[int]],
-                  filtered_fields: Optional[str], invalid_value: float, **kwargs) -> None:
+                  filtered_fields: Optional[str], invalid_value: float,
+                  coord_frame: str, **kwargs) -> None:
     """
     Apply a filter to LidarScan data based on the specified axis/field and indices.
 
@@ -605,7 +610,8 @@ def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Opt
     works by updating values that match the condition to the invalid-value (default: 0).
 
     Usage:
-    filter <axis_field> <indices> [--filtered-fields <fields>] [--invalid-value <value>]
+    filter [--filtered-fields <fields>] [--invalid-value <value>]
+           [--coord-frame <SENSOR|BODY|WORLD>] <axis_field> <indices>
 
     Examples:
 
@@ -629,12 +635,14 @@ def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Opt
     min_v = raw_min_v if raw_min_v is not None else float('-inf')
     max_v = raw_max_v if raw_max_v is not None else float('inf')
 
-    def filter_xyz_iter(scan_iter, axis_field, invalid_value, filtered_fields):
+    def filter_xyz_iter(scan_iter, axis_field, invalid_value, filtered_fields, coord_frame):
         axis_map = {'x': 0, 'y': 1, 'z': 2}
-        axis_idx = axis_map.get(axis_field, None)
+        axis_idx = axis_map[axis_field]
         # construct xyzlut per sensor
         from ouster.sdk.core import XYZLut
-        xyzluts = [XYZLut(s, use_extrinsics=True) for s in ctx.scan_source.sensor_info]
+        use_extrinsics = coord_frame != "sensor"
+        dewarp_points = coord_frame == "world"
+        xyzluts = [XYZLut(s, use_extrinsics=use_extrinsics) for s in ctx.scan_source.sensor_info]
         for scans in scan_iter():
             out = copy.deepcopy(scans)
             for idx, scan in enumerate(out):
@@ -642,7 +650,8 @@ def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Opt
                     # we divide by 1000 since xyzlut values are measured in meters
                     so.filter_xyz(scan, xyzluts[idx], axis_idx,
                               min_v / 1000, max_v / 1000, invalid_value,
-                              filtered_fields=filtered_fields)
+                              filtered_fields=filtered_fields,
+                              dewarp_points=dewarp_points)
             yield out
 
     def filter_field_uv(scan_iter, axis_field, invalid_value, filtered_fields):
@@ -664,13 +673,19 @@ def source_filter(ctx: SourceCommandContext, axis_field: str, indices: Tuple[Opt
             yield out
 
     axis_field = axis_field.strip()
+    axis_field_lower = axis_field.lower()
+    coord_frame = coord_frame.strip().lower()
     field_list = None if filtered_fields is None else filtered_fields.strip().split(',')
 
-    if axis_field.lower() in 'xyz':
-        ctx.scan_iter = partial(filter_xyz_iter, ctx.scan_iter, axis_field.lower(),
-                                invalid_value, field_list)  # type: ignore
-    elif axis_field.lower() in 'uv':
-        ctx.scan_iter = partial(filter_field_uv, ctx.scan_iter, axis_field.lower(),
+    if axis_field_lower not in {"x", "y", "z"} and coord_frame != "body":
+        raise click.BadParameter("is only supported when filtering by X, Y, or Z.",
+                                 param_hint="--coord-frame")
+
+    if axis_field_lower in {"x", "y", "z"}:
+        ctx.scan_iter = partial(filter_xyz_iter, ctx.scan_iter, axis_field_lower,
+                                invalid_value, field_list, coord_frame)  # type: ignore
+    elif axis_field_lower in {"u", "v"}:
+        ctx.scan_iter = partial(filter_field_uv, ctx.scan_iter, axis_field_lower,
                                 invalid_value, field_list)  # type: ignore
     else:   # assume it's a field name
         ctx.scan_iter = partial(filter_field_iter, ctx.scan_iter, axis_field,
@@ -752,6 +767,11 @@ def plumb_prerun(ctx: SourceCommandContext) -> None:
         for idx, packet in source:
             if (count > 100).all():
                 break
+
+            if sensor_idx is not None:
+                if idx != sensor_idx:
+                    continue
+                idx = 0
 
             if isinstance(packet, ImuPacket):
                 valid = packet.status()
@@ -1426,7 +1446,7 @@ source: SourceMultiCommand
 @click.option('-s', '--soft-id-check', is_flag=True, default=None,
               help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.option('-t', '--timeout', default=None, type=float, help="Seconds to wait for data [default: 1.0]")
-@click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
+@click.option('-f', '--filter', is_flag=True, help="Drop scans with missing data")
 @click.option('-e', '--extrinsics', type=str, required=False,
               help="Use this arg to adjust Lidar sensor extrinsics of the source."
                     "\nSupported formats:"
@@ -1740,7 +1760,8 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                     nonlocal filter
                     if filter:
                         for i in range(0, len(scan)):
-                            if not scan[i].complete():
+                            profile = scan[i].sensor_info.format.udp_profile_lidar
+                            if not scan[i].complete() and profile != core.UDPProfileLidar.OFF:
                                 scan[i] = None
                         # skip rather than return empty array if somehow all were incomplete
                         all_none = True

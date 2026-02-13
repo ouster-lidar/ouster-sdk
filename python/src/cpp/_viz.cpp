@@ -46,6 +46,7 @@ using namespace ouster::sdk;
 using ouster::sdk::viz::EventModifierKeys;
 using ouster::sdk::viz::MouseButton;
 using ouster::sdk::viz::MouseButtonEvent;
+using ouster::sdk::viz::PointVizNotRunningError;
 
 template <typename T, int F>
 static void check_array(const py::array_t<T, F>& array, size_t size = 0,
@@ -136,6 +137,12 @@ void init_viz(py::module& module, py::module& /*unused*/) {
         .value("MOD_CAPS_LOCK", EventModifierKeys::MOD_CAPS_LOCK)
         .value("MOD_NUM_LOCK", EventModifierKeys::MOD_NUM_LOCK)
         .export_values();
+
+    // clang-tidy produces spurious error here
+    // NOLINTBEGIN
+    py::register_exception<PointVizNotRunningError>(
+        module, "PointVizNotRunningError", PyExc_RuntimeError);
+    // NOLINTEND
 
     py::class_<viz::PointViz>(module, "PointViz")
         .def(py::init<const std::string&, bool, int, int, bool, bool, bool>(),

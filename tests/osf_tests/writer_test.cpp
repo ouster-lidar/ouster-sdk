@@ -18,6 +18,7 @@
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/reader.h"
+#include "ouster/osf/sensor_info_stream.h"
 #include "ouster/osf/stream_lidar_scan.h"
 #include "ouster/types.h"
 
@@ -66,15 +67,23 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
     Reader reader(output_osf_filename);
     EXPECT_EQ(reader.metadata_id(), "test_session");
 
-    auto msg_it = reader.messages().begin();
-    EXPECT_NE(msg_it, reader.messages().end());
+    auto lidar_stream = reader.meta_store().get<LidarScanStreamMeta>();
+    auto lidar_messages = reader.messages({lidar_stream->id()});
+
+    auto msg_it = lidar_messages.begin();
+    EXPECT_NE(msg_it, lidar_messages.end());
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 
     EXPECT_TRUE(ls_recovered);
     EXPECT_EQ(*ls_recovered, ls);
-    EXPECT_NE(++msg_it, reader.messages().end());  // sensor info message
-    EXPECT_EQ(++msg_it, reader.messages().end());
+
+    auto si_stream = reader.meta_store().get<SensorInfoStreamMeta>();
+    auto si_messages = reader.messages({si_stream->id()});
+
+    auto si_msg_it = si_messages.begin();
+    EXPECT_NE(si_msg_it, si_messages.end());  // sensor info message
+    EXPECT_EQ(++si_msg_it, si_messages.end());
 
     // Map of all MetadataEntries of type LidarSensor
     auto sensors = reader.meta_store().find<LidarSensor>();
@@ -156,16 +165,17 @@ TEST_F(WriterTest, WriteSingleLidarScanStreamingLayout) {
     EXPECT_EQ(reader.metadata_id(), "test_session");
 
     // TODO[pb]: Add reader validation CRC
+    auto lidar_stream = reader.meta_store().get<LidarScanStreamMeta>();
+    auto lidar_messages = reader.messages({lidar_stream->id()});
 
-    auto msg_it = reader.messages().begin();
-    EXPECT_NE(msg_it, reader.messages().end());
+    auto msg_it = lidar_messages.begin();
+    EXPECT_NE(msg_it, lidar_messages.end());
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 
     EXPECT_TRUE(ls_recovered);
     EXPECT_EQ(*ls_recovered, ls);
-    EXPECT_NE(++msg_it, reader.messages().end());  // sensor info message
-    EXPECT_EQ(++msg_it, reader.messages().end());
+    EXPECT_EQ(++msg_it, lidar_messages.end());
 
     // Map of all MetadataEntries of type LidarSensor
     auto sensors = reader.meta_store().find<LidarSensor>();
@@ -216,8 +226,11 @@ TEST_F(WriterTest, WriteSlicedLidarScan) {
     Reader reader(output_osf_filename);
     EXPECT_EQ(reader.metadata_id(), "test_session");
 
-    auto msg_it = reader.messages().begin();
-    EXPECT_NE(msg_it, reader.messages().end());
+    auto lidar_stream = reader.meta_store().get<LidarScanStreamMeta>();
+    auto lidar_messages = reader.messages({lidar_stream->id()});
+
+    auto msg_it = lidar_messages.begin();
+    EXPECT_NE(msg_it, lidar_messages.end());
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 
@@ -225,8 +238,7 @@ TEST_F(WriterTest, WriteSlicedLidarScan) {
 
     EXPECT_TRUE(ls_recovered);
     EXPECT_EQ(*ls_recovered, ls);
-    EXPECT_NE(++msg_it, reader.messages().end());  // sensor info message
-    EXPECT_EQ(++msg_it, reader.messages().end());
+    EXPECT_EQ(++msg_it, lidar_messages.end());
 
     // Map of all MetadataEntries of type LidarSensor
     auto sensors = reader.meta_store().find<LidarSensor>();
@@ -278,8 +290,11 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
     Reader reader(output_osf_filename);
     EXPECT_EQ(reader.metadata_id(), "test_session");
 
-    auto msg_it = reader.messages().begin();
-    EXPECT_NE(msg_it, reader.messages().end());
+    auto lidar_stream = reader.meta_store().get<LidarScanStreamMeta>();
+    auto lidar_messages = reader.messages({lidar_stream->id()});
+
+    auto msg_it = lidar_messages.begin();
+    EXPECT_NE(msg_it, lidar_messages.end());
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 
@@ -288,8 +303,7 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
     EXPECT_EQ(field_types.size(), ls_recovered->field_types().size());
 
     EXPECT_EQ(*ls_recovered, ls_reference);
-    EXPECT_NE(++msg_it, reader.messages().end());  // sensor info message
-    EXPECT_EQ(++msg_it, reader.messages().end());
+    EXPECT_EQ(++msg_it, lidar_messages.end());
 
     // Map of all MetadataEntries of type LidarSensor
     auto sensors = reader.meta_store().find<LidarSensor>();
@@ -363,8 +377,11 @@ TEST_F(WriterTest, WriteCustomLidarScanWithFlags) {
     Reader reader(output_osf_filename);
     EXPECT_EQ(reader.metadata_id(), "test_session");
 
-    auto msg_it = reader.messages().begin();
-    EXPECT_NE(msg_it, reader.messages().end());
+    auto lidar_stream = reader.meta_store().get<LidarScanStreamMeta>();
+    auto lidar_messages = reader.messages({lidar_stream->id()});
+
+    auto msg_it = lidar_messages.begin();
+    EXPECT_NE(msg_it, lidar_messages.end());
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 
@@ -374,8 +391,7 @@ TEST_F(WriterTest, WriteCustomLidarScanWithFlags) {
               ls_recovered->field_types().size());
 
     EXPECT_EQ(*ls_recovered, ls);
-    EXPECT_NE(++msg_it, reader.messages().end());  // sensor info message
-    EXPECT_EQ(++msg_it, reader.messages().end());
+    EXPECT_EQ(++msg_it, lidar_messages.end());
 }
 
 // Used in WriteExample test below
@@ -529,8 +545,11 @@ TEST_F(WriterTest, WriteCustomFieldsTest) {
     Reader reader(output_osf_filename);
     EXPECT_EQ(reader.metadata_id(), "test_session");
 
-    auto msg_it = reader.messages().begin();
-    EXPECT_NE(msg_it, reader.messages().end());
+    auto lidar_stream = reader.meta_store().get<LidarScanStreamMeta>();
+    auto lidar_messages = reader.messages({lidar_stream->id()});
+
+    auto msg_it = lidar_messages.begin();
+    EXPECT_NE(msg_it, lidar_messages.end());
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 

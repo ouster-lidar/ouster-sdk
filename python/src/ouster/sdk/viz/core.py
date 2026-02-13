@@ -23,7 +23,7 @@ import numpy as np
 
 from ouster.sdk import core
 from ouster.sdk.core import LidarScan, ChanField, LidarScanSet, ScanSource, SensorInfo
-from ouster.sdk._bindings.viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
+from ouster.sdk._bindings.viz import (PointVizNotRunningError, PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, MouseButton, MouseButtonEvent, EventModifierKeys)
 from .util import push_point_viz_handler, BoundMethod
 from ouster.sdk.viz.model import VizExtraMode, LidarScanVizModel
@@ -238,25 +238,45 @@ class LidarScanViz:
             if first_valid is None:
                 return  # No valid scans with this field in the buffer
             measurements_per_scan = first_valid.field(field_name).shape[0]
-            all_scan_values = np.zeros((measurements_per_scan * len(scans),))
+            # Use NaN for missing scans so gaps appear instead of false zeros
+            all_scan_values = np.full((measurements_per_scan * len(scans),), np.nan)
             self._imu_acc_scale[sensor_idx][field_name] = 1.0
             for idx, scan in enumerate(scans):
                 scan = scans[idx][sensor_idx]
                 if scan is None:
-                    continue  # Leave zeros for missing scans
+                    continue  # NaN values left for missing scans create visual gaps
                 field_values = scan.field(field_name)[::-1]
                 field_value_magnitudes = np.linalg.norm(field_values, axis=1)
-                new_scale_amt = 1.0 / np.max(field_value_magnitudes)
-                if self._imu_acc_scale[sensor_idx][field_name] > new_scale_amt:
-                    self._imu_acc_scale[sensor_idx][field_name] = new_scale_amt
+                # Mark invalid IMU measurements as missing.
+                if scan.has_field('IMU_STATUS'):
+                    imu_status = scan.field('IMU_STATUS')[::-1]
+                    field_value_magnitudes = field_value_magnitudes.astype(float)
+                    field_value_magnitudes[(imu_status & 0x1) == 0] = np.nan
+                valid = field_value_magnitudes[~np.isnan(field_value_magnitudes)]
+                max_magnitude = np.max(valid) if len(valid) > 0 else 0
+                if max_magnitude > 0:
+                    new_scale_amt = 1.0 / max_magnitude
+                    if self._imu_acc_scale[sensor_idx][field_name] > new_scale_amt:
+                        self._imu_acc_scale[sensor_idx][field_name] = new_scale_amt
                 all_scan_values[idx * measurements_per_scan:(idx + 1) * measurements_per_scan] = field_value_magnitudes
 
             chunk_w = img_w * len(scans) // self._imu_viz_num_scans
             x_axis_values = np.linspace(0, len(all_scan_values) - 1, chunk_w)
-            resampled_field = np.interp(x_axis_values, np.arange(len(all_scan_values)), all_scan_values)
-            scaled_resampled_field = (img_h - 1 - resampled_field * (img_h - 1)
+            # Interpolate over valid data only (np.interp can't handle NaN)
+            valid_mask = ~np.isnan(all_scan_values)
+            valid_indices = np.where(valid_mask)[0]
+            if len(valid_indices) == 0:
+                return
+            resampled_field = np.interp(x_axis_values, valid_indices, all_scan_values[valid_mask])
+            # Restore NaN for pixels that map into gap regions
+            nearest_orig = np.clip(np.round(x_axis_values).astype(int), 0, len(all_scan_values) - 1)
+            resampled_field[~valid_mask[nearest_orig]] = np.nan
+            # Only plot pixels that have valid data
+            valid = ~np.isnan(resampled_field)
+            scaled = (img_h - 1 - resampled_field[valid] * (img_h - 1)
                 * self._imu_acc_scale[sensor_idx][field_name]).astype(int)
-            indices = np.column_stack((scaled_resampled_field, np.arange(chunk_w))).T
+            pixel_x = np.arange(chunk_w)[valid]
+            indices = np.column_stack((scaled, pixel_x)).T
             img[indices[0], img_w - indices[1] - 1] = color
 
         for sensor_idx, sensor in enumerate(self._model._sensors):
@@ -834,7 +854,11 @@ class LidarScanViz:
         if osd_str_extra:
             osd_str_extra += "\n"
 
-        first_frame_ts = min([s.get_first_valid_packet_timestamp() for s in self._scans if s]) * 1e-9
+        valid_scans = [s for s in self._scans if s]
+        if not valid_scans:
+            return  # Skip update if no scans available yet
+
+        first_frame_ts = min([s.get_first_valid_packet_timestamp() for s in valid_scans]) * 1e-9
         if self._first_frame_ts is None:
             self._first_frame_ts = first_frame_ts
         frame_ts = first_frame_ts - self._first_frame_ts    # show relative time
@@ -1390,19 +1414,22 @@ class SimpleViz:
 
     def screenshot(self, file_path: Optional[str] = None) -> None:
         file_name: str
-        if self._screenshot_resolution is None:
-            # Handle the 'None' case (default)
-            file_name = self._viz.save_screenshot(file_path or "")
-        elif isinstance(self._screenshot_resolution, float):
-            # Handle the scale factor case
-            scale_factor = self._screenshot_resolution
-            file_name = self._viz.save_screenshot(file_path or "", scale_factor)
-        else:
-            # Handle the tuple case (width, height)
-            width, height = self._screenshot_resolution
-            file_name = self._viz.save_screenshot(file_path or "", width, height)
-        if file_name:
-            print(f"Saved screenshot to: {file_name}")
+        try:
+            if self._screenshot_resolution is None:
+                # Handle the 'None' case (default)
+                file_name = self._viz.save_screenshot(file_path or "")
+            elif isinstance(self._screenshot_resolution, float):
+                # Handle the scale factor case
+                scale_factor = self._screenshot_resolution
+                file_name = self._viz.save_screenshot(file_path or "", scale_factor)
+            else:
+                # Handle the tuple case (width, height)
+                width, height = self._screenshot_resolution
+                file_name = self._viz.save_screenshot(file_path or "", width, height)
+            if file_name:
+                print(f"Saved screenshot to: {file_name}")
+        except PointVizNotRunningError:
+            pass
 
     _screenshot_resolutions: List[float] = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
 
@@ -1554,14 +1581,17 @@ class SimpleViz:
                         if self._video_format == "png":
                             self.screenshot("")
                         else:
-                            if self._screenshot_resolution is None:
-                                pix = self._viz.get_screenshot()
-                            elif isinstance(self._screenshot_resolution, float):
-                                pix = self._viz.get_screenshot(self._screenshot_resolution)
-                            else:
-                                width, height = self._screenshot_resolution
-                                pix = self._viz.get_screenshot(width, height)
-                            self._images.append((PILImage.fromarray(pix), scan_ts))
+                            try:
+                                if self._screenshot_resolution is None:
+                                    pix = self._viz.get_screenshot()
+                                elif isinstance(self._screenshot_resolution, float):
+                                    pix = self._viz.get_screenshot(self._screenshot_resolution)
+                                else:
+                                    width, height = self._screenshot_resolution
+                                    pix = self._viz.get_screenshot(width, height)
+                                self._images.append((PILImage.fromarray(pix), scan_ts))
+                            except PointVizNotRunningError:
+                                pass
                 except StopIteration:
                     if not self._paused and not self._on_eof == "stop":
                         break
@@ -1588,11 +1618,10 @@ class SimpleViz:
         else:
             return 0.0
 
-    def _save_gif(self) -> None:
+    def _save_gif(self, filename=f"viz_gif_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.gif") -> None:
         if len(self._images) == 0:
             return
 
-        filename = f"viz_gif_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.gif"
         print("Saving gif to " + filename)
         start = self._images[0][0]
         rate = SimpleViz._playback_rates[self._rate_ind]
@@ -1606,6 +1635,8 @@ class SimpleViz:
         for i in range(1, len(self._images)):
             images.append(self._images[i][0])
             dt = self._images[i][1] - self._images[i - 1][1]
+            if dt <= 0:
+                dt = self._lidar_frame_period()
             durations.append(dt * 1000 / rate)
         durations.append(durations[-1])  # assume last frame has same duration as the one before
 

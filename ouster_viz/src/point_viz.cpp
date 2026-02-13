@@ -395,7 +395,10 @@ void PointViz::cursor_visible(bool state) {
 
 bool PointViz::running() { return pimpl_->glfw->running(); }
 
-void PointViz::running(bool state) { pimpl_->glfw->running(state); }
+void PointViz::running(bool state) {
+    std::unique_lock<std::mutex> lock(pimpl_->screenshot_request_mutex);
+    pimpl_->glfw->running(state);
+}
 
 void PointViz::visible(bool state) { pimpl_->glfw->visible(state); }
 
@@ -794,11 +797,14 @@ std::vector<uint8_t> PointViz::get_screenshot(uint32_t width, uint32_t height) {
         pimpl_->screenshot_fb = nullptr;
     } else {
         // get_screenshot is being called from a different thread than the main
-        // thread. Request the screenshot asynchrounously.
+        // thread. Request the screenshot asynchronously.
 
         // Submit screenshot request
         {
             std::unique_lock<std::mutex> lock(pimpl_->screenshot_request_mutex);
+            if (!running()) {
+                throw PointVizNotRunningError();
+            }
             if (!pimpl_->screenshot_request) {
                 pimpl_->screenshot_request =
                     std::make_unique<ScreenshotRequest>(width, height);
@@ -807,11 +813,8 @@ std::vector<uint8_t> PointViz::get_screenshot(uint32_t width, uint32_t height) {
                     "A screenshot request is already in progress. Only one "
                     "screenshot request can be processed at a time.");
             }
-        }
 
-        // Block until the screenshot is complete
-        {
-            std::unique_lock<std::mutex> lock(pimpl_->screenshot_request_mutex);
+            // Block until the screenshot is complete
             pimpl_->screenshot_condition_variable.wait(lock, [this]() {
                 if (!pimpl_->screenshot_request) {
                     return false;

@@ -655,6 +655,14 @@ class SensorInfoImpl : public impl::JsonTools {
                 sensor_info.format.zone_monitoring_enabled = true;
             }
         }
+
+        // handle the case where lidar data is disabled
+        // make sure to default to assuming the stream is enabled if we
+        // are missing the config settings for some reason
+        if (sensor_info.config.udp_port_lidar.value_or(7504) == 0 ||
+            sensor_info.config.udp_dest.value_or("default").empty()) {
+            sensor_info.format.udp_profile_lidar = UDPProfileLidar::OFF;
+        }
     }
 
     void parse_and_validate_calibration_status(SensorInfo& sensor_info) {

@@ -5,6 +5,7 @@
 #include "fb_common.h"
 
 #include <future>
+#include <stdexcept>
 #include <thread>
 
 #include "ouster/osf/impl/png_tools.h"
@@ -277,9 +278,21 @@ void fb_restore_fields(
             }
         }
         ChanFieldType tag = from_osf_enum(fb_field->tag());
+
         std::vector<size_t> shape{fb_field->shape()->begin(),
                                   fb_field->shape()->end()};
-        auto desc = FieldDescriptor::array(tag, shape);
+
+        // Skip fields with unsupported types (e.g., from a newer SDK version)
+        FieldDescriptor desc;
+        try {
+            desc = FieldDescriptor::array(tag, shape);
+        } catch (const std::invalid_argument&) {
+            error_handler(Severity::OUSTER_WARNING,
+                          "Skipping field '" + name +
+                              "' with unsupported type (tag=" +
+                              std::to_string(static_cast<int>(tag)) + ")");
+            continue;
+        }
         ouster::sdk::core::FieldClass field_class =
             from_osf_enum(fb_field->field_class());
 

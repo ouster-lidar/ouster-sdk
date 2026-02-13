@@ -461,6 +461,12 @@ void init_client_lidar_scan(py::module& module, py::module& /*unused*/) {
         .def("get_last_valid_packet_timestamp",
              &LidarScan::get_last_valid_packet_timestamp,
              "Return last valid packet timestamp in the scan.")
+        .def("get_first_valid_lidar_packet_timestamp",
+             &LidarScan::get_first_valid_lidar_packet_timestamp,
+             "Return first valid lidar packet timestamp in the scan.")
+        .def("get_last_valid_lidar_packet_timestamp",
+             &LidarScan::get_last_valid_lidar_packet_timestamp,
+             "Return last valid lidar packet timestamp in the scan.")
         .def("get_first_valid_column_timestamp",
              &LidarScan::get_first_valid_column_timestamp,
              "Return first valid column timestamp in the scan.")
@@ -585,6 +591,13 @@ void init_client_lidar_scan(py::module& module, py::module& /*unused*/) {
             py::keep_alive<0, 1>())
         .def("__eq__", [](const LidarScanSet& left,
                           const LidarScanSet& right) { return left == right; })
+        .def(
+            "__setitem__",
+            [](LidarScanSet& self, int index,
+               const std::shared_ptr<LidarScan>& value) {
+                self[index] = value;
+            },
+            py::arg("index"), py::arg("value").none())
         .def("__getitem__",
              [](const LidarScanSet& self, int index) { return self[index]; });
 }

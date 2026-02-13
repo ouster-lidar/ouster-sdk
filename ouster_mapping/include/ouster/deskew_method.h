@@ -180,12 +180,14 @@ class OUSTER_API_CLASS InertialIntegrationImuDeskewMethod
         Eigen::Ref<const ouster::sdk::core::MatrixX3dR>
             linear_accel_body_frame);
 
-    static bool pick_the_last_valid_imu_pose_from_scan_set(
+    static bool pick_last_valid_imu_pose(
         const ouster::sdk::core::LidarScanSet& scan_set, double& last_ts,
         ouster::sdk::core::Matrix4dR& last_pose);
 
     std::vector<ouster::sdk::core::Matrix4dR> imu_to_body_transform_;
     ouster::sdk::core::LidarScanSet last_scan_set_;
+    nonstd::optional<double> last_scan_set_last_ts_{};
+    nonstd::optional<ouster::sdk::core::Matrix4dR> last_scan_set_last_pose_{};
     nonstd::optional<Eigen::Vector3d> gravity_vector_world_frame_xyz_;
     std::vector<Eigen::Vector3d> accel_bias_imu_frame_;
     std::vector<Eigen::Vector3d> gyro_bias_imu_frame_;

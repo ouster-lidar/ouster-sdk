@@ -219,12 +219,24 @@ PcapScanSource::PcapScanSource(const std::string& source,
 
         // get average scan size plus some overhead
         const int pcap_pkt_header = 100;
-        int scan_size = 0;
+        size_t scan_size = 0;
         for (const auto& sensor : sensor_info()) {
             PacketFormat packet_format(*sensor);
             auto pkt_size = packet_format.lidar_packet_size + pcap_pkt_header;
             scan_size += pkt_size * sensor->format.lidar_packets_per_frame();
+            auto imu_pkt_size = packet_format.imu_packet_size + pcap_pkt_header;
+            scan_size += imu_pkt_size * sensor->format.imu_packets_per_frame;
+            if (sensor->format.zone_monitoring_enabled) {
+                scan_size += packet_format.zone_packet_size + pcap_pkt_header;
+            }
         }
+
+        if (scan_size == 0) {
+            throw std::runtime_error(
+                "Unexpected scan data size of 0. SensorInfo may be corrupt.");
+        }
+
+        // divide size of all scans to get average scan size
         scan_size /= sensor_info().size();
 
         // number of scans is approximately file size divided by scan size

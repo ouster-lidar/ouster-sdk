@@ -66,7 +66,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
   if(MSVC)
     add_compile_options(/W2 /bigobj /Zf)
-    add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
+    add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN _ENABLE_EXTENDED_ALIGNED_STORAGE)
   else()
     add_compile_options(-Wall -Wextra)
   endif()

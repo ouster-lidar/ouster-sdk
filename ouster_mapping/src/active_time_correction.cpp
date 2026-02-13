@@ -249,7 +249,7 @@ std::vector<int64_t> ActiveTimeCorrection::calculate_fallback_ts_offset(
     for (size_t idx : scans.valid_indices()) {
         const auto& scan = *scans[idx];
         int64_t first_pkt_ts =
-            static_cast<int64_t>(scan.get_first_valid_packet_timestamp());
+            static_cast<int64_t>(scan.get_first_valid_lidar_packet_timestamp());
         int64_t frame_start_ts =
             static_cast<int64_t>(scan.get_first_valid_column_timestamp());
         offsets[idx] = first_pkt_ts - frame_start_ts;

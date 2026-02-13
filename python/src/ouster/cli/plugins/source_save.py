@@ -48,6 +48,8 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     uri = ctx.source_uri
     if uri is None:
         raise RuntimeError("Unexpected condition")
+    source_list = [url.strip() for url in uri.split(',') if url.strip()]
+
     extension = ""
     splitfn = os.path.splitext(filename)
     if splitfn[0][0] == '.' and splitfn[1] == "":
@@ -64,7 +66,7 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 
     # Finally open the appropriate packet source
     packets: PacketSource
-    packets = open_packet_source(uri, **ctx.source_options)  # type: ignore
+    packets = open_packet_source(source_list, **ctx.source_options)  # type: ignore
 
     if extension == "pcap":
         save_pcap_impl(packets, filename, prefix, dir, raw=True, overwrite=overwrite,
@@ -110,15 +112,17 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 @click.option("--ts", default='packet', help="Timestamp to use for indexing.", type=click.Choice(['packet', 'lidar']))
 @click.option("--compression-level", default=1, help="Specifies the level of compression for OSF files. Higher values "
     "are slower but more space-efficient; lower values are faster but less space-efficient.", type=click.IntRange(0, 9))
-@click.option("--png", is_flag=True, default=False, help="If true, save in legacy PNG compressed OSF format. "
-              "Useful for backwards compatibility.")
+@click.option("--png", is_flag=True, default=False, help="Save using PNG compression instead of the default ZPNG. "
+              "See --legacy for older SDK compatibility.")
+@click.option("--legacy", is_flag=True, default=False, help="Save in a format compatible with older SDKs (0.12-0.15). "
+              "Uses PNG compression and drops unsupported field types (e.g. CHAR, ZONE_STATE).")
 @click.option("--split", default=None, type=int,
               help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
                     overwrite: bool, ts: str, continue_anyways: bool, compression_level: int,
-                    png: bool, split: Optional[int], **kwargs) -> None:
+                    png: bool, legacy: bool, split: Optional[int], **kwargs) -> None:
     """Save source as an OSF"""
     scans = ctx.scan_iter
     info = ctx.scan_source.sensor_info  # type: ignore
@@ -135,7 +139,8 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         exit(1)
 
     # Initialize osf writer
-    if png:
+    # --legacy implies PNG compression
+    if png or legacy:
         encoder = osf.Encoder(osf.PngLidarScanEncoder(compression_level))
     else:
         encoder = osf.Encoder(osf.ZPngLidarScanEncoder(compression_level))
@@ -146,33 +151,32 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     dropped_scans = 0
     last_ts = [0] * len(info)
     file_number = 1
-    dropped_string_fields: Set[str] = set()
+    dropped_fields: Set[str] = set()
 
     # returns false if we should stop recording
     need_split = False
 
+    # Standard numeric dtype kinds supported by older SDK versions (0.12-0.15)
+    LEGACY_DTYPE_KINDS = ("u", "i", "f")  # unsigned int, signed int, float
+
     def write_osf(scan: LidarScan, index: int):
         nonlocal wrote_scans, last_ts, dropped_scans, osf_writer, filename, file_number, need_split
-        scan_to_save = scan
-        if png:
-            # `save --png` exists primarily for backwards compatibility. Older SDK/CLI
-            # versions may not support string-typed ChanFields (e.g. POSITION_STRING),
-            # so strip any fields with numpy dtype kind 'S'/'U' from the scan.
-            for ft in scan_to_save.field_types:
-                try:
-                    if np.dtype(ft.element_type).kind not in ("S", "U"):
-                        continue
-                except (TypeError, ValueError):
+        if legacy:
+            # `save --legacy` is for backwards compatibility with SDK 0.12-0.15.
+            # Older versions only support standard numeric ChanFieldTypes (UINT*, INT*, FLOAT*).
+            # Drop fields with newer types like CHAR (kind 'S') or ZONE_STATE (kind 'V').
+            for ft in scan.field_types:
+                if np.dtype(ft.element_type).kind in LEGACY_DTYPE_KINDS:
                     continue
 
                 name = ft.name
-                if scan_to_save.has_field(name):
-                    scan_to_save.del_field(name)
-                    dropped_string_fields.add(name)
+                if scan.has_field(name):
+                    scan.del_field(name)
+                    dropped_fields.add(name)
 
         # Set OSF timestamp to the timestamp of the first valid column
-        scan_ts = scan_to_save.get_first_valid_packet_timestamp() if ts == "packet" \
-            else scan_to_save.get_first_valid_column_timestamp()
+        scan_ts = scan.get_first_valid_packet_timestamp() if ts == "packet" \
+            else scan.get_first_valid_column_timestamp()
         if scan_ts:
             if scan_ts < last_ts[index]:
                 if continue_anyways:
@@ -198,7 +202,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                 file_number += 1
                 osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
 
-            osf_writer.save(index, scan_to_save, scan_ts)
+            osf_writer.save(index, scan, scan_ts)
             last_ts[index] = scan_ts
 
             if split is not None:
@@ -230,8 +234,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                 for index, scan in enumerate(s):
                     if scan is None:
                         continue
-                    # Drop invalid lidarscans
-                    if not stop and np.any(scan.status):
+                    if not stop:
                         if not write_osf(scan, index):
                             stop = True
                 yield s
@@ -242,10 +245,10 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         finally:
             saved = True
             osf_writer.close()
-            if png and dropped_string_fields:
+            if legacy and dropped_fields:
                 click.echo(
-                    "NOTE: Dropping string ChanFields for backwards compatibility "
-                    f"(--png): fields={sorted(dropped_string_fields)}"
+                    "NOTE: Dropping fields with non-numeric types for backwards compatibility "
+                    f"(--legacy): fields={sorted(dropped_fields)}"
                 )
 
     ctx.scan_iter = save_iter  # type: ignore
@@ -620,7 +623,7 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
                 elif isinstance(packet, ImuPacket):
                     save_packet(idx, packet, metadata[idx].config.udp_port_imu)
                 elif isinstance(packet, ZonePacket):
-                    save_packet(idx, packet, metadata[idx].config.zm.port)
+                    save_packet(idx, packet, metadata[idx].config.udp_port_zm)
 
                 if duration is not None:
                     if end_time is None:
@@ -661,7 +664,7 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
                                 elif isinstance(packet, ImuPacket):
                                     save_packet(idx, packet, metadata[idx].config.udp_port_imu)
                                 elif isinstance(packet, ZonePacket):
-                                    save_packet(idx, packet, metadata[idx].config.zm.port)
+                                    save_packet(idx, packet, metadata[idx].config.udp_port_zm)
 
                             # only split after saving a whole scan to prevent a scan
                             # ending up between two files

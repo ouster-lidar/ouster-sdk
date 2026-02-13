@@ -418,7 +418,7 @@ std::string get_metadata(Client& cli, int timeout_sec) {
 bool init_logger(const std::string& log_level, const std::string& log_file_path,
                  bool rotating, int max_size_in_bytes, int max_files) {
     if (log_file_path.empty()) {
-        return Logger::instance().configure_stdout_sink(log_level);
+        return Logger::instance().configure_stderr_sink(log_level);
     } else {
         return Logger::instance().configure_file_sink(
             log_level, log_file_path, rotating, max_size_in_bytes, max_files);
