@@ -9,6 +9,7 @@ Ouster Visualizer (aka PointViz and tools)
 from ouster.sdk._bindings.viz import MouseButton
 from ouster.sdk._bindings.viz import MouseButtonEvent
 from ouster.sdk._bindings.viz import EventModifierKeys
+from ouster.sdk._bindings.viz import PointVizNotRunningError
 from ouster.sdk._bindings.viz import PointViz
 from ouster.sdk._bindings.viz import Cloud
 from ouster.sdk._bindings.viz import Image

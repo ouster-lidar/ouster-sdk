@@ -686,7 +686,17 @@ void init_client_data(py::module& module, py::module& /*unused*/) {
                        &SensorInfo::beam_to_lidar_transform,
                        "Homogenous transformation matrix reprsenting Beam to "
                        "Lidar Transform")
-        .def_readwrite("extrinsic", &SensorInfo::extrinsic, "Extrinsic Matrix.")
+        .def_property(
+            "extrinsic",
+            [](SensorInfo& self)
+                -> Eigen::Ref<decltype(SensorInfo::extrinsic)> {
+                return self.extrinsic;
+            },
+            [](SensorInfo& self,
+               const decltype(SensorInfo::extrinsic)& extrinsic) {
+                self.extrinsic = extrinsic;
+            },
+            "Extrinsic Matrix.")
         .def_readwrite("init_id", &SensorInfo::init_id, "Initialization id.")
         .def_readwrite("build_date", &SensorInfo::build_date, "Build date")
         .def_readwrite("image_rev", &SensorInfo::image_rev, "Image rev")

@@ -2,6 +2,39 @@
 Changelog
 =========
 
+[0.16.1]
+=========
+
+* [BUGFIX] Add ``--coord-frame`` (``SENSOR|BODY|WORLD``) to ``ouster-cli source ... filter`` for XYZ filtering. ``WORLD`` now applies ``dewarp(points, scan.pose)`` before thresholding, ``BODY`` remains the default for backward compatibility, and ``SENSOR`` uses XYZ without extrinsics.
+* [BUGFIX] Fix crash in ``LidarScan.__str__`` when scans contain non-pixel fields (IMU, GNSS, ZONE, or CHAR fields). The ``to_string()`` function now properly handles these field types, with special formatting for CHAR fields to display NMEA sentences.
+* [BUGFIX] Avoid divide-by-zero in IMU visualization when IMU magnitudes are zero.
+* [BUGFIX] Fix AOI picker showing normalized values for unknown fields in the viz.
+* [BREAKING] Renamed ``-F`` flag to ``-f`` in ``ouster-cli source`` command (short for ``--filter`` flag), which drops scans with missing data.
+* [BUGFIX] PLY maker minor change (e.g. support for no valid key field, ``--field NONE``).
+* [BUGFIX] Use stderr instead of stdout for logging in ouster-cli.
+* [BUGFIX] Fix ``filter``, ``clip``, and ``mask`` bugs: correct filter_xyz semantics (points inside bounds zeroed), restrict operations to PIXEL_FIELD only to avoid crashes with IMU/GNSS fields, and use RANGE2 coordinates for second-return fields.
+* [BUGFIX] Handle unsupported ChanFieldTypes when reading OSF files: skip unsupported fields with a warning instead of crashing (forward compatibility with newer OSF files).
+* Add ``--legacy`` flag for OSF export (PNG compression + drop CHAR/ZONE_STATE for SDK 0.12–0.15 compatibility), separate from ``--png`` (PNG compression only).
+* [BUGFIX] Update TUM format in trajectory saving as per official specification.
+* [BUGFIX] Fix viz GL buffer cleanup leaks: add missing ``glDeleteBuffers()`` for GLCuboid, GLRings, and GLImage to prevent GPU memory growth on repeated create/destroy.
+* [BUGFIX] Fix ValueError in viz when resizing before scans received.
+* [BUGFIX] Fix crash when saving a GIF when frame duration is negative (e.g. source has looped); fix viz deadlock when saving image recording.
+* [BUGFIX] Fix improper handling of sensors with lidar data disabled.
+* [BUGFIX] SLAM crashes when at least one sensor doesn't have imu data in a multi-sensor setup with the Synchronous IMU feature enabled.
+* [BUGFIX] SLAM uses un-corrected timestamps when using the the inertial integration deskew method with multi-sensor unsynchronized setups.
+* Pose Optimizer: constraint ID counter moved to constraint base class; constraint IDs are now logged when adding/processing constraints, and reassign constraint id when conflict instead of throwing.
+* [BUGFIX] Remove the skipping on single scans in SLAM and localize pipelines for multi-sensor datasets.
+* [BUGFIX] PNGs from the viz now embed the Display P3 profile so their colors match the viz window.
+* Add ``--http-addr`` option to ``sensor_replay`` plugin (e.g. for use with Ouster Detect).
+* Update README with community forum and support info.
+* Normalize license files for GitHub detection.
+
+Important Notes
+---------------
+
+* This will be the last release that supports macOS 11.x, 12.x and 13.x.
+
+
 [0.16.0]
 =========
 
@@ -10,7 +43,7 @@ Changelog
 * Clear AOI selection in the viz when right click is pressed and there is a preexisting selection.
 * Extend AOI selection to show 3 axis fields properly when right click in viz images.
 * Add support for low bandwidth dual returns lidar profile (PROFILE_RNG15_RFL8_NIR8_DUAL).
-* [BREAKING] renamed ``data_format::packets_per_frame()`` to ``lidar_packets_per_frame()``
+* [BREAKING] Renamed ``data_format::packets_per_frame()`` to ``lidar_packets_per_frame()``
 * Add support for saving and reading new ZPNG based OSF files which are several times faster and have better compression ratios.
 * [BREAKING] Make ZPNG the default format for saved OSF files. This format cannot be opened by older SDK versions.
 * [BREAKING] Change ``ouster-cli source <osf> dump`` JSON output to return the OSF version as a semver-style string instead of an integer.
@@ -85,7 +118,7 @@ Changelog
 * Changed all core sdk enums to enum classes and removed the prefixes from enum values. The C++ enums naming is now consistent with the Python enums naming.
   - e.g. ``OPERATING_NORMAL`` is now ``OperatingMode::UNSPECIFIED``
   - The older enum identiers are still available for use but are deprecated.
-* Utilize imu data when compensating for lidar data distortion during motion in SLAM and Localization. 
+* Utilize imu data when compensating for lidar data distortion during motion in SLAM and Localization.
 * Add Zone Monitor:
     - Add support for reading and writing Zone Monitor configurations for sensors running firmware 3.2 and above.
     - Add zone state data to LidarScans when Zone Monitor is enabled on the sensor.

@@ -142,7 +142,7 @@ void Writer::save_internal(uint32_t stream_index, const LidarScan& scan,
         msg.scan_stream_id = lidar_streams_[stream_index]->meta().id();
         msg.lidar_sensor_id = lidar_meta_id_[stream_index];
         if (info_ts_ == ts_t::min()) {
-            info_ts_ = timestamp;
+            info_ts_ = time;
         }
         sensor_info_stream_->save(msg, info_ts_);
         // todo dont actually need to flush for every single sensor just need to

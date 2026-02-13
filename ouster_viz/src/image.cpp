@@ -60,6 +60,7 @@ GLImage::GLImage(const Image& /*image*/) : GLImage{} {}
 
 GLImage::~GLImage() {
     glDeleteBuffers(2, vertexbuffers_.data());
+    glDeleteBuffers(1, &image_index_id_);
     glDeleteTextures(1, &image_texture_id_);
     glDeleteTextures(1, &mask_texture_id_);
     glDeleteTextures(1, &palette_texture_id_);

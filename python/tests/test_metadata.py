@@ -326,3 +326,14 @@ def test_zone_monitoring_enabled():
     sensor_info_json = json.loads(sensor_info.to_json_string())
     sensor_info_new = core.SensorInfo(json.dumps(sensor_info_json))
     assert sensor_info_new.format.zone_monitoring_enabled is True
+
+
+def test_extrinsic_mutability(meta: core.SensorInfo) -> None:
+    """Check that extrinsic is mutable and can be set to a new value."""
+    new_extrinsic = numpy.eye(4)
+    new_extrinsic[0, 3] = 1.0
+    meta.extrinsic = new_extrinsic
+    assert (meta.extrinsic == new_extrinsic).all()
+
+    meta.extrinsic[0, 3] = 2.0
+    assert meta.extrinsic[0, 3] == 2.0

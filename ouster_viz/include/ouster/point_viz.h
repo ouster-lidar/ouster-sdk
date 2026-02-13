@@ -27,6 +27,16 @@ namespace sdk {
 namespace viz {
 
 /**
+ * Exception thrown when a PointViz operation requires it to be running
+ * but it is not.
+ */
+struct PointVizNotRunningError : public std::runtime_error {
+    /// Constructor
+    PointVizNotRunningError()
+        : std::runtime_error("PointViz is not running.") {}
+};
+
+/**
  * 4x4 matrix of doubles to represent transformations
  */
 using mat4d = std::array<double, 16>;

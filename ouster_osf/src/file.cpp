@@ -285,14 +285,6 @@ void OsfFile::initialize_header_and_metadata() {
             "Osf: Metadata verification has failed.");
         return;
     }
-
-    if (!check_prefixed_size_block_crc(metadata_chunk_,
-                                       metadata_chunk_.size())) {
-        metadata_chunk_ = {};
-        ouster::sdk::core::logger().warn(
-            "Osf: CRC check of OSF metadata failed.");
-        return;
-    }
 }
 
 OsfOffset OsfFile::get_header_chunk_offset() { return header_offset_; }

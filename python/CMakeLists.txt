@@ -18,7 +18,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
   add_compile_options(/W2 /wd4996)
-  add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
+  add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN _ENABLE_EXTENDED_ALIGNED_STORAGE)
 else()
   add_compile_options(-Wall -Wextra -Wno-error=deprecated-declarations)
   if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

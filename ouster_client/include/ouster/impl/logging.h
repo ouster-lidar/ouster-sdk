@@ -37,6 +37,8 @@ class Logger {
 
     bool configure_stdout_sink(const std::string& log_level);
 
+    bool configure_stderr_sink(const std::string& log_level);
+
     bool configure_file_sink(const std::string& log_level,
                              const std::string& log_file_path, bool rotating,
                              int max_size_in_bytes, int max_files);

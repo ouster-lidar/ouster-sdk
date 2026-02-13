@@ -10,6 +10,7 @@ import json
 import click
 from datetime import datetime, timezone
 from ouster.sdk.core import SensorInfo, OperatingMode, UDPProfileLidar, TimestampMode
+from ouster.sdk.zone_monitor import ZoneSetOutputFilter
 from ouster.sdk._bindings.client import PacketType
 from ouster.sdk.util.parsing import scan_to_packets
 from ouster.sdk.core.io_types import OusterIoType, io_type
@@ -242,12 +243,25 @@ class HttpServer():
         self._http_port = http_port
 
         def _sensor_info_as_json(sensor_info):
-            return json.loads(sensor_info.to_json_string())
+            sensor_info_json = json.loads(sensor_info.to_json_string())
+            if "zone_set" in sensor_info_json:
+                del sensor_info_json["zone_set"]
+            if "ouster-sdk" in sensor_info_json:
+                del sensor_info_json["ouster-sdk"]
+            return sensor_info_json
 
         @app.route('/api/v1/sensor/metadata', methods=['GET'])
         def get_all_metadata():
             result = _sensor_info_as_json(self._sensor.sensor_info)
             return jsonify(result)
+
+        @app.route('/api/v1/zone_monitor/active/zip', methods=['GET'])
+        def handle_zones():
+            zone_set = self._sensor.sensor_info.zone_set
+            if zone_set is None:
+                return "{}", 404
+            blob = zone_set.to_zip_blob(ZoneSetOutputFilter.STL_AND_ZRB)
+            return blob, 200
 
         @app.route('/api/v1/sensor/metadata/<metadata_type>', methods=['GET'])
         def get_sensor_metadata(metadata_type):
@@ -438,6 +452,14 @@ class HttpServer():
                         'button': 'Set Local'
                     },
                     {
+                        'name': 'udp_dest_zm',
+                        'label': 'UDP Destination Address ZM',
+                        'active': config.udp_dest_zm,
+                        'staged': config.udp_dest_zm,
+                        'type': 'text',
+                        'button': 'Set Local'
+                    },
+                    {
                         'name': 'udp_port_lidar',
                         'label': 'UDP Port Lidar',
                         'active': config.udp_port_lidar,
@@ -450,6 +472,14 @@ class HttpServer():
                         'label': 'UDP Port IMU',
                         'active': config.udp_port_imu,
                         'staged': config.udp_port_imu,
+                        'type': 'text',
+                        'button': 'Reset to default'
+                    },
+                    {
+                        'name': 'udp_port_zm',
+                        'label': 'UDP Port ZM',
+                        'active': config.udp_port_zm,
+                        'staged': config.udp_port_zm,
                         'type': 'text',
                         'button': 'Reset to default'
                     }
@@ -499,7 +529,7 @@ class HttpServer():
                         'active': config.udp_profile_lidar.name,
                         'staged': config.udp_profile_lidar.name,
                         'type': 'dropdown',
-                        'options': [profile.name for profile in UDPProfileLidar.values]
+                        'options': [profile.name for profile in UDPProfileLidar.values()]
                     }
                 ],
                 'timing': [
@@ -509,7 +539,7 @@ class HttpServer():
                         'active': config.timestamp_mode.name,
                         'staged': config.timestamp_mode.name,
                         'type': 'dropdown',
-                        'options': [time_mode.name for time_mode in TimestampMode.values]
+                        'options': [time_mode.name for time_mode in TimestampMode.values()]
                     },
                     {
                         'immutable': True,
@@ -619,6 +649,12 @@ class HttpServer():
             imu_port = request.form.get('udp_port_imu')
             if imu_port:
                 self._sensor.sensor_info.config.udp_port_imu = int(imu_port)
+            udp_dest_zm = request.form.get('udp_dest_zm')
+            if udp_dest_zm:
+                self._sensor.sensor_info.config.udp_dest_zm = udp_dest_zm
+            zm_port = request.form.get('udp_port_zm')
+            if zm_port:
+                self._sensor.sensor_info.config.udp_port_zm = int(zm_port)
             operating_mode = request.form.get('operating_mode')
             if operating_mode:
                 self._sensor.sensor_info.config.operating_mode = OperatingMode.from_string(operating_mode)
@@ -681,7 +717,7 @@ class ScanSourceUdpReplay():
 
     def __init__(self, source_url, http_addr, http_port, loop, rate, soft_id_check, lidar_port=-1,
                  imu_port=-1, udp_dest="127.0.0.1", operating_mode="NORMAL", sensor_sn="",
-                 hide_diagnostics=False):
+                 hide_diagnostics=False, zm_port=-1):
 
         source_type = io_type(source_url)
         pkt_src_handler = io_type_handlers[source_type]
@@ -701,9 +737,12 @@ class ScanSourceUdpReplay():
             self._sensor_info.config.udp_port_lidar = lidar_port
         if imu_port != -1:
             self._sensor_info.config.udp_port_imu = imu_port
+        if zm_port != -1:
+            self._sensor_info.config.udp_port_zm = zm_port
         # should we override the current udp_dest? by default ?
         self._sensor_info.config.udp_dest = udp_dest
-        self._sensor_info.sn = sensor_sn if sensor_sn != "" else self._sensor_info.sn
+        self._sensor_info.config.udp_dest_zm = udp_dest
+        self._sensor_info.sn = int(sensor_sn) if sensor_sn != "" else self._sensor_info.sn
         self._sensor_info.config.operating_mode = OperatingMode.from_string(operating_mode)
 
         self._show_diagnostics = not hide_diagnostics
@@ -761,8 +800,10 @@ class ScanSourceUdpReplay():
             # grab current config in case it was changed via HTTP
             operating_mode = self._sensor_info.config.operating_mode
             udp_dest = self._sensor_info.config.udp_dest
+            udp_dest_zm = self._sensor_info.config.udp_dest_zm
             udp_port_lidar = self._sensor_info.config.udp_port_lidar
             udp_port_imu = self._sensor_info.config.udp_port_imu
+            udp_port_zm = self._sensor_info.config.udp_port_zm
 
             if operating_mode == OperatingMode.OPERATING_NORMAL:
                 if packet.type == PacketType.Lidar:
@@ -771,8 +812,11 @@ class ScanSourceUdpReplay():
                 elif packet.type == PacketType.Imu:
                     sock_imu.sendto(
                         packet.buf, (udp_dest, udp_port_imu))
+                elif packet.type == PacketType.Zone:
+                    sock_imu.sendto(
+                        packet.buf, (udp_dest_zm, udp_port_zm))
                 else:
-                    print(f"Unknown packet type {packet.type()}")
+                    print(f"Unknown packet type {packet.type}")
 
             # diagnostics
             if self._show_diagnostics:
@@ -784,6 +828,7 @@ class ScanSourceUdpReplay():
                         f"UDP Destination: {udp_dest}",
                         f"UDP Port (Lidar): {udp_port_lidar}",
                         f"UDP Port (IMU): {udp_port_imu}",
+                        f"UDP Port (ZM): {udp_port_zm}",
                         f"Host Time: {ts_format(packet.host_timestamp)}",
                         f"{pkts_count} packets/seconds"])
                     pkts_count = 0

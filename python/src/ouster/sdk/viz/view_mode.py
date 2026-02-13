@@ -174,8 +174,7 @@ class SimpleMode(ImageCloudMode):
 
         f = self._fields[return_num]
         field = ls.field(f)
-        key_data = field if field.dtype == np.float32 else field.astype(
-            np.float32)
+        key_data = field.astype(np.float32, copy=True)
 
         if self._buc:
             self._buc(key_data)
@@ -244,13 +243,13 @@ class RGBMode(ImageCloudMode):
         if np.ndim(field) != 3 and field.shape != 3:
             raise TypeError(f"Unsupport field shape: {field.shape}")
         if field.dtype == np.uint8:
-            key_data = (field / (2**8 - 1)).astype(np.float32)
+            key_data = (field / (2**8 - 1)).astype(np.float32, copy=True)
         elif field.dtype == np.uint16:
-            key_data = (field / (2**16 - 1)).astype(np.float32)
+            key_data = (field / (2**16 - 1)).astype(np.float32, copy=True)
         elif field.dtype == np.float32:
             key_data = field
         elif field.dtype == np.float64:
-            key_data = field.astype(np.float32)
+            key_data = field.astype(np.float32, copy=True)
         else:
             raise TypeError(f"Unsupport field type {field.dtype}")
 
@@ -373,7 +372,7 @@ class ReflMode(SimpleMode, ImageCloudMode):
             return None
 
         f = self._fields[return_num]
-        refl_data = ls.field(f).astype(np.float32)
+        refl_data = ls.field(f).astype(np.float32, copy=True)
         if self._normalized_refl:
             refl_data /= 255.0
         else:

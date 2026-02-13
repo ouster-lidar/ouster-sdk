@@ -212,6 +212,14 @@ static const Table<std::string, FieldInfo, 5> LB_FIELD_INFO{{
     {ChanField::RAW32_WORD1, field_info(0, 32)},
 }};
 
+static const Table<std::string, FieldInfo, 5> LB_WINDOW_FIELD_INFO{{
+    {ChanField::RANGE, field_info(0, 15, 3)},
+    {ChanField::FLAGS, field_info(15, 1)},
+    {ChanField::REFLECTIVITY, field_info(16, 8)},
+    {ChanField::WINDOW, field_info(24, 8)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+}};
+
 static const Table<std::string, FieldInfo, 14> DUAL_FIELD_INFO{{
     {ChanField::RANGE, field_info(0, 19)},
     {ChanField::FLAGS, field_info(19, 5)},
@@ -317,6 +325,8 @@ Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> OUSTER_API_FUNCTION
          {ZM_LB_FIELD_INFO.data(), ZM_LB_FIELD_INFO.size(), 8}},
         {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_ZONE16,
          {ZM_SINGLE_FIELD_INFO.data(), ZM_SINGLE_FIELD_INFO.size(), 12}},
+        {UDPProfileLidar::RNG15_RFL8_WIN8,
+         {LB_WINDOW_FIELD_INFO.data(), LB_WINDOW_FIELD_INFO.size(), 4}},
     }};
 
 OUSTER_API_FUNCTION Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES>

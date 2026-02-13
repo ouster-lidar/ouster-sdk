@@ -103,6 +103,7 @@ Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{
         {UDPProfileLidar::RNG15_RFL8_NIR8_ZONE16, "RNG15_RFL8_NIR8_ZONE16"},
         {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_ZONE16,
          "RNG19_RFL8_SIG16_NIR16_ZONE16"},
+        {UDPProfileLidar::RNG15_RFL8_WIN8, "RNG15_RFL8_WIN8"},
         {UDPProfileLidar::OFF, "OFF"},
     }};
 

@@ -66,6 +66,15 @@ def parse_gps_constraints_weights(
 
 
 def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field="unknown"):
+    field_upper = field.upper()
+    if field_upper == "NONE":
+        keys_count = 0
+    elif field_upper == "RGB":
+        keys_count = 3
+    else:
+        keys_count = 1
+    # Normalize scalar key to 0-1 for PLY output.
+    key_scale = 1.0 / 255.0 if keys_count == 1 else 1.0
 
     def ply_header():
         header = []
@@ -76,17 +85,17 @@ def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field
         header.append("property float y")
         header.append("property float z")
         # determine keys and normals
-        keys_count = 3 if field.upper() == 'RGB' else 1
         normals_count = cloud.shape[1] - 3 - keys_count
         if normals_count not in (0, 3):
             raise ValueError("Unsupported cloud shape for PLY: expected normals to be 0 or 3 columns")
 
-        if keys_count == 1:
-            header.append(f"property float {field}")
-        else:
-            header.append("property uchar red")
-            header.append("property uchar green")
-            header.append("property uchar blue")
+        if keys_count > 0:
+            if keys_count == 1:
+                header.append(f"property float {field}")
+            else:
+                header.append("property uchar red")
+                header.append("property uchar green")
+                header.append("property uchar blue")
 
         if normals_count == 3:
             header.append("property float nx")
@@ -99,7 +108,6 @@ def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field
     def pcd_header(data_mode: str):
         header = []
         # determine fields dynamically
-        keys_count = 3 if field.upper() == 'RGB' else 1
         normals_count = cloud.shape[1] - 3 - keys_count
         if normals_count not in (0, 3):
             raise ValueError("Unsupported cloud shape for PCD: expected normals to be 0 or 3 columns")
@@ -109,16 +117,17 @@ def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field
         types = ["F", "F", "F"]
         counts = [1, 1, 1]
 
-        if keys_count == 1:
-            fields.append(field)
-            sizes.append(4)
-            types.append("F")
-            counts.append(1)
-        else:
-            fields.append("rgb")
-            sizes.append(4)
-            types.append("F")
-            counts.append(1)
+        if keys_count > 0:
+            if keys_count == 1:
+                fields.append(field)
+                sizes.append(4)
+                types.append("F")
+                counts.append(1)
+            else:
+                fields.append("rgb")
+                sizes.append(4)
+                types.append("F")
+                counts.append(1)
 
         if normals_count == 3:
             fields.extend(["nx", "ny", "nz"])
@@ -144,55 +153,76 @@ def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(ply_header())
                 # infer keys and normals
-                keys_count = 3 if field.upper() == 'RGB' else 1
                 normals_count = cloud.shape[1] - 3 - keys_count
+                normals_offset = 3 + keys_count
                 for i in range(cloud.shape[0]):
                     x, y, z = cloud[i, 0], cloud[i, 1], cloud[i, 2]
-                    if keys_count == 1:
-                        key = cloud[i, 3]
-                        if normals_count == 0:
-                            f.write(f"{x} {y} {z} {key}\n")
+                    if keys_count > 0:
+                        if keys_count == 1:
+                            key = cloud[i, 3] * key_scale
+                            if normals_count == 0:
+                                f.write(f"{x} {y} {z} {key}\n")
+                            else:
+                                nx, ny, nz = cloud[i, 4], cloud[i, 5], cloud[i, 6]
+                                f.write(f"{x} {y} {z} {key} {nx} {ny} {nz}\n")
                         else:
-                            nx, ny, nz = cloud[i, 4], cloud[i, 5], cloud[i, 6]
-                            f.write(f"{x} {y} {z} {key} {nx} {ny} {nz}\n")
+                            r = color_f2i(cloud[i, 3])
+                            g = color_f2i(cloud[i, 4])
+                            b = color_f2i(cloud[i, 5])
+                            if normals_count == 0:
+                                f.write(f"{x} {y} {z} {r} {g} {b}\n")
+                            else:
+                                nx, ny, nz = cloud[i, 6], cloud[i, 7], cloud[i, 8]
+                                f.write(f"{x} {y} {z} {r} {g} {b} {nx} {ny} {nz}\n")
                     else:
-                        r = color_f2i(cloud[i, 3])
-                        g = color_f2i(cloud[i, 4])
-                        b = color_f2i(cloud[i, 5])
                         if normals_count == 0:
-                            f.write(f"{x} {y} {z} {r} {g} {b}\n")
+                            f.write(f"{x} {y} {z}\n")
                         else:
-                            nx, ny, nz = cloud[i, 6], cloud[i, 7], cloud[i, 8]
-                            f.write(f"{x} {y} {z} {r} {g} {b} {nx} {ny} {nz}\n")
+                            nx, ny, nz = (cloud[i, normals_offset],
+                                          cloud[i, normals_offset + 1],
+                                          cloud[i, normals_offset + 2])
+                            f.write(f"{x} {y} {z} {nx} {ny} {nz}\n")
         else:
             with open(filename, 'wb') as f:  # type: ignore[assignment]
                 f.write(ply_header().encode("ascii"))  # type: ignore[arg-type]
                 # write full float32 buffer (includes normals if present)
                 # if RGB keys present, convert to byte colors in binary case below
-                keys_count = 3 if field.upper() == 'RGB' else 1
                 normals_count = cloud.shape[1] - 3 - keys_count
-                if keys_count == 1:
-                    cloud_bin = cloud.copy().astype(np.float32)
-                    f.write(cloud_bin.tobytes())  # type: ignore[arg-type]
+                normals_offset = 3 + keys_count
+                if keys_count > 0:
+                    if keys_count == 1:
+                        cloud_bin = cloud.copy().astype(np.float32)
+                        if key_scale != 1.0:
+                            cloud_bin[:, 3] *= key_scale
+                        f.write(cloud_bin.tobytes())  # type: ignore[arg-type]
+                    else:
+                        # encode RGB as bytes per vertex
+                        for i in range(cloud.shape[0]):
+                            x, y, z = cloud[i, 0], cloud[i, 1], cloud[i, 2]
+                            r = np.uint8(color_f2i(cloud[i, 3]))
+                            g = np.uint8(color_f2i(cloud[i, 4]))
+                            b = np.uint8(color_f2i(cloud[i, 5]))
+                            if normals_count == 3:
+                                nx, ny, nz = float(cloud[i, 6]), float(cloud[i, 7]), float(cloud[i, 8])
+                                f.write(struct.pack('<3f3B3f', x, y, z, r, g, b, nx, ny, nz))  # type: ignore[arg-type]
+                            else:
+                                f.write(struct.pack('<3f3B', x, y, z, r, g, b))  # type: ignore[arg-type]
                 else:
-                    # encode RGB as bytes per vertex
-                    for i in range(cloud.shape[0]):
-                        x, y, z = cloud[i, 0], cloud[i, 1], cloud[i, 2]
-                        r = np.uint8(color_f2i(cloud[i, 3]))
-                        g = np.uint8(color_f2i(cloud[i, 4]))
-                        b = np.uint8(color_f2i(cloud[i, 5]))
-                        if normals_count == 3:
-                            nx, ny, nz = float(cloud[i, 6]), float(cloud[i, 7]), float(cloud[i, 8])
-                            f.write(struct.pack('<3f3B3f', x, y, z, r, g, b, nx, ny, nz))  # type: ignore[arg-type]
-                        else:
-                            f.write(struct.pack('<3f3B', x, y, z, r, g, b))  # type: ignore[arg-type]
+                    if normals_count == 0:
+                        cloud_bin = cloud[:, :3].astype(np.float32)
+                    else:
+                        cloud_bin = np.empty((cloud.shape[0], 6), dtype=np.float32)
+                        cloud_bin[:, 0:3] = cloud[:, 0:3].astype(np.float32)
+                        cloud_bin[:, 3:6] = cloud[:, normals_offset:normals_offset + 3].astype(
+                            np.float32)
+                    f.write(cloud_bin.tobytes())  # type: ignore[arg-type]
 
     elif filename.endswith(".pcd"):
         if ascii:
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(pcd_header("ascii"))
-                keys_count = 3 if field.upper() == 'RGB' else 1
                 normals_count = cloud.shape[1] - 3 - keys_count
+                normals_offset = 3 + keys_count
 
                 def pack_rgb_to_float(r, g, b):
                     ri = color_f2i(r)
@@ -202,17 +232,26 @@ def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field
                     return struct.unpack('<f', struct.pack('<I', rgb_int))[0]
                 for i in range(cloud.shape[0]):
                     x, y, z = cloud[i, 0], cloud[i, 1], cloud[i, 2]
-                    if keys_count == 1:
-                        if normals_count == 0:
-                            f.write(f"{x} {y} {z} {cloud[i,3]}\n")
+                    if keys_count > 0:
+                        if keys_count == 1:
+                            if normals_count == 0:
+                                f.write(f"{x} {y} {z} {cloud[i,3]}\n")
+                            else:
+                                f.write(f"{x} {y} {z} {cloud[i,3]} {cloud[i,4]} {cloud[i,5]} {cloud[i,6]}\n")
                         else:
-                            f.write(f"{x} {y} {z} {cloud[i,3]} {cloud[i,4]} {cloud[i,5]} {cloud[i,6]}\n")
+                            color = pack_rgb_to_float(cloud[i, 3], cloud[i, 4], cloud[i, 5])
+                            if normals_count == 0:
+                                f.write(f"{x} {y} {z} {np.float32(color)}\n")
+                            else:
+                                f.write(f"{x} {y} {z} {np.float32(color)} {cloud[i,6]} {cloud[i,7]} {cloud[i,8]}\n")
                     else:
-                        color = pack_rgb_to_float(cloud[i, 3], cloud[i, 4], cloud[i, 5])
                         if normals_count == 0:
-                            f.write(f"{x} {y} {z} {np.float32(color)}\n")
+                            f.write(f"{x} {y} {z}\n")
                         else:
-                            f.write(f"{x} {y} {z} {np.float32(color)} {cloud[i,6]} {cloud[i,7]} {cloud[i,8]}\n")
+                            nx, ny, nz = (cloud[i, normals_offset],
+                                          cloud[i, normals_offset + 1],
+                                          cloud[i, normals_offset + 2])
+                            f.write(f"{x} {y} {z} {nx} {ny} {nz}\n")
         else:
             with open(filename, 'wb') as f:  # type: ignore[assignment]
                 buf = StringIO()
@@ -220,28 +259,38 @@ def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field
                 f.write(buf.getvalue().encode("ascii"))  # type: ignore[arg-type]
 
                 # For binary, simply write the full float32 buffer. If RGB present, pack as before
-                keys_count = 3 if field.upper() == 'RGB' else 1
                 normals_count = cloud.shape[1] - 3 - keys_count
-                if keys_count == 3:
-                    # pack rgb into one float channel, preserve normals if present
-                    r = np.clip((255 * cloud[:, 3]).astype(np.uint32), 0, 255)
-                    g = np.clip((255 * cloud[:, 4]).astype(np.uint32), 0, 255)
-                    b = np.clip((255 * cloud[:, 5]).astype(np.uint32), 0, 255)
-                    rgb_u32 = (r << 16) | (g << 8) | b
-                    rgb_f32 = rgb_u32.view(np.float32)
-                    if normals_count == 0:
-                        out = np.empty((cloud.shape[0], 4), dtype=np.float32)
-                        out[:, 0:3] = cloud[:, 0:3].astype(np.float32)
-                        out[:, 3] = rgb_f32
-                        f.write(out.tobytes())  # type: ignore[arg-type]
+                normals_offset = 3 + keys_count
+                if keys_count > 0:
+                    if keys_count == 3:
+                        # pack rgb into one float channel, preserve normals if present
+                        r = np.clip((255 * cloud[:, 3]).astype(np.uint32), 0, 255)
+                        g = np.clip((255 * cloud[:, 4]).astype(np.uint32), 0, 255)
+                        b = np.clip((255 * cloud[:, 5]).astype(np.uint32), 0, 255)
+                        rgb_u32 = (r << 16) | (g << 8) | b
+                        rgb_f32 = rgb_u32.view(np.float32)
+                        if normals_count == 0:
+                            out = np.empty((cloud.shape[0], 4), dtype=np.float32)
+                            out[:, 0:3] = cloud[:, 0:3].astype(np.float32)
+                            out[:, 3] = rgb_f32
+                            f.write(out.tobytes())  # type: ignore[arg-type]
+                        else:
+                            out = np.empty((cloud.shape[0], 7), dtype=np.float32)
+                            out[:, 0:3] = cloud[:, 0:3].astype(np.float32)
+                            out[:, 3] = rgb_f32
+                            out[:, 4:7] = cloud[:, 6:9].astype(np.float32)
+                            f.write(out.tobytes())  # type: ignore[arg-type]
                     else:
-                        out = np.empty((cloud.shape[0], 7), dtype=np.float32)
-                        out[:, 0:3] = cloud[:, 0:3].astype(np.float32)
-                        out[:, 3] = rgb_f32
-                        out[:, 4:7] = cloud[:, 6:9].astype(np.float32)
-                        f.write(out.tobytes())  # type: ignore[arg-type]
+                        f.write(cloud.astype(np.float32).tobytes())  # type: ignore[arg-type]
                 else:
-                    f.write(cloud.astype(np.float32).tobytes())  # type: ignore[arg-type]
+                    if normals_count == 0:
+                        out = cloud[:, :3].astype(np.float32)
+                    else:
+                        out = np.empty((cloud.shape[0], 6), dtype=np.float32)
+                        out[:, 0:3] = cloud[:, 0:3].astype(np.float32)
+                        out[:, 3:6] = cloud[:, normals_offset:normals_offset + 3].astype(
+                            np.float32)
+                    f.write(out.tobytes())  # type: ignore[arg-type]
 
 
 @click.command
@@ -300,10 +349,6 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
     def slam_iter(scan_source):
         slam_engine = make_kiss_slam()
         for scans in scan_source():
-            scan = scans[0]
-            if scan is None:
-                continue
-
             yield slam_engine.update(scans)
 
         # only dump the map once
@@ -332,10 +377,13 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
               type=click.Choice(['SIGNAL',
                                  'NEAR_IR',
                                  'REFLECTIVITY',
-                                 'RGB'],
+                                 'RGB',
+                                 'NONE'],
                                 case_sensitive=False),
               default="REFLECTIVITY",
-              help="Chanfield for output file key value.", show_default=True)
+              help=("Chanfield for output file key value. Use NONE to omit "
+                    "key fields in output point cloud."),
+              show_default=True)
 @click.option('--decimate', required=False, type=bool,
               default=True, help="Downsample the point cloud to output.", show_default=True)
 @click.option('--verbose', is_flag=True, default=False,
@@ -376,7 +424,13 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
     already_saved = False
     empty_pose = True
 
-    keys_count = 3 if field.upper() == "RGB" else 1
+    field_upper = field.upper()
+    if field_upper == "NONE":
+        keys_count = 0
+    elif field_upper == "RGB":
+        keys_count = 3
+    else:
+        keys_count = 1
     normals_included = False
 
     def key_columns() -> int:
@@ -403,7 +457,7 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                     axis=1)
             else:
                 points_keys_total = np.zeros((0, total_columns()), dtype=float)
-            if keys_to_process.size:
+            if keys_to_process.shape[0]:
                 keys_to_process = np.append(
                     keys_to_process,
                     np.zeros((keys_to_process.shape[0], 3), dtype=float),
@@ -446,7 +500,13 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                 keys = keys[z_range_filter]
 
             if decimate:
-                points, keys = voxel_downsample(voxel_size, points, keys)
+                if keys_count == 0 and not normals_included:
+                    points, _ = voxel_downsample(
+                        voxel_size, points,
+                        np.zeros((points.shape[0], 0), dtype=float))
+                    keys = np.zeros((points.shape[0], 0), dtype=float)
+                else:
+                    points, keys = voxel_downsample(voxel_size, points, keys)
 
             pts_size_after = points.shape[0]
             points_down_removed += pts_size_before - pts_size_after
@@ -469,10 +529,11 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                 LAS_file.z = points_keys_total[:, 2]
                 # LAS file only has intensity but we can use it for other field
                 # value
-                LAS_file.intensity = points_keys_total[:, 3]
+                if keys_count != 0:
+                    LAS_file.intensity = points_keys_total[:, 3]
+                    logger.info(f"LAS format only supports the Intensity field. "
+                                f"Saving {field} as the Intensity field.")
                 LAS_file.write(file_wo_ext + outfile_ext)
-                logger.info(f"LAS format only supports the Intensity field. "
-                            f"Saving {field} as the Intensity field.")
 
             points_keys_total = np.zeros((0, total_columns()), dtype=float)
 
@@ -516,7 +577,10 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                         empty_pose = False
 
                     points = xyzlut_list[idx](scan)
-                    keys = scan.field(field)
+                    if keys_count == 0:
+                        keys = None
+                    else:
+                        keys = scan.field(field)
                     normals_field = None
                     if scan.has_field(ChanField.NORMALS):
                         try:
@@ -539,7 +603,10 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                     out_range_row_index = scan.field(ChanField.RANGE) == 0
                     dewarped_points = dewarp(points, column_poses)
                     filtered_points = dewarped_points[valid_row_index]
-                    filtered_keys = keys[valid_row_index]
+                    if keys_count == 0:
+                        filtered_keys = np.zeros((filtered_points.shape[0], 0), dtype=float)
+                    else:
+                        filtered_keys = keys[valid_row_index]
                     if normals_included:
                         if normals_field is not None:
                             try:
@@ -595,7 +662,7 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
             # handle the last part of point cloud or the first part of point cloud if
             # the size is less than down_sample_steps
             if not already_saved:
-                if keys_to_process.size > 0:
+                if points_to_process.shape[0] > 0:
                     process_points(points_to_process, keys_to_process)
 
                 if points_sum > 0:
@@ -623,7 +690,7 @@ def save_trajectory(ctx: SourceCommandContext, filename: str, sensor_idx: int, t
         with open(filename, "wt") as f:
             if tum:
                 # TUM format
-                f.write("#timestamp,x,y,z,qx,qy,qz,qw\n")
+                f.write("# timestamp tx ty tz qx qy qz qw\n")
             else:
                 # CSV format
                 f.write("timestamp,x,y,z,qx,qy,qz,qw\n")
@@ -638,11 +705,11 @@ def save_trajectory(ctx: SourceCommandContext, filename: str, sensor_idx: int, t
                 r = rotation_matrix_to_quaternion(scan_pose[:3, :3])
 
                 if tum:
-                    f.write(f"{scan_ts} {p[0]} {p[1]} {p[2]} "
-                            f"{r[1]} {r[2]} {r[3]} {r[0]}\n")
+                    # scan_ts is in nanoseconds; convert to seconds for TUM/evo.
+                    scan_ts_s = float(scan_ts) * 1e-9
+                    f.write(f"{scan_ts_s:.9f} {p[0]} {p[1]} {p[2]} {r[1]} {r[2]} {r[3]} {r[0]}\n")
                 else:
-                    f.write(f"{scan_ts},{p[0]},{p[1]},{p[2]},"
-                            f"{r[1]},{r[2]},{r[3]},{r[0]}\n")
+                    f.write(f"{scan_ts},{p[0]},{p[1]},{p[2]},{r[1]},{r[2]},{r[3]},{r[0]}\n")
                 yield scans
 
     # address generator type later

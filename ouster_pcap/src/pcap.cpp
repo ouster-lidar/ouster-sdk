@@ -127,7 +127,7 @@ const PacketInfo& PcapReader::current_info() const { return info_; }
 // Does offset need to unsigned int?
 void PcapReader::seek(uint64_t offset) {
     offset = std::max<uint64_t>(offset, sizeof(struct pcap_file_header));
-    if (FSEEK(impl_->pcap_reader_internals, static_cast<off_t>(offset),
+    if (FSEEK(impl_->pcap_reader_internals, static_cast<int64_t>(offset),
               SEEK_SET)) {
         throw std::runtime_error("pcap seek failed");
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -160,7 +161,9 @@ class OUSTER_API_CLASS Constraint {
      * @brief Default Constructor
      */
     OUSTER_API_FUNCTION
-    Constraint() = default;
+    Constraint()
+        : constraint_id(
+              next_constraint_id_.fetch_add(1, std::memory_order_relaxed)) {}
 
     /** Destructor */
     OUSTER_API_FUNCTION
@@ -173,7 +176,9 @@ class OUSTER_API_CLASS Constraint {
      */
     OUSTER_API_FUNCTION
     Constraint(const Eigen::Array3d& translation_weights)
-        : translation_weights(translation_weights) {}
+        : translation_weights(translation_weights),
+          constraint_id(
+              next_constraint_id_.fetch_add(1, std::memory_order_relaxed)) {}
 
     /**
      * @brief Copy constructor
@@ -188,8 +193,8 @@ class OUSTER_API_CLASS Constraint {
     /**
      * @brief Get the unique constraint ID.
      *
-     * Returns 0 for non-user (internal) constraints. IDs > 0 are assigned to
-     * user-added constraints and are immutable once set internally.
+     * Returns 0 for non-user (internal) constraints. IDs > 0 are assigned when
+     * constraint objects are constructed and are immutable once set internally.
      *
      * @return uint32_t The constraint identifier.
      */
@@ -220,17 +225,12 @@ class OUSTER_API_CLASS Constraint {
 
    private:
     friend class PoseOptimizer;
-    /**
-     * @brief Set the constraint ID.
-     *
-     * @param[in] id The id to assign to this constraint instance.
-     */
-    void set_constraint_id(uint32_t id) { constraint_id = id; }
+    static std::atomic<uint32_t> next_constraint_id_;
 
     /**
      * Internal constraint identifier.
      * 0 indicates an internal/trajectory constraint; >0 indicates a user-added
-     * constraint assigned by the optimizer.
+     * constraint assigned at construction time.
      */
     uint32_t constraint_id = 0;
 };

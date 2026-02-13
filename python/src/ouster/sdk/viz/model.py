@@ -645,7 +645,9 @@ class SensorModel:
                     bit = 0x1 << z_idx
                     mask[(occupancy & bit) > 0] = triggered_live_zone_color(self._zone_palette, zone_id)
             else:
-                mask[occupancy > 0] = (1, 0, 1, 1)
+                for z_idx in range(16):  # TODO[tws] max live zones constant
+                    bit = 0x1 << z_idx
+                    mask[(occupancy & bit) > 0] = triggered_live_zone_color(self._zone_palette, z_idx)
             destaggered_mask = core.destagger(self._meta, mask)
         self._cloud_masks[0] = mask
         for image in self._images:
@@ -803,6 +805,8 @@ class LidarScanVizModel:
     def cycle_image_mode(self, i: int, direction: int):
         """Updates the currently selected image mode from the list of all available cloud modes."""
         all_image_mode_names = self.sorted_image_mode_names()
+        if len(all_image_mode_names) == 0:
+            return
         self._image_mode_ind[i] = (self._image_mode_ind[i] + direction) % len(all_image_mode_names)
         self._image_mode_names[i] = all_image_mode_names[self._image_mode_ind[i]]
         # TODO[tws] optimize update image palettes

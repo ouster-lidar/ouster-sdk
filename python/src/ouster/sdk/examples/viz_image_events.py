@@ -28,7 +28,6 @@ hello_pixel: Optional[Tuple[int, int]] = None
 
 
 def update_window_size_label(position: Tuple[float, float], text: str):
-    global window_size_label
     window_size_label.set_text(text)
     window_size_label.set_position(*position)
 

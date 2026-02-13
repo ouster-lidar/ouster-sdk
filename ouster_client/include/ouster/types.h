@@ -312,6 +312,9 @@ enum class UDPProfileLidar {
     /** Single Return Zone Monitoring */
     RNG19_RFL8_SIG16_NIR16_ZONE16,
 
+    /** Single Return Low Data Rate Window Status */
+    RNG15_RFL8_WIN8,
+
     /** disabled */
     OFF = 100,
 

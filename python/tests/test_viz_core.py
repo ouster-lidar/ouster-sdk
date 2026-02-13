@@ -518,3 +518,14 @@ def test_viz_imu_when_a_scan_is_none():
     meta = SensorInfo.from_default(LidarMode._1024x10)
     viz = LidarScanViz([meta], MockPointViz())
     viz.imu_plot([[None]], viz._imu_viz_config)
+
+
+def test_viz_safe_gif(tmp_path):
+    from ouster.sdk.viz import SimpleViz
+    """It should not crash when the duration between frames is negative or zero."""
+    import PIL.Image as PILImage
+    test_image = PILImage.new('RGB', (10, 10))
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    viz = SimpleViz([meta], _override_pointviz=MockPointViz())
+    viz._images = [(test_image, 100), (test_image, 50)]
+    viz._save_gif(str(tmp_path / 'test.gif'))  # should not crash

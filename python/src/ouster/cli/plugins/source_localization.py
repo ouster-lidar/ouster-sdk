@@ -52,10 +52,6 @@ def source_localize(ctx: SourceCommandContext, map_path: str, max_range: float, 
     def localization_iter(scan_source):
         localization_engine = make_kiss_localization()
         for scans in scan_source():
-            scan = scans[0]
-            if scan is None:
-                continue
-
             yield localization_engine.update(scans)
 
     # type ignored because generators are tricky to mypy

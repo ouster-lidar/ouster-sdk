@@ -82,7 +82,7 @@ PointCloudXYZf read_pointcloud(const std::string& filename) {
         input.seekg(0, std::ios::beg);
 
         // field sizes
-        std::map<std::string, int> field_sizes{{"float", 4}};
+        std::map<std::string, int> field_sizes{{"float", 4}, {"uchar", 1}};
         bool end_header_found = false;
         bool is_binary = true;
         int current_offset = 0;

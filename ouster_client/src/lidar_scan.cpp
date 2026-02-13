@@ -103,6 +103,13 @@ static const Table<std::string, ChanFieldType, 4> LB_FIELD_SLOTS{{
     {ChanField::FLAGS, ChanFieldType::UINT8},
 }};
 
+static const Table<std::string, ChanFieldType, 4> LB_WINDOW_FIELD_SLOTS{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+    {ChanField::WINDOW, ChanFieldType::UINT8},
+    {ChanField::FLAGS, ChanFieldType::UINT8},
+}};
+
 static const Table<std::string, ChanFieldType, 5> ZM_LB_FIELD_SLOTS{{
     {ChanField::RANGE, ChanFieldType::UINT32},
     {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
@@ -158,6 +165,8 @@ Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_scan_fields
       {SINGLE_FIELD_SLOTS.data(), SINGLE_FIELD_SLOTS.size()}},
      {UDPProfileLidar::RNG15_RFL8_NIR8,
       {LB_FIELD_SLOTS.data(), LB_FIELD_SLOTS.size()}},
+     {UDPProfileLidar::RNG15_RFL8_WIN8,
+      {LB_WINDOW_FIELD_SLOTS.data(), LB_WINDOW_FIELD_SLOTS.size()}},
      {UDPProfileLidar::FIVE_WORD_PIXEL,
       {FIVE_WORD_SLOTS.data(), FIVE_WORD_SLOTS.size()}},
      {UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL,
@@ -578,7 +587,47 @@ ConstArrayView1<ZoneState> LidarScan::zones() const {
     return it->second;
 }
 
+// NOLINTNEXTLINE(google-build-using-namespace)
+using namespace ouster::sdk::core::ChanField;
 uint64_t LidarScan::get_first_valid_packet_timestamp() const {
+    uint64_t time = get_first_valid_lidar_packet_timestamp();
+    if (has_field(IMU_PACKET_TIMESTAMP)) {
+        ConstArrayView<uint64_t, 1> data = field(IMU_PACKET_TIMESTAMP);
+        for (size_t i = 0; i < data.size(); i++) {
+            if (data(i) != 0) {
+                time = (time == 0) ? data(i) : std::min(data(i), time);
+                break;
+            }
+        }
+    }
+    if (has_field(ZONE_PACKET_TIMESTAMP)) {
+        ConstArrayView<uint64_t, 1> data = field(ZONE_PACKET_TIMESTAMP);
+        if (data(0) != 0) {
+            time = (time == 0) ? data(0) : std::min(data(0), time);
+        }
+    }
+    return time;
+}
+
+uint64_t LidarScan::get_last_valid_packet_timestamp() const {
+    uint64_t time = get_last_valid_lidar_packet_timestamp();
+    if (has_field(IMU_PACKET_TIMESTAMP)) {
+        ConstArrayView<uint64_t, 1> data = field(IMU_PACKET_TIMESTAMP);
+        for (int i = static_cast<int>(data.size()) - 1; i >= 0; i--) {
+            if (data(i) != 0) {
+                time = std::max(data(i), time);
+                break;
+            }
+        }
+    }
+    if (has_field(ZONE_PACKET_TIMESTAMP)) {
+        ConstArrayView<uint64_t, 1> data = field(ZONE_PACKET_TIMESTAMP);
+        time = std::max(data(0), time);
+    }
+    return time;
+}
+
+uint64_t LidarScan::get_first_valid_lidar_packet_timestamp() const {
     int total_packets = packet_timestamp().size();
     int columns_per_packet = w / total_packets;
 
@@ -594,7 +643,7 @@ uint64_t LidarScan::get_first_valid_packet_timestamp() const {
     return 0;
 }
 
-uint64_t LidarScan::get_last_valid_packet_timestamp() const {
+uint64_t LidarScan::get_last_valid_lidar_packet_timestamp() const {
     int total_packets = packet_timestamp().size();
     int columns_per_packet = w / total_packets;
 
@@ -909,8 +958,63 @@ std::string to_string(const LidarScan& lidar_scan) {
         string_stream << ") ";
 
         if (field_val.bytes() > 0) {
-            FieldView flat_view = field_val.reshape(1, field_val.size());
-            impl::visit_field_2d(flat_view, read_eigen, string_stream);
+            if (field_val.tag() == ChanFieldType::CHAR) {
+                // Show first sentence (e.g., first NMEA string).
+                const char* data = static_cast<const char*>(field_val.get());
+                size_t max_len = NMEA_SENTENCE_LENGTH;
+                const auto& shape = field_val.shape();
+                if (!shape.empty() && shape.back() > 0) {
+                    max_len = shape.back();
+                }
+                const char* end =
+                    static_cast<const char*>(memchr(data, '\0', max_len));
+                size_t len = (end != nullptr) ? static_cast<size_t>(end - data)
+                                              : max_len;
+                std::string preview;
+                preview.reserve(len);
+                for (size_t i = 0; i < len; ++i) {
+                    switch (data[i]) {
+                        case '\r':
+                            preview += "\\r";
+                            break;
+                        case '\n':
+                            preview += "\\n";
+                            break;
+                        case '\t':
+                            preview += "\\t";
+                            break;
+                        case '\\':
+                            preview += "\\\\";
+                            break;
+                        case '\b':
+                            preview += "\\b";
+                            break;
+                        case '\f':
+                            preview += "\\f";
+                            break;
+                        case '\v':
+                            preview += "\\v";
+                            break;
+                        case '"':
+                            preview += "\\\"";
+                            break;
+                        default:
+                            preview += data[i];
+                            break;
+                    }
+                }
+                bool truncated = (len == max_len && end == nullptr);
+                if (truncated) {
+                    preview += "...";
+                }
+                string_stream << "\"" << preview << "\"";
+            } else {
+                // For numeric types, show min/mean/max stats
+                // visit_field_2d will no-op for unsupported types (ZONE_STATE,
+                // etc.)
+                FieldView flat_view = field_val.reshape(1, field_val.size());
+                impl::visit_field_2d(flat_view, read_eigen, string_stream);
+            }
         }
         string_stream << std::endl;
     };

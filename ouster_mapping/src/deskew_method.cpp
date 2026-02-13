@@ -56,31 +56,37 @@ InertialIntegrationImuDeskewMethod::InertialIntegrationImuDeskewMethod(
     }
 }
 
-// TODO[UN]: Improve the implementation to search for values that don't exceed
-// a preset timestamp threshold
-bool InertialIntegrationImuDeskewMethod::
-    pick_the_last_valid_imu_pose_from_scan_set(const LidarScanSet& scan_set,
-                                               double& last_ts,
-                                               Matrix4dR& last_pose) {
-    if (scan_set.size() == 0) {
-        return false;
+bool InertialIntegrationImuDeskewMethod::pick_last_valid_imu_pose(
+    const LidarScanSet& scan_set, double& last_ts, Matrix4dR& last_pose) {
+    bool imu_data_found = false;
+    for (const auto& scan : scan_set.valid_scans()) {
+        if (!scan.has_field(ChanField::IMU_STATUS)) {
+            continue;
+        }
+
+        Eigen::Ref<const Eigen::ArrayX<uint16_t>> imu_status =
+            scan.field(ChanField::IMU_STATUS);
+        std::vector<int> imu_valid =
+            impl::get_valid_columns<uint16_t>(imu_status);
+        if (imu_valid.empty()) {
+            continue;
+        }
+
+        int last_valid_imu_idx = imu_valid.back();
+        Eigen::Ref<const Eigen::ArrayX<uint64_t>> scan_ts =
+            scan.field(ChanField::IMU_TIMESTAMP);
+        double candidate_ts = scan_ts[last_valid_imu_idx] * 1e-9;
+        if (!imu_data_found || candidate_ts > last_ts) {
+            last_ts = candidate_ts;
+            Eigen::Ref<const Eigen::ArrayX<uint16_t>> meas_id =
+                scan.field(ChanField::IMU_MEASUREMENT_ID);
+            uint16_t last_pose_col = meas_id(last_valid_imu_idx);
+            last_pose = scan.get_column_pose(last_pose_col);
+        }
+        imu_data_found = true;
     }
-    const auto& last_scan = *scan_set.valid_scans().begin();
-    Eigen::Ref<const Eigen::ArrayX<uint16_t>> imu_status =
-        last_scan.field(ChanField::IMU_STATUS);
-    std::vector<int> imu_valid = impl::get_valid_columns<uint16_t>(imu_status);
-    if (imu_valid.empty()) {
-        return false;
-    }
-    int last_valid_imu_idx = imu_valid.back();
-    Eigen::Ref<const Eigen::ArrayX<uint64_t>> last_scan_ts =
-        last_scan.field(ChanField::IMU_TIMESTAMP);
-    last_ts = last_scan_ts[last_valid_imu_idx] * 1e-9;
-    Eigen::Ref<const Eigen::ArrayX<uint16_t>> last_meas_id =
-        last_scan.field(ChanField::IMU_MEASUREMENT_ID);
-    uint16_t last_pose_col = last_meas_id(last_valid_imu_idx);
-    last_pose = last_scan.get_column_pose(last_pose_col);
-    return true;
+
+    return imu_data_found;
 }
 
 void InertialIntegrationImuDeskewMethod::update(LidarScanSet& scan_set) {
@@ -147,19 +153,17 @@ void InertialIntegrationImuDeskewMethod::update(LidarScanSet& scan_set) {
         }
     }
 
-    double last_ts = 0.0;
-    Matrix4dR last_pose = Matrix4dR::Identity();
-
-    if (combined_ts.empty() || !pick_the_last_valid_imu_pose_from_scan_set(
-                                   last_scan_set_, last_ts, last_pose)) {
-        for (size_t idx : scan_set.valid_indices()) {
-            auto& scan = *scan_set[idx];
+    if (combined_ts.empty() || last_scan_set_last_ts_ == nonstd::nullopt) {
+        for (auto& scan : scan_set.valid_scans()) {
             impl::interp_pose(scan, ts_list_.front(), pose_list_.front(),
                               ts_list_.back(), pose_list_.back());
         }
         last_scan_set_ = scan_set;
         return;
     }
+
+    double last_ts = *last_scan_set_last_ts_;
+    Matrix4dR last_pose = *last_scan_set_last_pose_;
 
     // TODO[UN]: optimize this sorting given the timestamps are monotonically
     // increasing for each sensor
@@ -190,6 +194,12 @@ void InertialIntegrationImuDeskewMethod::update(LidarScanSet& scan_set) {
 
     for (size_t sidx : scan_set.valid_indices()) {
         auto& scan = *scan_set[sidx];
+        if (!scan.has_field(ChanField::IMU_STATUS)) {
+            impl::interp_pose(scan, ts_list_.front(), pose_list_.front(),
+                              ts_list_.back(), pose_list_.back());
+            continue;
+        }
+
         // This block deals with the edge cases where lidar packets may have
         // been dropped but corresponding imu packet exist and can be use to
         // subsitute the missing lidar timestamps
@@ -225,6 +235,15 @@ void InertialIntegrationImuDeskewMethod::update(LidarScanSet& scan_set) {
 
 void InertialIntegrationImuDeskewMethod::set_last_pose(int64_t ts,
                                                        const Matrix4dR& pose) {
+    // retrieve the last imu pose from the last scan set before the time get
+    // reset by the active time correction in case of an unsynchronized
+    // multi-sensor setup
+    double last_ts = 0.0;
+    Matrix4dR last_pose = Matrix4dR::Identity();
+    if (pick_last_valid_imu_pose(last_scan_set_, last_ts, last_pose)) {
+        last_scan_set_last_ts_ = last_ts;
+        last_scan_set_last_pose_ = last_pose;
+    }
     DeskewMethod::set_last_pose(ts, pose);
     estimate_gravity_vector(last_scan_set_);
 }
@@ -386,6 +405,12 @@ InertialIntegrationImuDeskewMethod::calc_poses_with_motion_model(
          pose_list_.front().block<3, 1>(0, 3)) /
         (ts_list_.back() - ts_list_.front());
 
+    // TODO[UN]: we need to skip imu measurements for timestamps earlier than
+    // last_timestamp and feed in poses from last scan set or alter the logic
+    // of pick_last_valid_imu_pose to get the last imu pose before current
+    // timestamp[0]. Alternatively, in cases of an imu measurements overlap one
+    // could simply average the results between the overlapping measurements.
+    // I will defer the choice to the next iteration.
     for (size_t i = 0; i < N; ++i) {
         double dt;
         Eigen::Matrix3d prev_world_orientation;
@@ -469,8 +494,11 @@ std::unique_ptr<DeskewMethod> DeskewMethodFactory::create(
     } else if (method == "auto") {
         if (!has_imu_data) {
             logger().info(
-                "IMU data not available, falling back to "
-                "ConstantVelocityDeskewMethod");
+                "Synchronous IMU data not available (requires FW 3.2+ and "
+                "ACCEL32_GYRO32_NMEA imu profile),"
+                " falling back to ConstantVelocityDeskewMethod.\n"
+                " Suppress this warning by adding '--deskew-method "
+                "constant_velocity' to the 'slam' or 'localize' command.");
             return std::make_unique<ConstantVelocityDeskewMethod>(infos);
         } else {
             logger().info("Using InertialIntegrationImuDeskewMethod");
