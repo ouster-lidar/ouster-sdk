@@ -22,6 +22,9 @@
 
 using namespace ouster::sdk;
 
+const size_t UDP_BUF_SIZE = 65536;
+auto packet_buf = std::make_unique<uint8_t[]>(UDP_BUF_SIZE);
+
 //! [docs-stag-x-image-form]
 core::img_t<double> get_x_in_image_form(const core::LidarScan& scan,
                                         bool destaggered,
@@ -161,4 +164,28 @@ int main(int argc, char* argv[]) {
               << " and an x coordinate of "
               << x_image_destaggered(print_row, print_column) << "."
               << std::endl;
+
+    // 5. getting IMU
+    std::cerr << "\n5. Getting IMU data..." << std::endl;
+    sensor::packet_format pf = sensor::get_format(info);
+    ouster::sensor_utils::read_packet(*handle, packet_buf.get(), UDP_BUF_SIZE);
+    std::cout << "IMU Timestamp: " << pf.imu_gyro_ts(packet_buf.get()) << " ns" << std::endl;
+
+    const double standard_g = 9.80665;
+    auto linear_acceleration_x = pf.imu_la_x(packet_buf.get()) * standard_g;
+    auto linear_acceleration_y = pf.imu_la_y(packet_buf.get()) * standard_g;
+    auto linear_acceleration_z = pf.imu_la_z(packet_buf.get()) * standard_g;
+
+    auto angular_velocity_x = pf.imu_av_x(packet_buf.get()) * M_PI / 180.0;
+    auto angular_velocity_y = pf.imu_av_y(packet_buf.get()) * M_PI / 180.0;
+    auto angular_velocity_z = pf.imu_av_z(packet_buf.get()) * M_PI / 180.0;
+
+    std::cerr << "IMU Acceleration: [" 
+                << linear_acceleration_x << ", "
+                << linear_acceleration_y << ", "
+                << linear_acceleration_z << "] G" << std::endl;
+    std::cerr << "IMU Angular Velocity: [" 
+                << angular_velocity_x << ", "
+                << angular_velocity_y << ", "
+                << angular_velocity_z << "] deg/s" << std::endl;
 }
