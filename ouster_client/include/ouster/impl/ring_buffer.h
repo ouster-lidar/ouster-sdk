@@ -148,7 +148,7 @@ class RingBuffer {
         if (full()) {
             throw std::overflow_error("pushed a full ring buffer");
         }
-        size_t write_idx = r_idx_.load();
+        size_t write_idx = w_idx_.load();
         // atomic increment modulo
         while (!w_idx_.compare_exchange_strong(write_idx,
                                                (write_idx + 1) % _capacity())) {
