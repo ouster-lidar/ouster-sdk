@@ -1,12 +1,11 @@
 /**
- * Minimal C wrapper for a subset of the Ouster SDK sensor client API.
+ * C wrapper for the Ouster SDK (ouster_client + ouster_sensor).
  *
- * This header exposes an opaque handle and a small collection of functions
- * sufficient to connect to a sensor, obtain metadata, derive packet sizes,
- * poll for data readiness, and read raw lidar/imu packets.
+ * Functions map to the public C++ API in ouster_client/include/ouster/ and
+ * ouster_sensor/include/ouster/. Opaque handles mirror C++ objects; numeric
+ * enums match the underlying C++ enumerator values unless noted.
  *
- * The wrapper purposely limits scope; for advanced batching and point cloud
- * generation use the native C++ API.
+ * Not wrapped here: ouster_viz, ouster_pcap, ouster_osf, and third-party code.
  */
 #ifndef OUSTER_C_WRAPPER_H
 #define OUSTER_C_WRAPPER_H
@@ -123,10 +122,29 @@ OUSTER_C_API ouster_lidar_scan_t* ouster_scan_source_next_scan(ouster_scan_sourc
 /* Destroy a scan handle returned by ouster_scan_source_next_scan */
 OUSTER_C_API void ouster_lidar_scan_destroy(ouster_lidar_scan_t* scan);
 
+/****************** SCAN ACCESSOR METHODS ******************/
+
 /* Get scan dimensions (width = columns_per_frame, height = pixels_per_column).
  */
 OUSTER_C_API void ouster_lidar_scan_get_dimensions(const ouster_lidar_scan_t* scan,
                                                    int* width, int* height);
+
+OUSTER_C_API size_t ouster_lidar_scan_columns_per_packet(const ouster_lidar_scan_t* scan);
+
+OUSTER_C_API int64_t ouster_lidar_scan_frame_id(const ouster_lidar_scan_t* scan);
+
+OUSTER_C_API uint64_t ouster_lidar_scan_frame_status(const ouster_lidar_scan_t* scan);
+
+/** sensor::ShotLimitingStatus numeric values */
+OUSTER_C_API int ouster_lidar_scan_shot_limiting_status(const ouster_lidar_scan_t* scan);
+
+/** sensor::ThermalShutdownStatus numeric values */
+OUSTER_C_API int ouster_lidar_scan_thermal_shutdown_status(const ouster_lidar_scan_t* scan);
+
+/** LidarScan::complete() — -1 if sensor_info missing, else 0/1 */
+OUSTER_C_API int ouster_lidar_scan_complete(const ouster_lidar_scan_t* scan);
+// TODO: add the 2nd version of LidarScan::complete
+
 
 /* Extract a channel field as uint32_t array.
  * out_buf capacity (in elements) must be >= number of pixels (w*h).

@@ -113,9 +113,39 @@ void ouster_lidar_scan_get_dimensions(const ouster_lidar_scan_t* scan,
     if (height) *height = static_cast<int>(scan->ls->h);
 }
 
-int ouster_lidar_scan_get_field_u32(const ouster_lidar_scan_t* scan,
-                                    const char* field_name, int destagger,
-                                    uint32_t* out_buf, size_t capacity,
+size_t ouster_lidar_scan_columns_per_packet(const ouster_lidar_scan_t* scan) {
+    if (!scan || !scan->ls) return 0;
+    return scan->ls->columns_per_packet_;
+}
+
+int64_t ouster_lidar_scan_frame_id(const ouster_lidar_scan_t* scan) {
+    if (!scan || !scan->ls) return -1;
+    return scan->ls->frame_id;
+}
+
+uint64_t ouster_lidar_scan_frame_status(const ouster_lidar_scan_t* scan) {
+    if (!scan || !scan->ls) return 0;
+    return scan->ls->frame_status;
+}
+
+int ouster_lidar_scan_shot_limiting_status(const ouster_lidar_scan_t* scan) {
+    if (!scan || !scan->ls) return -1;
+    return static_cast<int>(scan->ls->shot_limiting());
+}
+
+int ouster_lidar_scan_thermal_shutdown_status(const ouster_lidar_scan_t* scan) {
+    if (!scan || !scan->ls) return -1;
+    return static_cast<int>(scan->ls->thermal_shutdown());
+}
+
+int ouster_lidar_scan_complete(const ouster_lidar_scan_t* scan) {
+    if (!scan || !scan->ls) return -1;
+    try {
+        return scan->ls->complete() ? 1 : 0;
+    } catch (...) {
+        return -1;
+    }
+}
                                     size_t* out_count) {
     if (!scan || !scan->ls || !field_name || !out_buf) return -3;
     if (!scan->ls->has_field(field_name)) return -1;
