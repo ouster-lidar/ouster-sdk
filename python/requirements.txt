@@ -9,7 +9,7 @@ laspy >=2.5.0, <3
 threadpoolctl >=3.5.0
 Pillow >=10.2.0
 packaging
-rosbags == 0.9.23
+rosbags >= 0.9.23
 importlib-resources >=5.0; python_version < "3.9"
 setuptools; python_version >= "3.12"
 flask == 3.0
