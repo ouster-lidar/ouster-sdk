@@ -3,6 +3,7 @@
 
 #if !EIGEN_VERSION_AT_LEAST(3,4,0)
 namespace Eigen {
+
     template<typename Scalar, int Rows>
     using Vector = Matrix<Scalar, Rows, 1>;
 
