@@ -61,6 +61,7 @@ template <> OUSTER_API_FUNCTION ChanFieldType type_cft<float>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<double>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<char>();
 template <> OUSTER_API_FUNCTION ChanFieldType type_cft<ouster::sdk::core::ZoneState>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<float16_t>();
 
 // clang-format on
 
@@ -247,6 +248,8 @@ struct OUSTER_API_CLASS FieldDescriptor {
                 return array<char>(shape);
             case ChanFieldType::ZONE_STATE:
                 return array<ZoneState>(shape);
+            case ChanFieldType::FLOAT16:
+                return array<float16_t>(shape);
             default:
                 throw std::invalid_argument(
                     "fd_array: unsupported ChanFieldType");

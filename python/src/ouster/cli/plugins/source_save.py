@@ -302,6 +302,7 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
     """
 
     dual_formats = [UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL,
+                    UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_RGB16_DUAL,
                     UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL]
     for info in infos:
         if info.format.udp_profile_lidar in dual_formats:

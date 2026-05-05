@@ -11,7 +11,7 @@ import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .view_mode import (ImageMode, CloudMode, LidarScanVizMode,
-                        SimpleMode, ReflMode, RGBMode, NormalsMode, RingMode,
+                        SimpleMode, ReflMode, RGBMode, HdrRgbMode, NormalsMode, RingMode,
                         is_norm_reflectivity_mode, CloudPaletteItem)
 from ouster.sdk._bindings.viz import (Cloud, Image, Label, PointViz, Mesh,
                    calref_palette, spezia_palette, spezia_cal_ref_palette, grey_palette,
@@ -395,6 +395,8 @@ class SensorModel:
                 upper_name = field_name.upper()
                 if upper_name.startswith("NORMALS"):
                     mode = NormalsMode(field_name, info=self._meta)
+                elif ("RGB" in upper_name) and field.dtype == np.float16:
+                    mode = HdrRgbMode(field_name, info=self._meta)
                 else:
                     mode = RGBMode(field_name, info=self._meta)
             elif len(f_shape) == 2:
@@ -554,7 +556,7 @@ class SensorModel:
                     if zone.stl.coordinate_frame == CoordinateFrame.BODY:
                         stl_mesh._item.set_transform(stl_pose)
                     else:
-                        stl_mesh._item.set_transform(zrb_pose)
+                        stl_mesh._item.set_transform(zrb_mesh_pose)
 
         # set voxel mesh visibility
         for zone_id, zrb_mesh in self._zrb_meshes.items():
@@ -827,22 +829,33 @@ class LidarScanVizModel:
         if not sorted_image_mode_names or not sorted_cloud_mode_names:
             return
 
-        try:
-            preferred_fields = [ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2]
+        # Set the modes for image 1 and cloud
+        if "RGB" in sorted_image_mode_names:
+            # Always show RGB if present in image 1 and cloud
+            self._image_mode_ind[1] = sorted_image_mode_names.index("RGB")
+            self._cloud_mode_ind = sorted_cloud_mode_names.index("RGB")
+        else:
+            # Otherwise prefer REFLECTIVITY2 or NEAR_IR for image 1
+            # For cloud prefer REFLECTIVITY
+            preferred_field = ChanField.REFLECTIVITY2
             if ChanField.REFLECTIVITY2 not in self._known_fields:
-                preferred_fields[1] = ChanField.NEAR_IR
-            self._cloud_mode_ind = sorted_cloud_mode_names.index(preferred_fields[0])
-            self._image_mode_ind[0] = sorted_image_mode_names.index(preferred_fields[0])
-            self._image_mode_ind[1] = sorted_image_mode_names.index(preferred_fields[1])
+                preferred_field = ChanField.NEAR_IR
+            try:
+                self._image_mode_ind[1] = sorted_image_mode_names.index(preferred_field)
+                self._cloud_mode_ind = sorted_cloud_mode_names.index(ChanField.REFLECTIVITY)
+            except ValueError:
+                self._image_mode_ind[1] = 0
+                self._cloud_mode_ind = 0
+
+        # Finally set the mode for image 0, which should be reflectivity
+        try:
+            self._image_mode_ind[0] = sorted_image_mode_names.index(ChanField.REFLECTIVITY)
         except ValueError:
-            # handle a situation where no reflectivity or near ir channels are present
-            # which may happen with customized datasets
-            self._cloud_mode_ind = 0
-            self._image_mode_ind = [0, 0]
+            self._image_mode_ind[0] = 0
 
         self._cloud_mode_name = sorted_cloud_mode_names[self._cloud_mode_ind]
-        self._image_mode_names[0] = sorted_image_mode_names[self._image_mode_ind[0]]
-        self._image_mode_names[1] = sorted_image_mode_names[self._image_mode_ind[1]]
+        for i in range(2):
+            self._image_mode_names[i] = sorted_image_mode_names[self._image_mode_ind[i]]
         self.update_cloud_palettes()
 
     def update(self, scans: LidarScanSet) -> None:
@@ -1083,10 +1096,14 @@ class LidarScanVizModel:
             if data.size == 0:
                 data = np.zeros((1, channel_dimension), dtype=np.float32)
 
+            # Use float32 accumulators for fp16 RGB stats; summing/squaring AOI
+            # pixels in float16 can overflow even when the source values are valid.
+            stats_dtype = (np.float32 if np.issubdtype(data.dtype, np.floating) and
+                           data.dtype.itemsize < np.dtype(np.float32).itemsize else None)
             comp_min = np.min(data, axis=0)
             comp_max = np.max(data, axis=0)
-            comp_mean = np.mean(data, axis=0)
-            comp_std = np.std(data, axis=0)
+            comp_mean = np.mean(data, axis=0, dtype=stats_dtype)
+            comp_std = np.std(data, axis=0, dtype=stats_dtype)
 
             is_vector = channel_dimension == 3
 

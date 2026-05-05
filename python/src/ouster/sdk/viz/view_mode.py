@@ -3,7 +3,7 @@ from typing import (List, Optional, Union, Protocol, runtime_checkable)
 from dataclasses import dataclass
 import numpy as np
 from ouster.sdk import core
-from ouster.sdk.core import _utils, Version
+from ouster.sdk.core import (_utils, Version)
 
 from ouster.sdk._bindings.viz import Cloud, Image
 
@@ -177,10 +177,10 @@ class SimpleMode(ImageCloudMode):
         key_data = field.astype(np.float32, copy=True)
 
         if self._buc:
-            self._buc(key_data)
+            self._buc.update(key_data)
 
         if self._ae:
-            self._ae(key_data, update_state=(return_num == 0))
+            self._ae.update(key_data, update_state=(return_num == 0))
         else:
             key_max = np.max(key_data)
             if key_max:
@@ -277,6 +277,77 @@ class RGBMode(ImageCloudMode):
     def enabled(self, ls: core.LidarScan, return_num: int = 0):
         field = ls.field(self._field)
         return np.ndim(field) == 3
+
+
+class HdrRgbMode(ImageCloudMode):
+    """RGB view mode for HDR data that requires autoexposure."""
+
+    def __init__(self,
+                 field: str,
+                 *,
+                 info: Optional[core.SensorInfo] = None) -> None:
+        """
+        Args:
+            field: channel field to process (must be H x W x 3)
+            info: sensor metadata used for destaggering in set_image
+        """
+        self._info = info
+        self._field = field
+        self._corrector = _utils.AutoExposure(lo_percentile=0.05, hi_percentile=0.02, update_every=3)
+        self._last_scan: Optional[core.LidarScan] = None
+        self._last_data: Optional[np.ndarray] = None
+
+    @property
+    def name(self) -> str:
+        return self._field
+
+    @property
+    def names(self) -> List[str]:
+        return [self._field]
+
+    def _prepare_data(self,
+                      ls: core.LidarScan,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+        if not self.enabled(ls, return_num):
+            return None
+
+        if ls is self._last_scan:
+            return self._last_data
+
+        self._last_scan = ls
+
+        field = ls.field(self._field)
+        if field.dtype == np.float16:
+            key_data = field
+        else:
+            raise TypeError(f"Unsupported field type: {field.dtype}")
+
+        sdr_data = self._corrector.update(key_data)
+        self._last_data = sdr_data
+        return sdr_data
+
+    def set_image(self,
+                  img: Image,
+                  ls: core.LidarScan,
+                  return_num: int = 0) -> None:
+        if self._info is None:
+            raise ValueError(
+                f"VizMode[{self.name}] requires metadata to make a 2D image")
+        key_data = self._prepare_data(ls, return_num)
+        if key_data is not None:
+            img.set_image(core.destagger(self._info, key_data))
+
+    def set_cloud_color(self,
+                        cloud: Cloud,
+                        ls: core.LidarScan,
+                        return_num: int = 0) -> None:
+        key_data = self._prepare_data(ls, return_num)
+        if key_data is not None:
+            cloud.set_key(key_data)
+
+    def enabled(self, ls: core.LidarScan, return_num: int = 0) -> bool:
+        field = ls.field(self._field)
+        return np.ndim(field) == 3 and field.shape[2] == 3
 
 
 class NormalsMode(ImageCloudMode):
@@ -379,7 +450,7 @@ class ReflMode(SimpleMode, ImageCloudMode):
             # mypy doesn't recognize that we always should have _ae here
             # so we have explicit check
             if self._ae:
-                self._ae(refl_data, update_state=(return_num == 0))
+                self._ae.update(refl_data, update_state=(return_num == 0))
         return refl_data
 
 

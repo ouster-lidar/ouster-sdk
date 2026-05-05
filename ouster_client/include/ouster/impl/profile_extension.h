@@ -24,6 +24,7 @@ struct OUSTER_API_CLASS FieldInfo {
     size_t offset;
     uint64_t mask;
     int shift;
+    int num_elements = 1;
 };
 
 }  // namespace impl

@@ -37,7 +37,7 @@ struct parse_block {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
                     const PacketFormat& pf, const uint8_t* packet_buf) const {
-        pf.block_field<T, BlockDim>(field, f, packet_buf);
+        pf.block_field<T, BlockDim>(field.data(), field.cols(), f, packet_buf);
     }
 };
 

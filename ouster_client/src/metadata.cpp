@@ -635,8 +635,7 @@ class SensorInfoImpl : public impl::JsonTools {
         if (!parse_and_validate_item(issues_.information, fps_string,
                                      sensor_info.format.fps)) {
             if (have_lidar_mode_) {
-                sensor_info.format.fps =
-                    frequency_of_lidar_mode(*sensor_info.config.lidar_mode);
+                sensor_info.format.fps = sensor_info.config.lidar_mode->fps;
                 default_message(fps_string);
             } else {
                 skipped_due_to_item(

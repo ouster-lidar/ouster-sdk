@@ -33,32 +33,53 @@
 #include "ouster/types.h"
 
 namespace py = pybind11;
-using ouster::sdk::core::AutoExposure;
-using ouster::sdk::core::BeamUniformityCorrector;
 using ouster::sdk::core::cartesianT;
 using ouster::sdk::core::img_t;
 using ouster::sdk::core::LidarScan;
 using ouster::sdk::core::Packet;
 using ouster::sdk::core::PointsT;
 using ouster::sdk::core::PosesT;
+using ouster::sdk::core::rgb_img_t;
 using ouster::sdk::core::ScanBatcher;
 using ouster::sdk::core::SensorInfo;
 using ouster::sdk::core::XYZLut;
 using ouster::sdk::core::XYZLutT;
+using ouster::sdk::core::image::AutoExposure;
+using ouster::sdk::core::image::BeamUniformityCorrector;
 
 // alias for non-casting row-major array arguments
 template <typename T>
 using pyimg_t = py::array_t<T, py::array::c_style>;
 
-// factor out overloaded call operator for ae/buc
 template <typename T, typename U>
 void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
     if (image.ndim() != 2) {
         throw std::invalid_argument("Expected a 2d array");
     }
-    self(Eigen::Map<img_t<U>>(image.mutable_data(), image.shape(0),
-                              image.shape(1)),
-         update_state);
+    self.update(Eigen::Map<img_t<U>>(image.mutable_data(), image.shape(0),
+                                     image.shape(1)),
+                update_state);
+}
+
+template <typename T>
+void auto_exposure_update(AutoExposure& self,
+                          py::array_t<T, py::array::c_style> image,
+                          bool update_state) {
+    if (image.ndim() == 2) {
+        self.update(Eigen::Map<img_t<T>>(image.mutable_data(), image.shape(0),
+                                         image.shape(1)),
+                    update_state);
+    } else if (image.ndim() == 3 && image.shape(2) == 3) {
+        const auto h = static_cast<Eigen::Index>(image.shape(0));
+        const auto w = static_cast<Eigen::Index>(image.shape(1));
+        // rgb_img_t is RowMajor, matching numpy C-contiguous layout
+        Eigen::TensorMap<rgb_img_t<T>> tensor_map(image.mutable_data(), h, w,
+                                                  3);
+        self.update(tensor_map, update_state);
+    } else {
+        throw std::invalid_argument(
+            "Expected a 2D (H x W) or 3D (H x W x 3) array");
+    }
 }
 
 std::pair<Eigen::Matrix<double, Eigen::Dynamic, 3>,
@@ -454,19 +475,54 @@ Eigen::Map<const ouster::sdk::core::img_t<uint32_t>> to_imgt_uint32(
         arr.shape(1));
 }
 
-void init_client_processing(py::module& module, py::module& /*unused*/) {
-    // Destagger overloads for most numpy scalar types
-    module.def("destagger_bool", &ouster::sdk::core::destagger<bool>);
-    module.def("destagger_int8", &ouster::sdk::core::destagger<int8_t>);
-    module.def("destagger_int16", &ouster::sdk::core::destagger<int16_t>);
-    module.def("destagger_int32", &ouster::sdk::core::destagger<int32_t>);
-    module.def("destagger_int64", &ouster::sdk::core::destagger<int64_t>);
-    module.def("destagger_uint8", &ouster::sdk::core::destagger<uint8_t>);
-    module.def("destagger_uint16", &ouster::sdk::core::destagger<uint16_t>);
-    module.def("destagger_uint32", &ouster::sdk::core::destagger<uint32_t>);
-    module.def("destagger_uint64", &ouster::sdk::core::destagger<uint64_t>);
-    module.def("destagger_float", &ouster::sdk::core::destagger<float>);
-    module.def("destagger_double", &ouster::sdk::core::destagger<double>);
+template <typename T>
+inline py::array_t<T> destagger2(const py::array_t<T, py::array::c_style>& img,
+                                 const std::vector<int>& pixel_shift_by_row,
+                                 bool inverse) {
+    // make sure the image is at least 2d
+    if (img.ndim() < 2) {
+        throw std::invalid_argument("Must have at least 2 dimensions.");
+    }
+
+    if (img.shape(0) == 0 || img.shape(1) == 0) {
+        throw std::invalid_argument("Cannot have any dimensions of zero.");
+    }
+
+    int dim3 = 1;
+    for (size_t i = 2; i < img.ndim(); i++) {
+        dim3 *= img.shape(i);
+    }
+
+    std::vector<size_t> shape;
+    for (size_t i = 0; i < img.ndim(); i++) {
+        shape.push_back(img.shape(i));
+    }
+    auto result = py::array_t<T>(shape);
+
+    Eigen::TensorMap<const Eigen::Tensor<T, 3, Eigen::RowMajor>> eigen_img(
+        img.data(), img.shape(0), img.shape(1), dim3);
+
+    Eigen::TensorMap<Eigen::Tensor<T, 3, Eigen::RowMajor>> destaggered(
+        result.mutable_data(), img.shape(0), img.shape(1), dim3);
+    ouster::sdk::core::destagger_into<T, 3>(eigen_img, pixel_shift_by_row,
+                                            inverse, destaggered);
+
+    return result;
+}
+
+void init_client_processing(py::module_& module, py::module_& /*unused*/) {
+    module.def("destagger", &destagger2<bool>);
+    module.def("destagger", &destagger2<int8_t>);
+    module.def("destagger", &destagger2<int16_t>);
+    module.def("destagger", &destagger2<int32_t>);
+    module.def("destagger", &destagger2<int64_t>);
+    module.def("destagger", &destagger2<uint8_t>);
+    module.def("destagger", &destagger2<uint16_t>);
+    module.def("destagger", &destagger2<uint32_t>);
+    module.def("destagger", &destagger2<uint64_t>);
+    module.def("destagger", &destagger2<ouster::sdk::core::float16_t>);
+    module.def("destagger", &destagger2<float>);
+    module.def("destagger", &destagger2<double>);
 
     module.def(
         "normals",
@@ -631,20 +687,50 @@ Returns:
     // Image processing
     py::class_<AutoExposure>(module, "AutoExposure")
         .def(py::init<>())
-        .def(py::init<int>(), py::arg("update_every"))
-        .def(py::init<double, double, int>(), py::arg("lo_percentile"),
-             py::arg("hi_percentile"), py::arg("update_every"))
-        .def("__call__", &image_proc_call<AutoExposure, float>,
-             py::arg("image"), py::arg("update_state") = true)
-        .def("__call__", &image_proc_call<AutoExposure, double>,
-             py::arg("image"), py::arg("update_state") = true);
+        .def(py::init(
+                 [](int update_every) { return AutoExposure(update_every); }),
+             py::arg("update_every"))
+        .def(py::init([](double low, double high, int update_every) {
+                 return AutoExposure(low, high, update_every);
+             }),
+             py::arg("lo_percentile"), py::arg("hi_percentile"),
+             py::arg("update_every"))
+        .def("update", &auto_exposure_update<float>,
+             py::arg("image").noconvert(), py::arg("update_state") = true)
+        .def("update", &auto_exposure_update<double>,
+             py::arg("image").noconvert(), py::arg("update_state") = true)
+        .def(
+            "update",
+            [](AutoExposure& self,
+               const py::array_t<ouster::sdk::core::float16_t,
+                                 py::array::c_style>& image,
+               bool update_state) {
+                if (image.ndim() != 3 || image.shape(2) != 3) {
+                    throw std::invalid_argument("Expected an H x W x 3 array");
+                }
+                const auto h = static_cast<Eigen::Index>(image.shape(0));
+                const auto w = static_cast<Eigen::Index>(image.shape(1));
+
+                auto result = py::array_t<float>(
+                    std::vector<ssize_t>{image.shape(0), image.shape(1), 3});
+
+                Eigen::TensorMap<const rgb_img_t<ouster::sdk::core::float16_t>>
+                    in_map(image.data(), h, w, 3);
+                Eigen::TensorMap<rgb_img_t<float>> out_map(
+                    result.mutable_data(), h, w, 3);
+
+                self.update(in_map, out_map, update_state);
+
+                return result;
+            },
+            py::arg("image").noconvert(), py::arg("update_state") = true);
 
     py::class_<BeamUniformityCorrector>(module, "BeamUniformityCorrector")
         .def(py::init<>())
-        .def("__call__", &image_proc_call<BeamUniformityCorrector, float>,
-             py::arg("image"), py::arg("update_state") = true)
-        .def("__call__", &image_proc_call<BeamUniformityCorrector, double>,
-             py::arg("image"), py::arg("update_state") = true);
+        .def("update", &image_proc_call<BeamUniformityCorrector, float>,
+             py::arg("image").noconvert(), py::arg("update_state") = true)
+        .def("update", &image_proc_call<BeamUniformityCorrector, double>,
+             py::arg("image").noconvert(), py::arg("update_state") = true);
 
     module.def("dewarp",
                py::overload_cast<const py::array_t<double>&,

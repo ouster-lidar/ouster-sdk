@@ -133,8 +133,7 @@ OUSTER_DEPRECATED_MSG("Use ouster::sdk::open_source instead",
 OUSTER_API_FUNCTION
 std::shared_ptr<Client> init_client(
     const std::string& hostname, const std::string& udp_dest_host,
-    ouster::sdk::core::LidarMode ld_mode =
-        ouster::sdk::core::LidarMode::UNSPECIFIED,
+    ouster::sdk::core::LidarMode ld_mode = ouster::sdk::core::LidarMode(0, 0),
     ouster::sdk::core::TimestampMode ts_mode =
         ouster::sdk::core::TimestampMode::UNSPECIFIED,
     int lidar_port = 0, int imu_port = 0,

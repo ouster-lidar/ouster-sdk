@@ -22,6 +22,7 @@
 
 #include "ouster/field.h"
 #include "ouster/impl/packet_writer.h"
+#include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -44,6 +45,7 @@ struct FieldInfo {
     size_t offset;
     uint64_t mask;
     int shift;
+    int num_elements = 1;
 
     /**
      * Retrieves the value from the buffer.
@@ -108,7 +110,8 @@ struct FieldInfo {
  *
  * @return FieldInfo
  */
-FieldInfo field_info(size_t bit_start, size_t bit_size, size_t upshift = 0) {
+FieldInfo field_info(size_t bit_start, size_t bit_size, size_t upshift = 0,
+                     size_t max_length = 0, size_t num_elements = 1) {
     FieldInfo info{};
 
     size_t needs_bits = bit_size + upshift;
@@ -124,10 +127,12 @@ FieldInfo field_info(size_t bit_start, size_t bit_size, size_t upshift = 0) {
         info.mask |= uint64_t{1} << i;
     }
 
-    info.shift = bit_start;
-    info.shift -= upshift;
+    info.shift = static_cast<int>(bit_start);
+    info.shift -= static_cast<int>(upshift);
+    info.num_elements = static_cast<int>(num_elements);
 
     size_t size_bytes = (needs_bits / 8) + (((needs_bits % 8) != 0u) ? 1 : 0);
+    size_bytes /= num_elements;
 
     switch (size_bytes) {
         case 1:
@@ -218,6 +223,43 @@ static const Table<std::string, FieldInfo, 5> LB_WINDOW_FIELD_INFO{{
     {ChanField::REFLECTIVITY, field_info(16, 8)},
     {ChanField::WINDOW, field_info(24, 8)},
     {ChanField::RAW32_WORD1, field_info(0, 32)},
+}};
+
+static const Table<std::string, FieldInfo, 13> RGB_FIELD_INFO{{
+    {ChanField::RANGE, field_info(0, 19)},
+    {ChanField::FLAGS, field_info(19, 5)},
+    {ChanField::REFLECTIVITY, field_info(24, 8)},
+    {ChanField::SIGNAL, field_info(32, 16)},
+    {ChanField::NEAR_IR, field_info(48, 16)},
+    {ChanField::R, field_info(64, 16)},
+    {ChanField::G, field_info(64 + 16, 16)},
+    {ChanField::B, field_info(64 + 16 * 2, 16)},
+    {ChanField::RGB, field_info(64, size_t{16} * 3, 0, 0, 3)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+    {ChanField::RAW32_WORD2, field_info(32, 32)},
+    {ChanField::RAW32_WORD3, field_info(64, 32)},
+    {ChanField::RAW32_WORD4, field_info(96, 32)},
+}};
+
+static const Table<std::string, FieldInfo, 18> DUAL_RGB_FIELD_INFO{{
+    {ChanField::RANGE, field_info(0, 19)},
+    {ChanField::FLAGS, field_info(19, 5)},
+    {ChanField::REFLECTIVITY, field_info(24, 8)},
+    {ChanField::RANGE2, field_info(32, 19)},
+    {ChanField::FLAGS2, field_info(51, 5)},
+    {ChanField::REFLECTIVITY2, field_info(56, 8)},
+    {ChanField::SIGNAL, field_info(64, 16)},
+    {ChanField::SIGNAL2, field_info(80, 16)},
+    {ChanField::NEAR_IR, field_info(96, 16)},
+    {ChanField::R, field_info(112, 16)},
+    {ChanField::G, field_info(112 + 16, 16)},
+    {ChanField::B, field_info(112 + 16 * 2, 16)},
+    {ChanField::RGB, field_info(112, size_t{16} * 3, 0, 0, 3)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+    {ChanField::RAW32_WORD2, field_info(32, 32)},
+    {ChanField::RAW32_WORD3, field_info(64, 32)},
+    {ChanField::RAW32_WORD4, field_info(96, 32)},
+    {ChanField::RAW32_WORD5, field_info(128, 32)},
 }};
 
 static const Table<std::string, FieldInfo, 14> DUAL_FIELD_INFO{{
@@ -327,6 +369,10 @@ Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> OUSTER_API_FUNCTION
          {ZM_SINGLE_FIELD_INFO.data(), ZM_SINGLE_FIELD_INFO.size(), 12}},
         {UDPProfileLidar::RNG15_RFL8_WIN8,
          {LB_WINDOW_FIELD_INFO.data(), LB_WINDOW_FIELD_INFO.size(), 4}},
+        {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16,
+         {RGB_FIELD_INFO.data(), RGB_FIELD_INFO.size(), 16}},
+        {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16_DUAL,
+         {DUAL_RGB_FIELD_INFO.data(), DUAL_RGB_FIELD_INFO.size(), 20}},
     }};
 
 OUSTER_API_FUNCTION Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES>
@@ -595,7 +641,9 @@ PacketFormat::PacketFormat(const DataFormat& format)
       max_frame_id{impl_->max_frame_id},
       zone_monitoring_enabled{format.zone_monitoring_enabled} {
     for (const auto& kv : impl_->fields) {
-        field_types_.emplace_back(kv.first, kv.second.ty_tag);
+        std::pair<ouster::sdk::core::ChanFieldType, int> elm = {
+            kv.second.ty_tag, kv.second.num_elements};
+        field_types_.emplace_back(kv.first, elm);
     }
 }
 
@@ -603,25 +651,22 @@ PacketFormat::PacketFormat(const SensorInfo& info)
     : PacketFormat(info.format) {}
 
 template <typename T, int BlockDim>
-void PacketFormat::block_field(Eigen::Ref<img_t<T>> field,
-                               const std::string& chan,
-                               const uint8_t* packet_buf) const {
-    impl::FieldInfo field_info = impl_->fields.at(chan);
+void PacketFormat::block_field(T* data, int cols, const std::string& field_name,
+                               const uint8_t* lidar_buf) const {
+    impl::FieldInfo field_info = impl_->fields.at(field_name);
 
-    if (sizeof(T) < field_type_size(field_info.ty_tag)) {
+    if (sizeof(T) <
+        field_type_size(field_info.ty_tag) * field_info.num_elements) {
         throw std::invalid_argument("Dest type too small for specified field");
     }
 
     size_t channel_data_size = impl_->channel_data_size;
 
-    int cols = field.cols();
-
-    T* data = field.data();
-    std::array<const uint8_t*, BlockDim> col_buf;
+    std::array<const uint8_t*, BlockDim> col_buf{};
 
     for (int icol = 0; icol < columns_per_packet; icol += BlockDim) {
         for (int i = 0; i < BlockDim; ++i) {
-            col_buf[i] = nth_col(icol + i, packet_buf);
+            col_buf[i] = nth_col(icol + i, lidar_buf);
         }
 
         uint16_t m_id = col_measurement_id(col_buf[0]);
@@ -642,7 +687,8 @@ void PacketFormat::col_field(const uint8_t* col_buf, const std::string& chan,
                              T* dst, int dst_stride) const {
     impl::FieldInfo field_info = impl_->fields.at(chan);
 
-    if (sizeof(T) < field_type_size(field_info.ty_tag)) {
+    if (sizeof(T) <
+        field_type_size(field_info.ty_tag) * field_info.num_elements) {
         throw std::invalid_argument("Dest type too small for specified field");
     }
 
@@ -655,119 +701,49 @@ void PacketFormat::col_field(const uint8_t* col_buf, const std::string& chan,
     }
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define TYPE_LIST(size) \
+    X(size, uint8_t)    \
+    X(size, uint16_t)   \
+    X(size, uint32_t)   \
+    X(size, uint64_t)   \
+    X(size, int8_t)     \
+    X(size, int16_t)    \
+    X(size, int32_t)    \
+    X(size, int64_t)    \
+    X(size, float)      \
+    X(size, double)     \
+    X(size, float16_t)  \
+    X(size, ouster::sdk::core::impl::float3x16_t)
+
 // explicitly instantiate for each field type / block dim
-template void PacketFormat::block_field<uint8_t, 4>(
-    Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint16_t, 4>(
-    Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint32_t, 4>(
-    Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint64_t, 4>(
-    Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int8_t, 4>(
-    Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int16_t, 4>(
-    Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int32_t, 4>(
-    Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int64_t, 4>(
-    Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<float, 4>(
-    Eigen::Ref<img_t<float>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<double, 4>(
-    Eigen::Ref<img_t<double>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint8_t, 8>(
-    Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint16_t, 8>(
-    Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint32_t, 8>(
-    Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint64_t, 8>(
-    Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int8_t, 8>(
-    Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int16_t, 8>(
-    Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int32_t, 8>(
-    Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int64_t, 8>(
-    Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<float, 8>(
-    Eigen::Ref<img_t<float>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<double, 8>(
-    Eigen::Ref<img_t<double>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint8_t, 16>(
-    Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint16_t, 16>(
-    Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint32_t, 16>(
-    Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<uint64_t, 16>(
-    Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int8_t, 16>(
-    Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int16_t, 16>(
-    Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int32_t, 16>(
-    Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<int64_t, 16>(
-    Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<float, 16>(
-    Eigen::Ref<img_t<float>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
-template void PacketFormat::block_field<double, 16>(
-    Eigen::Ref<img_t<double>> field, const std::string& chan,
-    const uint8_t* packet_buf) const;
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define X(size, type)                                                          \
+    template OUSTER_API_FUNCTION void PacketFormat::block_field<type, (size)>( \
+        type*, int, const std::string&, const uint8_t*)                        \
+        const;  // NOLINT(bugprone-macro-parentheses)
+
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define BLOCK_FIELD(size) TYPE_LIST(size)
+
+BLOCK_FIELD(4)
+BLOCK_FIELD(8)
+BLOCK_FIELD(16)
+
+#undef X
 
 // explicitly instantiate for each field type
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      uint8_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      uint16_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      uint32_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      uint64_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      int8_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      int16_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      int32_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      int64_t*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      float*, int) const;
-template void PacketFormat::col_field(const uint8_t*, const std::string&,
-                                      double*, int) const;
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define X(size, type)                                          \
+    template OUSTER_API_FUNCTION void PacketFormat::col_field( \
+        const uint8_t*, const std::string&, type*, int)        \
+        const;  // NOLINT(bugprone-macro-parentheses)
+
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define COL_ELEMENTS() TYPE_LIST(0)
+
+COL_ELEMENTS()
+#undef X
 
 ChanFieldType PacketFormat::field_type(const std::string& field_name) const {
     return (impl_->fields.count(field_name) != 0u)
@@ -1122,23 +1098,22 @@ void PacketWriter::set_shot_limiting_countdown(
 }
 
 template <typename T>
-void PacketWriter::set_block(Eigen::Ref<const img_t<T>> field,
-                             const std::string& chan,
+void PacketWriter::set_block(const T* data, int cols,
+                             const std::string& field_name,
                              uint8_t* lidar_buf) const {
     constexpr int max_cols = 32;
     if (columns_per_packet > max_cols) {
         throw std::runtime_error("Recompile set_block_impl with larger N");
     }
 
-    impl::FieldInfo f_info = impl_->fields.at(chan);
+    impl::FieldInfo f_info = impl_->fields.at(field_name);
 
     size_t channel_data_size = impl_->channel_data_size;
 
-    int cols = field.cols();
-    const T* data = field.data();
-    std::array<uint8_t*, max_cols> col_buf;
-    std::array<bool, max_cols> valid;
-    for (int i = 0; i < columns_per_packet; ++i) {
+    std::array<uint8_t*, max_cols> col_buf{};
+    std::array<bool, max_cols> valid{};
+    for (uint32_t i = 0; i < columns_per_packet; ++i) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
         col_buf[i] = nth_col(i, lidar_buf);
         valid[i] = col_status(col_buf[i]) & 0x01;
     }
@@ -1159,101 +1134,20 @@ void PacketWriter::set_block(Eigen::Ref<const img_t<T>> field,
     }
 }
 
-template void PacketWriter::set_block(Eigen::Ref<const img_t<uint8_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<uint16_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<uint32_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<uint64_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<int8_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<int16_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<int32_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<int64_t>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<float>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
-template void PacketWriter::set_block(Eigen::Ref<const img_t<double>> field,
-                                      const std::string& chan,
-                                      uint8_t* lidar_buf) const;
+// explicitly instantiate for each field type
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define X(size, type)                                              \
+    template OUSTER_API_FUNCTION void PacketWriter::set_block(     \
+        const type* data, int cols, const std::string& field_name, \
+        uint8_t* lidar_buf) const;
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define SET_BLOCK() TYPE_LIST(0)
+SET_BLOCK()
+#undef X
 
-template <typename T>
-void PacketWriter::unpack_raw_headers(Eigen::Ref<const img_t<T>> field,
-                                      uint8_t* lidar_buf) const {
-    using ColMajorView = Eigen::Map<Eigen::Array<T, -1, 1, Eigen::ColMajor>>;
-
-    if (sizeof(T) > 4) {
-        throw std::invalid_argument(
-            "RAW_HEADERS field should be of type"
-            "uint32_t or smaller to work correctly");
-    }
-
-    uint8_t* col_zero = nth_col(0, lidar_buf);
-    uint16_t m_id = col_measurement_id(col_zero);
-
-    size_t ch_size = col_header_size / sizeof(T);
-    size_t cf_size = col_footer_size / sizeof(T);
-    size_t ph_size = packet_header_size / sizeof(T);
-    size_t pf_size = packet_footer_size / sizeof(T);
-
-    size_t ch_offset = 0;
-    size_t cf_offset = ch_offset + ch_size;
-    size_t ph_offset = cf_offset + cf_size;
-    size_t pf_offset = ph_offset + ph_size;
-
-    // fill in header and footer, col0 is sufficient for that
-    ColMajorView ph_view(reinterpret_cast<T*>(lidar_buf), ph_size);
-    ColMajorView pf_view(reinterpret_cast<T*>(footer(lidar_buf)), pf_size);
-    ph_view = field.block(ph_offset, m_id, ph_size, 1);
-    pf_view = field.block(pf_offset, m_id, pf_size, 1);
-
-    for (int icol = 0; icol < columns_per_packet; ++icol) {
-        uint8_t* col_buf = nth_col(icol, lidar_buf);
-        uint8_t* colf_ptr = col_buf + col_size - col_footer_size;
-
-        ColMajorView colh_view(reinterpret_cast<T*>(col_buf), ch_size);
-        ColMajorView colf_view(reinterpret_cast<T*>(colf_ptr), cf_size);
-
-        m_id = col_measurement_id(col_buf);
-
-        colh_view = field.block(ch_offset, m_id, ch_size, 1);
-        colf_view = field.block(cf_offset, m_id, cf_size, 1);
-    }
-}
-
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<uint8_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<uint16_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<uint32_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<uint64_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<int8_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<int16_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<int32_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<int64_t>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<float>> field, uint8_t* lidar_buf) const;
-template void PacketWriter::unpack_raw_headers(
-    Eigen::Ref<const img_t<double>> field, uint8_t* lidar_buf) const;
+// PacketWriter::unpack_raw_headers<T>(...) is defined inline in packet_writer.h
+// to work around an Apple Clang mangling bug for the dependent default
+// StrideType expression in Eigen::Ref. See the note in packet_writer.h.
 
 uint8_t* PacketWriter::imu_nth_measurement(int meas_idx,
                                            uint8_t* imu_buf) const {

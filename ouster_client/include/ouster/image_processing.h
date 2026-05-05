@@ -16,8 +16,12 @@
 namespace ouster {
 namespace sdk {
 namespace core {
+namespace image {
 
-/** Adjusts brightness to between 0 and 1. */
+/** Adjusts brightness to between 0 and 1 using a simple auto-exposure method.
+ *  Works with 1 or 3 channel images. For 3 channel images it applies
+ *  autoexposure in luminance space to keep colors consistent.
+ */
 class OUSTER_API_CLASS AutoExposure {
     const double lo_percentile_,
         hi_percentile_;  // percentiles used for scaling
@@ -32,7 +36,10 @@ class OUSTER_API_CLASS AutoExposure {
     int counter_ = 0;
 
     template <typename T>
-    void update(Eigen::Ref<img_t<T>> image, bool update_state);
+    void apply(Eigen::Ref<img_t<T>> image, bool update_state);
+
+    template <typename T>
+    void apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_state);
 
    public:
     /** Default constructor using default percentile and update values. */
@@ -67,7 +74,7 @@ class OUSTER_API_CLASS AutoExposure {
      * @param[in] update_state Update lo/hi percentiles if true.
      */
     OUSTER_API_FUNCTION
-    void operator()(Eigen::Ref<img_t<float>> image, bool update_state = true);
+    void update(Eigen::Ref<img_t<float>> image, bool update_state = true);
 
     /**
      * Scales the image so that contrast is stretched between 0 and 1.
@@ -79,7 +86,42 @@ class OUSTER_API_CLASS AutoExposure {
      * @param[in] update_state Update lo/hi percentiles if true.
      */
     OUSTER_API_FUNCTION
-    void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
+    void update(Eigen::Ref<img_t<double>> image, bool update_state = true);
+
+    /**
+     * Apply global RGB auto-exposure in-place stretching constrast between 0
+     * and 1.
+     *
+     * @param[in] image RGB image tensor (H x W x 3), modified in-place.
+     * @param[in] update_state Update lo/hi luminance percentiles if true.
+     */
+    OUSTER_API_FUNCTION
+    void update(Eigen::TensorMap<rgb_img_t<float>> image,
+                bool update_state = true);
+
+    /**
+     * Apply global RGB auto-exposure in-place stretching constrast between 0
+     * and 1.
+     *
+     * @param[in] image RGB image tensor (H x W x 3), modified in-place.
+     * @param[in] update_state Update lo/hi luminance percentiles if true.
+     */
+    OUSTER_API_FUNCTION
+    void update(Eigen::TensorMap<rgb_img_t<double>> image,
+                bool update_state = true);
+
+    /**
+     * Convert fp16-bit RGB to float and apply global RGB auto-exposure
+     * stretching constrast between 0 and 1.
+     *
+     * @param[in] input input RGB image tensor (H x W x 3) as float16_t.
+     * @param[out] out output RGB image tensor (H x W x 3) as float.
+     * @param[in] update_state Update lo/hi luminance percentiles if true.
+     */
+    OUSTER_API_FUNCTION
+    void update(
+        Eigen::TensorMap<const rgb_img_t<ouster::sdk::core::float16_t>> input,
+        Eigen::TensorMap<rgb_img_t<float>> out, bool update_state = true);
 };
 
 /**
@@ -93,7 +135,7 @@ class OUSTER_API_CLASS BeamUniformityCorrector {
     Eigen::ArrayXd dark_count_;
 
     template <typename T>
-    void update(Eigen::Ref<img_t<T>> image, bool update_state);
+    void apply(Eigen::Ref<img_t<T>> image, bool update_state);
 
    public:
     /**
@@ -104,7 +146,7 @@ class OUSTER_API_CLASS BeamUniformityCorrector {
      * @param[in] update_state Update dark counts if true.
      */
     OUSTER_API_FUNCTION
-    void operator()(Eigen::Ref<img_t<float>> image, bool update_state = true);
+    void update(Eigen::Ref<img_t<float>> image, bool update_state = true);
 
     /**
      * Applies dark count correction to an image, modifying it in-place to have
@@ -114,8 +156,9 @@ class OUSTER_API_CLASS BeamUniformityCorrector {
      * @param[in] update_state Update dark counts if true.
      */
     OUSTER_API_FUNCTION
-    void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
+    void update(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
+}  // namespace image
 }  // namespace core
 }  // namespace sdk
 }  // namespace ouster

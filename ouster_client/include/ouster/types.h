@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -54,50 +55,69 @@ extern const mat4d DEFAULT_IMU_TO_SENSOR_TRANSFORM;
 /** Design values for imu and lidar to sensor-frame transforms. */
 extern const mat4d DEFAULT_LIDAR_TO_SENSOR_TRANSFORM;
 
-/**
+/*
  * Constants used for configuration. Refer to the sensor documentation for the
  * meaning of each option.
  */
-enum class LidarMode {
-    UNSPECIFIED = 0,  ///< lidar mode: unspecified
-    _512x10,          ///< lidar mode: 10 scans of 512 columns per second
-    _512x20,          ///< lidar mode: 20 scans of 512 columns per second
-    _1024x10,         ///< lidar mode: 10 scans of 1024 columns per second
-    _1024x20,         ///< lidar mode: 20 scans of 1024 columns per second
-    _2048x10,         ///< lidar mode: 10 scans of 2048 columns per second
-    _4096x5,          ///< lidar mode: 5 scans of 4096 columns per second.
-                      ///< Only available on select sensors
 
-    // Deprecated entries
-    ///< @deprecated Use ouster::sdk::core::LidarMode::UNSPECIFIED instead.
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_UNSPEC, UNSPECIFIED,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
-    ///< @deprecated Use ouster::sdk::core::LidarMode::_512x10 instead.
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_512x10, _512x10,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
-    ///< @deprecated Use ouster::sdk::core::LidarMode::_512x20 instead.
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_512x20, _512x20,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
-    ///< @deprecated Use ouster::sdk::core::LidarMode::_1024x10 instead.
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_1024x10, _1024x10,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
-    ///< @deprecated Use ouster::sdk::core::LidarMode::_1024x20 instead.
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_1024x20, _1024x20,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
-    ///< @deprecated Use ouster::sdk::core::LidarMode::_2048x10 instead.
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_2048x10, _2048x10,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
-    ///< @deprecated Use ouster::sdk::core::LidarMode::_4096x5 instead.
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_4096x5, _4096x5,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
-    ///< end of deprecated entries
+/// Output resolution and framerate of the lidar
+struct LidarMode {
+    /**
+     * Construct a lidar mode from a string of the form COLUMNSxFPS (e.g. 10x20)
+     *
+     * @param[in] mode String form of LidarMode to construct from.
+     */
+    explicit LidarMode(const std::string& mode);
+
+    /**
+     * Construct a lidar mode from a number of columns and FPS.
+     *
+     * @param[in] cols Number of columns per scan.
+     * @param[in] framerate Number of scans per second.
+     */
+    LidarMode(unsigned int cols, unsigned int framerate);
+
+    /// number of columns per scan
+    unsigned int columns;
+
+    /// number of scans per second
+    unsigned int fps;
+
+    /// lidar mode: 10 scans of 512 columns per second
+    OUSTER_API_VAR static const LidarMode _512x10;
+    /// lidar mode: 20 scans of 512 columns per second
+    OUSTER_API_VAR static const LidarMode _512x20;
+    /// lidar mode: 10 scans of 1024 columns per second
+    OUSTER_API_VAR static const LidarMode _1024x10;
+    /// lidar mode: 20 scans of 1024 columns per second
+    OUSTER_API_VAR static const LidarMode _1024x20;
+    /// lidar mode: 10 scans of 2048 columns per second
+    OUSTER_API_VAR static const LidarMode _2048x10;
+    /// lidar mode: 5 scans of 4096 columns per second
+    OUSTER_API_VAR static const LidarMode _4096x5;
 };
 
 /**
- * @deprecated Use ouster::sdk::core::LidarMode instead.
+ * Equality for LidarMode.
+ *
+ * @param[in] lhs The first object to compare.
+ * @param[in] rhs The second object to compare.
+ *
+ * @return lhs == rhs
  */
-OUSTER_DEPRECATED_TYPE(lidar_mode, LidarMode,                   // NOLINT
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
+OUSTER_API_FUNCTION
+bool operator==(const LidarMode& lhs, const LidarMode& rhs);
+
+/**
+ * Inequality for LidarMode.
+ *
+ * @param[in] lhs The first object to compare.
+ * @param[in] rhs The second object to compare.
+ *
+ * @return lhs != rhs
+ */
+OUSTER_API_FUNCTION
+bool operator!=(const LidarMode& lhs, const LidarMode& rhs);
 
 /**
  * Mode controlling timestamp method. Refer to the sensor documentation for the
@@ -314,6 +334,12 @@ enum class UDPProfileLidar {
 
     /** Single Return Low Data Rate Window Status */
     RNG15_RFL8_WIN8,
+
+    /** Single Return RGB */
+    RNG19_RFL8_SIG16_NIR16_RGB16,
+
+    /** Dual Return RGB */
+    RNG19_RFL8_SIG16_NIR16_RGB16_DUAL,
 
     /** disabled */
     OFF = 100,
@@ -1186,7 +1212,7 @@ SensorInfo default_sensor_info(LidarMode mode);
  *
  * @param[in] mode LidarMode to get the string representation for.
  *
- * @return string representation of the lidar mode, or "UNKNOWN".
+ * @return string representation of the lidar mode.
  */
 OUSTER_API_FUNCTION
 std::string to_string(LidarMode mode);
@@ -1196,10 +1222,10 @@ std::string to_string(LidarMode mode);
  *
  * @param[in] s String to decode.
  *
- * @return lidar mode corresponding to the string, or 0 on error.
+ * @return lidar mode corresponding to the string, or nullopt on error
  */
 OUSTER_API_FUNCTION
-LidarMode lidar_mode_of_string(const std::string& s);
+optional<LidarMode> lidar_mode_of_string(const std::string& s);
 
 /**
  * Get number of columns in a scan for a lidar mode.
@@ -1219,7 +1245,7 @@ uint32_t n_cols_of_lidar_mode(LidarMode mode);
  * @return lidar rotation frequency in Hz.
  */
 OUSTER_API_FUNCTION
-int frequency_of_lidar_mode(LidarMode mode);
+unsigned int frequency_of_lidar_mode(LidarMode mode);
 
 /**
  * Get string representation of a timestamp mode.
@@ -1256,7 +1282,7 @@ std::string to_string(OperatingMode mode);
  *
  * @param[in] s String to get the operating mode from.
  *
- * @return operating mode corresponding to the string, or 0 on error.
+ * @return operating mode corresponding to the string, or nullopt on error.
  */
 OUSTER_API_FUNCTION
 optional<OperatingMode> operating_mode_of_string(const std::string& s);
@@ -1276,7 +1302,8 @@ std::string to_string(MultipurposeIOMode mode);
  *
  * @param[in] s String to decode into a multipurpose io mode.
  *
- * @return multipurpose io mode corresponding to the string, or 0 on error.
+ * @return multipurpose io mode corresponding to the string, or nullopt on
+ * error.
  */
 OUSTER_API_FUNCTION
 optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
@@ -1297,7 +1324,7 @@ std::string to_string(Polarity polarity);
  *
  * @param[in] s The string to decode into a polarity.
  *
- * @return polarity corresponding to the string, or 0 on error.
+ * @return polarity corresponding to the string, or nullopt on error.
  */
 OUSTER_API_FUNCTION
 optional<Polarity> polarity_of_string(const std::string& s);
@@ -1317,7 +1344,7 @@ std::string to_string(NMEABaudRate rate);
  *
  * @param[in] s The string to decode into a NMEA baud rate.
  *
- * @return nmea baud rate corresponding to the string, or 0 on error.
+ * @return nmea baud rate corresponding to the string, or nullopt on error.
  */
 OUSTER_API_FUNCTION
 optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
@@ -1573,7 +1600,7 @@ class OUSTER_API_CLASS PacketFormat {
     struct Impl;
     std::shared_ptr<const Impl> impl_;
 
-    std::vector<std::pair<std::string, ChanFieldType>> field_types_;
+    std::vector<std::pair<std::string, std::pair<ChanFieldType, int>>> field_types_;
 
    public:
     /**
@@ -1852,8 +1879,9 @@ class OUSTER_API_CLASS PacketFormat {
      * @param[in] dst_stride stride for writing to the destination array.
      */
     template <typename T>
-    void col_field(const uint8_t* col_buf, const std::string& f, T* dst,
-                   int dst_stride = 1) const;
+    OUSTER_API_FUNCTION void col_field(const uint8_t* col_buf,
+                                       const std::string& f, T* dst,
+                                       int dst_stride = 1) const;
 
     /**
      * Returns maximum available size of parsing block usable with block_field
@@ -1871,13 +1899,15 @@ class OUSTER_API_CLASS PacketFormat {
      * @tparam T T should be a numeric type large enough to store
      * values of the specified field. Otherwise, data will be truncated.
      *
-     * @param[out] field destination eigen array
-     * @param[in] f the channel field to copy.
+     * @param[out] data destination array to copy field data into.
+     * @param[in] cols number of columns in the destination array.
+     * @param[in] field_name the channel field to copy.
      * @param[in] lidar_buf the lidar buffer.
      */
     template <typename T, int BlockDim>
-    void block_field(Eigen::Ref<img_t<T>> field, const std::string& f,
-                     const uint8_t* lidar_buf) const;
+    OUSTER_API_FUNCTION void block_field(T* data, int cols,
+                                         const std::string& field_name,
+                                         const uint8_t* lidar_buf) const;
 
     // Per-pixel channel data block accessors
 

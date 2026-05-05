@@ -84,7 +84,8 @@ struct SetField {
             field.data(), field.shape(0), field.shape(1));
         // eigen is trash; this extra step is extra annoying
         Eigen::Ref<const ouster::sdk::core::img_t<T>> ref = field_map;
-        self.set_block(ref, field_name_str, packet.buf.data());
+        self.set_block(ref.data(), ref.cols(), field_name_str,
+                       packet.buf.data());
 
         // restore m_ids and statuses
         for (int icol = 0; icol < self.columns_per_packet; ++icol) {
@@ -144,6 +145,8 @@ inline static pybind11::dtype dtype_of_field_type(
             return pybind11::dtype::of<int32_t>();
         case ouster::sdk::core::ChanFieldType::INT64:
             return pybind11::dtype::of<int64_t>();
+        case ouster::sdk::core::ChanFieldType::FLOAT16:
+            return pybind11::dtype("float16");
         case ouster::sdk::core::ChanFieldType::FLOAT32:
             return pybind11::dtype::of<float>();
         case ouster::sdk::core::ChanFieldType::FLOAT64:
@@ -180,6 +183,8 @@ inline static ouster::sdk::core::ChanFieldType cft_of_dtype(
         return ouster::sdk::core::ChanFieldType::INT32;
     } else if (dtype.is(pybind11::dtype::of<int64_t>())) {
         return ouster::sdk::core::ChanFieldType::INT64;
+    } else if (dtype.is(pybind11::dtype("float16"))) {
+        return ouster::sdk::core::ChanFieldType::FLOAT16;
     } else if (dtype.is(pybind11::dtype::of<float>())) {
         return ouster::sdk::core::ChanFieldType::FLOAT32;
     } else if (dtype.is(pybind11::dtype::of<double>())) {

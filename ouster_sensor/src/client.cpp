@@ -477,7 +477,7 @@ std::shared_ptr<Client> init_client(const std::string& hostname,
         } else {
             config.udp_dest = udp_dest_host;
         }
-        if (ld_mode != LidarMode::UNSPECIFIED) {
+        if (ld_mode != LidarMode(0, 0)) {
             config.lidar_mode = ld_mode;
         }
         if (ts_mode != TimestampMode::UNSPECIFIED) {

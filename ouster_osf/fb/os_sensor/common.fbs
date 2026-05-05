@@ -12,7 +12,10 @@ enum CHAN_FIELD_TYPE:uint8 {
     INT32 = 7,
     INT64 = 8,
     FLOAT32 = 9,
-    FLOAT64 = 10
+    FLOAT64 = 10,
+    CHAR = 11,
+    FLOAT16 = 12,
+    ZONE_STATE = 30
 }
 
 // int64 because of this: https://github.com/google/flatbuffers/issues/5161

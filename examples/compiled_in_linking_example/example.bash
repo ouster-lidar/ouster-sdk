@@ -5,6 +5,7 @@ currentDir="$(cd $(dirname $0) && pwd)"
 baseDir=$currentDir/../..
 tempDir="$(mktemp -d)"
 APT_PROXY=${APT_PROXY:-""}
+APT_MIRROR=${APT_MIRROR:-""}
 
 baseImage="ubuntu:22.04"
 if ! [ -z "$1" ]; then
@@ -21,6 +22,7 @@ pwd
 docker build -f $currentDir/Dockerfile --iidfile=$tempDir/iid \
        --network host \
        --build-arg APT_PROXY="$APT_PROXY" \
+       --build-arg APT_MIRROR="$APT_MIRROR" \
        --build-arg BASE=$baseImage .
 
 docker run --rm $(cat $tempDir/iid)

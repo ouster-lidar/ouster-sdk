@@ -27,6 +27,20 @@ namespace sdk {
 namespace core {
 namespace impl {
 
+/**
+ * A packed triple of 16-bit float values.
+ *
+ * Stores three float16_t components (a, b, c) in a single tightly-packed
+ * structure, used for RGB or similar 3-channel float16 field data.
+ */
+#pragma pack(push, 1)
+struct OUSTER_API_CLASS float3x16_t {
+    uint16_t a; /**< First float16 component. */
+    uint16_t b; /**< Second float16 component. */
+    uint16_t c; /**< Third float16 component. */
+};
+#pragma pack(pop)
+
 /*
  * Call a generic operation op<T>(f, Args..) with the type parameter T having
  * the correct (dynamic) field type for the Field `field`
@@ -76,6 +90,10 @@ void visit_field_2d(FieldView& field, OP&& op, Args&&... args) {
         case ChanFieldType::INT64:
             op.template operator()(Eigen::Ref<img_t<int64_t>>(field),
                                    std::forward<Args>(args)...);
+            break;
+        case ChanFieldType::FLOAT16:
+            // op.template operator()(Eigen::Ref<img_t<float16_t>>(field),
+            //                        std::forward<Args>(args)...);
             break;
         case ChanFieldType::FLOAT32:
             op.template operator()(Eigen::Ref<img_t<float>>(field),
@@ -133,6 +151,10 @@ void visit_field_2d(const FieldView& field, OP&& op, Args&&... args) {
             op.template operator()(Eigen::Ref<const img_t<int64_t>>(field),
                                    std::forward<Args>(args)...);
             break;
+        case ChanFieldType::FLOAT16:
+            // op.template operator()(Eigen::Ref<const img_t<float16_t>>(field),
+            //                        std::forward<Args>(args)...);
+            break;
         case ChanFieldType::FLOAT32:
             op.template operator()(Eigen::Ref<const img_t<float>>(field),
                                    std::forward<Args>(args)...);
@@ -150,6 +172,152 @@ void visit_field_2d(const FieldView& field, OP&& op, Args&&... args) {
             break;
         default:
             throw std::invalid_argument("Invalid field for LidarScan");
+    }
+}
+
+/*
+ * Call a generic operation op<T>(f, Args..) with the type parameter T having
+ * the correct (dynamic) field type for the Field `field`
+ * Example code for the operation<T>:
+ * \code
+ * struct print_field_size {
+ *   template <typename T, size_t N>
+ *   void operator()(ArrayView<T, N> field) {
+ *       // Do thing on field here.
+ *   }
+ * };
+ * \endcode
+ */
+template <typename OP, typename... Args>
+void visit_field_ndim(FieldView& field, OP&& op, Args&&... args) {
+    if (field.shape().size() == 3) {
+        switch (field.tag()) {
+            case ChanFieldType::FLOAT16:
+                op.template operator()(ArrayView<float16_t, 3>(field),
+                                       std::forward<Args>(args)...);
+                return;
+            default:
+                throw std::invalid_argument("Invalid field for LidarScan");
+        }
+        throw std::invalid_argument("Unhandled field shape.");
+    } else if (field.shape().size() == 2) {
+        switch (field.tag()) {
+            case ChanFieldType::UINT8:
+                op.template operator()(ArrayView<uint8_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::UINT16:
+                op.template operator()(ArrayView<uint16_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::UINT32:
+                op.template operator()(ArrayView<uint32_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::UINT64:
+                op.template operator()(ArrayView<uint64_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT8:
+                op.template operator()(ArrayView<int8_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT16:
+                op.template operator()(ArrayView<int16_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT32:
+                op.template operator()(ArrayView<int32_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT64:
+                op.template operator()(ArrayView<int64_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::FLOAT16:
+                op.template operator()(ArrayView<float16_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::FLOAT32:
+                op.template operator()(ArrayView<float, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::FLOAT64:
+                op.template operator()(ArrayView<double, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            default:
+                throw std::invalid_argument("Invalid field for LidarScan");
+        }
+    } else {
+        throw std::invalid_argument("Invalid field shape.");
+    }
+}
+
+// @copydoc visit_field_ndim()
+template <typename OP, typename... Args>
+void visit_field_ndim(const FieldView& field, OP&& op, Args&&... args) {
+    if (field.shape().size() == 3) {
+        switch (field.tag()) {
+            case ChanFieldType::FLOAT16:
+                op.template operator()(ConstArrayView<float16_t, 3>(field),
+                                       std::forward<Args>(args)...);
+                return;
+            default:
+                throw std::invalid_argument("Invalid field for LidarScan");
+        }
+        throw std::invalid_argument("Unhandled field shape.");
+    } else if (field.shape().size() == 2) {
+        switch (field.tag()) {
+            case ChanFieldType::UINT8:
+                op.template operator()(ConstArrayView<uint8_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::UINT16:
+                op.template operator()(ConstArrayView<uint16_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::UINT32:
+                op.template operator()(ConstArrayView<uint32_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::UINT64:
+                op.template operator()(ConstArrayView<uint64_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT8:
+                op.template operator()(ConstArrayView<int8_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT16:
+                op.template operator()(ConstArrayView<int16_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT32:
+                op.template operator()(ConstArrayView<int32_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::INT64:
+                op.template operator()(ConstArrayView<int64_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::FLOAT16:
+                op.template operator()(ConstArrayView<float16_t, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::FLOAT32:
+                op.template operator()(ConstArrayView<float, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            case ChanFieldType::FLOAT64:
+                op.template operator()(ConstArrayView<double, 2>(field),
+                                       std::forward<Args>(args)...);
+                break;
+            default:
+                throw std::invalid_argument("Invalid field for LidarScan");
+        }
+    } else {
+        throw std::invalid_argument("Invalid field shape.");
     }
 }
 
@@ -180,6 +348,31 @@ void visit_field(SCAN&& ls, const std::string& name, OP&& op, Args&&... args) {
 }
 
 /*
+ * Call a generic operation op<T>(f, Args..) with the type parameter T having
+ * the correct (dynamic) field type for the LidarScan channel field f
+ * Example code for the operation<T>:
+ * \code
+ * struct print_field_size {
+ *   template <typename T, size_t N>
+ *   void operator()(ArrayView<T, N> field) {
+ *       // Do thing on field here.
+ *   }
+ * };
+ * \endcode
+ */
+template <typename SCAN, typename OP, typename... Args>
+void visit_field_ndim(SCAN&& ls, const std::string& name, OP&& op,
+                      Args&&... args) {
+    // throw early as python downstream expects ValueError
+    if (!ls.has_field(name)) {
+        throw std::invalid_argument("Invalid field for LidarScan");
+    }
+
+    visit_field_ndim(ls.field(name), std::forward<OP>(op),
+                     std::forward<Args>(args)...);
+}
+
+/*
  * Call a generic operation op<T>(f, Args...) for each parsed channel field of
  * the lidar scan with type parameter T having the correct field type
  */
@@ -190,6 +383,21 @@ void foreach_channel_field(SCAN&& ls, const PacketFormat& pf, OP&& op,
         if (ls.has_field(ft.first)) {
             visit_field(ls, ft.first, std::forward<OP>(op), ft.first,
                         std::forward<Args>(args)...);
+        }
+    }
+}
+
+/*
+ * Call a generic operation op<T>(f, Args...) for each parsed channel field of
+ * the lidar scan with type parameter T having the correct field type
+ */
+template <typename SCAN, typename OP, typename... Args>
+void foreach_channel_field_ndim(SCAN&& ls, const PacketFormat& pf, OP&& op,
+                                Args&&... args) {
+    for (const auto& ft : pf) {
+        if (ls.has_field(ft.first)) {
+            visit_field_ndim(ls, ft.first, std::forward<OP>(op), ft.first,
+                             std::forward<Args>(args)...);
         }
     }
 }
@@ -322,9 +530,17 @@ void scan_to_packets(const LidarScan& ls,
 
         auto pack_field = [&pw](auto ref_field, const std::string& i,
                                 LidarPacket& packet) {
-            pw.set_block(ref_field, i, packet.buf.data());
+            if (sizeof(ref_field.shape) / sizeof(ref_field.shape[0]) != 2) {
+                // 3D field (e.g. RGB float16x3): reinterpret as packed type
+                auto ptr =
+                    reinterpret_cast<const float3x16_t*>(ref_field.data());
+                pw.set_block(ptr, ref_field.shape[1], i, packet.buf.data());
+            } else {
+                pw.set_block(ref_field.data(), ref_field.shape[1], i,
+                             packet.buf.data());
+            }
         };
-        foreach_channel_field(ls, pw, pack_field, lidar_packet);
+        foreach_channel_field_ndim(ls, pw, pack_field, lidar_packet);
 
         if (raw_headers_enabled(pw, ls)) {
             auto unpack_raw_headers = [&pw](auto ref_field,
@@ -571,6 +787,38 @@ inline void destagger_into(const Eigen::Ref<const img_t<T>>& img,
     }
 }
 
+template <typename T, int ndim>
+inline void destagger_into(
+    const Eigen::TensorRef<const Eigen::Tensor<T, ndim, Eigen::RowMajor>>& img,
+    const std::vector<int>& pixel_shift_by_row, bool inverse,
+    Eigen::TensorRef<Eigen::Tensor<T, ndim, Eigen::RowMajor>> destaggered) {
+    const size_t h = img.dimension(0);
+    const size_t w = img.dimension(1);
+
+    if (pixel_shift_by_row.size() != h) {
+        throw std::invalid_argument{"image height does not match shifts size"};
+    }
+
+    int sign = inverse ? -1 : +1;
+
+    const auto* const g = (const T*)img.data();
+    const auto d = (T*)destaggered.data();
+
+    auto n_elements = 1;
+    for (int i = 2; i < ndim; i++) {
+        n_elements *= img.dimension(i);
+    }
+
+    for (size_t u = 0; u < h; ++u) {
+        const auto g_row = g + (u * w) * n_elements;
+        const auto d_row = d + (u * w) * n_elements;
+        const int offset =
+            ((w + sign * pixel_shift_by_row[u] % w) % w) * n_elements;
+        memcpy(d_row, g_row + (w * n_elements - offset), offset * sizeof(T));
+        memcpy(d_row + offset, g_row, (w * n_elements - offset) * sizeof(T));
+    }
+}
+
 // destagger into a new array
 template <typename T>
 inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& img,
@@ -580,6 +828,20 @@ inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& img,
     const size_t w = img.cols();
 
     img_t<T> destaggered{h, w};
+    destagger_into<T>(img, pixel_shift_by_row, inverse, destaggered);
+    return destaggered;
+}
+
+// destagger into a new array
+template <typename T, int ndim>
+inline Eigen::Tensor<T, ndim, Eigen::RowMajor> destagger(
+    const Eigen::TensorRef<const Eigen::Tensor<T, ndim, Eigen::RowMajor>>& img,
+    const std::vector<int>& pixel_shift_by_row, bool inverse) {
+    Eigen::Vector<Eigen::Index, ndim> size_array;
+    for (size_t i = 0; i < ndim; i++) {
+        size_array[i] = img.dimension(i);
+    }
+    Eigen::Tensor<T, ndim, Eigen::RowMajor> destaggered{size_array};
     destagger_into<T>(img, pixel_shift_by_row, inverse, destaggered);
     return destaggered;
 }

@@ -4,17 +4,13 @@ All rights reserved.
 """
 
 from enum import Enum
-from typing import Callable, List, Union
+from typing import Callable, Union
 import logging
 
 import numpy as np
 
 from ouster.sdk._bindings.client import (LidarScan, SensorInfo, Packet)
-
-from ouster.sdk._bindings.client import (destagger_int8, destagger_int16, destagger_int32,
-                      destagger_int64, destagger_uint8, destagger_uint16,
-                      destagger_uint32, destagger_uint64, destagger_float,
-                      destagger_double, destagger_bool)
+from ouster.sdk._bindings.client import destagger as _destagger
 
 from ouster.sdk._bindings.client import XYZLut as client_XYZLut
 from ouster.sdk._bindings.client import XYZLutFloat as client_XYZLutFloat
@@ -30,6 +26,10 @@ class ChanField:
     RANGE2 = "RANGE2"
     SIGNAL = "SIGNAL"
     SIGNAL2 = "SIGNAL2"
+    R = "R"
+    G = "G"
+    B = "B"
+    RGB = "RGB"
     REFLECTIVITY = "REFLECTIVITY"
     REFLECTIVITY2 = "REFLECTIVITY2"
     NEAR_IR = "NEAR_IR"
@@ -81,23 +81,6 @@ class ColHeader(Enum):
         return self.value
 
 
-def _destagger(field: np.ndarray, shifts: List[int],
-               inverse: bool) -> np.ndarray:
-    return {
-        np.dtype(bool): destagger_bool,
-        np.dtype(np.int8): destagger_int8,
-        np.dtype(np.int16): destagger_int16,
-        np.dtype(np.int32): destagger_int32,
-        np.dtype(np.int64): destagger_int64,
-        np.dtype(np.uint8): destagger_uint8,
-        np.dtype(np.uint16): destagger_uint16,
-        np.dtype(np.uint32): destagger_uint32,
-        np.dtype(np.uint64): destagger_uint64,
-        np.dtype(np.single): destagger_float,
-        np.dtype(np.double): destagger_double,
-    }[field.dtype](field, shifts, inverse)
-
-
 def stagger(info: SensorInfo,
             fields: np.ndarray) -> np.ndarray:
     """Return a staggered copy of the provided fields.
@@ -135,25 +118,12 @@ def destagger(info: SensorInfo,
     Returns:
         A destaggered numpy array of the same shape
     """
-    h = info.format.pixels_per_column
-    w = info.format.columns_per_frame
     shifts = info.format.pixel_shift_by_row
 
-    # remember original shape
-    shape = fields.shape
-    fields = fields.reshape((h, w, -1))
+    if fields.shape[0] != info.h or fields.shape[1] != info.w:
+        raise ValueError("Array must match SensorInfo dimension.")
 
-    # don't bother dstacking if we are only a 2d array
-    if fields.shape[2] == 1:
-        return _destagger(fields[:, :, 0], shifts, inverse).reshape(shape)
-
-    # apply destagger to each channel
-    # note: astype() needed due to some strange behavior of the pybind11
-    # bindings. The wrong overload is chosen otherwise (due to the indexing?)
-    return np.dstack([
-        _destagger(fields[:, :, i], shifts, inverse)
-        for i in range(fields.shape[2])
-    ]).reshape(shape)
+    return _destagger(fields, shifts, inverse)
 
 
 def XYZLut(

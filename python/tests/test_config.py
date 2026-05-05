@@ -35,7 +35,7 @@ def test_operating_mode_misc() -> None:
     # the number of OperatingMode members is set to 4 because we are keeping
     # the deprecated constants for the time being.
     assert len(
-        core.OperatingMode.__members__) == 4, "Don't forget to update tests!"
+        core.OperatingMode.__members__) == 6, "Don't forget to update tests!"
     assert core.OperatingMode.from_string("foo") is None
     assert core.OperatingMode(1) == core.OperatingMode.NORMAL
 

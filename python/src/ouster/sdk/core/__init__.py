@@ -62,6 +62,7 @@ from ouster.sdk._bindings.client import LidarScanSet
 from ouster.sdk._bindings.client import BloomReductionOptimization
 from ouster.sdk._bindings.client import INVALID_VERSION
 from ouster.sdk._bindings.client import normals
+from ouster.sdk._bindings.client import AutoExposure
 
 from .data import BufferT
 from .data import ColHeader

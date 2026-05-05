@@ -6,6 +6,7 @@ baseDir="$currentDir/../.."
 tempDir="$(mktemp -d)"
 VCPKG_BINARY_SOURCES=${VCPKG_BINARY_SOURCES:-""}
 APT_PROXY=${APT_PROXY:-""}
+APT_MIRROR=${APT_MIRROR:-""}
 
 baseImage="ubuntu:22.04"
 if ! [ -z "$1" ]; then
@@ -21,6 +22,7 @@ docker build -f "$currentDir/Dockerfile" --iidfile="$tempDir/iid" \
   --network host \
   --build-arg BASE="$baseImage" \
   --build-arg APT_PROXY="$APT_PROXY" \
+  --build-arg APT_MIRROR="$APT_MIRROR" \
   --build-arg VCPKG_BINARY_SOURCES="$VCPKG_BINARY_SOURCES" .
 
 docker run --rm "$(cat "$tempDir/iid")"

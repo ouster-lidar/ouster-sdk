@@ -1041,7 +1041,8 @@ def model_viz(ctx: SourceCommandContext, axes: bool, **kwargs) -> None:
     View a pointcloud or stl file.
     """
     from ouster.sdk import viz
-    from ouster.sdk.core import read_pointcloud
+    from ouster.cli.plugins.read_pointcloud_color import read_pointcloud_color
+
     from ouster.sdk.zone_monitor import Stl
 
     pviz = viz.PointViz("Model Viewer")
@@ -1053,13 +1054,16 @@ def model_viz(ctx: SourceCommandContext, axes: bool, **kwargs) -> None:
         mesh = Stl(uri).to_mesh()
         m = viz.Mesh.from_simple_mesh(mesh)
         pviz.add(m)
-    else:
-        pts = read_pointcloud(uri)
+    elif ".ply" in uri or ".pcd" in uri:
+        pts = read_pointcloud_color(uri)
         cld = viz.Cloud(pts.shape[0])
-        cld.set_xyz(pts[:, 0:3])
+        cld.set_xyz(np.ascontiguousarray(pts[:, :3], np.float32))
+        cld.set_key(np.ascontiguousarray(pts[:, 3:], np.float32))
         cld.set_point_size(3)
-        cld.set_key(np.mod(pts[:, 2], 1))
         pviz.add(cld)
+    else:
+        click.secho("Unsupported file type. Only .stl, .ply, .pcd, and .las are supported.", fg="red")
+        exit(1)
 
     if axes:
         helper = viz.util.AxisWithLabel(pviz)  # noqa: F841
@@ -1157,16 +1161,25 @@ def source_mask(ctx: SourceCommandContext, image_path: str, fields: str, **kwarg
     help="Path to zone configuration zip to use. If not provided uses configuration"
     " from the underlying source."
 )
-@click.option('-l', '--live', default=None, type=str, help="Comma separated list of zones to make live.")
+@click.option('-l', '--live', default=None, type=str,
+              help="Comma separated list of zones to make live."
+                   " Cannot be combined with --keep-live-ids.")
 @click.option('--no-render', is_flag=True, default=False,
-              help="If true, do not render zones and use those stored in configuration.")
+              help="Do not render zones and use those stored in configuration.")
+@click.option('--keep-sensor-to-body', '-s', is_flag=True, default=False,
+              help="Use sensor to body transform from the zones stored in the"
+                   " original source.")
+@click.option('--keep-live-ids', '-z', is_flag=True, default=False,
+              help="Use live zones ids from zone data in the original source. Cannot be combined with --live.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR)
 def source_emulate_zones(
     ctx: SourceCommandContext,
     config: Optional[str],
     live: Optional[str],
-    no_render: bool
+    no_render: bool,
+    keep_sensor_to_body: bool,
+    keep_live_ids: bool
 ):
     """
     Emulate zone monitoring off-sensor.
@@ -1191,8 +1204,17 @@ def source_emulate_zones(
         print("emulate_zones: No zone monitor configuration available.")
         exit(1)
 
+    if keep_sensor_to_body:
+        if sensor_info.zone_set is None:
+            print("emulate_zones: --keep-sensor-to-body requires existing zones.")
+            exit(1)
+        zone_set.sensor_to_body_transform = sensor_info.zone_set.sensor_to_body_transform
+
     # setting live zones by parameter
     if live is not None:
+        if keep_live_ids:
+            print("emulate_zones: --live and --keep-live-ids cannot be combined.")
+            exit(1)
         live_zones = []
         for id in live.split(','):
             try:
@@ -1207,6 +1229,12 @@ def source_emulate_zones(
     if sensor_info.config.udp_dest_zm is None:
         sensor_info.config.udp_dest_zm = "127.0.0.1"
     sensor_info.format.zone_monitoring_enabled = True
+
+    if keep_live_ids and sensor_info.zone_set:
+        if len(sensor_info.zone_set.zones) > len(zone_set.zones):
+            print("emulate_zones: --keep-live-ids requires new zone set to contain"
+                  " as least as many zones as the previous.")
+            exit(1)
 
     # render zones
     sensor_info.zone_set = zone_set
@@ -1225,6 +1253,13 @@ def source_emulate_zones(
             # TODO[tws] figure out what to do with Multi
             scan = scans[0]
             if scan.has_field(ZONE_STATES_FIELDNAME):
+                if keep_live_ids:
+                    data = scan.field(ZONE_STATES_FIELDNAME)
+                    live_zones = []
+                    for zone in data:
+                        if zone.id != 255:
+                            live_zones.append(zone.id)
+                    emulator.set_live_zones(live_zones)
                 scan.del_field(ZONE_STATES_FIELDNAME)
             if scan.has_field(ZONE_OCCUPANCY_FIELDNAME):
                 scan.del_field(ZONE_OCCUPANCY_FIELDNAME)
@@ -1455,6 +1490,7 @@ source: SourceMultiCommand
                     "\n\n-e X,Y,Z,R,P,Y ; 'X Y Z' for position (meters), 'R P Y' represent euler angles (deg)"
                     "\n\n-e X,Y,Z,QX,QY,QZ,QW ; 'X Y Z' for position (meters), 'QX, QY QZ, QW' represent a quaternion"
                     "\n\n-e n1,n2,..,n16 ; 16 float representing a 2D array in a row-major order"
+                    "\n\n-e zone ; Use sensor to body transform stored in zones."
                     "\n\nIf more than one sensor is present in the source and this argument is used"
                     " then the same extrinsics will be applied to all sensors except when using"
                     " an extrinsics file.")
@@ -1512,7 +1548,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
     resolved_extrinsics: Optional[Union[str, np.ndarray]] = None
     resolved_initial_pose: Optional[np.ndarray] = None
 
-    if extrinsics:
+    if extrinsics and extrinsics != "zone":
         resolved_extrinsics = parse_extrinsics_from_string(extrinsics)
 
     if initial_pose:
@@ -1664,6 +1700,16 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                     scan_source = scan_source.single(idx)
             else:
                 scan_source = open_source(source_list, **ctx.source_options, collate=False)
+
+            # override extrinsics from zones if requested
+            if extrinsics == "zone":
+                for info in scan_source.sensor_info:
+                    if info.zone_set:
+                        info.extrinsic = info.zone_set.sensor_to_body_transform
+                    else:
+                        click.secho("ERROR: cannot set extrinsics to zone as no zone_set present on sensor in source.",
+                                fg="red")
+                        return
 
             # HACK: We need to redesign how the ScanSource is passed is passed and
             # used, the current pipeline skips the scan_source and simply uses the

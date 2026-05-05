@@ -136,18 +136,21 @@ void init_client_field(py::module& module, py::module& /*unused*/) {
         .def("__str__", [](const FieldType& self) { return to_string(self); });
 
     py::class_<FieldInfo>(module, "FieldInfo")
-        .def(py::init(
-            [](py::object dtype, size_t offset, uint64_t mask, int shift) {
-                return new FieldInfo{cft_of_dtype(py::dtype::from_args(dtype)),
-                                     offset, mask, shift};
-            }))
+        .def(py::init([](py::object dtype, size_t offset, uint64_t mask,
+                         int shift, int num_elements) {
+                 return new FieldInfo{cft_of_dtype(py::dtype::from_args(dtype)),
+                                      offset, mask, shift, num_elements};
+             }),
+             py::arg("dtype_arg"), py::arg("offset"), py::arg("mask"),
+             py::arg("shift"), py::arg("num_elements") = 1)
         .def_property_readonly("ty_tag",
                                [](const FieldInfo& self) {
                                    return dtype_of_field_type(self.ty_tag);
                                })
         .def_readwrite("offset", &FieldInfo::offset)
         .def_readwrite("mask", &FieldInfo::mask)
-        .def_readwrite("shift", &FieldInfo::shift);
+        .def_readwrite("shift", &FieldInfo::shift)
+        .def_readwrite("num_elements", &FieldInfo::num_elements);
 
     module.def(
         "resolve_field_types",

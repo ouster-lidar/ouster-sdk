@@ -369,15 +369,34 @@ class OUSTER_API_CLASS LidarScan {
 
     /**
      * @copydoc ClientLidarScanField
+     *
+     * @par Supported \c T
+     * \c field<T>() supports element types \c uint8_t, \c int8_t, \c uint16_t,
+     * \c int16_t, \c uint32_t, \c int32_t, \c uint64_t, \c int64_t, \c float,
+     * \c float16_t, and \c double.
      */
+    // NOTE: defined inline on purpose. Apple Clang 13 has a mangling bug where
+    // explicit instantiation of these member function templates produces an
+    // ABI-incompatible mangle for the dependent default StrideType expression
+    // in Eigen::Ref. Defining inline forces every TU to implicitly instantiate
+    // from the same header, which keeps mangling consistent across the
+    // library and its consumers
     template <typename T>
-    Eigen::Ref<img_t<T>> field(const std::string& f);
+    OUSTER_API_FUNCTION Eigen::Ref<img_t<T>> field(const std::string& f) {
+        return field(f);
+    }
 
     /**
      * @copydoc ClientLidarScanField
+     *
+     * @par Supported \c T
+     * Same element types as the non-const \c field() template above.
      */
     template <typename T>
-    Eigen::Ref<const img_t<T>> field(const std::string& f) const;
+    OUSTER_API_FUNCTION Eigen::Ref<const img_t<T>> field(
+        const std::string& f) const {
+        return field(f);
+    }
 
     /**
      * @defgroup ClientLidarScanFieldString Access fields in a lidar scan

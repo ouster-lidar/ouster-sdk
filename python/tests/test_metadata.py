@@ -39,13 +39,26 @@ def test_timestamp_mode_misc() -> None:
 
 def test_lidar_mode_misc() -> None:
     """Check some misc properties of lidar mode."""
-    # the number of LidarMode members is set to 14 because we are keeping
-    # the deprecated constants for the time being.
-    assert len(
-        core.LidarMode.__members__) == 14, "Don't forget to update tests!"
-    assert core.LidarMode.from_string('foo') == core.LidarMode.UNSPECIFIED
-    assert core.LidarMode(0) == core.LidarMode.UNSPECIFIED
-    assert str(core.LidarMode.UNSPECIFIED) == "UNKNOWN"
+    assert core.LidarMode('100x20') == core.LidarMode(100, 20)
+    mode = core.LidarMode(1, 2)
+    assert mode.fps == 2
+    assert mode.columns == 1
+    with pytest.raises(ValueError):
+        core.LidarMode('wrong')
+    with pytest.raises(ValueError):
+        core.LidarMode('x')
+    with pytest.raises(ValueError):
+        core.LidarMode('100x')
+    with pytest.raises(ValueError):
+        core.LidarMode('x100')
+    with pytest.raises(ValueError):
+        core.LidarMode('100')
+    with pytest.raises(ValueError):
+        core.LidarMode('-10x-10')
+    with pytest.raises(ValueError):
+        core.LidarMode('-x-')
+    with pytest.raises(ValueError):
+        core.LidarMode('')
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])

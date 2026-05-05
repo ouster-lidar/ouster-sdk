@@ -34,6 +34,8 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+using ouster::sdk::core::impl::float3x16_t;
+
 namespace ouster {
 namespace sdk {
 namespace core {
@@ -94,6 +96,28 @@ static const Table<std::string, ChanFieldType, 6> SINGLE_FIELD_SLOTS{{
     {ChanField::FLAGS, ChanFieldType::UINT8},
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
     {ChanField::WINDOW, ChanFieldType::UINT8},
+}};
+
+static const Table<std::string, ChanFieldType, 6> RGB_FIELD_SLOTS{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::SIGNAL, ChanFieldType::UINT16},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+    {ChanField::RGB, ChanFieldType::FLOAT16},  // this is turned into a 3d array
+    {ChanField::FLAGS, ChanFieldType::UINT8},
+}};
+
+static const Table<std::string, ChanFieldType, 10> DUAL_RGB_FIELD_SLOTS{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::RANGE2, ChanFieldType::UINT32},
+    {ChanField::SIGNAL, ChanFieldType::UINT16},
+    {ChanField::SIGNAL2, ChanFieldType::UINT16},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+    {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
+    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+    {ChanField::RGB, ChanFieldType::FLOAT16},
+    {ChanField::FLAGS, ChanFieldType::UINT8},
+    {ChanField::FLAGS2, ChanFieldType::UINT8},
 }};
 
 static const Table<std::string, ChanFieldType, 4> LB_FIELD_SLOTS{{
@@ -179,6 +203,10 @@ Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_scan_fields
       {ZM_LB_FIELD_SLOTS.data(), ZM_LB_FIELD_SLOTS.size()}},
      {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_ZONE16,
       {ZM_SINGLE_FIELD_SLOTS.data(), ZM_SINGLE_FIELD_SLOTS.size()}},
+     {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16,
+      {RGB_FIELD_SLOTS.data(), RGB_FIELD_SLOTS.size()}},
+     {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16_DUAL,
+      {DUAL_RGB_FIELD_SLOTS.data(), DUAL_RGB_FIELD_SLOTS.size()}},
 }};
 // clang-format on
 
@@ -483,40 +511,10 @@ Field LidarScan::del_field(const std::string& name) {
     return ptr;
 }
 
-template <typename T>
-Eigen::Ref<img_t<T>> LidarScan::field(const std::string& name) {
-    return field(name);
-}
-
-template <typename T>
-Eigen::Ref<const img_t<T>> LidarScan::field(const std::string& name) const {
-    return field(name);
-}
-
-// explicitly instantiate for each supported field type
-
-// clang-format off
-template Eigen::Ref<img_t<uint8_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<uint16_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<uint32_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<uint64_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<int8_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<int16_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<int32_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<int64_t>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<float>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<img_t<double>> LidarScan::field(const std::string& field_name);
-template Eigen::Ref<const img_t<uint8_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<uint16_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<uint32_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<uint64_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<int8_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<int16_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<int32_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<int64_t>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<float>> LidarScan::field(const std::string& field_name) const;
-template Eigen::Ref<const img_t<double>> LidarScan::field(const std::string& field_name) const;
-// clang-format on
+// LidarScan::field<T>(...) is defined inline in lidar_scan.h to work around
+// an Apple Clang mangling bug for the dependent default StrideType expression
+// in Eigen::Ref. See the note in lidar_scan.h. (float16_t and other types are
+// covered by implicit instantiation wherever they are used.)
 
 static FieldType get_field_type(const std::string& name, const Field& field) {
     int offset = 0;
@@ -803,6 +801,13 @@ LidarScanFieldTypes get_field_types(const DataFormat& format,
     LidarScanFieldTypes field_types =
         impl::lookup_scan_fields(format.udp_profile_lidar);
 
+    // update RGB to 3D since the table doesn't support this information
+    for (auto& field_type : field_types) {
+        if (field_type.name == "RGB") {
+            field_type.extra_dims.push_back(3);
+        }
+    }
+
     size_t imu_measurements =
         format.imu_packets_per_frame * format.imu_measurements_per_packet;
 
@@ -1051,17 +1056,6 @@ ScanBatcher::ScanBatcher(const SensorInfo& info)
 namespace {
 
 /*
- * Generic operation to set all columns in the range [start, end) to zero
- */
-struct ZeroFieldCols {
-    template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, const std::string& /*unused*/,
-                    std::ptrdiff_t start, std::ptrdiff_t end) const {
-        field.block(0, start, field.rows(), end - start).setZero();
-    }
-};
-
-/*
  * Zero out all measurement block headers in range [start, end)
  */
 void zero_header_cols(LidarScan& lidar_scan, std::ptrdiff_t start,
@@ -1076,8 +1070,8 @@ void zero_header_cols(LidarScan& lidar_scan, std::ptrdiff_t start,
  * into a scan
  */
 struct ParseFieldCol {
-    template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, const std::string& field_name,
+    template <typename T, size_t NDim>
+    void operator()(ArrayView<T, NDim> field, const std::string& field_name,
                     uint16_t m_id, const PacketFormat& packet_format,
                     const uint8_t* col_buf) const {
         // RAW_HEADERS field is populated separately because it has
@@ -1087,8 +1081,20 @@ struct ParseFieldCol {
             return;
         }
 
-        packet_format.col_field(col_buf, field_name, field.col(m_id).data(),
-                                field.cols());
+        // RGB is stored in LidarScan as H x W x 3 float16_t values, but the
+        // packet helpers currently read/write each pixel as one packed 3x16-bit
+        // element. This cast relies on those layouts matching.
+        // TODO: teach PacketFormat about multi-element fields directly.
+        if (NDim == 3) {
+            packet_format.col_field(col_buf, field_name,
+                                    reinterpret_cast<float3x16_t*>(
+                                        field.subview(keep(), m_id).data()),
+                                    field.shape[1]);
+        } else {
+            packet_format.col_field(col_buf, field_name,
+                                    field.subview(keep(), m_id).data(),
+                                    field.shape[1]);
+        }
     }
 };
 
@@ -1155,6 +1161,47 @@ struct PackRawHeadersCol {
     }
 };
 
+void zero_field(LidarScan& scan, const std::string& name, std::ptrdiff_t start,
+                std::ptrdiff_t end, bool check_exists = true) {
+    if (check_exists && !scan.has_field(name)) {
+        return;
+    }
+
+    if (start == end) {
+        return;
+    }
+
+    auto& field = scan.field(name);
+
+    // zero the specified area of each column
+    auto slice_size = (end - start) * field.desc().element_size;
+    auto start_ptr = static_cast<uint8_t*>(field.get<void>());
+    auto row_size = field.desc().element_size;
+    for (size_t i = 1; i < field.shape().size(); i++) {
+        row_size *= field.shape()[i];
+    }
+    auto byte_offset = field.desc().element_size * start;
+    for (size_t i = 2; i < field.shape().size(); i++) {
+        slice_size *= field.shape()[i];
+        byte_offset *= field.shape()[i];
+    }
+    start_ptr += byte_offset;
+    for (size_t i = 0; i < field.shape()[0]; i++) {
+        memset(start_ptr + i * row_size, 0, slice_size);
+    }
+}
+
+void zero_fields(LidarScan& scan, const PacketFormat& packet_format,
+                 std::ptrdiff_t start, std::ptrdiff_t end) {
+    for (const auto& field_type : packet_format) {
+        if (!scan.has_field(field_type.first)) {
+            continue;
+        }
+
+        zero_field(scan, field_type.first, start, end, false);
+    }
+}
+
 }  // namespace
 
 void ScanBatcher::parse_by_col(const uint8_t* packet_buf,
@@ -1175,9 +1222,8 @@ void ScanBatcher::parse_by_col(const uint8_t* packet_buf,
         if (raw_headers) {
             // zero out missing columns if we jumped forward
             if (m_id >= next_headers_m_id_) {
-                impl::visit_field(lidar_scan, ChanField::RAW_HEADERS,
-                                  ZeroFieldCols{}, "", next_headers_m_id_,
-                                  m_id);
+                zero_field(lidar_scan, ChanField::RAW_HEADERS,
+                           next_headers_m_id_, m_id);
                 next_headers_m_id_ = m_id + 1;
             }
 
@@ -1193,8 +1239,7 @@ void ScanBatcher::parse_by_col(const uint8_t* packet_buf,
 
         // zero out missing columns if we jumped forward
         if (m_id >= next_valid_m_id_) {
-            impl::foreach_channel_field(lidar_scan, pf, ZeroFieldCols{},
-                                        next_valid_m_id_, m_id);
+            zero_fields(lidar_scan, pf, next_valid_m_id_, m_id);
             zero_header_cols(lidar_scan, next_valid_m_id_, m_id);
             next_valid_m_id_ = m_id + 1;
         }
@@ -1204,8 +1249,8 @@ void ScanBatcher::parse_by_col(const uint8_t* packet_buf,
         lidar_scan.measurement_id()[m_id] = m_id;
         lidar_scan.status()[m_id] = status;
 
-        impl::foreach_channel_field(lidar_scan, pf, ParseFieldCol{}, m_id, pf,
-                                    col_buf);
+        impl::foreach_channel_field_ndim(lidar_scan, pf, ParseFieldCol{}, m_id,
+                                         pf, col_buf);
     }
 }
 
@@ -1215,11 +1260,22 @@ void ScanBatcher::parse_by_col(const uint8_t* packet_buf,
  */
 template <int BlockDim>
 struct ParseFieldBlock {
-    template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, const std::string& field_name,
+    template <typename T, size_t NDim>
+    void operator()(ArrayView<T, NDim> field, const std::string& field_name,
                     const PacketFormat& packet_format,
                     const uint8_t* packet_buf) const {
-        packet_format.block_field<T, BlockDim>(field, field_name, packet_buf);
+        // RGB is stored in LidarScan as H x W x 3 float16_t values, but the
+        // packet helpers currently read/write each pixel as one packed 3x16-bit
+        // element. This cast relies on those layouts matching.
+        // TODO: teach PacketFormat about multi-element fields directly.
+        if (NDim == 3) {
+            packet_format.block_field<float3x16_t, BlockDim>(
+                reinterpret_cast<impl::float3x16_t*>(field.data()),
+                field.shape[1], field_name, packet_buf);
+        } else {
+            packet_format.block_field<T, BlockDim>(field.data(), field.shape[1],
+                                                   field_name, packet_buf);
+        }
     }
 };
 
@@ -1229,8 +1285,7 @@ void ScanBatcher::parse_by_block(const uint8_t* packet_buf,
     const uint16_t first_m_id =
         pf.col_measurement_id(pf.nth_col(0, packet_buf));
     if (first_m_id >= next_valid_m_id_) {
-        impl::foreach_channel_field(lidar_scan, pf, ZeroFieldCols{},
-                                    next_valid_m_id_, first_m_id);
+        zero_fields(lidar_scan, pf, next_valid_m_id_, first_m_id);
         zero_header_cols(lidar_scan, next_valid_m_id_, first_m_id);
         next_valid_m_id_ = first_m_id + pf.columns_per_packet;
     }
@@ -1250,16 +1305,16 @@ void ScanBatcher::parse_by_block(const uint8_t* packet_buf,
 
     switch (pf.block_parsable()) {
         case 16:
-            impl::foreach_channel_field(lidar_scan, pf, ParseFieldBlock<16>{},
-                                        pf, packet_buf);
+            impl::foreach_channel_field_ndim(
+                lidar_scan, pf, ParseFieldBlock<16>{}, pf, packet_buf);
             break;
         case 8:
-            impl::foreach_channel_field(lidar_scan, pf, ParseFieldBlock<8>{},
-                                        pf, packet_buf);
+            impl::foreach_channel_field_ndim(
+                lidar_scan, pf, ParseFieldBlock<8>{}, pf, packet_buf);
             break;
         case 4:
-            impl::foreach_channel_field(lidar_scan, pf, ParseFieldBlock<4>{},
-                                        pf, packet_buf);
+            impl::foreach_channel_field_ndim(
+                lidar_scan, pf, ParseFieldBlock<4>{}, pf, packet_buf);
             break;
         default:
             throw std::invalid_argument("Invalid block dim for packet format");
@@ -1563,13 +1618,13 @@ bool ScanBatcher::check_scan_complete(const LidarScan& lidar_scan) const {
 
 void ScanBatcher::finalize_scan(LidarScan& lidar_scan) {
     if (next_valid_m_id_ < w_) {
-        impl::foreach_channel_field(lidar_scan, pf, ZeroFieldCols{},
-                                    next_valid_m_id_, w_);
+        zero_fields(lidar_scan, pf, next_valid_m_id_,
+                    static_cast<std::ptrdiff_t>(w_));
     }
 
     if (impl::raw_headers_enabled(pf, lidar_scan)) {
-        impl::visit_field(lidar_scan, ChanField::RAW_HEADERS, ZeroFieldCols{},
-                          "", next_headers_m_id_, w_);
+        zero_field(lidar_scan, ChanField::RAW_HEADERS, next_headers_m_id_,
+                   static_cast<std::ptrdiff_t>(w_));
     }
 
     finished_scan_id_ = lidar_scan.frame_id;

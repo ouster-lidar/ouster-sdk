@@ -122,7 +122,7 @@ def test_map_max_min(ae_with_params, normal_data_with_outliers, straight_line,
     auto_exposure, params = ae_with_params
 
     def test_max_min(key, ae):
-        ae(key)
+        ae.update(key)
         assert (np.all(key >= 0.0))
         assert (np.all(key <= 1.0))
 
@@ -147,7 +147,7 @@ def test_map_zero(ae_with_params, normal_data_with_outliers, straight_line,
         zeros = (key <= 0.0)
         if (np.all(zeros == False)):  # can't map when they're all 0
             return
-        ae(key)
+        ae.update(key)
         assert (np.all(key[zeros] == 0.0))
 
     test_zero(normal_data_with_outliers, auto_exposure)
@@ -162,7 +162,7 @@ def test_map_constant(ae_with_params):
     auto_exposure, params = ae_with_params
 
     def test_constant(key, ae):
-        ae(key)
+        ae.update(key)
         assert (np.all(key == key[0, 0]))
 
     ones = np.ones((50, 100))
@@ -181,7 +181,7 @@ def test_straight_line(ae_with_params, straight_line):
     auto_exposure, params = ae_with_params
     lo_percentile, hi_percentile, update_every = params
 
-    auto_exposure(straight_line)
+    auto_exposure.update(straight_line)
     assert (np.count_nonzero(np.isclose(straight_line, 0.0) == 1))
     max_after_ae = np.max(straight_line)
     assert (np.count_nonzero(np.isclose(straight_line, max_after_ae) == 1))
@@ -209,7 +209,7 @@ def test_map_normal_distribution(ae_with_params, normal_params):
         return
 
     key = np.random.normal(mean, stddev, (rows, cols))
-    auto_exposure(key)
+    auto_exposure.update(key)
     assert (np.count_nonzero(
         np.isclose(key, 0.0) <= lo_percentile * rows * cols * .5))
     assert (np.count_nonzero(np.isclose(key, 1.0)) <=
@@ -228,7 +228,7 @@ def test_map_normal_with_outliers(ae_with_params, normal_params):
 
     key, low_outliers, high_outliers = outlierize_normal_data(
         mean, stddev, rows, cols)
-    auto_exposure(key)
+    auto_exposure.update(key)
 
     assert (np.all(np.isclose(key[low_outliers], 0.0)))
     assert (np.all(np.isclose(key[high_outliers], 1.0)))
@@ -253,8 +253,8 @@ def test_real_data_skewed(ae_with_params, normal_params):
         normal_data_copy[randrow, randcol] = 0.0
         blanked_out[randrow, randcol] = True
 
-    auto_exposure(normal_data)
-    auto_exposure(normal_data_copy)
+    auto_exposure.update(normal_data)
+    auto_exposure.update(normal_data_copy)
 
     # use large atol b/c should be similar, not exactly alike
     assert (np.all(
@@ -275,18 +275,18 @@ def test_multiple_updates(ae_with_params, normal_params):
     key0 = outlierize_normal_data(mean, stddev, rows, cols)[0]
     key0_copy = np.array(key0)
 
-    auto_exposure(key0)
-    auto_exposure_copy(key0_copy)
+    auto_exposure.update(key0)
+    auto_exposure_copy.update(key0_copy)
 
     # now we differentiate the copy
     key1 = outlierize_normal_data(2000, 150, rows, cols)[0]
-    auto_exposure_copy(key1)
+    auto_exposure_copy.update(key1)
 
     key2 = outlierize_normal_data(mean, stddev, rows, cols)[0]
     key2_copy = np.array(key2)
 
-    auto_exposure(key2)
-    auto_exposure(key2_copy)
+    auto_exposure.update(key2)
+    auto_exposure.update(key2_copy)
 
     assert (not np.allclose(key2, key2_copy))
 

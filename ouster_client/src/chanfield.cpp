@@ -40,6 +40,8 @@ std::string to_string(ChanFieldType field_type) {
             return "FLOAT64";
         case ChanFieldType::CHAR:
             return "CHAR";
+        case ChanFieldType::FLOAT16:
+            return "FLOAT16";
         default:
             return "UNKNOWN";
     }
@@ -56,6 +58,7 @@ size_t field_type_size(ChanFieldType field_type) {
             return 1;
         case ChanFieldType::INT16:
         case ChanFieldType::UINT16:
+        case ChanFieldType::FLOAT16:
             return 2;
         case ChanFieldType::INT32:
         case ChanFieldType::UINT32:

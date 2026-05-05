@@ -58,6 +58,7 @@ template <> ChanFieldType type_cft<int32_t>() { return ChanFieldType::INT32; }
 template <> ChanFieldType type_cft<int64_t>() { return ChanFieldType::INT64; }
 template <> ChanFieldType type_cft<float>() { return ChanFieldType::FLOAT32; }
 template <> ChanFieldType type_cft<double>() { return ChanFieldType::FLOAT64; }
+template <> ChanFieldType type_cft<float16_t>() { return ChanFieldType::FLOAT16; }
 template <> ChanFieldType type_cft<char>() { return ChanFieldType::CHAR; }
 template <> ChanFieldType type_cft<ZoneState>() {
     return ChanFieldType::ZONE_STATE;
@@ -115,6 +116,8 @@ ChanFieldType FieldDescriptor::tag() const {
         return type_cft<float>();
     } else if (type == type_hash<double>()) {
         return type_cft<double>();
+    } else if (type == type_hash<float16_t>()) {
+        return type_cft<float16_t>();
     } else if (type == type_hash<char>()) {
         return type_cft<char>();
     } else if (type == type_hash<ZoneState>()) {
