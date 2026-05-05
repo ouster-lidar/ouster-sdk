@@ -5,10 +5,12 @@
 
 #pragma once
 
-#include <chrono>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "ouster/impl/build.h"
@@ -19,10 +21,12 @@
 #include "ouster/types.h"
 
 namespace ouster {
+namespace sdk {
 namespace pcap {
 
 /// Options for the PcapScanSource
-struct OUSTER_API_CLASS PcapScanSourceOptions : private ScanSourceOptions {
+struct OUSTER_API_CLASS PcapScanSourceOptions
+    : private ouster::sdk::ScanSourceOptions {
     using ScanSourceOptions::extrinsics;
     using ScanSourceOptions::extrinsics_file;
     using ScanSourceOptions::field_names;
@@ -35,6 +39,16 @@ struct OUSTER_API_CLASS PcapScanSourceOptions : private ScanSourceOptions {
 
     using ScanSourceOptions::check;
 
+    /**
+     * @brief Construct PcapScanSourceOptions from a ScanSourceOptions object.
+     *
+     * Initializes the Pcap-specific scan source options by copying from a
+     * `ScanSourceOptions` instance. This enables reuse of configuration
+     * parameters like `sensor_info`, `meta`, `extrinsics`, and others across
+     * multiple scan source types.
+     *
+     * @param[in] o The ScanSourceOptions object to initialize from.
+     */
     OUSTER_API_FUNCTION
     PcapScanSourceOptions(const ScanSourceOptions& o);
 
@@ -45,25 +59,27 @@ struct OUSTER_API_CLASS PcapScanSourceOptions : private ScanSourceOptions {
 class PcapScanIteratorImpl;
 /// ScanSource that produces LidarScans from a given PCAP file
 class OUSTER_API_CLASS PcapScanSource
-    : public ouster::core::ScanSource,
-      ouster::impl::ScanSourceBuilder<ouster::core::IoType::PCAP,
-                                      PcapScanSource> {
+    : public ouster::sdk::core::ScanSource,
+      ouster::sdk::impl::ScanSourceBuilder<ouster::sdk::core::IoType::PCAP,
+                                           PcapScanSource> {
     friend class PcapScanIteratorImpl;
-    ouster::pcap::PcapPacketSource packets_;
+    PcapPacketSource packets_;
 
     size_t num_scans_;
     std::vector<size_t> scans_count_;
-    std::vector<std::vector<ouster::FieldType>> field_types_;
+    std::vector<std::vector<ouster::sdk::core::FieldType>> field_types_;
 
     std::vector<std::vector<std::pair<uint64_t, uint64_t>>> index_;
     std::vector<std::pair<uint64_t, uint64_t>> real_index_;
 
     bool indexed_ = false;
 
+    size_t size_hint_ = 0;
+
     void assert_indexed(const char* function) const;
 
     // registers this with the open_source factory
-    inline void dummy() { (void)registered_; }
+    inline void dummy() { (void)REGISTERED; }
 
    protected:
     void close() override;
@@ -86,17 +102,20 @@ class OUSTER_API_CLASS PcapScanSource
     );
 
     OUSTER_API_FUNCTION
-    ouster::core::ScanIterator begin() const override;
+    ouster::sdk::core::ScanIterator begin() const override;
 
     OUSTER_API_FUNCTION
-    ouster::core::ScanIterator begin(int sensor_index) const override;
+    ouster::sdk::core::ScanIterator begin(int sensor_index) const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>&
     sensor_info() const override;
 
     OUSTER_API_FUNCTION
     size_t size() const override;
+
+    OUSTER_API_FUNCTION
+    size_t size_hint() const override;
 
     OUSTER_API_FUNCTION
     bool is_indexed() const override;
@@ -113,7 +132,7 @@ class OUSTER_API_CLASS PcapScanSource
         const override;
 
     OUSTER_API_FUNCTION
-    ScanSource* move() override;
+    std::unique_ptr<ouster::sdk::core::ScanSource> move() override;
 
     /// Return the number of id errors that occurred while building scans
     /// @return count of id errors
@@ -124,6 +143,23 @@ class OUSTER_API_CLASS PcapScanSource
     /// @return count of size errors
     OUSTER_API_FUNCTION
     uint64_t size_error_count() const;
+
+    /**
+     * open_source compatible factory.
+     *
+     * @relates ouster::open_source
+     *
+     * @param[in] sources source filenames
+     * @param[in] options source options
+     * @param[in] collate whether to collate the source or not
+     * @param[in] sensor_idx access specific sensor index in the osf
+     * @return unique_ptr of ScanSource type
+     */
+    OUSTER_API_FUNCTION
+    static std::unique_ptr<ouster::sdk::core::ScanSource> create(
+        const std::vector<std::string>& sources,
+        const ScanSourceOptions& options, bool collate, int sensor_idx = -1);
 };
 }  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

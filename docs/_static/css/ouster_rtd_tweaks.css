@@ -8,6 +8,10 @@
     width: 200px;
 }
 
+.wy-nav-content {
+  max-width: 1200px !important;
+}
+
 /*
 Used for custom role:
 .. role:: strike

@@ -1,6 +1,6 @@
-from typing import Optional, Iterator, Union, List, overload
+from typing import Iterator, Union, List, overload
 from ouster.sdk._bindings.client import ScanSource
-from ouster.sdk.core import SensorInfo, LidarScan
+from ouster.sdk.core import SensorInfo, LidarScan, LidarScanSet
 from .scan_ops import clip
 
 
@@ -40,7 +40,10 @@ class ClippedScanSource(ScanSource):
     def __len__(self) -> int:
         return len(self._scan_source)
 
-    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+    def __length_hint__(self) -> int:
+        return self._scan_source.__length_hint__()
+
+    def __iter__(self) -> Iterator[LidarScanSet]:
 
         def clip_with_copy(scan, fields, lower, upper):
             cpy = LidarScan(scan)
@@ -48,9 +51,8 @@ class ClippedScanSource(ScanSource):
             return cpy
 
         for scans in self._scan_source.__iter__():
-            print("clip", self._upper, self._lower)
-            yield [clip_with_copy(scan, self._fields, self._lower, self._upper)
-                   if scan else None for scan in scans]
+            yield LidarScanSet([clip_with_copy(scan, self._fields, self._lower, self._upper)
+                   if scan else None for scan in scans])
 
     @overload
     def __getitem__(self, key: int) -> List[LidarScan]:
@@ -71,12 +73,12 @@ class ClippedScanSource(ScanSource):
         self.close()
 
 
-def _clip_fn(src: ScanSource, fields: List[str], lower: int, upper: int):
+def _clip_fn(self: ScanSource, fields: List[str], lower: int, upper: int):
     """
     limits the values of the specified set of fields to within the range = [lower, upper], any value
     that exceeds this range is replaced by zero.
     """
-    return ClippedScanSource(src, fields, lower, upper)
+    return ClippedScanSource(self, fields, lower, upper)
 
 
 ScanSource.clip = _clip_fn  # type: ignore

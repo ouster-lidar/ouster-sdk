@@ -13,28 +13,34 @@
 #include <ouster/types.h>
 #include <ouster/version.h>
 
+#include <cstdint>
 #include <memory>
+#include <nonstd/optional.hpp>
+#include <string>
+#include <vector>
 
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace sensor {
-namespace util {
 
 /**
  * Result for get_user_data_and_policy on SensorHttp
  */
 struct OUSTER_API_CLASS UserDataAndPolicy {
-    bool keep_on_config_delete;
-    std::string data;
+    bool keep_on_config_delete;  ///< Whether to retain user data on config
+                                 ///< deletion.
+    std::string data;            ///< The user data stored on the sensor.
 };
 
 /**
  * An interface to communicate with Ouster sensors via http requests
  */
 class OUSTER_API_CLASS SensorHttp {
-    ouster::util::version version_;
+    ouster::sdk::core::Version version_;
     std::string hostname_;
+    bool vlp_prod_;
 
    protected:
     /**
@@ -55,7 +61,7 @@ class OUSTER_API_CLASS SensorHttp {
      * @return returns the sensor FW version
      */
     OUSTER_API_FUNCTION
-    inline const ouster::util::version& firmware_version() const {
+    inline const ouster::sdk::core::Version& firmware_version() const {
         return version_;
     }
 
@@ -68,9 +74,18 @@ class OUSTER_API_CLASS SensorHttp {
     inline const std::string& hostname() const { return hostname_; }
 
     /**
+     * Returns if the sensor is a VLP variant.
+     *
+     * @return returns if it is a VLP variant
+     */
+    OUSTER_API_FUNCTION
+    inline bool is_vlp() const { return vlp_prod_; }
+
+    /**
      * Queries the sensor metadata.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return returns a json string of the sensor metadata.
      */
@@ -82,6 +97,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Queries the sensor_info.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return returns a json string representing the sensor_info.
      */
@@ -94,6 +110,7 @@ class OUSTER_API_CLASS SensorHttp {
      *
      * @param[in] active if true retrieve active, otherwise get staged configs.
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return a string representing the active or staged config
      */
@@ -109,6 +126,7 @@ class OUSTER_API_CLASS SensorHttp {
      * @param[in] key name of the config to change.
      * @param[in] value the new value to set for the selected configuration.
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void set_config_param(
@@ -119,6 +137,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Retrieves the active configuration on the sensor
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return json string of active configuration parameters set on the sensor
      */
@@ -130,6 +149,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Retrieves the staged configuration on the sensor
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return json string of staged configuration parameters set on the sensor
      */
@@ -141,6 +161,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Enables automatic assignment of udp destination ports.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void set_udp_dest_auto(
@@ -150,6 +171,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Retrieves beam intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return json string of beam_intrinsics retrieved from sensor
      */
@@ -161,6 +183,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Retrieves imu intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return json string of imu_intrinsics received from sensor
      */
@@ -172,6 +195,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Retrieves lidar intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return json string of lidar_intrinsics retrieved from sensor
      */
@@ -183,6 +207,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Retrieves lidar data format.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return json string of lidar_data_format received from sensor
      */
@@ -194,6 +219,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Gets the calibaration status of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return json string ofcalibration status received from sensor
      */
@@ -202,18 +228,30 @@ class OUSTER_API_CLASS SensorHttp {
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
-     * Restarts the sensor applying all staged configurations.
+     * Reinitializes the sensor applying all staged configurations.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void reinitialize(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
+     * Restarts the sensor applying the persisted configuration.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void restart(
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
      * Persist active configuration parameters to the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void save_config_params(
@@ -223,6 +261,8 @@ class OUSTER_API_CLASS SensorHttp {
      * Gets the user data stored on the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
      *
      * @return user data retrieved from sensor
      */
@@ -234,6 +274,8 @@ class OUSTER_API_CLASS SensorHttp {
      * Gets the user data stored on the sensor and the retention policy.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
      *
      * @return user data and policy setting retrieved from the sensor
      */
@@ -248,6 +290,8 @@ class OUSTER_API_CLASS SensorHttp {
      * @param[in] keep_on_config_delete If true, keep the userdata when
                                         configuration is deleted from the sensor
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     if an HTTP error occurs, or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void set_user_data(
@@ -259,6 +303,7 @@ class OUSTER_API_CLASS SensorHttp {
      *
      * @param[in] timeout_sec The timeout to use in seconds for the version
      *                        request, this argument is optional.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return a JSON string containing sensor IP address information.
      */
@@ -273,6 +318,7 @@ class OUSTER_API_CLASS SensorHttp {
      *                        request, this argument is optional.
      * @param[in] original_destination Destination to restore to the sensor
      *                                 after. Otherwise pulled from the sensor.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return autodetected address
      */
@@ -282,10 +328,12 @@ class OUSTER_API_CLASS SensorHttp {
         nonstd::optional<std::string> original_destination = {}) const = 0;
 
     /**
-     * Set's the sensor's static IP address.
+     * Set's the sensor's static IP address and subnet mask.
      *
-     * @param[in] ip_address The static IP to set on the sensor.
+     * @param[in] ip_address The static IP to set on the sensor in CIDR form
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void set_static_ip(
@@ -293,9 +341,25 @@ class OUSTER_API_CLASS SensorHttp {
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
+     * Set's the sensor's static IP address, subnet mask and gateway address.
+     *
+     * @param[in] ip_address The static IP to set on the sensor in CIDR form.
+     * @param[in] gateway_address The gateway IP to set on the sensor.
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void set_static_ip(
+        const std::string& ip_address, const std::string& gateway_address,
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
      * Deletes any static IP address stored on the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void delete_static_ip(
@@ -305,6 +369,8 @@ class OUSTER_API_CLASS SensorHttp {
      * Deletes the user data stored on the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
      */
     OUSTER_API_FUNCTION
     virtual void delete_user_data(
@@ -314,6 +380,7 @@ class OUSTER_API_CLASS SensorHttp {
      * Downloads diagnostics data in zip format from the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs, or if timeout occurs.
      *
      * @return diagnostics dump file contents
      */
@@ -322,11 +389,85 @@ class OUSTER_API_CLASS SensorHttp {
         int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
+     * Downloads zone monitor config in zip format from the sensor.
+     *
+     * @param[in] staged if true, downloads from staged config instead of active
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
+     *
+     * @return zone monitor config zip archive as a binary blob
+     */
+    OUSTER_API_FUNCTION
+    virtual std::vector<uint8_t> get_zone_monitor_config_zip(
+        bool staged = false,
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Sets a zip of zone monitor config to the sensor.
+     *
+     * @param[in] zip_archive blob of zip archive to send to sensor
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void set_zone_monitor_config_zip(
+        const std::vector<uint8_t>& zip_archive,
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Deletes the staged zone monitor configuration on the sensor.
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void delete_zone_monitor_staged_config(
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Get the live zones for a sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
+     * @return A vector ids of the active zones.
+     */
+    OUSTER_API_FUNCTION
+    virtual std::vector<uint8_t> get_zone_monitor_live_ids(
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Sets the live zones for a sensor.
+     * (All zones whose ids are not present in the vector will be made not
+     * live.)
+     *
+     * @param[in] zone_ids A vector of the zones to set to live.
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void set_zone_monitor_live_ids(
+        const std::vector<uint8_t>& zone_ids,
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Applies the staged zone monitor configuration to active on the sensor.
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void apply_zone_monitor_staged_config_to_active(
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
      * Retrieves sensor firmware version information as a string.
      *
      * @param[in] hostname hostname of the sensor to communicate with.
      * @param[in] timeout_sec The timeout to use in seconds for the version
      *                        request, this argument is optional.
+     * @throws std::runtime_error if an HTTP error occurs, or if timeout occurs.
      *
      * @return firmware version string from sensor
      */
@@ -341,11 +482,12 @@ class OUSTER_API_CLASS SensorHttp {
      * @param[in] hostname hostname of the sensor to communicate with.
      * @param[in] timeout_sec The timeout to use in seconds for the version
      *                        request, this argument is optional.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return parsed firmware version from sensor
      */
     OUSTER_API_FUNCTION
-    static ouster::util::version firmware_version(
+    static ouster::sdk::core::Version firmware_version(
         const std::string& hostname,
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
@@ -355,6 +497,7 @@ class OUSTER_API_CLASS SensorHttp {
      * @param[in] hostname hostname of the sensor to communicate with.
      * @param[in] timeout_sec The timeout to use in seconds for the version
      *                        request, this argument is optional.
+     * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
      * @return a version specific implementation of the SensorHTTP instance
      */
@@ -382,6 +525,6 @@ void set_http_api_headers(const std::vector<std::string>& headers);
 OUSTER_API_FUNCTION
 void set_http_api_prefix(const std::string& prefix);
 
-}  // namespace util
 }  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

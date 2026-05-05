@@ -203,7 +203,7 @@ def viewer_3d(scans: core.ScanSource, paused: bool = False) -> None:
         key = scan.field(fields[field_ind]).astype(float)
 
         # apply colormap to field values
-        aes[field_ind](key)
+        aes[field_ind].update(key)
         color_img = colorize(key)
 
         # prepare point cloud for Open3d Visualiser

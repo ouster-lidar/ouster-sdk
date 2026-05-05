@@ -28,13 +28,16 @@
 #include <tuple>
 #include <vector>
 
-namespace kiss_icp::metrics {
+namespace kiss_icp {
+namespace metrics {
 
 std::tuple<float, float> SeqError(const std::vector<Eigen::Matrix4d> &poses_gt,
                                   const std::vector<Eigen::Matrix4d> &poses_result);
 
 std::tuple<float, float> AbsoluteTrajectoryError(const std::vector<Eigen::Matrix4d> &poses_gt,
                                                  const std::vector<Eigen::Matrix4d> &poses_result);
-}  // namespace kiss_icp::metrics
+
+}   // namespace metrics
+}   // namespace kiss_icp
 
 #endif  // KITTI_UTILS_H_

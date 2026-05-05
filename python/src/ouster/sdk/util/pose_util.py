@@ -484,7 +484,7 @@ class TrajectoryEvaluator(Poser):
             self._deltas = np.r_[np.zeros((1, 6)), log_pose(deltas_mat)]
 
         # store keys separately for bisect function
-        self._ts_keys = [x[0] for x in self._poses]
+        self._ts_keys: List[Numeric] = [x[0] for x in self._poses]
 
     def _check_ts_and_bounds(self, ts: Union[Sequence[Numeric], np.ndarray]):
         """Checks whether `ts` in the trajectory poses timestamps with bounds"""
@@ -688,15 +688,15 @@ def pose_scans(
     Args:
         source: one of:
             - Sequence[core.LidarScan] - single scan sources
-            - Sequence[List[Optional[core.LidarScan]]] - multi scans sources
+            - Sequence[core.LidarScanSet] - multi scans sources
     """
 
     for obj in source:
         if isinstance(obj, core.LidarScan):
             # Iterator[core.LidarScan]
             yield poses(obj) if poses is not None else obj
-        elif isinstance(obj, list):
-            # collated scans: List[Optional[LidarScan]]
+        elif isinstance(obj, core.LidarScanSet):
+            # collated scans: List[LidarScanSet]
             if poses is not None:
                 yield [
                     poses(scan) if scan is not None else None for scan in obj
@@ -752,7 +752,7 @@ def pose_scans_from_kitti(
     Args:
         source: one of:
             - Sequence[core.LidarScan] - single scan sources
-            - Sequence[List[Optional[core.LidarScan]]] - multi scans sources
+            - Sequence[core.LidarScanSet] - multi scans sources
         kitti_poses: path to the file with in kitti poses format, i.e. every
                      line contains 12 floats of 4x4 homogeneous transformation
                      matrix (``[:3, :]`` in numpy notation, row-major serialized)
@@ -795,8 +795,8 @@ def pose_scans_from_kitti(
             traj_eval(scan, col_ts=idx_ts)
             yield scan
 
-        elif isinstance(obj, list):
-            # collated scans: List[Optional[LidarScan]]
+        elif isinstance(obj, core.LidarScanSet):
+            # collated scans: core.LidarScanSet
             # TODO[pb]: Make it for multi scan sources when we have stable
             #           multi source interfaces
             raise ValueError("Multi scan sources not yet implemented. Got: ",

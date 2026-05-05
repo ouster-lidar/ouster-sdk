@@ -5,22 +5,68 @@
 
 #include "ouster/osf/meta_streaming_info.h"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <jsoncons/json.hpp>
 #include <map>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "ouster/osf/meta_streaming_info.h"
+#include "ouster/osf/basics.h"
+// We need this for the v2 namespace.
+#include "ouster/osf/buffer.h"
+#include "ouster/osf/impl/basics.h"  // NOLINT(misc-include-cleaner)
+#include "ouster/osf/metadata.h"
 #include "streaming/streaming_info_generated.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
+namespace {
+flatbuffers::Offset<impl::gen::StreamingInfo> create_streaming_info(
+    flatbuffers::FlatBufferBuilder& fbb,
+    const std::map<uint64_t, ChunkInfo>& chunks_info,
+    const std::map<uint32_t, StreamStats>& stream_stats) {
+    // Pack chunks vector
+    std::vector<flatbuffers::Offset<impl::gen::ChunkInfo>> chunks_info_vec;
+    for (const auto& chunk_info_pair : chunks_info) {
+        const auto& chunk = chunk_info_pair.second;
+        auto ci_offset = impl::gen::CreateChunkInfo(
+            fbb, chunk.offset, chunk.stream_id, chunk.message_count);
+        chunks_info_vec.push_back(ci_offset);
+    }
+
+    // Pack stream_stats vector
+    std::vector<flatbuffers::Offset<impl::gen::StreamStats>> stream_stats_vec;
+    for (const auto& stream_stat_pair : stream_stats) {
+        auto stat = stream_stat_pair.second;
+        auto ss_offset = impl::gen::CreateStreamStats(
+            fbb, stat.stream_id, stat.start_ts.count(), stat.end_ts.count(),
+            stat.message_count, stat.message_avg_size,
+            fbb.CreateVector<uint64_t>(stat.receive_timestamps),
+            fbb.CreateVector<uint64_t>(stat.sensor_timestamps));
+        stream_stats_vec.push_back(ss_offset);
+    }
+
+    auto si_offset = impl::gen::CreateStreamingInfoDirect(fbb, &chunks_info_vec,
+                                                          &stream_stats_vec);
+    return si_offset;
+}
+
+};  // namespace
+
 std::string to_string(const ChunkInfo& chunk_info) {
-    std::stringstream ss;
-    ss << "{offset = " << chunk_info.offset
-       << ", stream_id = " << chunk_info.stream_id
-       << ", message_count = " << chunk_info.message_count << "}";
-    return ss.str();
+    std::stringstream string_stream;
+    string_stream << "{offset = " << chunk_info.offset
+                  << ", stream_id = " << chunk_info.stream_id
+                  << ", message_count = " << chunk_info.message_count << "}";
+    return string_stream.str();
 }
 
 StreamStats::StreamStats(uint32_t s_id, ts_t receive_ts, ts_t sensor_ts,
@@ -35,8 +81,12 @@ StreamStats::StreamStats(uint32_t s_id, ts_t receive_ts, ts_t sensor_ts,
 }
 
 void StreamStats::update(ts_t receive_ts, ts_t sensor_ts, uint32_t msg_size) {
-    if (start_ts > receive_ts) start_ts = receive_ts;
-    if (end_ts < receive_ts) end_ts = receive_ts;
+    if (start_ts > receive_ts) {
+        start_ts = receive_ts;
+    }
+    if (end_ts < receive_ts) {
+        end_ts = receive_ts;
+    }
     ++message_count;
     int avg_size = static_cast<int>(message_avg_size);
     avg_size = avg_size + (static_cast<int>(msg_size) - avg_size) /
@@ -47,52 +97,22 @@ void StreamStats::update(ts_t receive_ts, ts_t sensor_ts, uint32_t msg_size) {
 }
 
 std::string to_string(const StreamStats& stream_stats) {
-    std::stringstream ss;
-    ss << "{stream_id = " << stream_stats.stream_id
-       << ", start_ts = " << stream_stats.start_ts.count()
-       << ", end_ts = " << stream_stats.end_ts.count()
-       << ", message_count = " << stream_stats.message_count
-       << ", message_avg_size = " << stream_stats.message_avg_size
-       << ", host_timestamps = [";
-    for (const auto& ts : stream_stats.receive_timestamps) {
-        ss << ts << ", ";
+    std::stringstream string_stream;
+    string_stream << "{stream_id = " << stream_stats.stream_id
+                  << ", start_ts = " << stream_stats.start_ts.count()
+                  << ", end_ts = " << stream_stats.end_ts.count()
+                  << ", message_count = " << stream_stats.message_count
+                  << ", message_avg_size = " << stream_stats.message_avg_size
+                  << ", host_timestamps = [";
+    for (const auto& timestamp : stream_stats.receive_timestamps) {
+        string_stream << timestamp << ", ";
     }
-    ss << "], sensor_timestamps = [";
-    for (const auto& ts : stream_stats.sensor_timestamps) {
-        ss << ts << ", ";
+    string_stream << "], sensor_timestamps = [";
+    for (const auto& timestamp : stream_stats.sensor_timestamps) {
+        string_stream << timestamp << ", ";
     }
-    ss << "]}";
-    return ss.str();
-}
-
-flatbuffers::Offset<ouster::osf::gen::StreamingInfo> create_streaming_info(
-    flatbuffers::FlatBufferBuilder& fbb,
-    const std::map<uint64_t, ChunkInfo>& chunks_info,
-    const std::map<uint32_t, StreamStats>& stream_stats) {
-    // Pack chunks vector
-    std::vector<flatbuffers::Offset<gen::ChunkInfo>> chunks_info_vec;
-    for (const auto& chunk_info : chunks_info) {
-        const auto& ci = chunk_info.second;
-        auto ci_offset = gen::CreateChunkInfo(fbb, ci.offset, ci.stream_id,
-                                              ci.message_count);
-        chunks_info_vec.push_back(ci_offset);
-    }
-
-    // Pack stream_stats vector
-    std::vector<flatbuffers::Offset<gen::StreamStats>> stream_stats_vec;
-    for (const auto& stream_stat : stream_stats) {
-        auto stat = stream_stat.second;
-        auto ss_offset = gen::CreateStreamStats(
-            fbb, stat.stream_id, stat.start_ts.count(), stat.end_ts.count(),
-            stat.message_count, stat.message_avg_size,
-            fbb.CreateVector<uint64_t>(stat.receive_timestamps),
-            fbb.CreateVector<uint64_t>(stat.sensor_timestamps));
-        stream_stats_vec.push_back(ss_offset);
-    }
-
-    auto si_offset = ouster::osf::gen::CreateStreamingInfoDirect(
-        fbb, &chunks_info_vec, &stream_stats_vec);
-    return si_offset;
+    string_stream << "]}";
+    return string_stream.str();
 }
 
 StreamingInfo::StreamingInfo(
@@ -123,93 +143,103 @@ std::vector<uint8_t> StreamingInfo::buffer() const {
     return {buf, buf + size};
 };
 
-std::unique_ptr<MetadataEntry> StreamingInfo::from_buffer(
-    const std::vector<uint8_t>& buf) {
-    auto streaming_info = gen::GetSizePrefixedStreamingInfo(buf.data());
+std::unique_ptr<MetadataEntry> StreamingInfo::from_buffer(const OsfBuffer buf) {
+    auto streaming_info = impl::gen::GetSizePrefixedStreamingInfo(buf.data());
 
-    std::unique_ptr<StreamingInfo> si = std::make_unique<StreamingInfo>();
+    auto new_streaming_info = std::make_unique<StreamingInfo>();
 
-    auto& chunks_info = si->chunks_info();
-    if (streaming_info->chunks() && streaming_info->chunks()->size()) {
-        std::transform(
-            streaming_info->chunks()->begin(), streaming_info->chunks()->end(),
-            std::inserter(chunks_info, chunks_info.end()),
-            [](const gen::ChunkInfo* ci) {
-                return std::make_pair(ci->offset(),
-                                      ChunkInfo{ci->offset(), ci->stream_id(),
-                                                ci->message_count()});
-            });
-    }
-
-    auto& stream_stats = si->stream_stats();
-    if (streaming_info->stream_stats() &&
-        streaming_info->stream_stats()->size()) {
-        std::transform(streaming_info->stream_stats()->begin(),
-                       streaming_info->stream_stats()->end(),
-                       std::inserter(stream_stats, stream_stats.end()),
-                       [](const gen::StreamStats* stat) {
-                           StreamStats ss{};
-                           ss.stream_id = stat->stream_id();
-                           ss.start_ts = ts_t{stat->start_ts()};
-                           ss.end_ts = ts_t{stat->end_ts()};
-                           ss.message_count = stat->message_count();
-                           ss.message_avg_size = stat->message_avg_size();
-                           if (stat->receive_timestamps()) {
-                               for (auto v : *stat->receive_timestamps()) {
-                                   ss.receive_timestamps.push_back(v);
-                               }
-                           }
-                           if (stat->sensor_timestamps()) {
-                               for (auto v : *stat->sensor_timestamps()) {
-                                   ss.sensor_timestamps.push_back(v);
-                               }
-                           }
-                           return std::make_pair(stat->stream_id(), ss);
+    auto& chunks_info = new_streaming_info->chunks_info();
+    if ((streaming_info->chunks() != nullptr) &&
+        (streaming_info->chunks()->size() != 0u)) {
+        std::transform(streaming_info->chunks()->begin(),
+                       streaming_info->chunks()->end(),
+                       std::inserter(chunks_info, chunks_info.end()),
+                       [](const impl::gen::ChunkInfo* chunk_info_ptr) {
+                           return std::make_pair(
+                               chunk_info_ptr->offset(),
+                               ChunkInfo{chunk_info_ptr->offset(),
+                                         chunk_info_ptr->stream_id(),
+                                         chunk_info_ptr->message_count()});
                        });
     }
 
-    return si;
+    auto& stream_stats = new_streaming_info->stream_stats();
+    if ((streaming_info->stream_stats() != nullptr) &&
+        (streaming_info->stream_stats()->size() != 0u)) {
+        std::transform(
+            streaming_info->stream_stats()->begin(),
+            streaming_info->stream_stats()->end(),
+            std::inserter(stream_stats, stream_stats.end()),
+            [](const impl::gen::StreamStats* stat) {
+                StreamStats stream_stats_obj{};
+                stream_stats_obj.stream_id = stat->stream_id();
+                stream_stats_obj.start_ts = ts_t{stat->start_ts()};
+                stream_stats_obj.end_ts = ts_t{stat->end_ts()};
+                stream_stats_obj.message_count = stat->message_count();
+                stream_stats_obj.message_avg_size = stat->message_avg_size();
+                if (stat->receive_timestamps()) {
+                    for (auto value : *stat->receive_timestamps()) {
+                        stream_stats_obj.receive_timestamps.push_back(value);
+                    }
+                }
+                if (stat->sensor_timestamps()) {
+                    for (auto value : *stat->sensor_timestamps()) {
+                        stream_stats_obj.sensor_timestamps.push_back(value);
+                    }
+                }
+                return std::make_pair(stat->stream_id(), stream_stats_obj);
+            });
+    }
+
+    return new_streaming_info;
 }
 
 std::string StreamingInfo::repr() const {
-    jsoncons::json si_obj;
+    jsoncons::json streaming_info_obj;
 
     jsoncons::json chunks(jsoncons::json_array_arg);
-    for (const auto& ci : chunks_info_) {
+    for (const auto& chunk_info_pair : chunks_info_) {
         jsoncons::json chunk_info;
-        chunk_info["offset"] = static_cast<uint64_t>(ci.second.offset);
-        chunk_info["stream_id"] = ci.second.stream_id;
-        chunk_info["message_count"] = ci.second.message_count;
+        chunk_info["offset"] =
+            static_cast<uint64_t>(chunk_info_pair.second.offset);
+        chunk_info["stream_id"] = chunk_info_pair.second.stream_id;
+        chunk_info["message_count"] = chunk_info_pair.second.message_count;
         chunks.emplace_back(chunk_info);
     }
-    si_obj["chunks"] = chunks;
+    streaming_info_obj["chunks"] = chunks;
 
     jsoncons::json stream_stats(jsoncons::json_array_arg);
     for (const auto& stat : stream_stats_) {
-        jsoncons::json ss{};
-        ss["stream_id"] = stat.first;
-        ss["start_ts"] = static_cast<uint64_t>(stat.second.start_ts.count());
-        ss["end_ts"] = static_cast<uint64_t>(stat.second.end_ts.count());
-        ss["message_count"] = static_cast<uint64_t>(stat.second.message_count);
-        ss["message_avg_size"] = stat.second.message_avg_size;
-        jsoncons::json st(jsoncons::json_array_arg);
-        jsoncons::json rt(jsoncons::json_array_arg);
-        for (const auto& t : stat.second.sensor_timestamps) {
-            st.emplace_back(static_cast<uint64_t>(t));
+        jsoncons::json stream_stat_json{};
+        stream_stat_json["stream_id"] = stat.first;
+        stream_stat_json["start_ts"] =
+            static_cast<uint64_t>(stat.second.start_ts.count());
+        stream_stat_json["end_ts"] =
+            static_cast<uint64_t>(stat.second.end_ts.count());
+        stream_stat_json["message_count"] =
+            static_cast<uint64_t>(stat.second.message_count);
+        stream_stat_json["message_avg_size"] = stat.second.message_avg_size;
+        jsoncons::json sensor_timestamps_json(jsoncons::json_array_arg);
+        jsoncons::json receive_timestamps_json(jsoncons::json_array_arg);
+        for (const auto& timestamp : stat.second.sensor_timestamps) {
+            sensor_timestamps_json.emplace_back(
+                static_cast<uint64_t>(timestamp));
         }
-        for (const auto& t : stat.second.receive_timestamps) {
-            rt.emplace_back(static_cast<uint64_t>(t));
+        for (const auto& timestamp : stat.second.receive_timestamps) {
+            receive_timestamps_json.emplace_back(
+                static_cast<uint64_t>(timestamp));
         }
-        ss["sensor_timestamps"] = st;
-        ss["receive_timestamps"] = rt;
-        stream_stats.emplace_back(ss);
+        stream_stat_json["sensor_timestamps"] = sensor_timestamps_json;
+        stream_stat_json["receive_timestamps"] = receive_timestamps_json;
+        stream_stats.emplace_back(stream_stat_json);
     }
-    si_obj["stream_stats"] = stream_stats;
+    streaming_info_obj["stream_stats"] = stream_stats;
 
     std::string out;
-    si_obj.dump(out);
+    streaming_info_obj.dump(out);
     return out;
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

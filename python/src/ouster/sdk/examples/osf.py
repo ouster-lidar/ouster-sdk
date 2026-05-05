@@ -6,6 +6,9 @@ def osf_read_scans(osf_file: str) -> None:
     """Read Lidar Scans from an OSF file.
 
     Shows scans for each sensor in time order stored in the OSF File.
+
+    Args:
+        osf_file: path to osf file.
     """
     import ouster.sdk.osf as osf
     # [doc-stag-osf-read-scans]
@@ -13,6 +16,7 @@ def osf_read_scans(osf_file: str) -> None:
     for scan, in scans:
         assert scan is not None
         print(f'scan = {scan}, WxH={scan.w}x{scan.h}')
+    scans.close()
     # [doc-etag-osf-read-scans]
 
 
@@ -20,16 +24,20 @@ def osf_get_sensors_info(osf_file: str) -> None:
     """Read Lidar Sensors info from an OSF file.
 
     Shows metadata for all sensors found in an OSF file.
+
+    Args:
+        osf_file: path to osf file.
     """
     import ouster.sdk.osf as osf
     # [doc-stag-osf-get-sensors-info]
     scans = osf.OsfScanSource(osf_file)
     for sensor_id, info in enumerate(scans.sensor_info):
         print(f"sensor[{sensor_id}] = ", info)
+    scans.close()
     # [doc-etag-osf-get-sensors-info]
 
 
-def osf_slice_scans(osf_file: str) -> None:
+def osf_slice_scans(osf_file: str) -> str:
     """Copy scans from input OSF file with reduction using the Writer API.
 
     Slicing is done via saving only RANGE, SIGNAL and REFLECTIVITY fields into an output OSF files.
@@ -46,6 +54,9 @@ def osf_slice_scans(osf_file: str) -> None:
 
     output_file_base = os.path.splitext(os.path.basename(osf_file))[0]
     output_file = output_file_base + '_sliced.osf'
+    # Remove the file if it exists
+    if os.path.exists(output_file):
+        os.remove(output_file)
 
     # Create Writer with a subset of fields to save (i.e. slicing will happen
     # automatically on write)
@@ -61,6 +72,7 @@ def osf_slice_scans(osf_file: str) -> None:
 
     writer.close()
     # [doc-etag-osf-slice-scans]
+    return output_file
 
 
 def main():

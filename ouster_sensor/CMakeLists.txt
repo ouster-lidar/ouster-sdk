@@ -7,8 +7,7 @@ include(Coverage)
 
 # ==== Libraries ====
 add_library(ouster_sensor STATIC src/client.cpp src/netcompat.cpp src/sensor_packet_source.cpp
-  src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_scan_source.cpp
-  src/sensor_tcp_imp.cpp)
+  src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_scan_source.cpp)
 target_link_libraries(ouster_sensor
   PUBLIC
     OusterSDK::ouster_client
@@ -35,12 +34,12 @@ if(WIN32)
   target_link_libraries(ouster_sensor PUBLIC ws2_32)
 endif()
 
-target_include_directories(ouster_sensor 
+target_include_directories(ouster_sensor
   PUBLIC
       $<INSTALL_INTERFACE:include>
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
-target_include_directories(ouster_sensor SYSTEM 
+target_include_directories(ouster_sensor SYSTEM
   PUBLIC
   PRIVATE
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty>)

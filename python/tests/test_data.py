@@ -56,7 +56,7 @@ def test_lidar_packet(meta: core.SensorInfo) -> None:
     h = pf.pixels_per_column
 
     scan_has_signal = (meta.format.udp_profile_lidar !=
-                       core.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+                       core.UDPProfileLidar.RNG15_RFL8_NIR8)
 
     assert np.array_equal(pf.packet_field(core.ChanField.RANGE, p.buf), np.zeros((h, w)))
     assert np.array_equal(pf.packet_field(core.ChanField.REFLECTIVITY, p.buf),
@@ -317,7 +317,7 @@ def test_scan_dual_profile() -> None:
     """Dual returns scan has the expected fields."""
     ls = core.LidarScan(
         32, 1024,
-        core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
 
     assert set(ls.fields) == {
         core.ChanField.RANGE,
@@ -329,13 +329,14 @@ def test_scan_dual_profile() -> None:
         core.ChanField.FLAGS,
         core.ChanField.FLAGS2,
         core.ChanField.NEAR_IR,
+        core.ChanField.WINDOW,
     }
 
 
 def test_scan_low_data_rate() -> None:
     """Low Data Rate scan has the expected fields."""
     ls = core.LidarScan(32, 1024,
-                        core.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+                        core.UDPProfileLidar.RNG15_RFL8_NIR8)
 
     assert set(ls.fields) == {
         core.ChanField.RANGE,
@@ -348,7 +349,7 @@ def test_scan_low_data_rate() -> None:
 def test_scan_single_return() -> None:
     """Single Return scan has the expected fields."""
     ls = core.LidarScan(
-        32, 1024, core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16)
+        32, 1024, core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16)
 
     assert set(ls.fields) == {
         core.ChanField.RANGE,
@@ -356,6 +357,7 @@ def test_scan_single_return() -> None:
         core.ChanField.SIGNAL,
         core.ChanField.NEAR_IR,
         core.ChanField.FLAGS,
+        core.ChanField.WINDOW,
     }
 
 
@@ -389,10 +391,10 @@ def test_scan_eq_fields() -> None:
     """Test equality between scans with different fields."""
     ls0 = core.LidarScan(32, 1024)
     ls1 = core.LidarScan(32, 1024,
-                         core.UDPProfileLidar.PROFILE_LIDAR_LEGACY)
+                         core.UDPProfileLidar.LEGACY)
     ls2 = core.LidarScan(
         32, 1024,
-        core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
     ls3 = core.LidarScan(32, 1024, [FieldType(core.ChanField.SIGNAL, np.uint32)])
     ls4 = core.LidarScan(32, 1024, [FieldType(core.ChanField.SIGNAL, np.uint16)])
     ls5 = core.LidarScan(32, 1024, [])
@@ -410,7 +412,7 @@ def test_scan_zero_init() -> None:
     """Test that scan fields and headers are zero initialized."""
     ls = core.LidarScan(
         64, 1024,
-        core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
 
     assert ls.frame_id == -1
     assert ls.frame_status == 0
@@ -639,14 +641,14 @@ def test_packet_writer_bindings(meta: core.SensorInfo) -> None:
 
 def test_to_string_doesnt_cause_fp_exception():
     """It shouldn't crash with a floating point exception when std::to_string(LidarScan&) is called."""
-    str(core.LidarScan(1024, 128, core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL))
+    str(core.LidarScan(1024, 128, core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL))
 
 
 def test_scan_float_double() -> None:
     """Test that we can add float fields and that setting floats in them works."""
     ls = core.LidarScan(
         64, 1024,
-        core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
 
     ls.add_field("f32", np.float32, (), core.FieldClass.PIXEL_FIELD)
     ls.add_field("f64", np.float64, (), core.FieldClass.PIXEL_FIELD)
@@ -662,7 +664,7 @@ def test_scan_int() -> None:
     """Test that we can add int fields and that setting ints in them works."""
     ls = core.LidarScan(
         64, 1024,
-        core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
 
     fields = [
         ("i8", np.int8, (), core.FieldClass.PIXEL_FIELD),
@@ -703,7 +705,7 @@ def test_scan_empty_field() -> None:
     """Test that we can add zero size fields through different means and that zero size PFs are disallowed."""
     ls = core.LidarScan(
         64, 1024,
-        core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
 
     ls.add_field("floats", np.ones((64, 1024, 0), np.float64), core.FieldClass.SCAN_FIELD)
     ls.add_field("float", np.array([], np.float64), core.FieldClass.SCAN_FIELD)
@@ -787,6 +789,26 @@ def test_lidarscan_fieldtype_dtype() -> None:
     assert ft.element_type is np.dtype(np.uint8)
 
 
+def test_fieldtype_char_dtype() -> None:
+    """FieldType element_type should be accessible"""
+    ft = core.FieldType(core.ChanField.RANGE, np.dtype("S25"), (10,), core.FieldClass.SCAN_FIELD)
+    assert ft.element_type == np.dtype("S25")
+    assert ft.extra_dims == (10, 25)
+
+    # it's mutable
+    ft.element_type = np.dtype(np.uint8)
+    assert ft.element_type == np.dtype(np.uint8)
+    assert ft.extra_dims == (10,)  # drops the fixed string dimension
+
+    ft.element_type = np.dtype("S30")
+    assert ft.element_type == np.dtype("S30")
+    assert ft.extra_dims == (10, 30)  # adds the fixed string dimension
+
+    ft.element_type = np.dtype("S25")
+    assert ft.element_type == np.dtype("S25")
+    assert ft.extra_dims == (10, 25)  # replaces the fixed string dimension
+
+
 def test_lidarscan_add_field_with_value() -> None:
     """LidarScan.add_field should accept an array to be used as the field's
     initial value"""
@@ -807,3 +829,13 @@ def test_lidar_scan_packet_header_width():
     assert scan.packet_count == 64
     scan = LidarScan(1, 1023)
     assert scan.packet_count == 64
+
+
+def test_lidar_scan_zones_access():
+    scan = LidarScan(1, 1)
+
+    from ouster.sdk._bindings.client import ZoneState
+
+    assert scan.zones is not None
+    assert scan.zones.shape == (0,)
+    assert scan.zones.dtype == ZoneState.dtype()

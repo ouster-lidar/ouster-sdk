@@ -1,7 +1,7 @@
 from typing import List, Optional, Iterator, Union, overload
 import numpy as np
 from ouster.sdk._bindings.client import ScanSource
-from ouster.sdk.core import SensorInfo, LidarScan
+from ouster.sdk.core import SensorInfo, LidarScan, LidarScanSet
 from .scan_ops import mask
 from ouster.sdk.core import destagger
 
@@ -39,9 +39,13 @@ class MaskedScanSource(ScanSource):
     def __len__(self) -> int:
         return len(self._scan_source)
 
-    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+    def __length_hint__(self) -> int:
+        return self._scan_source.__length_hint__()
+
+    def __iter__(self) -> Iterator[LidarScanSet]:
         for scans in self._scan_source.__iter__():
-            result = []
+
+            result: List[Optional[LidarScan]] = []
             for idx, scan in enumerate(scans):
                 if scan:
                     cpy = LidarScan(scan)
@@ -49,8 +53,8 @@ class MaskedScanSource(ScanSource):
                         mask(cpy, self._fields, self._masks[idx])   # type: ignore
                     result.append(cpy)
                 else:
-                    result.append(None)     # type: ignore
-            yield result    # type: ignore
+                    result.append(None)
+            yield LidarScanSet(result)
 
     @overload
     def __getitem__(self, key: int) -> List[LidarScan]:
@@ -71,8 +75,8 @@ class MaskedScanSource(ScanSource):
         self.close()
 
 
-def _mask_fn(src: ScanSource, fields: List[str], masks: List[Optional[np.ndarray]]):
-    return MaskedScanSource(src, fields, masks)
+def _mask_fn(self: ScanSource, fields: List[str], masks: List[Optional[np.ndarray]]):
+    return MaskedScanSource(self, fields, masks)
 
 
 ScanSource.mask = _mask_fn  # type: ignore

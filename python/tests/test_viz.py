@@ -4,14 +4,14 @@ All rights reserved.
 """
 
 import weakref
-from typing import TYPE_CHECKING, List, Tuple, Optional, Callable
+from typing import TYPE_CHECKING, Tuple, Optional, Callable, Iterable
 
 import pytest
 import numpy as np
 
 import random
 
-from ouster.sdk.core import ChanField, LidarScan, SensorInfo
+from ouster.sdk.core import ChanField, LidarScan, SensorInfo, LidarScanSet
 
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
@@ -496,7 +496,7 @@ def test_viz_multiple_instances(meta: SensorInfo,
 
     ls_viz = viz.LidarScanViz([meta], point_viz)
 
-    ls_viz.update([scan])
+    ls_viz.update(LidarScanSet([scan]))
     ls_viz.draw()
     point_viz.run()
 
@@ -506,7 +506,7 @@ def test_scan_viz_smoke(meta: SensorInfo,
     """Smoke test LidarScan visualization."""
     ls_viz = viz.LidarScanViz([meta])
 
-    ls_viz.update([scan])
+    ls_viz.update(LidarScanSet([scan]))
     ls_viz.draw()
     ls_viz.run()
 
@@ -534,7 +534,7 @@ def test_scan_viz_extras(meta: SensorInfo,
     point_viz.add(cube1)
     point_viz.add(cube2)
 
-    ls_viz.update([scan])
+    ls_viz.update(LidarScanSet([scan]))
 
     point_viz.camera.dolly(150)
     ls_viz.draw()
@@ -550,8 +550,8 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
         viz: Optional[viz.PointViz] = None,
         pre_draw_callback: Optional[
             Callable[
-                [List[Optional[LidarScan]]],
-                List[Optional[LidarScan]]
+                [LidarScanSet],
+                LidarScanSet
             ]
         ] = None,
         post_draw_callback: Optional[Callable[['LidarScanVizWithCallbacks'],
@@ -567,7 +567,7 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
 
         # pre draw callbacl takes LidarScan and returns LidarScan
         if self._pre_draw_callback:
-            self._scan = self._pre_draw_callback(self._scans)
+            self._model.update(self._pre_draw_callback(self._scans))
 
         # call original draw
         super()._draw()
@@ -583,14 +583,17 @@ def test_simple_viz_with_callbacks(meta: SensorInfo,
                                    scan: LidarScan) -> None:
     """Call the callback on pre/post draw example."""
 
-    from itertools import repeat
     from copy import deepcopy
 
     start_range = 1    # in meters
     num_steps = 100
 
     # this can be any scan source (just a repeater as an example)
-    scans = repeat(scan, num_steps)
+    def repeated_scan() -> Iterable[LidarScanSet]:
+        for i in range(num_steps):
+            scan.packet_timestamp[:] += 1000 * 1000 * 100
+            yield LidarScanSet([scan])
+    scans = repeated_scan()
 
     point_viz = viz.PointViz("Test Viz")
 
@@ -603,17 +606,17 @@ def test_simple_viz_with_callbacks(meta: SensorInfo,
             ratio = scan_cnt / num_steps
 
             # modifying range in some way
-            range = nls.field(ChanField.RANGE)
-            range = start_range * 1000 + (range - start_range * 1000) * ratio
-            nls.field(ChanField.RANGE)[:] = range
+            rng = nls.field(ChanField.RANGE)
+            rng = start_range * 1000 + (rng - start_range * 1000) * ratio
+            nls.field(ChanField.RANGE)[:] = rng
             return nls
         return None
 
-    def pre_draw(scans: List[Optional[LidarScan]]) -> List[Optional[LidarScan]]:
+    def pre_draw(scans: LidarScanSet) -> LidarScanSet:
         nonlocal scan_cnt
         scan_cnt += 1
         # don't forget to return it back
-        return [modify_scan(ls) for ls in scans]
+        return LidarScanSet([modify_scan(ls) for ls in scans])
 
     def post_draw(scan_viz: LidarScanVizWithCallbacks) -> None:
         # TWS: the original test only handled one scan but the new LidarScanViz is always multi.

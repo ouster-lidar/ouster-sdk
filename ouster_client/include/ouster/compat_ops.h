@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -12,6 +14,7 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace core {
 /// Determine if a path is a directory. Returns optional if the path does not
 /// exist. False if the path is a file.
@@ -34,5 +37,22 @@ std::vector<std::string> files_in_directory(
     const std::string& path  ///< [in] path to check
 );
 
+/**
+ * Get the size of the given file in bytes.
+ * @param[in] path The path to the file.
+ * @return The size of the file in bytes.
+ */
+OUSTER_API_FUNCTION
+size_t get_file_size(const std::string& path);
+
+/**
+ * Get the contents of the file as a vector of bytes.
+ * @param[in] path The path to the file.
+ * @return A vector containing the contents of the file.
+ */
+OUSTER_API_FUNCTION
+std::vector<uint8_t> get_file_as_bytes(const std::string& path);
+
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

@@ -11,3 +11,4 @@ prune sdk/sdk-extensions
 prune sdk/build
 recursive-exclude sdk Jenkinsfile
 recursive-exclude sdk scripts
+prune sdk/venv

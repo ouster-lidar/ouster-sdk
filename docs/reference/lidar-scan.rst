@@ -9,11 +9,11 @@ function names in the order (``C++ class/function``, ``Python class/function``).
 language-specific usage and running example code, please see the :ref:`Python LidarScan examples<ex-python-lidarscan>`
 or the :ref:`C++ LidarScan examples<ex-cpp-lidarscan>`.
 
-The ``LidarScan`` class (:cpp:class:`ouster::LidarScan`, :py:class:`.LidarScan`) batches lidar
+The ``LidarScan`` class (:cpp:class:`ouster::sdk::core::LidarScan`, :py:class:`.core.LidarScan`) batches lidar
 packets by full rotations into accessible fields of the appropriate type. The ``LidarScan`` also
 allows for easy projection of the batched data into Cartesian coordinates, producing point clouds.
 
-.. todo:: 
+.. todo::
     Update so that all code-tabs are actually literalincludes from examples somewhere
     Currently group tabs are broken since they do not match between tabs and code-tabs
 
@@ -21,14 +21,18 @@ allows for easy projection of the batched data into Cartesian coordinates, produ
 Creating the LidarScan
 ======================
 
-A ``LidarScan`` (:cpp:class:`ouster::LidarScan`, :py:class:`.LidarScan`) contains fields of data
+A ``LidarScan`` (:cpp:class:`ouster::sdk::core::LidarScan`, :py:class:`.core.LidarScan`) contains fields of data
 specified at its initialization either through a lidar profile or a specific list of fields:
 
 .. tabs::
 
-    .. code-tab:: python
+    .. tab:: Python
 
-        scan = LidarScan(h, w, info.format.udp_profile_lidar)
+        .. literalinclude:: /../python/src/ouster/sdk/examples/lidar_scan.py
+            :language: python
+            :start-after: [doc-stag-python-lidarscan-constructor]
+            :end-before: [doc-etag-python-lidarscan-constructor]
+            :dedent:
 
     .. tab:: C++
 
@@ -43,9 +47,13 @@ the ``frame_id`` with simply:
 
 .. tabs::
 
-    .. code-tab:: python
-        
-        frame_id = scan.frame_id # frame_id is an int
+    .. tab:: Python
+
+        .. literalinclude:: /../python/src/ouster/sdk/examples/lidar_scan.py
+            :language: python
+            :start-after: [doc-stag-python-lidarscan-frame-id]
+            :end-before: [doc-etag-python-lidarscan-frame-id]
+            :dedent:
 
     .. code-tab:: c++
 
@@ -60,14 +68,14 @@ values in the header outside the azimuth window will be 0'd out accordingly.
 
 .. tabs::
 
-    .. code-tab:: python
+    .. tab:: Python
 
-        # each of these has as many entries as there are columns in the scan
-        ts_0 = scan.timestamp[0]
-        measurement_id_0 = scan.measurement_id[0]
-        status_0 = status[0]
-        
-        
+        .. literalinclude:: /../python/src/ouster/sdk/examples/lidar_scan.py
+            :language: python
+            :start-after: [doc-stag-python-lidarscan-headers]
+            :end-before: [doc-etag-python-lidarscan-headers]
+            :dedent:
+
     .. tab:: C++
 
         .. literalinclude:: /../examples/lidar_scan_example.cpp
@@ -76,17 +84,24 @@ values in the header outside the azimuth window will be 0'd out accordingly.
             :end-before: [doc-etag-lidarscan-cpp-headers]
             :dedent:
 
-For any field contained by a ``LidarScan`` scan, you can access that field in the following way:
+For any field contained by a ``LidarScan`` scan, you can access that field in the following way.
+
+.. note::
+
+    The available fields depend on the sensor's UDP profile configuration - different profiles
+    provide different combinations of fields (e.g., single vs dual returns, different data types).
+    See :py:class:`.core.UDPProfileLidar` for available profiles and their field combinations.
 
 .. tabs::
 
-    .. code-tab:: python
+    .. tab:: Python
 
-        ranges = scan.field(client.ChanField.RANGE)
-        ranges2 = scan.field(client.ChanField.RANGE2)
-        reflectivity = scan.field(client.ChanField.REFLECTIVITY)
-        reflectivity2 = scan.field(client.ChanField.REFLECTIVITY2)
-    
+        .. literalinclude:: /../python/src/ouster/sdk/examples/lidar_scan.py
+            :language: python
+            :start-after: [doc-stag-python-lidarscan-fields]
+            :end-before: [doc-etag-python-lidarscan-fields]
+            :dedent:
+
     .. tab:: C++
 
         .. literalinclude:: /../examples/lidar_scan_example.cpp
@@ -117,7 +132,7 @@ scan through an iterator:
             :dedent:
 
 .. note::
-    
+
     The units of a particular field from a ``LidarScan`` are consistent even
     when you use lidar profiles which scale the returned data from the sensor.
     This is because the LidarScan will reverse the scaling for you when
@@ -166,17 +181,17 @@ Projecting into Cartesian Coordinates
 =====================================
 
 To facilitate working with 3D points, you can create a pre-computed XYZ look-up table ``XYZLut``
-(:cpp:struct:`ouster::XYZLut`, :py:func:`.client.XYZLut`) on the appropriate metadata, which you can
+(:cpp:class:`ouster::sdk::core::XYZLut`, :py:func:`.core.data.XYZLut`) on the appropriate metadata, which you can
 then use to project the ``RANGE`` and ``RANGE2`` fields into Cartesian coordinates efficiently. The
 result of calling this function will be a point cloud represented as an array (either an
 ``Eigen::Array`` or a numpy array). See the respective API documentations for
-:cpp:func:`ouster::cartesian` and :py:func:`.client.XYZLut` for more details.
+:cpp:func:`ouster::sdk::core::cartesian` and :py:func:`.core.cartesian` for more details.
 
 .. tabs::
 
     .. tab:: Python
 
-        .. literalinclude:: /../python/src/ouster/sdk/examples/client.py
+        .. literalinclude:: /../python/src/ouster/sdk/examples/core.py
             :language: python
             :start-after: [doc-stag-plot-xyz-points]
             :end-before: [doc-etag-plot-xyz-points]
@@ -205,7 +220,7 @@ Staggering and Destaggering
 The default representation of ``LidarScan`` stores data in **staggered** columns, meaning
 that each column contains measurements taken at a single timestamp. As the lasers flashing at each
 timestamp are arranged over several different azimuths, the resulting 2D image if directly
-visualized is not a natural image. 
+visualized is not a natural image.
 
 Let's take a look at a typical **staggered** representation:
 
@@ -217,16 +232,19 @@ Let's take a look at a typical **staggered** representation:
 
 It would be convenient to obtain a representation where the columns represent azimuth angle instead
 of timestamp. For this natural 2D image, we *destagger* the relevant field of the ``LidarScan`` with
-``destagger`` (:cpp:func:`ouster::destagger`, :py:func:`.client.destagger` function):
+``destagger`` (:cpp:func:`ouster::sdk::core::destagger`, :py:func:`.core.destagger` function):
 
 .. todo:: fix destagger for cpp link
 
 .. tabs::
 
-    .. code-tab:: python
-        
-        ranges = scan.field(client.ChanField.REFLECTIVITY)
-        ranges_destaggered = client.destagger(source.metadata, range)
+    .. tab:: Python
+
+        .. literalinclude:: /../python/src/ouster/sdk/examples/lidar_scan.py
+            :language: python
+            :start-after: [doc-stag-python-lidarscan-destagger]
+            :end-before: [doc-etag-python-lidarscan-destagger]
+            :dedent:
 
     .. tab:: C++
 
@@ -253,11 +271,11 @@ Populating LidarScans
 
 This reference has covered how to a ``LidarScan``, and how to access, project, and destagger its
 contents. But in order for ``LidarScan`` s to be useful, we need a way to populate them with packet
-data! For convenience, the Ouster Python SDK provides the :py:class:`.Scans` interface, which allows
+data! For convenience, the Ouster Python SDK provides the :py:class:`.core.multi.Scans` interface, which allows
 both sampling, used in :ref:`ex-visualization-with-matplotlib`, and streaming, used in
 :ref:`ex-stream`.
 
 Under the hood, this class batches packets into ``LidarScans``. C++ users must batch packets
-themselves using the :cpp:class:`ouster::ScanBatcher` class. To get a feel for how to use it, we recommend
+themselves using the :cpp:class:`ouster::sdk::core::ScanBatcher` class. To get a feel for how to use it, we recommend
 reading `this example on GitHub
 <https://github.com/ouster-lidar/ouster-sdk/blob/master/examples/client_example.cpp#L93>`_.

@@ -5,10 +5,17 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include "ouster/packet_source.h"
 #include "ouster/scan_source.h"
 
 namespace ouster {
+namespace sdk {
 namespace core {
 
 /// ScanSource that collates a given ScanSource
@@ -41,17 +48,20 @@ class OUSTER_API_CLASS Collator : public ScanSource {
     ScanIterator begin(int sensor_index) const override;
 
     OUSTER_API_FUNCTION
-    ScanSource* move() override;
+    std::unique_ptr<ScanSource> move() override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-    sensor_info() const override;
+    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info()
+        const override;
 
     OUSTER_API_FUNCTION
     bool is_live() const override;
 
     OUSTER_API_FUNCTION
     bool is_indexed() const override;
+
+    OUSTER_API_FUNCTION
+    size_t size_hint() const override;
 
     OUSTER_API_FUNCTION
     const std::vector<std::pair<uint64_t, uint64_t>>& full_index()
@@ -82,7 +92,7 @@ class OUSTER_API_CLASS Singler : public ScanSource {
     const ScanSource* source_;
     size_t idx_;
     std::unique_ptr<ScanSource> parent_;
-    std::vector<std::shared_ptr<ouster::sensor::sensor_info>> sensor_info_;
+    std::vector<std::shared_ptr<SensorInfo>> sensor_info_;
     std::vector<size_t> scans_num_;
 
    public:
@@ -100,6 +110,10 @@ class OUSTER_API_CLASS Singler : public ScanSource {
     OUSTER_API_FUNCTION
     Singler(std::unique_ptr<ScanSource> source, size_t idx);
 
+    /**
+     * Move constructor for Singler.
+     * @param[in] copy The Singler instance to move from.
+     */
     OUSTER_API_FUNCTION
     Singler(Singler&& copy) = default;
 
@@ -122,11 +136,14 @@ class OUSTER_API_CLASS Singler : public ScanSource {
     const std::vector<size_t>& scans_num() const override;
 
     OUSTER_API_FUNCTION
-    ScanSource* move() override;
+    size_t size_hint() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-    sensor_info() const override;
+    std::unique_ptr<ScanSource> move() override;
+
+    OUSTER_API_FUNCTION
+    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info()
+        const override;
 
     OUSTER_API_FUNCTION
     const std::vector<std::pair<uint64_t, uint64_t>>& full_index()
@@ -167,6 +184,10 @@ class OUSTER_API_CLASS Slicer : public ScanSource {
     OUSTER_API_FUNCTION
     Slicer(ScanSource&& source, int start, int end, int step);
 
+    /**
+     * Move constructor for Slicer.
+     * @param[in] source The Slicer instance to move from.
+     */
     OUSTER_API_FUNCTION
     Slicer(Slicer&& source) = default;
 
@@ -177,7 +198,7 @@ class OUSTER_API_CLASS Slicer : public ScanSource {
     ScanIterator begin(int idx) const override;
 
     OUSTER_API_FUNCTION
-    ScanSource* move() override;
+    std::unique_ptr<ScanSource> move() override;
 
     OUSTER_API_FUNCTION
     bool is_live() const override;
@@ -186,11 +207,14 @@ class OUSTER_API_CLASS Slicer : public ScanSource {
     bool is_indexed() const override;
 
     OUSTER_API_FUNCTION
+    size_t size_hint() const override;
+
+    OUSTER_API_FUNCTION
     const std::vector<size_t>& scans_num() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-    sensor_info() const override;
+    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info()
+        const override;
 
     OUSTER_API_FUNCTION
     const std::vector<std::pair<uint64_t, uint64_t>>& full_index()
@@ -232,8 +256,8 @@ class OUSTER_API_CLASS AnyScanSource : public ScanSource {
     ScanIterator end() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-    sensor_info() const override;
+    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info()
+        const override;
 
     OUSTER_API_FUNCTION
     bool is_live() const override;
@@ -243,6 +267,9 @@ class OUSTER_API_CLASS AnyScanSource : public ScanSource {
 
     OUSTER_API_FUNCTION
     size_t size() const override;
+
+    OUSTER_API_FUNCTION
+    size_t size_hint() const override;
 
     OUSTER_API_FUNCTION
     const std::vector<std::vector<std::pair<uint64_t, uint64_t>>>&
@@ -256,7 +283,7 @@ class OUSTER_API_CLASS AnyScanSource : public ScanSource {
     const std::vector<size_t>& scans_num() const override;
 
     OUSTER_API_FUNCTION
-    ScanSource* move() override;
+    std::unique_ptr<ScanSource> move() override;
 
     /// Get the ScanSource wrapped by this ScanSource
     /// @return wrapped ScanSource
@@ -287,8 +314,8 @@ class OUSTER_API_CLASS AnyPacketSource : public PacketSource {
     PacketIterator end() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-    sensor_info() const override;
+    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info()
+        const override;
 
     OUSTER_API_FUNCTION
     bool is_live() const override;
@@ -301,5 +328,84 @@ class OUSTER_API_CLASS AnyPacketSource : public PacketSource {
    protected:
     void close() override;
 };
+
+class MultiScanIteratorImpl;
+/// MultiScanSource, combines multiple scan sources into a single one.
+class OUSTER_API_CLASS MultiScanSource : public ScanSource {
+    friend class MultiScanIteratorImpl;
+
+   public:
+    /// Construct a MultiScanSource from a provided sources
+    OUSTER_API_FUNCTION
+    MultiScanSource(std::vector<std::shared_ptr<ScanSource>>
+                        sources  ///< [in] the sources to combine
+    );
+
+    OUSTER_API_FUNCTION
+    ScanIterator begin() const override;
+
+    OUSTER_API_FUNCTION
+    ScanIterator begin(int idx) const override;
+
+    OUSTER_API_FUNCTION
+    ScanIterator end() const override;
+
+    OUSTER_API_FUNCTION
+    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info()
+        const override;
+
+    OUSTER_API_FUNCTION
+    bool is_live() const override;
+
+    OUSTER_API_FUNCTION
+    bool is_indexed() const override;
+
+    OUSTER_API_FUNCTION
+    size_t size() const override;
+
+    OUSTER_API_FUNCTION
+    size_t size_hint() const override;
+
+    OUSTER_API_FUNCTION
+    const std::vector<std::vector<std::pair<uint64_t, uint64_t>>>&
+    individual_index() const override;
+
+    OUSTER_API_FUNCTION
+    const std::vector<std::pair<uint64_t, uint64_t>>& full_index()
+        const override;
+
+    OUSTER_API_FUNCTION
+    const std::vector<size_t>& scans_num() const override;
+
+    OUSTER_API_FUNCTION
+    std::unique_ptr<ScanSource> move() override;
+
+   protected:
+    void close() override;
+
+    std::vector<std::shared_ptr<ScanSource>> sources_;
+
+    bool indexed_;
+
+    // mapping of original sensor info to sensor index and output sensor info
+    std::map<const SensorInfo*, std::pair<int, std::shared_ptr<SensorInfo>>>
+        info_map_;
+
+    std::vector<std::shared_ptr<SensorInfo>> sensor_info_;
+
+    struct OUSTER_API_CLASS IndexSample {
+        int source_index;
+        uint64_t timestamp;
+        int scan_index;
+    };
+    std::vector<IndexSample> source_index_;
+    std::vector<std::vector<std::pair<uint64_t, uint64_t>>> individual_index_;
+    std::vector<std::pair<uint64_t, uint64_t>> full_index_;
+    std::vector<size_t> scans_num_;
+
+    size_t size_;
+    size_t size_hint_;
+};
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

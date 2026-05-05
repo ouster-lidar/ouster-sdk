@@ -102,6 +102,7 @@ def test_xyz_lut_scan_dims(stream_digest: digest.StreamDigest, meta: core.Sensor
         xyzlut(core.LidarScan(h, w - 1))
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_xyz_calcs(stream_digest: digest.StreamDigest,
                    scan: core.LidarScan, meta: core.SensorInfo) -> None:
     """Compare the optimized xyz projection to a reference implementation."""

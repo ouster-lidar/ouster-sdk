@@ -53,6 +53,7 @@ visualize a list of LidarScan:
     viz.ls_show(scans)
 
     # When using an indexed source you can do this instead
+    idx = 0  # example index
     viz.ls_show(scan_source[idx]) # where idx is a valid index value into the source
 
     
@@ -64,7 +65,7 @@ Additionally, ``ls_show`` accepts a list or slice of LidarScan(s), the following
 .. code-block:: python
 
     # the following will visualize the first 3 scans simultaneously
-    viz.ls_show([scan_source[0], scan_source[1], scan_source[2]])
+    viz.ls_show([scan_source[0][0], scan_source[1][0], scan_source[2][0]])
 
     # the following will visualize a range of scans from the scan_source
     viz.ls_show(scan_source[0:10])

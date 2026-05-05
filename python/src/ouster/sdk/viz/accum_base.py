@@ -3,8 +3,8 @@ from ouster.sdk.viz import Cloud, PointViz
 from ouster.sdk.viz.model import LidarScanVizModel
 from ouster.sdk.viz.track import Track
 import ouster.sdk.core as core
-from ouster.sdk.core import ChanField
-from .view_mode import (CloudMode, CloudPaletteItem, is_norm_reflectivity_mode)
+from ouster.sdk.core import ChanField, LidarScanSet
+from ouster.sdk.viz.view_mode import (CloudMode, CloudPaletteItem, is_norm_reflectivity_mode)
 
 
 class AccumulatorBase:
@@ -101,10 +101,10 @@ class AccumulatorBase:
         self._update_cloud_palette()
 
     def update(self,
-               scan: List[Optional[core.LidarScan]],
+               scan: LidarScanSet,
                scan_num: Optional[int] = None) -> None:
         """Register the new scan and update the states of TRACK, ACCUM and MAP"""
-        self._scan: List[Optional[core.LidarScan]] = [scan] if isinstance(
+        self._scan: LidarScanSet = LidarScanSet([scan]) if isinstance(
             scan, core.LidarScan) else scan
         if scan_num is not None:
             self._scan_num = scan_num

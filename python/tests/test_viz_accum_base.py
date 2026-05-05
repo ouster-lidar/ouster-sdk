@@ -10,15 +10,15 @@ def test_use_default_view_modes():
     """It should add/remove the Clouds used to render
     the track and key frames depending on visibility."""
     infos = [
-        SensorInfo.from_default(LidarMode.MODE_2048x10),
-        SensorInfo.from_default(LidarMode.MODE_2048x10)
+        SensorInfo.from_default(LidarMode._2048x10),
+        SensorInfo.from_default(LidarMode._2048x10)
     ]
     for info in infos:
         info.image_rev = 'ousteros-image-prod-bootes-v3.0.1'  # needed for "is_norm_reflectivity_mode"
-    model = LidarScanVizModel(infos, _img_aspect_ratio=0)
+    viz = MockPointViz()
+    model = LidarScanVizModel(viz, infos, _img_aspect_ratio=0)
     config = LidarScanVizAccumulatorsConfig(accum_max_num=2, accum_min_dist_num=2)
     track = MultiTrack(model, config)
-    viz = MockPointViz()
     accum = AccumulatorBase(model, viz, track)
     assert accum.metadata == infos
     assert accum.active_cloud_mode == ''

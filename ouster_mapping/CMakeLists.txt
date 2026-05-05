@@ -4,10 +4,10 @@ option(USE_OPENMP "Enable the use of OpenMP" ON)
 
 find_package(Ceres REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(Sophus REQUIRED)
 find_package(KissIcp REQUIRED)
 
 if(USE_OPENMP)
-
   if (APPLE)
     message(STATUS "NOTE: On MacOS you may need to install libomp via Homebrew or MacPorts")
     find_package(OPENMP REQUIRED)
@@ -23,13 +23,22 @@ endif()
 # Create a shared library for pose_optimizer_py
 add_library(ouster_mapping STATIC
     src/pose_optimizer.cpp
+    src/constraint_config.cpp
     src/utils.cpp
-    src/absolute_pose_constraint.cpp
-    src/pose_to_pose_constraint.cpp
-    src/point_to_point_constraint.cpp
+    src/absolute_pose_constraint_impl.cpp
+    src/absolute_point_constraint_impl.cpp
+    src/pose_to_pose_constraint_impl.cpp
+    src/point_to_point_constraint_impl.cpp
     src/pose_optimizer_node.cpp
     src/trajectory.cpp
-    src/preprocessing.cpp
+    src/slam_util.cpp
+    src/deskew_method.cpp
+    src/active_time_correction.cpp
+    src/kiss_icp.cpp
+    src/kiss_slam.cpp
+    src/slam_engine.cpp
+    src/kiss_localization.cpp
+    src/localization_engine.cpp
 )
 
 target_include_directories(ouster_mapping
@@ -37,9 +46,12 @@ target_include_directories(ouster_mapping
      ouster_transform
      ${CERES_INCLUDE_DIRS}
      ${EIGEN3_INCLUDE_DIRS}
+     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/sophus>
+     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/kiss-icp/cpp>
    PUBLIC
       $<INSTALL_INTERFACE:include>
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty>
 )
 
 # On Linux gcc_s MUST be linked against before CERES to avoid libunwind issues
@@ -65,13 +77,14 @@ endif()
 target_link_libraries(ouster_mapping
   PRIVATE
     ${MAPPING_OS_LIBRARIES}
+    $<BUILD_INTERFACE:Sophus::Sophus>
     $<BUILD_INTERFACE:kiss_icp_core>
-    $<BUILD_INTERFACE:kiss_icp_pipeline>
     ${CERES_LIBRARIES_INTERNAL}
     Eigen3::Eigen
     OusterSDK::ouster_client
     OusterSDK::ouster_osf
     ${OPENMP_LIBRARIES_INTERNAL}
+    ${kiss_icp_cpp_LIBRARIES}
 )
 
 target_compile_definitions(ouster_mapping PUBLIC GLOG_USE_GLOG_EXPORT)

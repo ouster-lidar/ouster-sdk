@@ -12,50 +12,9 @@
 #include <random>
 
 #include "ouster/lidar_scan.h"
+#include "util.h"
 
-class Timer {
-   public:
-    void start() { t_start = std::chrono::system_clock::now(); }
-
-    void stop() { t_end = std::chrono::system_clock::now(); }
-
-    int64_t elapsed_microseconds() {
-        using namespace std::chrono;
-        return duration_cast<microseconds>(t_end - t_start).count();
-    }
-
-   private:
-    std::chrono::time_point<std::chrono::system_clock> t_start;
-    std::chrono::time_point<std::chrono::system_clock> t_end;
-};
-
-template <typename T, typename Total, size_t N>
-class MovingAverage {
-   public:
-    MovingAverage& operator()(T sample) {
-        total_sum += sample;
-        if (samples_count < N)
-            samples[samples_count++] = sample;
-        else {
-            T& oldest = samples[samples_count++ % N];
-            total_sum -= oldest;
-            oldest = sample;
-        }
-        return *this;
-    }
-
-    operator double() const {
-        return static_cast<double>(total_sum) /
-               static_cast<double>(std::min(samples_count, N));
-    }
-
-   private:
-    T samples[N];
-    size_t samples_count{0};
-    Total total_sum{0};
-};
-
-using namespace ouster;
+using namespace ouster::sdk::core;
 
 // the original destagger method
 template <typename T>
@@ -191,7 +150,7 @@ TEST(DestaggerParameterizedTestFixture,
     std::cout << "range.size(): " << range.rows() << std::endl;
     std::cout << "shift.size(): " << shifts.size() << std::endl;
 
-    auto destagger_image = ouster::destagger<uint32_t>(range, shifts, true);
+    auto destagger_image = destagger<uint32_t>(range, shifts, true);
     auto staggered_image = destagger<uint32_t>(destagger_image, shifts, false);
     EXPECT_TRUE(staggered_image.isApprox(range));
 }
@@ -260,7 +219,10 @@ TEST_P(DestaggerParameterizedTestFixture, SpeedCheck) {
 
     img_t<uint32_t> output = img_t<uint32_t>(HEIGHT, WIDTH);
 
-    constexpr int N_SCANS = 1000;
+    // By default run the shortest possible test unless OUSTER_PERFORMANCE is
+    // set
+    int N_SCANS = enable_performance_tests() ? 1000 : 1;
+
     constexpr int MOVING_AVG_WINDOW = 100;
     using MovingAverage64 = MovingAverage<int64_t, int64_t, MOVING_AVG_WINDOW>;
     static std::map<std::string, MovingAverage64> mv;

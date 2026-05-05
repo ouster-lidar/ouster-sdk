@@ -3,27 +3,40 @@
  * All rights reserved.
  */
 
+#include "ouster/cartesian.h"
+
 #include <gtest/gtest.h>
 
-#include <Eigen/Eigen>
+#include <Eigen/Core>
+#include <cstdlib>
 #include <iomanip>
 #include <numeric>
 #include <random>
 
 #include "ouster/lidar_scan.h"
+#include "ouster/typedefs.h"
+#include "ouster/xyzlut.h"
 #include "util.h"
 
-using namespace ouster;
+using ouster::sdk::core::cartesianT;
+using ouster::sdk::core::img_t;
+using ouster::sdk::core::XYZLut;
+
+using ouster::sdk::core::ArrayX3dR;
+using ouster::sdk::core::ArrayX3fR;
+using ouster::sdk::core::PointCloudXYZd;
+using ouster::sdk::core::PointCloudXYZf;
 
 // Same as ouster::cartesian but uses single float precision
-PointsF cartesian_f(const Eigen::Ref<const img_t<uint32_t>>& range,
-                    const PointsF& direction, const PointsF& offset) {
+PointCloudXYZf cartesian_f(const Eigen::Ref<const img_t<uint32_t>>& range,
+                           const ArrayX3fR& direction,
+                           const ArrayX3fR& offset) {
     if (range.cols() * range.rows() != direction.rows())
         throw std::invalid_argument("unexpected image dimensions");
-    auto reshaped = Eigen::Map<const Eigen::Array<uint32_t, -1, 1>>(
+    auto reshaped = Eigen::Map<const Eigen::ArrayX<uint32_t>>(
         range.data(), range.cols() * range.rows());
     auto nooffset = direction.colwise() * reshaped.cast<float>();
-    return (nooffset.array() == 0.0).select(nooffset, nooffset + offset);
+    return (nooffset == 0.0).select(nooffset, nooffset + offset).matrix();
 }
 
 class CartesianParameterizedTestFixture
@@ -46,10 +59,10 @@ TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatch) {
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 
-    PointsD direction =
-        0.5 * PointsD::Random(ROWS, COLS) + PointsD::Constant(ROWS, COLS, 1.0);
-    PointsD offset = 0.005 * (PointsD::Random(ROWS, COLS) +
-                              PointsD::Constant(ROWS, COLS, 1.0));
+    ArrayX3dR direction = 0.5 * ArrayX3dR::Random(ROWS, COLS) +
+                          ArrayX3dR::Constant(ROWS, COLS, 1.0);
+    ArrayX3dR offset = 0.005 * (ArrayX3dR::Random(ROWS, COLS) +
+                                ArrayX3dR::Constant(ROWS, COLS, 1.0));
     XYZLut lut;
     lut.direction = direction;
     lut.offset = offset;
@@ -58,7 +71,7 @@ TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatch) {
 
     auto points0 = cartesian(range, lut);
 
-    PointsD points = PointsD::Zero(ROWS, COLS);
+    PointCloudXYZd points = PointCloudXYZd::Zero(ROWS, COLS);
 
     cartesianT(points, range, direction, offset);
     EXPECT_TRUE(points.isApprox(points0));
@@ -70,23 +83,23 @@ TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatchF) {
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 
-    PointsD direction =
-        0.5 * PointsD::Random(ROWS, COLS) + PointsD::Constant(ROWS, COLS, 1.0);
-    PointsD offset = 0.005 * (PointsD::Random(ROWS, COLS) +
-                              PointsD::Constant(ROWS, COLS, 1.0));
+    ArrayX3dR direction = 0.5 * ArrayX3dR::Random(ROWS, COLS) +
+                          ArrayX3dR::Constant(ROWS, COLS, 1.0);
+    ArrayX3dR offset = 0.005 * (ArrayX3dR::Random(ROWS, COLS) +
+                                ArrayX3dR::Constant(ROWS, COLS, 1.0));
     XYZLut lut;
     lut.direction = direction;
     lut.offset = offset;
 
-    PointsF directionF = direction.cast<float>();
-    PointsF offsetF = offset.cast<float>();
+    ArrayX3fR directionF = direction.cast<float>();
+    ArrayX3fR offsetF = offset.cast<float>();
 
     img_t<uint32_t> range = img_t<uint32_t>::Random(WIDTH, HEIGHT);
 
     auto points0 = cartesian(range, lut);
     auto points0F = points0.cast<float>();
 
-    PointsF pointsF = PointsF::Zero(ROWS, COLS);
+    PointCloudXYZf pointsF = PointCloudXYZf::Zero(ROWS, COLS);
 
     cartesianT(pointsF, range, directionF, offsetF);
     EXPECT_TRUE(pointsF.isApprox(points0F));
@@ -104,23 +117,26 @@ TEST_P(CartesianParameterizedTestFixture, SpeedCheck) {
               << "CHECKING PERFORMANCE FOR LIDAR MODE: [" << WIDTH << "x"
               << HEIGHT << "]" << styles["reset"] << std::endl;
 
-    PointsD direction =
-        0.5 * PointsD::Random(ROWS, COLS) + PointsD::Constant(ROWS, COLS, 1.0);
-    PointsD offset = 0.005 * (PointsD::Random(ROWS, COLS) +
-                              PointsD::Constant(ROWS, COLS, 1.0));
+    ArrayX3dR direction = 0.5 * ArrayX3dR::Random(ROWS, COLS) +
+                          ArrayX3dR::Constant(ROWS, COLS, 1.0);
+    ArrayX3dR offset = 0.005 * (ArrayX3dR::Random(ROWS, COLS) +
+                                ArrayX3dR::Constant(ROWS, COLS, 1.0));
     XYZLut lut;
     lut.direction = direction;
     lut.offset = offset;
 
-    PointsF directionF = direction.cast<float>();
-    PointsF offsetF = offset.cast<float>();
+    ArrayX3fR directionF = direction.cast<float>();
+    ArrayX3fR offsetF = offset.cast<float>();
 
     // create an empty arrays of points
-    PointsD points = PointsD(ROWS, COLS);
-    PointsF pointsF = PointsF(ROWS, COLS);
+    PointCloudXYZd points = PointCloudXYZd(ROWS, COLS);
+    PointCloudXYZf pointsF = PointCloudXYZf(ROWS, COLS);
     img_t<uint32_t> range = img_t<uint32_t>(WIDTH, HEIGHT);
 
-    constexpr int N_SCANS = 100;
+    // By default run the shortest possible test unless OUSTER_PERFORMANCE is
+    // set
+    int N_SCANS = enable_performance_tests() ? 100 : 1;
+
     constexpr int MOVING_AVG_WINDOW = 30;
     using MovingAverage64 = MovingAverage<int64_t, int64_t, MOVING_AVG_WINDOW>;
     static std::map<std::string, MovingAverage64> mv;

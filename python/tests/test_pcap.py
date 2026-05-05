@@ -18,6 +18,7 @@ import numpy as np
 from ouster.sdk import core, pcap
 import ouster.sdk._bindings.pcap as _pcap
 from ouster.sdk.core import PacketValidationFailure
+from ouster.sdk.pcap import PacketInfo
 import ouster.sdk._bindings.client as _client
 from tests.conftest import PCAPS_DATA_DIR, TESTS
 from tests.test_batching import _patch_frame_id  # type: ignore
@@ -482,7 +483,7 @@ def test_record_packet_info(fake_meta, tmpdir) -> None:
     record = _pcap.record_initialize(file_path, buf_size)
     i = 0
     for next_packet in packets:
-        info = _pcap.packet_info()
+        info = PacketInfo()
 
         info.dst_ip = "127.0.0." + str(i)
         info.src_ip = "127.0.1." + str(i)
@@ -499,7 +500,7 @@ def test_record_packet_info(fake_meta, tmpdir) -> None:
     _pcap.record_uninitialize(record)
 
     playback = _pcap.replay_initialize(file_path)
-    info = _pcap.packet_info()
+    info = PacketInfo()
     i = 0
     while _pcap.next_packet_info(playback, info):
         assert (info.dst_ip == "127.0.0." + str(i))
@@ -643,7 +644,7 @@ def test_validation():
     pcap_file_path = path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     metadata = core.SensorInfo(open(meta_file_path).read())
     metadata.init_id = 123
-    metadata.format.udp_profile_lidar = core.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
+    metadata.format.udp_profile_lidar = core.UDPProfileLidar.FIVE_WORD_PIXEL
     reader = pcap.PcapPacketSource(pcap_file_path, sensor_info=[metadata])
     consume(reader)
     # size error takes precedent

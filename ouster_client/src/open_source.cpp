@@ -6,13 +6,26 @@
 #include "ouster/open_source.h"
 
 #include <Eigen/Geometry>
+#include <algorithm>
+#include <cstddef>
+#include <cstdio>
 #include <fstream>
+#include <functional>
+#include <ios>
 #include <jsoncons/json.hpp>
 #include <jsoncons/json_type.hpp>
+#include <map>
+#include <memory>
+#include <nonstd/optional.hpp>
+#include <string>
+#include <vector>
 
 #include "ouster/scan_source_utils.h"
 
+using ouster::sdk::core::IoType;
+
 namespace ouster {
+namespace sdk {
 
 namespace impl {
 std::map<core::IoType, ScanBuilderT>& get_builders() {
@@ -26,26 +39,27 @@ std::map<core::IoType, PacketBuilderT>& get_packet_builders() {
 }
 }  // namespace impl
 
-static std::string read_file(const std::string& fileName) {
-    std::ifstream ifs(fileName.c_str(),
+static std::string read_file(const std::string& file_name) {
+    std::ifstream ifs(file_name.c_str(),
                       std::ios::in | std::ios::binary | std::ios::ate);
 
-    std::ifstream::pos_type fileSize = ifs.tellg();
+    std::ifstream::pos_type file_size = ifs.tellg();
     ifs.seekg(0, std::ios::beg);
 
-    std::vector<char> bytes(fileSize);
-    ifs.read(bytes.data(), fileSize);
+    std::vector<char> bytes(file_size);
+    ifs.read(bytes.data(), file_size);
 
-    return std::string(bytes.data(), fileSize);
+    return std::string(bytes.data(), file_size);
 }
 
+namespace core {
 void populate_extrinsics(
     std::string extrinsics_file,
     std::vector<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>> extrinsics,
-    std::vector<std::shared_ptr<sensor::sensor_info>>& sensor_infos) {
+    std::vector<std::shared_ptr<SensorInfo>>& sensor_infos) {
     // try and load from file if set
     std::vector<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>> final_extrinsics;
-    if (extrinsics_file.length()) {
+    if (!extrinsics_file.empty()) {
         std::string json = read_file(extrinsics_file);
         auto data = jsoncons::json::parse(json);
         size_t extrinsic_count = 0;
@@ -89,7 +103,7 @@ void populate_extrinsics(
         }
     }
 
-    if (extrinsics.size()) {
+    if (!extrinsics.empty()) {
         for (size_t i = 0; i < std::min(extrinsics.size(), sensor_infos.size());
              i++) {
             sensor_infos[i]->extrinsic = extrinsics[i];
@@ -105,54 +119,58 @@ void populate_extrinsics(
 }
 
 std::vector<std::vector<FieldType>> resolve_field_types(
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>& metadata,
-    bool raw_headers, bool raw_fields,
+    const std::vector<std::shared_ptr<SensorInfo>>& metadata, bool raw_headers,
+    bool raw_fields,
     const nonstd::optional<std::vector<std::string>>& field_names) {
     std::vector<std::vector<FieldType>> all_ftypes;
-    for (const auto& m : metadata) {
-        auto ftypes = get_field_types(*m);
-        bool dual = (m->num_returns() == 2);
+    for (const auto& meta : metadata) {
+        auto ftypes = get_field_types(*meta);
+        bool dual = (meta->num_returns() == 2);
 
         if (raw_fields) {
-            ftypes.push_back(FieldType(sensor::ChanField::RAW32_WORD1,
-                                       sensor::ChanFieldType::UINT32));
-            if (m->format.udp_profile_lidar !=
-                ouster::sensor::UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8) {
-                ftypes.push_back(FieldType(sensor::ChanField::RAW32_WORD2,
-                                           sensor::ChanFieldType::UINT32));
-                ftypes.push_back(FieldType(sensor::ChanField::RAW32_WORD3,
-                                           sensor::ChanFieldType::UINT32));
-            }
-            if (dual) {
-                ftypes.push_back(FieldType(sensor::ChanField::RAW32_WORD4,
-                                           sensor::ChanFieldType::UINT32));
+            ftypes.emplace_back(ChanField::RAW32_WORD1, ChanFieldType::UINT32);
+            if (meta->format.udp_profile_lidar ==
+                UDPProfileLidar::RNG15_RFL8_NIR8_DUAL) {
+                ftypes.emplace_back(ChanField::RAW32_WORD2,
+                                    ChanFieldType::UINT32);
+            } else if (meta->format.udp_profile_lidar !=
+                       UDPProfileLidar::RNG15_RFL8_NIR8) {
+                ftypes.emplace_back(ChanField::RAW32_WORD2,
+                                    ChanFieldType::UINT32);
+                ftypes.emplace_back(ChanField::RAW32_WORD3,
+                                    ChanFieldType::UINT32);
+                if (dual) {
+                    ftypes.emplace_back(ChanField::RAW32_WORD4,
+                                        ChanFieldType::UINT32);
+                }
             }
         }
 
         if (raw_headers) {
-            auto pf = ouster::sensor::packet_format(*m);
-            auto h = pf.pixels_per_column;
+            auto packet_format = PacketFormat(*meta);
+            auto h = packet_format.pixels_per_column;
             auto raw_headers_space =
-                (pf.packet_header_size + pf.packet_footer_size +
-                 pf.col_header_size + pf.col_footer_size);
+                (packet_format.packet_header_size +
+                 packet_format.packet_footer_size +
+                 packet_format.col_header_size + packet_format.col_footer_size);
             auto size_bytes = raw_headers_space / h;
-            auto dtype = sensor::ChanFieldType::UINT8;
+            auto dtype = ChanFieldType::UINT8;
             if (size_bytes >= 2) {
-                dtype = sensor::ChanFieldType::UINT32;
+                dtype = ChanFieldType::UINT32;
             } else if (size_bytes >= 1) {
-                dtype = sensor::ChanFieldType::UINT16;
+                dtype = ChanFieldType::UINT16;
             }
-            ftypes.push_back(FieldType(sensor::ChanField::RAW_HEADERS, dtype));
+            ftypes.emplace_back(ChanField::RAW_HEADERS, dtype);
         }
 
         // Finally apply field names
         if (field_names) {
             std::vector<FieldType> real_field_types;
             // Only parse fields we asked for in field_names
-            for (const auto& ft : ftypes) {
+            for (const auto& field_type : ftypes) {
                 for (const auto& name : field_names.value()) {
-                    if (ft.name == name) {
-                        real_field_types.push_back(ft);
+                    if (field_type.name == name) {
+                        real_field_types.push_back(field_type);
                         break;
                     }
                 }
@@ -161,8 +179,8 @@ std::vector<std::vector<FieldType>> resolve_field_types(
             // Error if we cant find a field with the requested name
             for (const auto& name : field_names.value()) {
                 bool found = false;
-                for (const auto& ft : ftypes) {
-                    if (ft.name == name) {
+                for (const auto& field_type : ftypes) {
+                    if (field_type.name == name) {
                         found = true;
                         break;
                     }
@@ -182,6 +200,7 @@ std::vector<std::vector<FieldType>> resolve_field_types(
     }
     return all_ftypes;
 }
+}  // namespace core
 
 core::AnyScanSource open_source(
     const std::string& name,
@@ -199,22 +218,29 @@ core::AnyScanSource open_source(
     if (options) {
         options(opts);
     }
-    auto type = ouster::core::io_type(names[0]);
-    if (impl::get_builders().find(type) != impl::get_builders().end()) {
-        auto source = impl::get_builders()[type](names, opts);
-        if (sensor_idx >= 0) {
-            source = new ouster::core::Singler(
-                std::unique_ptr<ouster::core::ScanSource>(source), sensor_idx);
-        } else if (collate) {
-            source = new ouster::core::Collator(
-                std::unique_ptr<ouster::core::ScanSource>(source));
+    auto type = ouster::sdk::core::io_type(names[0]);
+    for (size_t i = 1; i < names.size(); i++) {
+        if (ouster::sdk::core::io_type(names[i]) != type) {
+            throw std::runtime_error("All sources must have the same type.");
         }
-        return core::AnyScanSource(
-            std::unique_ptr<ouster::core::ScanSource>(source));
+    }
+    if (impl::get_builders().find(type) != impl::get_builders().end()) {
+        auto source =
+            impl::get_builders()[type](names, opts, collate, sensor_idx);
+        return core::AnyScanSource(std::move(source));
     } else {
-        throw std::runtime_error(
-            "Source type expected to be a sensor hostname, ip address, or a "
-            ".pcap, .osf, or .bag file.");
+        if (type == IoType::OSF || type == IoType::PCAP ||
+            type == IoType::SENSOR) {
+            throw std::runtime_error(
+                "Could not open scan source. Unhandled source type " +
+                to_string(type) +
+                ". Perhaps you forgot to include the requisite source type or "
+                "built the library without the correct build flags.");
+        } else {
+            throw std::runtime_error(
+                "Could not open scan source. Unhandled source type " +
+                to_string(type) + ".");
+        }
     }
 }
 
@@ -232,15 +258,23 @@ core::AnyPacketSource open_packet_source(
     if (options) {
         options(opts);
     }
-    auto type = ouster::core::io_type(names[0]);
+    auto type = ouster::sdk::core::io_type(names[0]);
     if (impl::get_packet_builders().find(type) !=
         impl::get_packet_builders().end()) {
-        return core::AnyPacketSource(std::unique_ptr<core::PacketSource>(
-            impl::get_packet_builders()[type](names, opts)));
+        return core::AnyPacketSource(
+            impl::get_packet_builders()[type](names, opts));
     } else {
-        throw std::runtime_error(
-            "Source type expected to be a sensor hostname, ip address, or a "
-            ".pcap, or .bag file.");
+        if (type == IoType::PCAP || type == IoType::SENSOR) {
+            throw std::runtime_error(
+                "Could not open packet source. Unhandled source type " +
+                to_string(type) +
+                ". Perhaps you forgot to include the requisite source type or "
+                "built the library without the correct build flags.");
+        } else {
+            throw std::runtime_error(
+                "Could not open packet source. Unhandled source type " +
+                to_string(type) + ".");
+        }
     }
 }
 
@@ -259,6 +293,7 @@ void PacketSourceOptions::check(const char* source_type) const {
     do_not_reinitialize.check("do_not_reinitialize", source_type);
     no_auto_udp_dest.check("no_auto_udp_dest", source_type);
     sensor_config.check("sensor_config", source_type);
+    reuse_ports.check("reuse_ports", source_type);
 }
 
 void ScanSourceOptions::check(const char* source_type) const {
@@ -279,6 +314,7 @@ void ScanSourceOptions::check(const char* source_type) const {
     raw_headers.check("raw_headers", source_type);
     raw_fields.check("raw_fields", source_type);
     sensor_config.check("sensor_config", source_type);
+    reuse_ports.check("reuse_ports", source_type);
 }
 
 PacketSourceOptions::PacketSourceOptions(ScanSourceOptions& options)
@@ -293,7 +329,9 @@ PacketSourceOptions::PacketSourceOptions(ScanSourceOptions& options)
       sensor_info(options.sensor_info.move()),
       do_not_reinitialize(options.do_not_reinitialize.move()),
       no_auto_udp_dest(options.no_auto_udp_dest.move()),
-      sensor_config(options.sensor_config.move()) {}
+      sensor_config(options.sensor_config.move()),
+      reuse_ports(options.reuse_ports.move()) {}
 
-PacketSourceOptions::PacketSourceOptions() {}
+PacketSourceOptions::PacketSourceOptions() = default;
+}  // namespace sdk
 }  // namespace ouster

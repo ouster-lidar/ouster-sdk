@@ -8,14 +8,20 @@
  */
 #pragma once
 
-#include <iostream>
+#include <cstdint>
+#include <map>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
+#include "ouster/osf/buffer.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
@@ -178,7 +184,7 @@ class OUSTER_API_CLASS StreamingInfo
     : public MetadataEntryHelper<StreamingInfo> {
    public:
     OUSTER_API_FUNCTION
-    StreamingInfo() {}
+    StreamingInfo() = default;
 
     /**
      * @param[in] chunks_info Vector containing pairs of
@@ -223,7 +229,7 @@ class OUSTER_API_CLASS StreamingInfo
      * @copydoc MetadataEntry::buffer
      */
     OUSTER_API_FUNCTION
-    std::vector<uint8_t> buffer() const override final;
+    std::vector<uint8_t> buffer() const final;
 
     /**
      * Create a StreamingInfo object from a byte array.
@@ -236,8 +242,7 @@ class OUSTER_API_CLASS StreamingInfo
      * @return The new StreamingInfo cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(
-        const std::vector<uint8_t>& buf);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf);
 
     /**
      * Get the string representation for the LidarSensor object.
@@ -287,4 +292,5 @@ struct OUSTER_API_CLASS MetadataTraits<StreamingInfo> {
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

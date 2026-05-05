@@ -9,8 +9,14 @@ from ouster.sdk._bindings.client import open_packet_source as _open_packet_sourc
 from functools import partial
 
 
-def _python_source_wrapper(ty: type, source_url: Union[str, List[str]], collate: bool,
-                           sensor_idx: int, *args, **kwargs):
+def _python_source_wrapper(ty: type, ioty: OusterIoType, source_url: Union[str, List[str]], collate: bool,
+                           sensor_idx: int, *args, **kwargs) -> ScanSource:
+    # handle multiple files
+    src: ScanSource
+    if type(source_url) is list and len(source_url) > 1:
+        for name in source_url:
+            if ouster.sdk.core.io_types.io_type(name) != ioty:
+                raise RuntimeError("All sources must have the same type.")
     src = ty(source_url, *args, **kwargs)
     if sensor_idx >= 0:
         src = src.single(sensor_idx)
@@ -20,29 +26,27 @@ def _python_source_wrapper(ty: type, source_url: Union[str, List[str]], collate:
 
 
 io_type_handlers = {
-    OusterIoType.SENSOR: _open_source,
-    OusterIoType.PCAP: _open_source,
-    OusterIoType.OSF: _open_source,
-    OusterIoType.BAG: partial(_python_source_wrapper, BagScanSource),
-    OusterIoType.MCAP: partial(_python_source_wrapper, BagScanSource)
+    OusterIoType.BAG: partial(_python_source_wrapper, BagScanSource, OusterIoType.BAG),
+    OusterIoType.MCAP: partial(_python_source_wrapper, BagScanSource, OusterIoType.MCAP)
 }
 
 packet_io_type_handlers: Dict[OusterIoType, Callable[..., PacketSource]] = {
-    OusterIoType.SENSOR: _open_packet_source,
-    OusterIoType.PCAP: _open_packet_source,
-    OusterIoType.OSF: _open_packet_source,
     OusterIoType.BAG: BagPacketSource,
     OusterIoType.MCAP: BagPacketSource,
 }
 
 
 class SourceURLException(Exception):
-    def __init__(self, sub_exception, url):
+    def __init__(self, sub_exception, url, packet = False):
         self._sub_exception = sub_exception
         self._url = url
+        self._packet = packet
 
     def __str__(self):
-        result = f"Failed to create scan_source for url {self._url}\n"
+        if self._packet:
+            result = f"Failed to create packet_source for url {self._url}\n"
+        else:
+            result = f"Failed to create scan_source for url {self._url}\n"
         result += f"more details: {self._sub_exception}"
         return result
 
@@ -89,13 +93,12 @@ def open_source(source_url: Union[str, List[str]], collate: bool = True, sensor_
     scan_source: Optional[ScanSource] = None
     try:
         source_type = ouster.sdk.core.io_types.io_type(first_url)
-        handler = io_type_handlers[source_type]
+        handler = _open_source
+        if source_type in io_type_handlers:
+            handler = io_type_handlers[source_type]
         scan_source = handler(source_url, collate=collate, sensor_idx=sensor_idx, *args, **kwargs)  # type: ignore
-    except KeyError:
-        raise NotImplementedError(
-            f"The io_type:{source_type} is not supported!")
     except Exception as ex:
-        raise SourceURLException(ex, source_url if type(source_url) is list else [source_url])  # type: ignore
+        raise SourceURLException(ex, source_url if type(source_url) is list else [source_url], False)  # type: ignore
 
     if scan_source is None:
         raise RuntimeError(
@@ -138,13 +141,12 @@ def open_packet_source(source_url: Union[str, List[str]], *args,
     scan_source: Optional[PacketSource] = None
     try:
         source_type = ouster.sdk.core.io_types.io_type(first_url)
-        handler = packet_io_type_handlers[source_type]
+        handler = _open_packet_source
+        if source_type in io_type_handlers:
+            handler = packet_io_type_handlers[source_type]
         scan_source = handler(source_url, *args, **kwargs)
-    except KeyError:
-        raise NotImplementedError(
-            f"The io_type:{source_type} is not supported!")
     except Exception as ex:
-        raise SourceURLException(ex, source_url if type(source_url) is list else [source_url])  # type: ignore
+        raise SourceURLException(ex, source_url if type(source_url) is list else [source_url], True)  # type: ignore
 
     if scan_source is None:
         raise RuntimeError(

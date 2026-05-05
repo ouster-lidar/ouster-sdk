@@ -14,3 +14,4 @@ from .packet_iter import RecordingPacketSource
 from ouster.sdk._bindings.pcap import PcapPacketSource
 from ouster.sdk._bindings.pcap import PcapScanSource
 from ouster.sdk._bindings.pcap import PcapDuplicatePortException
+from ouster.sdk._bindings.pcap import PacketInfo

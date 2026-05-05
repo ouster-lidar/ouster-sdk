@@ -12,6 +12,7 @@
 #include "ouster/point_viz.h"
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 
@@ -35,20 +36,20 @@ class GLCloud {
     void initialize_vao();
 
     // per-object gl state
-    GLuint vao;
-    GLuint xyz_buffer;
-    GLuint off_buffer;
-    GLuint range_buffer;
-    GLuint key_buffer;
-    GLuint mask_buffer;
-    GLuint trans_index_buffer;
-    GLuint transform_texture;
-    GLuint palette_texture;
-    GLfloat point_size;
-    bool mono;
+    GLuint vao_;
+    GLuint xyz_buffer_;
+    GLuint off_buffer_;
+    GLuint range_buffer_;
+    GLuint key_buffer_;
+    GLuint mask_buffer_;
+    GLuint trans_index_buffer_;
+    GLuint transform_texture_;
+    GLuint palette_texture_;
+    GLfloat point_size_;
+    bool mono_;
 
-    Eigen::Matrix4d map_pose;
-    Eigen::Matrix4f extrinsic;
+    Eigen::Matrix4d map_pose_;
+    Eigen::Matrix4f extrinsic_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -76,4 +77,5 @@ class GLCloud {
 
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

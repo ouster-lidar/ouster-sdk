@@ -1,0 +1,8 @@
+
+solid exported
+
+    facet normal 0 0 1
+        outer loop
+            vertex -20 -20 40
+            vertex 20 -20 40
+            vertex -20 20 40

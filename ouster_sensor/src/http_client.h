@@ -15,7 +15,8 @@
 #include <vector>
 
 namespace ouster {
-namespace util {
+namespace sdk {
+namespace sensor {
 
 /**
  * An abstraction of http client to handle http requests
@@ -92,29 +93,57 @@ class HttpClient {
     virtual std::string del(const std::string& url, int timeout_sec) const = 0;
 
     /**
-     * Executes a Delete request towards the provided url.
+     * Executes a Post request towards the provided url.
      *
      * @param[in] url http request url.
-     * @param[in] data http post data.
+     * @param[in] json http post data (in json format).
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
      * @return the result of the execution. If request fails it returns an empty
      * string.
      */
-    virtual std::string post(const std::string& url, const std::string& data,
+    virtual std::string post(const std::string& url, const std::string& json,
                              int timeout_sec) const = 0;
 
     /**
-     * Executes a Delete request towards the provided url.
+     * Executes a Post request towards the provided url.
      *
      * @param[in] url http request url.
-     * @param[in] data http post data.
+     * @param[in] data http post data (in binary format).
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
      * @return the result of the execution. If request fails it returns an empty
      * string.
      */
-    virtual std::string put(const std::string& url, const std::string& data,
+    virtual std::string post(const std::string& url,
+                             const std::vector<uint8_t>& data,
+                             int timeout_sec) const = 0;
+
+    /**
+     * Executes a Put request towards the provided url.
+     *
+     * @param[in] url http request url.
+     * @param[in] json http post data (in json format).
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return the result of the execution. If request fails it returns an empty
+     * string.
+     */
+    virtual std::string put(const std::string& url, const std::string& json,
+                            int timeout_sec) const = 0;
+
+    /**
+     * Executes a Put request towards the provided url.
+     *
+     * @param[in] url http request url.
+     * @param[in] data http post data (in binary format).
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return the result of the execution. If request fails it returns an empty
+     * string.
+     */
+    virtual std::string put(const std::string& url,
+                            const std::vector<uint8_t>& data,
                             int timeout_sec) const = 0;
 
     /**
@@ -140,5 +169,6 @@ class HttpClient {
     std::vector<std::string> additional_headers_;
 };
 
-}  // namespace util
+}  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

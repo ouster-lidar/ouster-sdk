@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
+// NOLINTBEGIN
 #include "ip_reassembler.h"
 
 #include <tins/arp.h>
@@ -52,6 +52,10 @@
 #include <tins/sll.h>
 #include <tins/tcp.h>
 #include <tins/udp.h>
+
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
 using std::make_pair;
 
 namespace Tins {
@@ -65,7 +69,7 @@ IPv4Stream2::IPv4Stream2()
 void IPv4Stream2::add_fragment(const std::chrono::microseconds& timestamp,
                                IP* ip) {
     // handle timeout
-    if (fragments_.size()) {
+    if (!fragments_.empty()) {
         if ((timestamp - last_timestamp_) > fragment_timeout) {
             // if we timed out, clear out all old packets
             received_size_ = 0;
@@ -140,7 +144,7 @@ static Tins::PDU* pdu_from_flag2(Constants::IP::e flag, const uint8_t* buffer,
     if (rawpdu_on_no_match) {
         return new Tins::RawPDU(buffer, size);
     }
-    return 0;
+    return nullptr;
 }
 
 PDU* IPv4Stream2::allocate_pdu() const {
@@ -151,14 +155,15 @@ PDU* IPv4Stream2::allocate_pdu() const {
     for (fragments_type::const_iterator it = fragments_.begin();
          it != fragments_.end(); ++it) {
         if (expected != it->offset()) {
-            return 0;
+            return nullptr;
         }
         expected = it->offset() + it->payload().size();
         buffer.insert(buffer.end(), it->payload().begin(), it->payload().end());
     }
     return pdu_from_flag2(
         static_cast<Constants::IP::e>(first_fragment_.protocol()),
-        buffer.empty() ? 0 : &buffer[0], static_cast<uint32_t>(buffer.size()));
+        buffer.empty() ? nullptr : buffer.data(),
+        static_cast<uint32_t>(buffer.size()));
 }
 
 const IP& IPv4Stream2::first_fragment() const { return first_fragment_; }
@@ -176,7 +181,7 @@ IPv4Reassembler2::IPv4Reassembler2(OverlappingTechnique /*technique*/) {}
 IPv4Reassembler2::PacketStatus IPv4Reassembler2::process(
     const std::chrono::microseconds& timestamp, PDU& pdu) {
     IP* ip = pdu.find_pdu<IP>();
-    if (ip && ip->inner_pdu()) {
+    if ((ip != nullptr) && (ip->inner_pdu() != nullptr)) {
         // There's fragmentation
         if (ip->is_fragmented()) {
             key_type key = make_key(ip);
@@ -205,7 +210,7 @@ IPv4Reassembler2::PacketStatus IPv4Reassembler2::process(
                 // Erase this stream, since it's already assembled
                 streams_.erase(key);
                 // The packet is corrupt
-                if (!pdu) {
+                if (pdu == nullptr) {
                     return FRAGMENTED;
                 }
                 ip->inner_pdu(pdu);
@@ -235,3 +240,4 @@ IPv4Reassembler2::address_pair IPv4Reassembler2::make_address_pair(
 }
 
 }  // namespace Tins
+   // NOLINTEND

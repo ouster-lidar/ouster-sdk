@@ -17,11 +17,13 @@
 #include "ouster/point_viz.h"
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 
 struct GLFWContext {
     explicit GLFWContext(const std::string& name, bool fix_aspect,
-                         int window_width, int window_height, bool maximized);
+                         int window_width, int window_height, bool maximized,
+                         bool fullscreen, bool borderless);
 
     // manages glfw window pointer lifetime
     GLFWContext(const GLFWContext&) = delete;
@@ -42,6 +44,8 @@ struct GLFWContext {
 
     void visible(bool);
 
+    static bool is_opengl_es();
+
     GLFWwindow* window;
 
     // state set by GLFW callbacks
@@ -55,4 +59,5 @@ struct GLFWContext {
 };
 
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

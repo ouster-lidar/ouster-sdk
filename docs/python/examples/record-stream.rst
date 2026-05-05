@@ -19,19 +19,19 @@ It's easy to record data to a pcap file from a sensor programmatically. Let's tr
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+        $ python3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME record-pcap
 
     .. code-tab:: powershell Windows x64
 
-        PS >  py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+        PS >  py -3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME record-pcap
 
 
-This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for 10
+This will capture the :class:`.core.LidarPacket`'s and :class:`.core.ImuPacket`'s data for 10
 seconds and store the pcap file along with the metadata json file into the current directory.
 
 The source code of an example below:
 
-.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/core.py
    :start-after: [doc-stag-pcap-record]
    :end-before: [doc-etag-pcap-record]
    :emphasize-lines: 15
@@ -53,18 +53,18 @@ a live feed from your :ref:`configured<ex-configure-sensor>` sensor:
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-reflectivity
+        $ python3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME live-plot-reflectivity
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-reflectivity
+        PS > py -3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME live-plot-reflectivity
 
 This should give you a live feed from your sensor that looks like a black and white moving image.
 Try waving your hand or moving around to find yourself within the image!
 
 So how did we do that?
 
-.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/core.py
    :start-after: [doc-stag-live-plot-reflectivity]
    :end-before: [doc-etag-live-plot-reflectivity]
    :emphasize-lines: 2-3

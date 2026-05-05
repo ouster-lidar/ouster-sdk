@@ -6,6 +6,7 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace core {
 
 /// An enum that represents a level of severity for non-fatal errors encountered
@@ -30,4 +31,5 @@ OUSTER_API_FUNCTION
 void default_error_handler(Severity severity, const std::string& message);
 
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

@@ -1,19 +1,14 @@
-#  type: ignore
 """Ouster command-line tool top-level module."""
 import sys
 import traceback
-import collections
 import click
 import logging
 from logging.handlers import RotatingFileHandler
 import platform
 import os
-from importlib_metadata import distributions, version
-from more_itertools import always_iterable
-import inspect
+from typing import Optional
 
-from typing import Optional, List, Mapping
-
+from ouster.sdk import __version__
 from ouster.sdk.core import init_logger
 from ouster.sdk.sensor import ClientError
 
@@ -21,7 +16,6 @@ from .util import util_group
 
 from threadpoolctl import threadpool_limits
 
-this_package_name = 'ouster-sdk'
 APP_NAME = 'ouster'
 TRACEBACK = False
 TRACEBACK_FLAG = '--traceback'
@@ -30,9 +24,26 @@ logger = logging.getLogger("cli-args-logger")
 
 
 def log_packages():
-    import pkg_resources
-    package_list = sorted([f"{item.key}=={item.version}" for item in pkg_resources.working_set])
-    logger.debug(str(package_list))
+    """Log installed packages for debugging import/dependency issues."""
+    try:
+        from importlib.metadata import distributions
+        package_list = sorted([f"{dist.metadata['Name']}=={dist.version}" for dist in distributions()])
+        logger.debug(str(package_list))
+    except Exception as e:
+        logger.debug(f"Failed to log packages: {e}")
+
+
+def is_package_related_error(exception: Exception) -> bool:
+    """Check if an exception is likely related to package/dependency issues."""
+    # Direct import/module errors
+    if isinstance(exception, (ImportError, ModuleNotFoundError, AttributeError)):
+        return True
+
+    # Check if error message suggests dependency issues
+    error_msg = str(exception).lower()
+    package_keywords = ['version', 'compatibility', 'incompatible', 'requires',
+                       'dependency', 'not installed', 'missing']
+    return any(keyword in error_msg for keyword in package_keywords)
 
 
 class SourceArgsException(Exception):
@@ -47,25 +58,10 @@ class SourceArgsException(Exception):
         return self._context_object.args
 
 
-def get_packages_and_versions():
-    result = set()
-    for dist_name in set(packages_distributions().get('ouster', [])):
-        if dist_name == this_package_name:
-            continue
-        result.add((dist_name, version(dist_name)))
-    return result
-
-
 def print_version(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
-    click.echo(f"ouster-cli, version {version(this_package_name)}")
-
-    packages_and_versions = get_packages_and_versions()
-    if packages_and_versions:
-        click.echo('\nOuster Python packages:')
-        for dist_name, dist_version in packages_and_versions:
-            click.echo(f"{dist_name}, {dist_version}")
+    click.echo(f"ouster-cli, version {__version__}")
 
     click.echo('\nPlugins provided:')
     for plugin in find_plugins():
@@ -107,35 +103,11 @@ def cli(ctx, trace: bool, sdk_log_level: Optional[str]) -> None:
 cli.add_command(util_group)
 
 
-# from https://github.com/python/importlib_metadata, Apache 2.0 license
-def packages_distributions() -> Mapping[str, List[str]]:
-    pkg_to_dist = collections.defaultdict(list)
-    for dist in distributions():
-        for pkg in _top_level_declared(dist) or _top_level_inferred(dist):
-            pkg_to_dist[pkg].append(dist.metadata['Name'])
-    return dict(pkg_to_dist)
-
-
-# from https://github.com/python/importlib_metadata, Apache 2.0 license
-def _top_level_declared(dist):
-    return (dist.read_text('top_level.txt') or '').split()
-
-
-# from https://github.com/python/importlib_metadata, Apache 2.0 license
-def _top_level_inferred(dist):
-    opt_names = {
-        f.parts[0] if len(f.parts) > 1 else inspect.getmodulename(f)
-        for f in always_iterable(dist.files)
-    }
-    return list(filter(lambda name: name is not None and '.' not in name, opt_names))
-
-
 def find_plugins(show_traceback: bool = False):
     import ouster.cli.plugins
     import pkgutil
     import importlib
     submodules = []
-    load_fail = False
     for module in pkgutil.iter_modules(
         ouster.cli.plugins.__path__, ouster.cli.plugins.__name__ + "."
     ):
@@ -149,7 +121,6 @@ def find_plugins(show_traceback: bool = False):
                 submodules.append(module)
                 importlib.import_module(module.name)
         except Exception as e:
-            load_fail = True
             logger.debug(f"Failed to load plugin {module.name} due to an error.")
             click.echo(click.style(
                 f"Failed to load plugin {module.name} due to an error: {e}",
@@ -162,11 +133,14 @@ def find_plugins(show_traceback: bool = False):
                 ), err=True)
             else:
                 click.echo(click.style(
-                    f"Run {os.path.basename(os.path.sys.argv[0])} {TRACEBACK_FLAG} for debug output.",
+                    f"Run {os.path.basename(sys.argv[0])} {TRACEBACK_FLAG} for debug output.",
                     fg="yellow"
                 ), err=True)
-    if load_fail:
-        log_packages()
+
+            # Log packages only for import/dependency errors
+            if is_package_related_error(e):
+                logger.debug("Plugin load failed due to package-related error, listing packages")
+                log_packages()
 
     return submodules
 
@@ -193,7 +167,7 @@ def run(args=None) -> None:
         client_log_dir = os.path.join(os.path.expanduser("~"), ".ouster-cli")
         client_log_location = os.path.join(client_log_dir, "cli.log")
 
-    handler = None
+    handler: Optional[logging.Handler] = None
     if not os.path.exists(client_log_dir):
         try:
             os.makedirs(client_log_dir)
@@ -249,10 +223,16 @@ def run(args=None) -> None:
             logger.debug(e)
         else:
             print("Add the --traceback option after ouster-cli for more information.")
+
+        # Log packages for unexpected exceptions that might be package-related
+        if is_package_related_error(e):
+            logger.debug("Unexpected exception with package indicators, listing packages")
+            log_packages()
+        else:
+            logger.debug("Unexpected exception (probably not package-related)")
+            logger.debug(f"Exception type: {type(e).__name__}, message: {str(e)}")
+
     logger.debug("return code: " + str(exit_code))
-    if exit_code != 0:
-        logger.debug("error detected, listing packages")
-        log_packages()
     sys.exit(exit_code)
 
 

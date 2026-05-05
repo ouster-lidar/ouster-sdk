@@ -106,15 +106,15 @@ fail.
 .. note::
    Another optional but important parameter for the ``open_source`` method is ``sensor_idx``. By default, ``sensor_idx`` is set to
    ``-1`` and collation is set to ``True``. It is assumed that the pcap file that you are using (or osf or any LidarScan
-   storage) contains scans from more than one sensor. For the case of single sensor, users can set the ``sensor_idx`` to ``0`` 
-   to access and manipulate scans from a single sensor. 
-   
+   storage) contains scans from more than one sensor. For the case of single sensor, users can set the ``sensor_idx`` to ``0``
+   to access and manipulate scans from a single sensor.
+
    Prior to 0.15.0, if users set the value of ``sensor_idx`` to ``-1``, then ``open_source`` returned a
    slightly different interface for single sensor, ``ScanSource`` and multiple sensors, ``MultiScanSource``.
 
-   Starting with version 0.15.0, if ``collate=True`` and ``sensor_idx < 0``, ``open_source`` yields a **list** of ``LidarScan(s)`` 
-   per iteration corresponding to the number of sensors stored in the pcap file or whatever source type is being used. 
-   This is true even when the pcap file contains data for a single sensor to maintain consistency between scan sources with single and 
+   Starting with version 0.15.0, if ``collate=True`` and ``sensor_idx < 0``, ``open_source`` yields a **list** of ``LidarScan(s)``
+   per iteration corresponding to the number of sensors stored in the pcap file or whatever source type is being used.
+   This is true even when the pcap file contains data for a single sensor to maintain consistency between scan sources with single and
    multiple sensors. Otherwise, it is always a length of 1.
 
 On the other hand, if the user wants to open an OSF file or access a live sensor, all that changes is URL
@@ -131,20 +131,28 @@ Obtaining sensor metadata
 -------------------------
 
 Every ScanSource holds a reference to the sensor metadata, which has crucial information that is important when
-when processing the individual scans. Continuing the example, a user this can access the metadata through the
-``metadata`` property of a ``ScanSource`` object:
+processing the individual scans. Continuing the example, a user can access the metadata through the
+``sensor_info`` property of a ``ScanSource`` object:
 
 .. code:: python
 
-   >>> print(source.metadata)
+   >>> info = source.sensor_info[0]
+   >>> print(info)
+
+.. note::
+   The ``sensor_info`` property returns a list of ``SensorInfo`` objects, even for single-sensor sources.
+   This maintains consistency between single and multi-sensor data sources. Most visualization functions
+   accept this list directly, supporting both single and multi-sensor sources automatically. Use ``[0]``
+   to access the first (and often only) sensor's metadata.
 
 .. _iterating-over-scans:
 
 Iterating over Scans
 --------------------
 
-First, let's consider the case of a single sensor, we could call ``open_source`` with ``sensor_idx=0`` and/or 
-``collate=False``. The ``source`` object returned is an iterable of ``List[LidarScan]`` objects.
+First, let's consider the case of a single sensor, we could call ``open_source`` with ``sensor_idx=0`` and/or
+``collate=False``. The ``source`` object returned is a ``ScanSource``, iterating over it yields ``LidarScan`` objects
+when you pass ``sensor_idx=0`` (regardless of collate), and yields ``List[LidarScan]`` for multi-sensor/non-collated sources.”
 
 .. code:: python
 
@@ -178,9 +186,9 @@ perform the same example as above when ``source`` is a handle to ``ScanSource`` 
 .. code:: python
 
    >>> ctr = 0
-   >>> source_iter = iter(source)
-   >>> for scans in source_iter:
-   ...     for scan in scans:    # source_iter here returns a list of scans
+   >>> scan_set = iter(source)
+   >>> for scans in scan_set:
+   ...     for scan in scans:    # scan_set is LidarScanSet
    ...         if scan:          # check if individual scan object is valid
    ...             print(scan.frame_id, end=', ')
    ...     print()   # new line for next batch
@@ -216,7 +224,7 @@ Depending on the file size and the underlying file format there can be some dela
 file take much less time than pcap file to index). A progress bar will appear to indicate progress of the indexing.
 
 Once the index is built up, then we can start using utilizing and interact with the ``ScanSource`` object to access scans
-in the same manner we are dealing with a python list that holds reference to LidarScan objects. 
+in the same manner we are dealing with a python list that holds reference to LidarScan objects.
 
 To access the 10th LidarScan and print its frame id, we can do the following:
 
@@ -267,7 +275,7 @@ Slicing operator as a ScanSource
 
 Starting with ouster-sdk 0.12.0 the ScanSource slice operator ``[::]``
 returns a ``ScanSource`` scoped to the indicated slice range. This means that the users can pass the object returned by
-the slice operator ``[::]`` to any function or code that expects a ``ScanSource`` object. 
+the slice operator ``[::]`` to any function or code that expects a ``ScanSource`` object.
 
 However, from ouster-sdk 0.15.0, ``open_source`` always returns a list of ``LidarScan`` objects per sensor.
 
@@ -308,7 +316,7 @@ taking a subset of 10 frames from the main dataset and have the vertical resolut
 Using the client API
 ====================
 
-The client API provides :py:class:`.PacketMultiSource` implementations, as well as access to methods for configuring a sensor or reading metadata.
+The client API provides :py:class:`.core.PacketSource` implementations, as well as access to methods for configuring a sensor or reading metadata.
 
 As such, you can use it instead of the ``ScanSource`` API if you prefer to work with individual packets rather than lidar scans.
 
@@ -322,16 +330,16 @@ information from ``metadata_path`` first, using the client module:
    Prior to version 0.15.0, ``SensorInfo`` was part of the ``ouster.sdk.client`` namespace.
    This namespace is now deprecated and will be removed in version ``0.16.0``.
    Please update your code to use ``ouster.sdk.core`` instead.
-   
+
 .. code:: python
 
    >>> from ouster.sdk import core
    >>> with open(metadata_path, 'r') as f:
    ...     info = core.SensorInfo(f.read())
 
-Now that we've parsed the metadata file into a :py:class:`.SensorInfo`, we can use it to read our
+Now that we've parsed the metadata file into a :py:class:`.core.SensorInfo`, we can use it to read our
 captured UDP data by instantiating :py:class:`.pcap.PcapPacketSource` (previously `PcapMultiPacketReader`). 
-This class acts as a :py:class:`.PacketSource` ( previously `.PacketMultiSource`) and can be used in many 
+This class acts as a :py:class:`.core.PacketSource` ( previously `PacketMultiSource`) and can be used in many 
 of the same contexts as a real sensor.
 
 .. code:: python
@@ -342,8 +350,8 @@ of the same contexts as a real sensor.
     >>>    ...
 
 The ``source`` object returned is an ``Iterable`` of tuples each containing the sensor index and a packet that
-originates from that sensor. (The index corresponds to the positions of the ``SensorInfo`` instances provided to the
-``metadatas`` keyword argument.)
+originates from that sensor. The index corresponds to the positions of the ``SensorInfo`` instances provided to the
+``sensor_info`` keyword argument.
 
 To visualize data from this pcap file, proceed to :doc:`/python/examples/visualizations` examples.
 
@@ -365,7 +373,7 @@ a local socket.
    Sensor Documentation.
 
 In the following, ``<SENSOR_HOSTNAME>`` should be substituted for the actual hostname or IP of your
-sensor. 
+sensor.
 
 To make sure everything is connected, open a separate console window and try pinging the sensor. You
 should see some output like:
@@ -411,12 +419,12 @@ Now configure the client:
    >>> config.operating_mode = core.OperatingMode.OPERATING_NORMAL
    >>> sensor.set_config(hostname, config, persist=True, udp_dest_auto = True)
 
-When using a :py:class:`.SensorPacketSource`, provide a list of hostnames and optionally, list of ``SensorConfig``:
+When using a :py:class:`.sensor.SensorPacketSource`, provide a list of hostnames and optionally, list of ``SensorConfig``:
 
 .. code:: python
 
    >>> source = sensor.SensorPacketSource([hostname], sensor_config=[config])
-   >>> info = source.metadata
+   >>> info = source.sensor_info[0] # get SensorInfo for the first sensor
 
 Now we have a ``source`` from our sensor! ``SensorPacketSource`` supports single and multiple sensors, one would
 read it as an ``Iterable[Tuple[int, Union[LidarPacket, ImuPacket]]]`` of each containing the sensor index and a packet.

@@ -8,12 +8,15 @@
 #include <functional>
 #include <iostream>
 #include <stdexcept>
-#include <vector>
+#include <string>
 
 #include "gltext.h"
 #include "ouster/point_viz.h"
 
+static bool is_opengl_es = false;
+
 namespace ouster {
+namespace sdk {
 namespace viz {
 
 namespace {
@@ -32,7 +35,9 @@ void handle_key_press(GLFWwindow* window, int key, int /*scancode*/, int action,
                       int mods) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        if (ctx->key_handler) ctx->key_handler(ctx->window_context, key, mods);
+        if (ctx->key_handler) {
+            ctx->key_handler(ctx->window_context, key, mods);
+        }
     }
 }
 
@@ -46,7 +51,9 @@ void handle_framebuffer_resize(GLFWwindow* window, int fb_width,
     ctx->window_context.viewport_height = fb_height;
     glViewport(0, 0, fb_width, fb_height);
     gltViewport(fb_width, fb_height);
-    if (ctx->resize_handler) ctx->resize_handler(ctx->window_context);
+    if (ctx->resize_handler) {
+        ctx->resize_handler(ctx->window_context);
+    }
 }
 
 /*
@@ -60,7 +67,9 @@ void handle_window_resize(GLFWwindow* window, int window_width,
     // GLFW invokes the window resize callback after the fb resize callback,
     // Which means the resize handler doesn't get the most up-to-date window
     // size. Calling the resize handler again here fixes this.
-    if (ctx->resize_handler) ctx->resize_handler(ctx->window_context);
+    if (ctx->resize_handler) {
+        ctx->resize_handler(ctx->window_context);
+    }
 }
 
 /*
@@ -85,8 +94,9 @@ void handle_mouse_button(GLFWwindow* window, int button, int action, int mods) {
         ctx->window_context.mbutton_down = false;
     }
 
-    if (ctx->mouse_button_handler)
+    if (ctx->mouse_button_handler) {
         ctx->mouse_button_handler(ctx->window_context, button, action, mods);
+    }
 }
 
 /*
@@ -98,8 +108,9 @@ void handle_cursor_pos(GLFWwindow* window, double xpos, double ypos) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
 
     // run custom button handlers from users
-    if (ctx->mouse_pos_handler)
+    if (ctx->mouse_pos_handler) {
         ctx->mouse_pos_handler(ctx->window_context, xpos, ypos);
+    }
 
     // update context position only after passing new values to handlers
     ctx->window_context.mouse_x = xpos;
@@ -113,8 +124,9 @@ void handle_cursor_pos(GLFWwindow* window, double xpos, double ypos) {
  */
 void handle_scroll(GLFWwindow* window, double xoff, double yoff) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
-    if (ctx->scroll_handler)
+    if (ctx->scroll_handler) {
         ctx->scroll_handler(ctx->window_context, xoff, yoff);
+    }
 }
 
 /*
@@ -127,7 +139,7 @@ void handle_scroll(GLFWwindow* window, double xoff, double yoff) {
  */
 void handle_cursor_enter(GLFWwindow* window, int entered) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
-    if (!entered) {
+    if (entered == 0) {
         ctx->window_context.lbutton_down = false;
         ctx->window_context.mbutton_down = false;
     }
@@ -139,14 +151,15 @@ void handle_cursor_enter(GLFWwindow* window, int entered) {
  * Initialize GLFW window
  */
 GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
-                         int window_width, int window_height, bool maximized) {
+                         int window_width, int window_height, bool maximized,
+                         bool fullscreen, bool borderless) {
     glfwSetErrorCallback(error_callback);
 
     // avoid chdir to resources dir on macos
 #ifdef __APPLE__
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, false);
 #endif
-    if (!glfwInit()) {
+    if (glfwInit() == 0) {
         throw std::runtime_error("Failed to initialize GLFW");
     }
 #ifdef __APPLE__
@@ -157,22 +170,34 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, 1);
-    glfwWindowHint(GLFW_VISIBLE, false);
+    glfwWindowHint(GLFW_VISIBLE, 0);
+    glfwWindowHint(GLFW_DECORATED, borderless ? GLFW_FALSE : GLFW_TRUE);
     if (maximized) {
         glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     }
+    GLFWmonitor* monitor = fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
     // open a window and create its OpenGL context
-    window =
-        glfwCreateWindow(window_width, window_height, name.c_str(), NULL, NULL);
+    window = glfwCreateWindow(window_width, window_height, name.c_str(),
+                              monitor, nullptr);
 
+    if (window == nullptr) {
+        std::cerr << "Failed to open OpenGL 3.3 context. Trying OpenGL ES 3.1"
+                  << std::endl;
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+        window = glfwCreateWindow(window_width, window_height, name.c_str(),
+                                  monitor, nullptr);
+        ::is_opengl_es = (window != nullptr);
+    }
     if (window == nullptr) {
         glfwTerminate();
         throw std::runtime_error("Failed to create GLFW window");
     }
     glfwMakeContextCurrent(window);
 
-    if (!gladLoadGL(glfwGetProcAddress)) {
+    if (gladLoadGL(glfwGetProcAddress) == 0) {
         glfwTerminate();
         throw std::runtime_error("Failed to initialize GLAD");
     }
@@ -203,21 +228,24 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
 
 #if GLFW_VERSION_MAJOR >= 3 && GLFW_VERSION_MINOR >= 2
     // prevent window aspect from changing
-    if (fix_aspect)
+    if (fix_aspect) {
         glfwSetWindowAspectRatio(window, window_width, window_height);
+    }
 #else
     (void)fix_aspect;
 #endif
 
     // initialize viewport size. Note: this is conceptually different than the
     // window size, and actually different on retina displays. See: glfw docs
-    int viewport_width, viewport_height;
+    int viewport_width;
+    int viewport_height;
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
 
     // set viewport for glText (in pixels)
     gltViewport(viewport_width, viewport_height);
 
-    int win_width, win_height;
+    int win_width;
+    int win_height;
     glfwGetWindowSize(window, &win_width, &win_height);
 
     // store window and viewport (i.e. framebuffer) sizes to the context
@@ -238,18 +266,22 @@ void GLFWContext::terminate() {
     glfwTerminate();
 }
 
-bool GLFWContext::running() { return !glfwWindowShouldClose(window); }
+bool GLFWContext::running() { return glfwWindowShouldClose(window) == 0; }
 
 void GLFWContext::running(bool state) {
-    glfwSetWindowShouldClose(window, !state);
+    glfwSetWindowShouldClose(window, static_cast<int>(!state));
 }
 
 void GLFWContext::visible(bool state) {
-    if (state)
+    if (state) {
         glfwShowWindow(window);
-    else
+    } else {
         glfwHideWindow(window);
+    }
 }
 
+bool GLFWContext::is_opengl_es() { return ::is_opengl_es; }
+
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

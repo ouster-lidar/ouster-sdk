@@ -1,9 +1,10 @@
 #  type: ignore
 import os
+import inspect
 from glob import glob
 from pathlib import Path
+import click
 import pytest
-import subprocess
 import sys
 import json
 import tempfile
@@ -45,6 +46,11 @@ def test_osf_file() -> str:
 @pytest.fixture
 def test_pcap_file() -> str:
     return str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+
+
+@pytest.fixture
+def test_pcap_file2() -> str:
+    return str(Path(PCAPS_DATA_DIR) / 'OS-1-128_v2.3.0_1024x10_lb_n3.pcap')
 
 
 @pytest.fixture
@@ -452,6 +458,32 @@ def test_source_pcap_save_raw(test_pcap_file, runner, tmp_path):
         assert any(filename == 'test.pcap' for filename in files)
 
 
+def test_source_pcap_save_zm_imu(runner, tmp_path):
+    """It should save a pcap file with the desired name."""
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'imu_zm_no_lidar.pcap')
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save', 'test.pcap']).args)
+        assert result.exit_code == 0
+        # there's a pcap in the output directory
+        files = os.listdir(tmp_path)
+        assert len(files) == 2
+        assert any(filename == 'test.pcap' for filename in files)
+
+
+def test_source_pcap_save_raw_zm_imu(runner, tmp_path):
+    """It should save a pcap file with the desired name."""
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'imu_zm_no_lidar.pcap')
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save_raw', 'test.pcap']).args)
+        assert result.exit_code == 0
+        # there's a pcap in the output directory
+        files = os.listdir(tmp_path)
+        assert len(files) == 2
+        assert any(filename == 'test.pcap' for filename in files)
+
+
 def test_source_osf_info_help(test_osf_file, runner):
     """ouster-cli source <src>.osf info --help
     should display OSF viz help"""
@@ -473,19 +505,74 @@ def test_source_osf_viz_help(test_osf_file, runner):
     assert result.exit_code == 0
 
 
-# TODO: Uncomment when bag conversion is re-enabled
-# def test_source_pcap_convert_help_3(runner):
-#    """ouster-cli source <src>.pcap convert <output>.bag --help
-#     should display Rosbag convert help"""
-#    with tempfile.NamedTemporaryFile(suffix='.pcap') as pcap_file:
-#        with tempfile.NamedTemporaryFile(suffix='.bag') as f:
-#            result = runner.invoke(core.cli, CliArgs(['source', pcap_file.name, 'convert', f.name, '--help']).args)
-#            assert "Usage: cli source SOURCE convert [OPTIONS] OUTPUT_FILE" in result.output
-#            option_names = [option.name.replace('_', '-') for option in source.bag_from_pcap.params]
-#
-#            # check that all the options for the command are present in the help
-#            assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
-#            assert result.exit_code == 0
+def get_stats(monkeypatch, runner, filename, args = []):
+    import atexit
+    from contextlib import redirect_stdout, redirect_stderr
+    import io
+    # monkeypatch atexit so and capture the output
+    with monkeypatch.context() as m:
+        teardown_fn: Callable[[], None] = lambda: None  # noqa
+
+        def set_teardown_fn(fn):
+            nonlocal teardown_fn
+            teardown_fn = fn
+
+        m.setattr(atexit, "register", set_teardown_fn)
+        io_stream = io.StringIO()
+        with redirect_stdout(io_stream), redirect_stderr(io_stream):
+            all_args = ['source']
+            for arg in args:
+                all_args.append(arg)
+            all_args.append(filename)
+            all_args.append('stats')
+            result = runner.invoke(core.cli, CliArgs(all_args).args)
+            teardown_fn()
+
+    assert result.exit_code == 0
+    return io_stream.getvalue()
+
+
+@pytest.mark.parametrize('args', [('.osf', 10, 1, 1), ('.bag', 10, 1, 1), ('.pcap', 10, 2, 2),
+                                  ('.osf', 0, 3, 3), ('.bag', 0, 3, 2), ('.pcap', 0, 4, 4)])
+def test_source_split_save(test_pcap_file2, runner, tmp_path, args, monkeypatch):
+    """Make sure we save the expected number of files with the expected number of frames."""
+    with set_directory(tmp_path):
+        ext, split_size, num_files, num_files_windows = args
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file2, 'save', '--split',
+                                                  str(split_size), 'test' + ext]).args)
+        assert result.exit_code == 0
+        # test we got the expected number of files
+        files = os.listdir(tmp_path)
+        if sys.platform.startswith("win"):
+            assert len(files) == num_files_windows
+        else:
+            assert len(files) == num_files
+        assert ('test' + ext) in files
+
+        assert "Count: 3" in get_stats(monkeypatch, runner, 'test*' + ext, args=['-g'])
+
+
+@pytest.mark.parametrize('args', [('.bag', 10, 1, 1), ('.pcap', 10, 2, 2),
+                                  ('.bag', 0, 3, 2), ('.pcap', 0, 4, 4)])
+def test_source_split_save_raw(test_pcap_file2, runner, tmp_path, args, monkeypatch):
+    """Make sure we save the expected number of files with the expected number of frames."""
+    with set_directory(tmp_path):
+        ext, split_size, num_files, num_files_windows = args
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file2, 'save_raw', '--split',
+                                                  str(split_size), 'test' + ext]).args)
+        print(result.output)
+        assert result.exit_code == 0
+        # test we got the expected number of files
+        files = os.listdir(tmp_path)
+        if sys.platform.startswith("win"):
+            assert len(files) == num_files_windows
+        else:
+            assert len(files) == num_files
+        assert ('test' + ext) in files
+
+        assert "Count: 3" in get_stats(monkeypatch, runner, 'test*' + ext, args=['-g'])
 
 
 def test_discover(runner):
@@ -496,15 +583,121 @@ def test_discover(runner):
     assert result.exit_code == 0
 
 
-def test_source_stats(test_pcap_file, runner):
+def test_source_stats(test_pcap_file, runner, monkeypatch):
     """ouster-cli source ... stats should display correct stats."""
-    result = subprocess.run(["ouster-cli", "source", test_pcap_file, "stats"],
-                            capture_output=True, check=True, text=True)
-    assert "Count: 1" in result.stdout
-    assert "First Time: 1650408693" in result.stdout
-    assert "Sizes: 1024x128" in result.stdout
-    assert "Incomplete Scans" in result.stdout
-    assert result.returncode == 0
+    result = get_stats(monkeypatch, runner, test_pcap_file)
+    assert "Count: 1" in result
+    assert "First Receive Time: 1650408693" in result
+    assert "Sizes: 1024x128" in result
+    assert "Incomplete Scans" in result
+
+
+def test_source_filter_no_lidar(runner, monkeypatch):
+    """ouster-cli source --filter on data with no lidar packets should pass through scans"""
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'imu_zm_no_lidar.pcap')
+    result = get_stats(monkeypatch, runner, test_pcap_file, args = [])
+    assert "Count: 1" in result
+    result = get_stats(monkeypatch, runner, test_pcap_file, args = ["--filter"])
+    assert "Count: 1" in result
+
+
+def test_source_filter(runner, monkeypatch):
+    """ouster-cli source --filter removes incomplete scans"""
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'crc_test.pcap')
+    result = get_stats(monkeypatch, runner, test_pcap_file, args = [])
+    assert "Count: 2" in result
+    result = get_stats(monkeypatch, runner, test_pcap_file, args = ["--filter"])
+    assert "Count: 1" in result
+
+
+def test_source_filter_coord_frame_requires_xyz():
+    """--coord-frame should only be accepted for X/Y/Z filtering."""
+    ctx = source.SourceCommandContext()
+    source_filter_fn = inspect.unwrap(source.source_filter.callback)
+    with pytest.raises(click.BadParameter, match="X, Y, or Z"):
+        source_filter_fn(
+            ctx=ctx,
+            axis_field="U",
+            indices=(None, 10),
+            filtered_fields=None,
+            invalid_value=0,
+            coord_frame="WORLD",
+        )
+
+
+@pytest.mark.parametrize("coord_frame, expected_use_extrinsics, expected_dewarp_points", [
+    ("SENSOR", False, False),
+    ("BODY", True, False),
+    ("WORLD", True, True),
+])
+def test_source_filter_xyz_coord_frame_modes(
+    monkeypatch,
+    coord_frame,
+    expected_use_extrinsics,
+    expected_dewarp_points,
+):
+    """XYZ coord frames should map to expected LUT/dewarp behavior."""
+    import ouster.sdk.core as sdk_core
+    import ouster.sdk.core.scan_ops as so
+    source_filter_fn = inspect.unwrap(source.source_filter.callback)
+
+    xyzlut_use_extrinsics = []
+    dewarp_points_args = []
+    scan_tokens = []
+
+    class FakeScanSource:
+        sensor_info = [object()]
+
+    ctx = source.SourceCommandContext()
+    ctx.scan_source = FakeScanSource()
+    ctx.scan_iter = lambda: iter([[{"scan": 1}]])  # type: ignore
+
+    def fake_xyzlut(sensor_info, use_extrinsics=True):
+        xyzlut_use_extrinsics.append(use_extrinsics)
+
+        def fake_xyz(range_image):
+            h, w = range_image.shape
+            return np.zeros((h, w, 3), dtype=np.float64)
+
+        return fake_xyz
+
+    def fake_filter_xyz(scan, xyzlut, axis_idx, lower, upper, invalid,
+                        filtered_fields=None, dewarp_points=False):
+        scan_tokens.append(scan)
+        dewarp_points_args.append(dewarp_points)
+        return None
+
+    monkeypatch.setattr(sdk_core, "XYZLut", fake_xyzlut)
+    monkeypatch.setattr(so, "filter_xyz", fake_filter_xyz)
+
+    source_filter_fn(
+        ctx=ctx,
+        axis_field="X",
+        indices=(-1000, 1000),
+        filtered_fields=None,
+        invalid_value=0,
+        coord_frame=coord_frame,
+    )
+    list(ctx.scan_iter())  # type: ignore[operator]
+
+    assert scan_tokens
+    assert xyzlut_use_extrinsics
+    assert set(xyzlut_use_extrinsics) == {expected_use_extrinsics}
+    assert dewarp_points_args
+    assert set(dewarp_points_args) == {expected_dewarp_points}
+
+
+def test_source_plumb(test_pcap_file, runner, tmp_path):
+    """ouster-cli source ... plumb should run successfully."""
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', "--sensor-idx", "0",
+                                                  test_pcap_file, 'plumb', 'save', 'test.osf']).args)
+        assert result.exit_code == 0
+        # there's at most one OSF file in output dir
+        files = os.listdir(tmp_path)
+        assert len(files) == 1
+        assert all(filename == 'test.osf' for filename in files)
 
 
 def test_source_osf(runner, has_mapping) -> None:
@@ -523,7 +716,7 @@ def test_source_osf(runner, has_mapping) -> None:
 def test_source_osf_dump(test_osf_file, runner):
     """ouster-cli source <src>.osf dump
     should display OSF metadata"""
-    result = runner.invoke(core.cli, ['source', test_osf_file, 'dump'])
+    result = runner.invoke(core.cli, ['--sdk-log-level', 'off', 'source', test_osf_file, 'dump'])
     meta = json.loads(result.output)
     assert len(meta['metadata']['entries']) == 3
     assert 'buffer' in meta['metadata']['entries'][0]
@@ -534,7 +727,7 @@ def test_source_osf_dump(test_osf_file, runner):
 def test_source_osf_dump_short(test_osf_file, runner):
     """ouster-cli source <src>.osf info -s
     should display OSF metadata in short form"""
-    result = runner.invoke(core.cli, ['source', test_osf_file, 'dump', '-s'])
+    result = runner.invoke(core.cli, ['--sdk-log-level', 'off', 'source', test_osf_file, 'dump', '-s'])
     meta = json.loads(result.output)
     assert len(meta['metadata']['entries']) == 3
     assert 'buffer' not in meta['metadata']['entries'][0]

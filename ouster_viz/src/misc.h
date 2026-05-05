@@ -5,9 +5,7 @@
 
 #pragma once
 
-#include <Eigen/Core>
 #include <array>
-#include <cstddef>
 
 #include "camera.h"
 #include "glfw.h"
@@ -15,6 +13,7 @@
 #include "ouster/point_viz.h"
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 
@@ -31,9 +30,9 @@ class GLRings {
     static GLuint ring_thickness_id;
     static GLuint xyz_buffer;
 
-    int ring_size;
-    int ring_line_width;
-    bool rings_enabled;
+    int ring_size_;
+    int ring_line_width_;
+    bool rings_enabled_;
 
    public:
     /*
@@ -69,15 +68,15 @@ class GLCuboid {
     static GLuint cuboid_proj_view_id;
     static GLuint cuboid_rgba_id;
 
-    const std::array<GLfloat, 24> xyz;
-    const std::array<GLubyte, 36> indices;
-    const std::array<GLubyte, 24> edge_indices;
+    const std::array<GLfloat, 24> xyz_;
+    const std::array<GLubyte, 36> indices_;
+    const std::array<GLubyte, 24> edge_indices_;
 
-    GLuint xyz_buffer{0};
-    GLuint indices_buffer{0};
-    GLuint edge_indices_buffer{0};
-    Eigen::Matrix4d transform;
-    std::array<float, 4> rgba;
+    GLuint xyz_buffer_{0};
+    GLuint indices_buffer_{0};
+    GLuint edge_indices_buffer_{0};
+    Eigen::Matrix4d transform_;
+    vec4f rgba_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -119,9 +118,9 @@ class GLLines {
     static GLuint lines_proj_view_id;
     static GLuint lines_rgba_id;
 
-    GLuint xyz_buffer{0};
-    Eigen::Matrix4d transform;
-    std::array<float, 4> rgba;
+    GLuint xyz_buffer_{0};
+    Eigen::Matrix4d transform_;
+    vec4f rgba_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -153,14 +152,14 @@ class GLLines {
 };
 
 class GLLabel {
-    GLTtext* gltext;
-    Eigen::Vector3d text_position;
-    bool is_3d;
-    float scale;
-    int halign;
-    int valign;
+    GLTtext* gltext_;
+    Eigen::Vector3d text_position_;
+    bool is_3d_;
+    float scale_;
+    int halign_;
+    int valign_;
 
-    std::array<float, 4> rgba;
+    vec4f rgba_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -181,8 +180,11 @@ class GLLabel {
     static void beginDraw();
 
     static void endDraw();
+
+    static float get_text_height(const Label& label);
 };
 
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

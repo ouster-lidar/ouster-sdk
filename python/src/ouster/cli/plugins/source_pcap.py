@@ -1,4 +1,3 @@
-#  type: ignore
 from datetime import datetime
 import os
 
@@ -58,7 +57,7 @@ def print_stream_table(all_infos):
                      retrieve_click_context=True)
 def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) -> None:
     """Print information about a pcap file to stdout."""
-    file = ctx.source_uri
+    file = ctx.source_uri or ""
     try:
         import ouster.sdk.pcap as pcap
     except ImportError:
@@ -67,6 +66,7 @@ def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) 
     pcap_size = os.path.getsize(file)
     # read full pcap with progress bar
     all_infos = None
+    bar: click._termui_impl.ProgressBar
     with click.progressbar(length=pcap_size, label="Reading pcap:") as bar:
         def progress_callback(current, diff, total):
             bar.update(diff)

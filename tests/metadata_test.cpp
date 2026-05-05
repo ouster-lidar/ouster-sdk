@@ -13,6 +13,8 @@
 
 #include "ouster/types.h"
 
+using namespace ouster::sdk::core;
+
 class MetaFiles : public testing::TestWithParam<const char*> {};
 
 inline std::string getenvs(const std::string& var) {
@@ -55,13 +57,12 @@ TEST_P(MetaFiles, combinedTestMetadata) {
 
     auto data_dir = getenvs("DATA_DIR");
 
-    const ouster::sensor::sensor_info si_orig =
-        ouster::sensor::metadata_from_json(data_dir + param + ".json");
+    const SensorInfo si_orig = metadata_from_json(data_dir + param + ".json");
 
     // Make si new -- change a few values
     auto si_new = si_orig;
     si_new.init_id = 5;
-    si_new.config.lidar_mode = ouster::sensor::lidar_mode::MODE_4096x5;
+    si_new.config.lidar_mode = LidarMode::_4096x5;
     si_new.format.fps = 47289;  // fps is an addition instead of a replacement
     si_new.beam_altitude_angles[5] = 0.01;
 
@@ -72,7 +73,7 @@ TEST_P(MetaFiles, combinedTestMetadata) {
     EXPECT_NE(si_new.beam_altitude_angles, si_orig.beam_altitude_angles);
 
     auto si_new_updated_string = si_new.to_json_string();
-    auto si_roundtrip = ouster::sensor::sensor_info(si_new_updated_string);
+    auto si_roundtrip = SensorInfo(si_new_updated_string);
 
     EXPECT_EQ(si_new.config.lidar_mode, si_roundtrip.config.lidar_mode);
     EXPECT_EQ(si_new.init_id, si_roundtrip.init_id);
@@ -80,32 +81,28 @@ TEST_P(MetaFiles, combinedTestMetadata) {
     EXPECT_EQ(si_new.beam_altitude_angles, si_roundtrip.beam_altitude_angles);
 }
 
-class product_info_test : public ouster::sensor::product_info {
+class product_info_test : public ProductInfo {
    public:
     product_info_test(std::string product_info_string, std::string form_factor,
                       bool short_range, std::string beam_config, int beam_count)
-        : ouster::sensor::product_info(product_info_string, form_factor,
-                                       short_range, beam_config, beam_count){};
+        : ProductInfo(product_info_string, form_factor, short_range,
+                      beam_config, beam_count){};
 };
 
 TEST(Util, TestProdlineDecoder) {
-    EXPECT_EQ(ouster::sensor::product_info(), ouster::sensor::product_info());
-    EXPECT_EQ(
-        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"),
-        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"));
-    EXPECT_NE(
-        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"),
-        ouster::sensor::product_info());
-    EXPECT_NE(
-        ouster::sensor::product_info::create_product_info("OS-0-128"),
-        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"));
-    EXPECT_NE(
-        ouster::sensor::product_info::create_product_info("OS-0-128-BH02"),
-        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"));
+    EXPECT_EQ(ProductInfo(), ProductInfo());
+    EXPECT_EQ(ProductInfo::create_product_info("OS-0-128-BH02-SR"),
+              ProductInfo::create_product_info("OS-0-128-BH02-SR"));
+    EXPECT_NE(ProductInfo::create_product_info("OS-0-128-BH02-SR"),
+              ProductInfo());
+    EXPECT_NE(ProductInfo::create_product_info("OS-0-128"),
+              ProductInfo::create_product_info("OS-0-128-BH02-SR"));
+    EXPECT_NE(ProductInfo::create_product_info("OS-0-128-BH02"),
+              ProductInfo::create_product_info("OS-0-128-BH02-SR"));
 
     bool error_recieved = false;
     try {
-        ouster::sensor::product_info::create_product_info("DEADBEEF");
+        ProductInfo::create_product_info("DEADBEEF");
     } catch (const std::runtime_error& e) {
         EXPECT_EQ(std::string(e.what()),
                   "Product Info \"DEADBEEF\" is not a recognized product info");
@@ -113,8 +110,8 @@ TEST(Util, TestProdlineDecoder) {
     }
     EXPECT_TRUE(error_recieved);
 
-    auto bad_count = ouster::sensor::product_info::create_product_info(
-        "OS-0-STUFF HERE-BH02-SR");
+    auto bad_count =
+        ProductInfo::create_product_info("OS-0-STUFF HERE-BH02-SR");
     EXPECT_EQ(bad_count.beam_count, 0);
 
     std::vector<std::pair<std::string, std::shared_ptr<product_info_test>>>
@@ -288,8 +285,7 @@ TEST(Util, TestProdlineDecoder) {
                                "OS-DOME-64-U13", "OSDOME", false, "U13", 64))};
 
     for (auto it : test_product_infos) {
-        auto actual =
-            ouster::sensor::product_info::create_product_info(it.first);
+        auto actual = ProductInfo::create_product_info(it.first);
         std::cout << "Comparing:" << std::endl;
         std::cout << to_string(actual);
         std::cout << "To:" << std::endl;

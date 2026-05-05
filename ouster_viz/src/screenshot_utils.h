@@ -9,6 +9,7 @@
 #include <vector>
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 namespace screenshot_utils {
@@ -38,4 +39,5 @@ void flip_pixels(std::vector<uint8_t>& pixels, int width, int height);
 
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

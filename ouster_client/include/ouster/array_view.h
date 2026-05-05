@@ -5,10 +5,10 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cstdint>
-#include <exception>
+#include <initializer_list>
 #include <iterator>
+#include <type_traits>
 #include <utility>
 
 #include "ouster/impl/cuda_macros.h"
@@ -16,28 +16,43 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 
-template <typename T, int Dim>
+template <typename T, size_t Dim>
 class ArrayView;
 
-template <typename T, int Dim>
+/**
+ * @brief Type alias for read-only ArrayView of N dimensions.
+ *
+ * Equivalent to `ArrayView<const T, Dim>`.
+ */
+template <typename T, size_t Dim>
 using ConstArrayView = ArrayView<const T, Dim>;
 
+/** Type alias for a 4D ArrayView. */
 template <typename T>
 using ArrayView4 = ArrayView<T, 4>;
+/** Type alias for a 3D ArrayView. */
 template <typename T>
 using ArrayView3 = ArrayView<T, 3>;
+/** Type alias for a 2D ArrayView. */
 template <typename T>
 using ArrayView2 = ArrayView<T, 2>;
+/** Type alias for a 1D ArrayView. */
 template <typename T>
 using ArrayView1 = ArrayView<T, 1>;
 
+/** Type alias for read-only 4D ArrayView. */
 template <typename T>
 using ConstArrayView4 = ConstArrayView<T, 4>;
+/** Type alias for read-only 3D ArrayView. */
 template <typename T>
 using ConstArrayView3 = ConstArrayView<T, 3>;
+/** Type alias for read-only 2D ArrayView. */
 template <typename T>
 using ConstArrayView2 = ConstArrayView<T, 2>;
+/** Type alias for read-only 1D ArrayView. */
 template <typename T>
 using ConstArrayView1 = ConstArrayView<T, 1>;
 
@@ -67,12 +82,12 @@ struct product {
      * Host-only version for iterators
      */
     template <typename IterT>
-    T operator()(IterT, stop_recursion) {
+    T operator()(IterT /*unused*/, stop_recursion /*unused*/) {
         return T{1};
     }
 
     template <typename IterT, int... I>
-    T operator()(IterT iter, row_pack<I...>) {
+    T operator()(IterT iter, row_pack<I...> /*unused*/) {
         IterT i = --iter;
         return static_cast<T>(*i) *
                (*this)(i, typename drop_left<I...>::type{});
@@ -82,12 +97,12 @@ struct product {
      * Device/host version for pointers
      */
     template <typename IntT>
-    OSDK_FN T operator()(IntT*, stop_recursion) {
+    OSDK_FN T operator()(IntT* /*unused*/, stop_recursion /*unused*/) {
         return T{1};
     }
 
     template <typename IntT, int... I>
-    OSDK_FN T operator()(IntT* ptr, row_pack<I...>) {
+    OSDK_FN T operator()(IntT* ptr, row_pack<I...> /*unused*/) {
         IntT* i = --ptr;
         return static_cast<T>(*i) *
                (*this)(i, typename drop_left<I...>::type{});
@@ -161,7 +176,17 @@ OSDK_FN int strided_index(const StridesT& strides, Args... idx) {
 
 }  // namespace impl
 
-template <typename T, int Dim>
+/**
+ * @brief Multi-dimensional view into contiguous memory.
+ *
+ * `ArrayView` provides lightweight indexing and slicing functionality over
+ * memory without owning it. It supports both read-only and mutable access.
+ * Shape and strides are passed at construction to define the logical layout.
+ *
+ * @tparam T Element type (e.g., `float`, `int`, `const T` for read-only)
+ * @tparam Dim Number of dimensions (e.g., 1D, 2D, etc.)
+ */
+template <typename T, size_t Dim>
 class ArrayView {
     static_assert(Dim > 0, "ArrayView dimensions cannot be less than 1");
 
@@ -177,7 +202,7 @@ class ArrayView {
     /**
      * C array of shape dimensions
      */
-    const int32_t shape[Dim];
+    const uint32_t shape[Dim];
 
     /**
      * Construct from any types with subscript operator, i.e. vector/array
@@ -257,7 +282,7 @@ class ArrayView {
      * @param[in] other ArrayView
      */
     template <typename OtherT, typename = std::enable_if_t<
-                                   std::is_same<T, const OtherT>::value, void>>
+                                   std::is_same<T, const OtherT>::VALUE, void>>
     OSDK_FN ArrayView(const ArrayView<OtherT, Dim>& other)
         : ArrayView(other.data_, other.shape, other.strides) {}
 
@@ -300,7 +325,7 @@ class ArrayView {
      */
     template <typename... Args>
     OSDK_FN static constexpr int subview_dim() {
-        return Dim - sizeof...(Args) + impl::count_n_ranges<Args...>::value;
+        return Dim - sizeof...(Args) + impl::count_n_ranges<Args...>::VALUE;
     }
 
     /**
@@ -334,15 +359,16 @@ class ArrayView {
         static_assert(N > 0, "Ran out of dimensions to subview");
 
 #ifndef __CUDA_ARCH__
-        if (impl::subview_oob_check(shape, idx...))
+        if (impl::subview_oob_check(shape, idx...)) {
             throw std::invalid_argument(
                 "ArrayView cannot subview over the "
                 "shape limits");
+        }
 #endif
 
         T* ptr =
             data_ + impl::strided_index(strides, impl::range_or_idx(idx)...);
-        int32_t new_shape[N];
+        uint32_t new_shape[N];
         int32_t new_strides[N];
         impl::range_args_reshape(shape, new_shape, idx...);
         impl::range_args_restride(strides, new_strides, idx...);
@@ -367,13 +393,13 @@ class ArrayView {
                 "ArrayView: cannot reshape sparse views");
         }
 
-        if (impl::product<int>{}(dims...) != shape[0] * strides[0]) {
+        if (impl::product<uint32_t>{}(dims...) != shape[0] * strides[0]) {
             throw std::invalid_argument(
                 "ArrayView: cannot reshape due to size mismatch");
         }
 
         return ArrayView<T, sizeof...(Args)>(data_,
-                                             {static_cast<int>(dims)...});
+                                             {static_cast<uint32_t>(dims)...});
     }
 
     /**
@@ -383,8 +409,9 @@ class ArrayView {
      */
     OSDK_FN bool sparse() const {
         bool dense = strides[Dim - 1] == 1;
-        for (int i = 1; i < Dim; ++i) {
-            dense = dense && (strides[i - 1] == strides[i] * shape[i]);
+        for (size_t i = 1; i < Dim; ++i) {
+            dense = dense && (static_cast<uint32_t>(strides[i - 1]) ==
+                              strides[i] * shape[i]);
         }
         return !dense;
     }
@@ -397,31 +424,46 @@ class ArrayView {
      * explicitly host side at the moment, until we get to implementing
      * sparse iterators
      *
-     * @return pointer to data
+     * @throws std::logic_error if the view is sparse, since iterators are not
+     *         supported for non-contiguous memory layouts.
+     * @return pointer to the first element in the view.
      */
     const T* begin() const {
-        if (sparse())
+        if (sparse()) {
             throw std::logic_error(
                 "ArrayView iterators not supported for "
                 "sparse views");
+        }
         return data_;
     }
 
-    // @copydoc begin()
+    /**
+     * @brief Returns a pointer to one past the last element in the view.
+     *
+     * Provides a raw pointer that acts as the end iterator for the array view,
+     * which can be used in standard iterator-based loops. Only supported for
+     * non-sparse arrays.
+     *
+     * @throws std::logic_error if the view is sparse, as iterators are not
+     *         supported for sparse memory layouts.
+     *
+     * @return pointer to one past the last element.
+     */
     const T* end() const {
-        if (sparse())
+        if (sparse()) {
             throw std::logic_error(
                 "ArrayView iterators not supported "
                 "for sparse views");
-        return data_ + shape[0] * strides[0];
+        }
+        return data_ + (shape[0] * strides[0]);
     }
 
-    // @copydoc begin()
+    /// @copydoc begin() const
     T* begin() {
         return const_cast<T*>(const_cast<const ArrayView*>(this)->begin());
     }
 
-    // @copydoc begin()
+    /// @copydoc end() const
     T* end() {
         return const_cast<T*>(const_cast<const ArrayView*>(this)->end());
     }
@@ -433,8 +475,21 @@ class ArrayView {
      */
     const T* data() const { return data_; }
 
-    // @copydoc data()
+    /// @copydoc data() const
     T* data() { return data_; }
+
+    /**
+     * Get total size of the elements in the array view.
+     *
+     * @return size of the array view
+     */
+    size_t size() const {
+        size_t out = shape[0];
+        for (size_t i = 1; i < Dim; ++i) {
+            out *= shape[i];
+        }
+        return out;
+    }
 
    private:
     friend class ArrayView<const T, Dim>;
@@ -446,10 +501,10 @@ class ArrayView {
      */
     template <typename Indexable1, typename Indexable2, int... I>
     ArrayView(T* ptr, const Indexable1& _shape, const Indexable2& _strides,
-              impl::row_pack<I...>)
+              impl::row_pack<I...> /*unused*/)
         : data_(ptr),
           strides{static_cast<int32_t>(_strides[I])...},
-          shape{static_cast<int32_t>(_shape[I])...} {}
+          shape{static_cast<uint32_t>(_shape[I])...} {}
 
     /**
      * Internal iterator based constructor
@@ -457,25 +512,26 @@ class ArrayView {
      * host only due to iterators
      */
     template <typename IterT, int... I, int... J>
-    ArrayView(T* ptr, IterT first, IterT last, impl::row_pack<I...>,
-              impl::row_pack<J...>)
+    ArrayView(T* ptr, IterT first, IterT last, impl::row_pack<I...> /*unused*/,
+              impl::row_pack<J...> /*unused*/)
         : data_(ptr),
           strides{
               impl::product<int32_t>{}(last, impl::index_row<Dim - 1 - J>{})...,
               1},
-          shape{(void(I), static_cast<int32_t>(*first++))...} {}
+          shape{(void(I), static_cast<uint32_t>(*first++))...} {}
 
     /**
      * Internal pointer pair based constructor
      */
     template <typename IntT, int... I, int... J>
-    OSDK_FN ArrayView(T* ptr, IntT* first, IntT* last, impl::row_pack<I...>,
-                      impl::row_pack<J...>)
+    OSDK_FN ArrayView(T* ptr, IntT* first, IntT* last,
+                      impl::row_pack<I...> /*unused*/,
+                      impl::row_pack<J...> /*unused*/)
         : data_(ptr),
           strides{
               impl::product<int32_t>{}(last, impl::index_row<Dim - 1 - J>{})...,
               1},
-          shape{(void(I), static_cast<int32_t>(*first++))...} {
+          shape{(void(I), static_cast<uint32_t>(*first++))...} {
         (void)last;  // silence an unused variable warning due to a compiler bug
     }
 
@@ -484,8 +540,11 @@ class ArrayView {
      */
     template <int... I>
     OSDK_FN ArrayView(T* ptr, const int32_t (&shape)[Dim],
-                      const int32_t (&strides)[Dim], impl::row_pack<I...>)
+                      const int32_t (&strides)[Dim],
+                      impl::row_pack<I...> /*unused*/)
         : data_(ptr), strides{strides[I]...}, shape{shape[I]...} {}
 };
 
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

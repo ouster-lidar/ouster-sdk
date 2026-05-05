@@ -11,6 +11,7 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace core {
 
 enum class IoType {
@@ -23,15 +24,21 @@ enum class IoType {
     PCD = 6,
     LAS = 7,
     MCAP = 8,
-    PNG = 9
+    PNG = 9,
+    STL = 10
 };
 
-/// Return a OusterIoType given a source arg str
+/// Return a IoType given a source arg str
 /// @throws std::runtime_error if IoType is unknown
 OUSTER_API_FUNCTION
 IoType io_type(const std::string& source);
 
-/// Return an OusterIoType given the file extension for the provided file path
+/// Convert an IoType to human readable string
+/// @throws std::runtime_error if IoType is invalid
+OUSTER_API_FUNCTION
+std::string to_string(IoType type);
+
+/// Return an IoType given the file extension for the provided file path
 /// @throws std::runtime_error if IoType is unknown
 OUSTER_API_FUNCTION
 IoType io_type_from_extension(const std::string& filename);
@@ -42,4 +49,5 @@ OUSTER_API_FUNCTION
 nonstd::optional<std::string> extension_from_io_type(IoType type);
 
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

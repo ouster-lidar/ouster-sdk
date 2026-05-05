@@ -17,7 +17,7 @@ import ouster.sdk.pcap as pcap
 from ouster.sdk.util import resolve_metadata
 import ouster.sdk.util.pose_util as pu
 from ouster.sdk.viz.model import LidarScanVizModel
-from ouster.sdk.core import dewarp
+from ouster.sdk.core import dewarp, LidarScanSet
 
 from ouster.sdk.viz.accumulators import LidarScanVizAccumulators
 from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
@@ -427,7 +427,7 @@ def test_viz_util_scans_accum_poses(test_data_dir,
     meta = core.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
     scans = pcap.PcapScanSource(pcap_file, sensor_info=[meta])
     scans_w_poses = pu.pose_scans_from_kitti(scans, poses_file)
-    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    model = LidarScanVizModel(point_viz, metas=[meta], _img_aspect_ratio=0)
 
     viz.AxisWithLabel(point_viz,
                       pose=np.eye(4),
@@ -451,8 +451,8 @@ def test_viz_util_scans_accum_poses(test_data_dir,
     )
 
     for scan in scans_w_poses:
-        scans_acc.update([scan])
-        model._amend_view_modes_all([scan])
+        scans_acc.update(LidarScanSet([scan]))
+        model._amend_view_modes_all(LidarScanSet([scan]))
 
     scans_acc.draw(update=True)
 

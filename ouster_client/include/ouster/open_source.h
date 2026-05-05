@@ -5,7 +5,12 @@
 
 #pragma once
 
-#include <map>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <nonstd/optional.hpp>
+#include <string>
+#include <vector>
 
 #include "ouster/error_handler.h"
 #include "ouster/impl/open_source_impl.h"
@@ -15,6 +20,7 @@
 #include "ouster/scan_source_utils.h"
 
 namespace ouster {
+namespace sdk {
 
 /// All possible configuration options for sources available through open_source
 struct OUSTER_API_CLASS ScanSourceOptions {
@@ -38,6 +44,11 @@ struct OUSTER_API_CLASS ScanSourceOptions {
     /// if true, ensure that this file is indexed, indexing in place if
     /// necessary
     impl::Parameter<bool> index = false;
+
+    /// if true, enable reuse ports on the sensor client sockets
+    /// this enables multiple programs on the same computer to bind these ports
+    /// which is useful for multi/broadcast but can lead to conflicts otherwise
+    impl::Parameter<bool> reuse_ports = false;
 
     /// optional list of metadata files to load with some formats, if not
     /// provided files are attempted to be found automatically
@@ -66,7 +77,7 @@ struct OUSTER_API_CLASS ScanSourceOptions {
     impl::Parameter<unsigned int> queue_size = 2;
 
     /// Override sensor info. If provided used instead of talking to the sensor.
-    impl::Parameter<std::vector<ouster::sensor::sensor_info>> sensor_info;
+    impl::Parameter<std::vector<core::SensorInfo>> sensor_info;
 
     /// If true, batch raw_headers into each scan
     impl::Parameter<bool> raw_headers = false;
@@ -75,11 +86,11 @@ struct OUSTER_API_CLASS ScanSourceOptions {
     impl::Parameter<bool> raw_fields = false;
 
     /// Configuration to apply to the sensors
-    impl::Parameter<std::vector<ouster::sensor::sensor_config>> sensor_config;
+    impl::Parameter<std::vector<core::SensorConfig>> sensor_config;
 
     /// An optional error handler
-    impl::Parameter<ouster::core::error_handler_t> error_handler{
-        ouster::core::default_error_handler};
+    impl::Parameter<core::error_handler_t> error_handler{
+        core::default_error_handler};
 
     /// Check if any parameters are unused
     /// @throw std::runtime_error if any parameters are unused
@@ -93,7 +104,7 @@ struct OUSTER_API_CLASS ScanSourceOptions {
 /// @throw std::runtime_error if source type is not detected or not supported
 /// @throw std::runtime_error if provided option is not supported by source type
 OUSTER_API_FUNCTION
-ouster::core::AnyScanSource open_source(
+ouster::sdk::core::AnyScanSource open_source(
     const std::string& source,  ///< [in] source filename(s)
     const std::function<void(ScanSourceOptions&)>& options =
         {},               ///< [in] source options
@@ -101,9 +112,9 @@ ouster::core::AnyScanSource open_source(
     int sensor_idx = -1   ///< [in] sensor index to access in the data source
 );
 
-/// @copydoc ouster::open_source
+/// @copydoc ouster::sdk::open_source
 OUSTER_API_FUNCTION
-ouster::core::AnyScanSource open_source(
+ouster::sdk::core::AnyScanSource open_source(
     const std::vector<std::string>& source,
     const std::function<void(ScanSourceOptions&)>& options = {},
     bool collate = true, int sensor_idx = -1);
@@ -148,7 +159,7 @@ struct OUSTER_API_CLASS PacketSourceOptions {
     impl::Parameter<bool> index = false;
 
     /// Override sensor info. If provided used instead of talking to the sensor.
-    impl::Parameter<std::vector<ouster::sensor::sensor_info>> sensor_info;
+    impl::Parameter<std::vector<core::SensorInfo>> sensor_info;
 
     /// If true, do not change any settings on the sensor or reinitialize it
     impl::Parameter<bool> do_not_reinitialize = false;
@@ -157,7 +168,12 @@ struct OUSTER_API_CLASS PacketSourceOptions {
     impl::Parameter<bool> no_auto_udp_dest = false;
 
     /// Configuration to apply to the sensors
-    impl::Parameter<std::vector<ouster::sensor::sensor_config>> sensor_config;
+    impl::Parameter<std::vector<core::SensorConfig>> sensor_config;
+
+    /// if true, enable reuse ports on the sensor client sockets
+    /// this enables multiple programs on the same computer to bind these ports
+    /// which is useful for multi/broadcast but can lead to conflicts otherwise
+    impl::Parameter<bool> reuse_ports = false;
 
     /// Construct given the options in a ScanSourceOptions
     OUSTER_API_FUNCTION
@@ -180,26 +196,27 @@ struct OUSTER_API_CLASS PacketSourceOptions {
 /// @throw std::runtime_error if source type is not detected or not supported
 /// @throw std::runtime_error if provided option is not supported by source type
 OUSTER_API_FUNCTION
-ouster::core::AnyPacketSource open_packet_source(
+ouster::sdk::core::AnyPacketSource open_packet_source(
     const std::string& source,  ///< [in] source file name(s)
     const std::function<void(PacketSourceOptions&)>& options = {}
     ///< [in] source options
 );
 
-/// @copydoc ouster::open_packet_source
+/// @copydoc ouster::sdk::open_packet_source
 OUSTER_API_FUNCTION
-ouster::core::AnyPacketSource open_packet_source(
+ouster::sdk::core::AnyPacketSource open_packet_source(
     const std::vector<std::string>& source,
     const std::function<void(PacketSourceOptions&)>& options = {});
 
+namespace core {
 /// Populate the extrinsics in the sensor infos
 OUSTER_API_FUNCTION
 void populate_extrinsics(
     std::string extrinsics_file,  ///< [in] optional extrinsics file name
     std::vector<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>
         extrinsics,  ///< [in] optional extrinsics list
-    std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-        sensor_infos  ///< [out] sensor_infos to fill with extrinsics
+    std::vector<std::shared_ptr<SensorInfo>>&
+        sensor_infos  ///< [out] SensorInfos to fill with extrinsics
 );
 
 /// Resolve list of field types for the given sensor infos
@@ -207,12 +224,14 @@ void populate_extrinsics(
 /// @throw std::runtime_error if field name not in list of default fields
 OUSTER_API_FUNCTION
 std::vector<std::vector<FieldType>> resolve_field_types(
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-        sensor_infos,  ///< [in] sensor_infos
+    const std::vector<std::shared_ptr<SensorInfo>>&
+        sensor_infos,  ///< [in] SensorInfos
     bool raw_headers,  ///< [in] if true, add raw headers
     bool raw_fields,   ///< [in] if true, add raw fields
     const nonstd::optional<std::vector<std::string>>&
         field_names  ///< [in] names of fields to include from list of defaults,
                      ///< if empty all default fields are added
 );
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

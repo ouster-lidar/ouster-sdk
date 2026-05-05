@@ -1,8 +1,11 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <cstddef>
+#include <functional>
 
 namespace ouster {
+namespace sdk {
 namespace core {
 namespace impl {
 template <typename PointScalar, typename AttribScalar>
@@ -58,4 +61,5 @@ struct hash_eigen {
 };
 }  // namespace impl
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

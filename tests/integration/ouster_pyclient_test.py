@@ -72,7 +72,8 @@ def _send_receive_lidar_packets(path, dst_ip, meta):
         with closing(
                 sensor.SensorPacketSource(dst_ip,
                               sensor_info=[rcv_meta],
-                              timeout=1.0)) as src:
+                              timeout=1.0,
+                              reuse_ports=True)) as src:
             tmp_socket.close()
             net_packets = iter(src)
 
@@ -100,7 +101,7 @@ def run_receive_data(test_file_prefix):
     # outer_pyclient_test_long does not have a _meta.json
     if info is None:
         info = core.SensorInfo.from_default(
-            core.LidarMode.MODE_1024x10)
+            core.LidarMode._1024x10)
 
     it = _send_receive_lidar_packets(path, dst_ip, info)
 

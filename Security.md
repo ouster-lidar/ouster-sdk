@@ -4,7 +4,7 @@
 
 This security policy outlines the security support commitments for ouster-sdk users.
 
-[Email](security@ouster.io) to learn more about Ouster's security SLAs and process.
+[Email](mailto:security@ouster.io) to learn more about Ouster's security SLAs and process.
 
 ## BSD-3-Clause License Users
 
@@ -16,7 +16,7 @@ This security policy outlines the security support commitments for ouster-sdk us
 
 ## Reporting a Vulnerability
 
-Please [email](security@ouster.io) to report a security vulnerability.
+Please [email](mailto:security@ouster.io) to report a security vulnerability.
 
 Please include the requested information listed below (as much as you can provide) to help us better understand 
 the nature and scope of the possible issue:
@@ -36,4 +36,4 @@ We prefer all communications to be in English.
 ### Response time 
 You should receive a response within 3 business days. 
 
-If for some reason you do not, please follow up via email to ensure we received your original message.
+If for some reason you do not, please follow up via [email](mailto:security@ouster.io) to ensure we received your original message.

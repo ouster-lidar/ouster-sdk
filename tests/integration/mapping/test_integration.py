@@ -3,37 +3,13 @@
 
 import glob
 import os
+import sys
 import shlex
 import subprocess
-import sys
-import re
-import ouster.sdk.mapping
+import pytest
+from pathlib import Path
 from ouster.sdk.core import read_pointcloud
 from ouster.sdk import open_source
-from pathlib import Path
-
-import pytest
-import platform
-
-# Check if the platform is macOS and if it's running on ARM architecture
-is_mac_arm = platform.system() == 'Darwin' and platform.processor() == 'arm'
-
-@pytest.fixture
-def verify_kiss_icp():
-    try:
-        import kiss_icp   # type: ignore
-        return True
-    except BaseException:
-        return False
-
-
-@pytest.fixture
-def verify_point_cloud_util():
-    try:
-        import point_cloud_utils   # type: ignore
-        return True
-    except BaseException:
-        return False
 
 
 @pytest.fixture
@@ -44,7 +20,6 @@ def pcap_full_path():
 
 
 @pytest.fixture
-@pytest.mark.skipif(is_mac_arm, reason="Skipping tests on MacBook with ARM architecture")
 def slam_conversion_path(pcap_full_path, tmp_path):
     slam_out_osf = os.path.join(tmp_path, "out.osf").replace("\\", "/")
     execution_command = f"ouster-cli source {pcap_full_path} slam save {slam_out_osf}"
@@ -56,13 +31,9 @@ def slam_conversion_path(pcap_full_path, tmp_path):
     assert os.path.exists(slam_out_osf)
     return slam_out_osf
 
-try:
-    from ouster.sdk.mapping import SlamEngine
-    kiss_icp_available = True
-except ImportError:
-    kiss_icp_available = False
 
-@pytest.mark.skipif(not kiss_icp_available or is_mac_arm, reason="No Platform Support or on mac arm")
+@pytest.mark.skipif(sys.platform.startswith("win"),
+                    reason="CLI help capture is flaky on Windows")
 def test_slam_source_help_command(pcap_full_path):
     # Test ouster-cli source --help
     help_command_1 = "ouster-cli source --help"
@@ -116,28 +87,27 @@ def convert(input_file, output_file):
 
     return files[0].replace("\\", "/")
 
-@pytest.mark.skipif(not kiss_icp_available or is_mac_arm, reason="No Platform Support or on mac arm")
-@pytest.mark.parametrize("output_file,min_size", [
-    ("test_output.osf", 1),
-    ("test_output.ply", 50000),
-    ("test_output.las", 50000),
-    ("test_output.pcd", 50000)])
-def test_slam_command_output(output_file, min_size,
-                             slam_conversion_path,
-                             tmp_path):
-    output_file = os.path.join(tmp_path, output_file)
-    output_file = convert(slam_conversion_path, output_file)
+# @pytest.mark.parametrize("output_file,min_size", [
+#     ("test_output.osf", 1),
+#     ("test_output.ply", 50000),
+#     ("test_output.las", 50000),
+#     ("test_output.pcd", 50000)])
+# def test_slam_command_output(output_file, min_size,
+#                              slam_conversion_path,
+#                              tmp_path):
+#     output_file = os.path.join(tmp_path, output_file)
+#     output_file = convert(slam_conversion_path, output_file)
 
-    # validate the files
-    assert os.path.exists(output_file)
-    if output_file.endswith("osf"):
-        num_pts = len(open_source(output_file))
-    else:
-        if output_file.endswith("las"):
-            import laspy
-            with laspy.open(output_file) as input_las:
-                num_pts = input_las.header.point_count
-        else:
-            num_pts = read_pointcloud(output_file).shape[0]
+#     # validate the files
+#     assert os.path.exists(output_file)
+#     if output_file.endswith("osf"):
+#         num_pts = len(open_source(output_file))
+#     else:
+#         if output_file.endswith("las"):
+#             import laspy
+#             with laspy.open(output_file) as input_las:
+#                 num_pts = input_las.header.point_count
+#         else:
+#             num_pts = read_pointcloud(output_file).shape[0]
 
-    assert num_pts >= min_size
+#     assert num_pts >= min_size

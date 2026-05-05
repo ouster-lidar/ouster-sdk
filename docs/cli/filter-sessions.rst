@@ -21,14 +21,17 @@ Where:
 
 - ``SOURCE`` can be a sensor hostname or a PCAP file.
 - ``AXIS_FIELD`` can be either a field name such as ``RANGE``, ``REFLECTIVITY`` or a axis in the cartesian coordinates
-``{X, Y, Z}`` or image coordinates ``{U, V}``.  
+  ``{X, Y, Z}`` or image coordinates ``{U, V}``.
 - ``INDICES`` The indices specifiy a range of values (e.g., ``0:10``) that map to the values of the ``AXIS_FIELD``. Any
- value of the choosen ``AXIS_FIELD`` that matches the ``INDICES`` will be replaced by zero unless the option ``--invalid-value``
- is set to a different value.  
+  value of the choosen ``AXIS_FIELD`` that matches the ``INDICES`` will be replaced by zero unless the option ``--invalid-value``
+  is set to a different value.
 - ``[OPTIONS]`` current options include:
-        - ``--invalid-value``: The value to replace the pixels that match the predicate. Default is zero.
-        - ``--filtered-fields``: A comma-separated list of fields to apply the filter to. If not specified, the filter will
-        be applied to all fields of the scan.
+
+  - ``--invalid-value``: The value to replace the pixels that match the predicate. Default is zero.
+  - ``--filtered-fields``: A comma-separated list of fields to apply the filter to. If not specified, the filter will
+    be applied to all fields of the scan.
+  - ``--coord-frame``: Coordinate frame for XYZ filtering only. Options are ``SENSOR`` (no extrinsics),
+    ``BODY`` (extrinsics, default), and ``WORLD`` (dewarp with poses).
 
 Example Usage
 -------------
@@ -54,7 +57,7 @@ command predicate, we can highlight points in the low cloud with higher reflecti
    :align: center
    :width: 800px
 
-  
+
 2) Filter based on cartesian coordinates:
 
 Another way to filter the point cloud is to use the cartesian coordinates of the points. For example, imagine we want to
@@ -64,6 +67,13 @@ follows:
 .. code:: bash
 
         ouster-cli source <source_url> filter Z :-1m filter Z 1m: viz
+
+If you need the XYZ filter in a different coordinate frame, use ``--coord-frame``. For example, dewarp
+into WORLD coordinates before filtering:
+
+.. code:: bash
+
+        ouster-cli source <source_url> filter --coord-frame WORLD Z :-1m viz
 
 After applying this filter the resulting point cloud will look like this:
 
@@ -91,7 +101,7 @@ resulting point cloud will look like this:
    :align: center
    :width: 800px
 
-This can be useful to mask out certain columns (``V``) or certain beams (``U``) of the LidarScan. 
+This can be useful to mask out certain columns (``V``) or certain beams (``U``) of the LidarScan.
 
 .. note::
 

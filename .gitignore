@@ -9,9 +9,11 @@ python/**/*.pyd
 
 /build
 python/artifacts/
+/artifacts
 
 # visual studio
 .vs/
+.vscode
 out/
 
 # vim
@@ -34,3 +36,14 @@ rules.ninja
 *.a
 **/_build
 clang-tidy-output.{txt,json}
+
+#npm
+node_modules/
+/package-lock.json
+/package.json
+.aider*
+
+# docs
+docs/build/
+docs/cpp/api_cpp/
+docs/python/api_python/

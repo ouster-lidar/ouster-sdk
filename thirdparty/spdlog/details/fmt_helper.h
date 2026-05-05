@@ -30,11 +30,11 @@ inline void append_int(T n, memory_buf_t &dest) {
     SPDLOG_CONSTEXPR const auto BUF_SIZE = std::numeric_limits<T>::digits10 + 2;
     char buf[BUF_SIZE];
 
-    auto [ptr, ec] = std::to_chars(buf, buf + BUF_SIZE, n, 10);
-    if (ec == std::errc()) {
-        dest.append(buf, ptr);
+    auto res = std::to_chars(buf, buf + BUF_SIZE, n, 10);
+    if (res.ec == std::errc()) {
+        dest.append(buf, res.ptr);
     } else {
-        throw_spdlog_ex("Failed to format int", static_cast<int>(ec));
+        throw_spdlog_ex("Failed to format int", static_cast<int>(res.ec));
     }
 }
 #else

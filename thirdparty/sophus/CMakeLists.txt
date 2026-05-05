@@ -57,8 +57,10 @@ if(NOT TARGET Eigen3::Eigen)
   find_package(Eigen3 3.3.0 REQUIRED)
 endif()
 
-if(NOT TARGET fmt::fmt)
-  find_package(fmt)
+if (NOT CMAKE_DISABLE_FIND_PACKAGE_fmt)
+  if(NOT TARGET fmt::fmt)
+    find_package(fmt)
+  endif()
 endif()
 
 

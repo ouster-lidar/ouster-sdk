@@ -1,3 +1,4 @@
+from .conftest import MockPointViz
 from ouster.sdk.core import LidarScan, first_valid_column_pose, SensorInfo, LidarMode
 from ouster.sdk.viz.model import LidarScanVizModel
 from ouster.sdk.viz.track import Track, MultiTrack, TRACK_INIT_POINTS_NUM, TRACK_MAP_GROWTH_RATE
@@ -114,10 +115,11 @@ def test_track_update_5():
 def test_multitrack_update():
     """It updates a track for each sensor."""
     infos = [
-        SensorInfo.from_default(LidarMode.MODE_2048x10),
-        SensorInfo.from_default(LidarMode.MODE_2048x10)
+        SensorInfo.from_default(LidarMode._2048x10),
+        SensorInfo.from_default(LidarMode._2048x10)
     ]
-    model = LidarScanVizModel(infos, _img_aspect_ratio=0)
+    viz = MockPointViz()
+    model = LidarScanVizModel(viz, infos, _img_aspect_ratio=0)
     config = LidarScanVizAccumulatorsConfig(accum_max_num=2, accum_min_dist_num=2)
     multitrack = MultiTrack(model, config)
     assert len(multitrack._tracks) == len(infos)

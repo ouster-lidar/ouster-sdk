@@ -121,8 +121,8 @@ void VoxelHashMap::AddPoints(const std::vector<Eigen::Vector3d> &points) {
 void VoxelHashMap::RemovePointsFarFromLocation(const Eigen::Vector3d &origin) {
     const auto max_distance2 = max_distance_ * max_distance_;
     for (auto it = map_.begin(); it != map_.end();) {
-        const auto &[voxel, voxel_points] = *it;
-        const auto &pt = voxel_points.front();
+        const auto &kv = *it;
+        const auto &pt = kv.second.front();
         if ((pt - origin).squaredNorm() >= (max_distance2)) {
             it = map_.erase(it);
         } else {

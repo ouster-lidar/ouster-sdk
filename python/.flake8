@@ -1,5 +1,12 @@
 [flake8]
 max-line-length = 120
+exclude =
+    .venv,
+    .tox,
+    .eggs,
+    __pycache__,
+    build,
+    dist
 per-file-ignores =
     tests/*: D
     docs/*: D

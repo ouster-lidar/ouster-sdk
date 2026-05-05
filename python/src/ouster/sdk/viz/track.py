@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 import ouster.sdk.core as core
+from ouster.sdk.core import LidarScan, LidarScanSet
 from .model import LidarScanVizModel
 from .accumulators_config import LidarScanVizAccumulatorsConfig
 
@@ -25,7 +26,7 @@ if not logger.hasHandlers():
 class ScanRecord:
     """Represents a scan, its pose, and its color (aka keys) for each available cloud mode."""
     pose: np.ndarray
-    scan: core.LidarScan
+    scan: LidarScan
     cloud_mode_keys: Dict[str, Optional[np.ndarray]] = field(default_factory = lambda: dict())
 
     @property
@@ -71,7 +72,6 @@ class Track:
         self._kf_key = np.zeros((self._kf_max_num + 1, 4),
                            dtype=np.float32)
         self._kf_key_color = np.array([0.9, 0.9, 0.2, 1.0])
-        self._extrinsics = extrinsics
 
     def _update_track(self) -> None:
         """Extract and update the scans poses TRACK"""
@@ -180,7 +180,7 @@ class Track:
                 self._kf_max_num + 1) % (self._kf_max_num + 1)
 
     def update(self,
-               scan: Optional[core.LidarScan],
+               scan: Optional[LidarScan],
                scan_num: int) -> None:
         """Register the new scan and update the track and key frames"""
         self._scan_num = scan_num
@@ -194,7 +194,7 @@ class Track:
             return
 
         if scan:
-            pose = core.last_valid_column_pose(scan) @ self._extrinsics
+            pose = core.last_valid_column_pose(scan)
             self._scan_records[self._scan_num] = ScanRecord(pose=pose, scan=scan)
         self._update_track()
         self._update_accum()
@@ -211,7 +211,7 @@ class MultiTrack:
         self._scan_num = -1
 
     def update(self,
-               scans: List[Optional[core.LidarScan]],
+               scans: LidarScanSet,
                scan_num: Optional[int] = None) -> None:
         """Update the Track for each sensor."""
         if scan_num is not None:

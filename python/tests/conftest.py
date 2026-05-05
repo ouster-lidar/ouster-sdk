@@ -4,7 +4,7 @@ All rights reserved.
 """
 
 from contextlib import closing
-from os import path
+from os import path, environ
 from typing import Iterator
 from pathlib import Path
 
@@ -32,12 +32,13 @@ def pytest_addoption(parser):
                      required=False,
                      default=False,
                      help="Run interactive tests")
-
+    default_performance = environ.get("OUSTER_PERFORMANCE", "0") == "1"
     parser.addoption("--performance",
                      action="store_true",
                      required=False,
-                     default=False,
-                     help="Run longer performance tests")
+                     default=default_performance,
+                     help="""Run longer performance tests.
+                     Can also be set using the OUSTER_PERFORMANCE environment variable.""")
     parser.addoption("--num-iterations",
                      required=False,
                      default=0,
@@ -159,7 +160,7 @@ def scan(packets: core.PacketSource) -> core.LidarScan:
             new_scan = False
             if isinstance(p, core.LidarPacket) and batcher(p, scan):
                 yield scan
-                scan = core.LidarScan(packets.metadata)
+                scan = core.LidarScan(packets.sensor_info[0])
                 new_scan = True
         if not new_scan:
             yield scan
@@ -244,3 +245,6 @@ class MockPointViz():
     @property
     def target_display(*args, **kwargs):
         return MockPointViz.MockTargetDisplay()
+
+    def set_notification(*args, **kwargs):
+        pass

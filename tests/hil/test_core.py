@@ -13,7 +13,8 @@ import requests
 import pytest
 
 from ouster.sdk import core, sensor
-from ouster.sdk.core import UDPProfileLidar, TimestampMode, LidarMode, PacketFormat, ColHeader
+from ouster.sdk.core import UDPProfileLidar, TimestampMode, LidarMode, PacketFormat, ColHeader, LidarScanSet, SensorHttp
+from ouster.sdk.zone_monitor import ZoneSet
 from ouster.sdk._bindings import client as _client
 
 logger = logging.getLogger("HIL")
@@ -31,7 +32,7 @@ def imu_port():
 
 @pytest.fixture
 def lidar_mode():
-    return LidarMode.MODE_1024x10
+    return LidarMode._1024x10
 
 @pytest.fixture
 def timestamp_mode():
@@ -41,17 +42,17 @@ def timestamp_mode():
 @pytest.fixture(
     scope='module',
     params=[
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_LEGACY,
+        pytest.param(UDPProfileLidar.LEGACY,
                      id="PROFILE_LIDAR_LEGACY"),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8,
+        pytest.param(UDPProfileLidar.RNG15_RFL8_NIR8,
                      id="PROFILE_LIDAR_RNG15_RFL8_NIR8",
                      marks=pytest.mark.full),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16,
+        pytest.param(UDPProfileLidar.RNG19_RFL8_SIG16_NIR16,
                      id="PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16"),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL,
+        pytest.param(UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL,
                      id="PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL",
                      marks=pytest.mark.full),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL,
+        pytest.param(UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL,
                      id="PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL",
                      marks=pytest.mark.full)
     ])
@@ -140,7 +141,7 @@ def concat_measurement_ids(packets, pf) -> np.ndarray:
 
 @pytest.mark.parametrize(
     'lidar_mode, azimuth_window',
-    [pytest.param(LidarMode.MODE_2048x10, (0, 360000), id="full_2048")])
+    [pytest.param(LidarMode._2048x10, (0, 360000), id="full_2048")])
 def test_packets_consecutive(hil_configured_sensor) -> None:
     """Check that packets are not being dropped."""
     if hil_configured_sensor is None:
@@ -195,6 +196,15 @@ def fix_float_rounding(metadata, src):
         metadata.extrinsic = src.sensor_info[0].extrinsic
 
 
+def get_zone_set_if_it_exists(hostname: str) -> Optional[ZoneSet]:
+    sensor_http = core.SensorHttp.create(hostname)
+    try:
+        return ZoneSet(sensor_http.get_zone_monitor_config_zip())
+    except RuntimeError:
+        print("No live zone set on sensor.")
+        return None
+
+
 def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firmware, lowest_metadata_endpoint_fw) -> None:
     """Test that SensorInfo matches when from sensor http endpoint"""
 
@@ -212,6 +222,7 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
 
         metadata_response = requests.get(http_metadata_endpoint)
         metadata = core.SensorInfo(core.SensorInfo(metadata_response.text).to_json_string())
+        metadata.zone_set = get_zone_set_if_it_exists(hostname)
 
         userdata_response = requests.get(http_userdata_endpoint)
         if userdata_response.status_code == 200:
@@ -220,6 +231,10 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
         fix_float_rounding(metadata, src)
         # TWS 20230818: the decoded fields should be equal
         assert metadata.user_data == src.sensor_info[0].user_data
+        assert metadata.zone_set == src.sensor_info[0].zone_set
+
+        # TODO[tws] decide whether we want the ZoneSet to be in the SensorInfo JSON itself
+        assert metadata.config == src.sensor_info[0].config
         assert metadata.has_fields_equal(src.sensor_info[0])
         assert type(metadata) == type(src.sensor_info[0])
 
@@ -233,9 +248,9 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
         assert metadata == src.sensor_info[0]
 
 
-def n_frame_id_gaps(ss: List[List[Optional[core.LidarScan]]]) -> int:
+def n_frame_id_gaps(ss: List[LidarScanSet]) -> int:
     """Return number of non-consecutive frame ids."""
-    return np.count_nonzero(np.diff([cast(core.LidarScan, s).frame_id for s, in ss]) % 2**16 != 1)
+    return int(np.count_nonzero(np.diff([cast(core.LidarScan, s).frame_id for s, in ss]) % 2**16 != 1))
 
 
 def test_scans_consecutive(hil_configured_sensor) -> None:
@@ -301,5 +316,7 @@ def test_scans_read_timeout_only_imu(hil_configured_sensor, imu_port) -> None:
             next(iter(scans))
 
 
-def test_longform_client(hil_sensor_hostname, lidar_mode, timestamp_mode, lidar_port, imu_port) -> None:
+def test_longform_client(hil_sensor_hostname, lidar_mode, timestamp_mode, lidar_port, imu_port, vlp_sensor) -> None:
+    if vlp_sensor:
+        lidar_mode = LidarMode._2048x10
     cli = _client.SensorConnection(hil_sensor_hostname, "", lidar_mode, timestamp_mode, lidar_port, imu_port, 60)

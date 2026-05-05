@@ -11,11 +11,14 @@
 #pragma once
 
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
-#include <numeric>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -31,25 +34,63 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace sensor {
 
-class ClientError : public std::runtime_error {
+/**
+ * @brief Base class for client-related exceptions.
+ */
+class OUSTER_API_CLASS ClientError : public std::runtime_error {
    public:
+    /**
+     * Constructs a ClientError with the given error message.
+     * @param[in] msg A description of the client error.
+     */
+    OUSTER_API_FUNCTION
     ClientError(const std::string& msg) : runtime_error(msg) {}
 };
 
-class ClientOverflow : public ClientError {
+/**
+ * @brief Exception for buffer overflow errors in the client.
+ *
+ * Thrown when a buffer exceeds its capacity or an overflow condition
+ * is detected during client data handling.
+ * @param[in] msg The error message indicating buffer overflow.
+ */
+class OUSTER_API_CLASS ClientOverflow : public ClientError {
    public:
+    /**
+     * Constructs a ClientOverflow with the given error message.
+     * @param[in] msg The error message indicating buffer overflow.
+     */
+    OUSTER_API_FUNCTION
     ClientOverflow(const std::string& msg) : ClientError(msg) {}
 };
 
-class ClientTimeout : public ClientError {
+/**
+ * @brief Exception for timeout errors in the client.
+ *
+ * Thrown when a client operation exceeds the expected time limit.
+ * @param[in] msg The error message indicating a timeout occurred.
+ */
+class OUSTER_API_CLASS ClientTimeout : public ClientError {
    public:
+    /**
+     * Constructs a ClientTimeout with the given error message.
+     * @param[in] msg The error message indicating a timeout occurred.
+     */
+    OUSTER_API_FUNCTION
     ClientTimeout(const std::string& msg) : ClientError(msg) {}
 };
 
 /// Struct that describes a result from retriving a packet from SensorClient
 class SensorPacketSource;
+/**
+ * @brief Represents an event from the SensorPacketSource.
+ *
+ * Contains the result of polling the sensor client, such as received
+ * packets, timeouts, and errors.
+ */
 class OUSTER_API_CLASS ClientEvent {
     friend class SensorPacketSource;
 
@@ -58,25 +99,37 @@ class OUSTER_API_CLASS ClientEvent {
 
     /// Types of events that can occur
     enum EventType {
-        Error,  ///< An error occurred in the SensorClient, it may no longer
-                /// function.
-        Exit,   ///< The client has been closed and will not return any more
-                /// packets.
-        PollTimeout,  ///< get_packet has timed out waiting for an event/packet
-        Packet,       ///< An packet from a sensor
+        ERR,           ///< An error occurred in the SensorClient, it may no
+                       ///< longer
+                       /// function.
+        EXIT,          ///< The client has been closed and will not return any
+                       ///< more
+                       /// packets.
+        POLL_TIMEOUT,  ///< get_packet has timed out waiting for an
+                       ///< event/packet
+        PACKET,        ///< An packet from a sensor
+        Error = ERR,   ///< Deprecated alias for ERR
+        Exit = EXIT,   ///< Deprecated alias for EXIT
+        PollTimeout = POLL_TIMEOUT,  ///< Deprecated alias for POLL_TIMEOUT
+        Packet = PACKET              ///< Deprecated alias for PACKET
     };
+    // Fix when OUSTER_DEPRECATED_LAST_SUPPORTED_0_16 is removed
 
     int source;  ///< negative if not applicable to a source, like PollTimeout
                  ///< or Error
     EventType type;  ///< The type of event that occurred.
 
-    OUSTER_API_FUNCTION inline ouster::sensor::Packet& packet() {
+    /**
+     * Access the packet associated with this event.
+     * @return Reference to the packet associated with the event.
+     */
+    OUSTER_API_FUNCTION inline ouster::sdk::core::Packet& packet() {
         return *packet_;
     }
 
    private:
-    ouster::sensor::Packet* packet_;
-    ClientEvent(ouster::sensor::Packet* packet, int src, EventType tpe)
+    ouster::sdk::core::Packet* packet_;
+    ClientEvent(ouster::sdk::core::Packet* packet, int src, EventType tpe)
         : source{src}, type{tpe}, packet_{packet} {}
 };
 
@@ -86,25 +139,28 @@ class OUSTER_API_CLASS Sensor {
     /// Construct a sensor descriptor with the given hostname and desired config
     OUSTER_API_FUNCTION
     Sensor(const std::string& hostname,  ///< [in] sensor hostname
-           const sensor_config& config   ///< [in] desired sensor configuration
+           const ouster::sdk::core::SensorConfig&
+               config  ///< [in] desired sensor configuration
     );
 
     /// Queries the sensor metadata.
-    /// @return the parsed sensor_info object containing the metadata.
+    /// @return the parsed SensorInfo object containing the metadata.
     OUSTER_API_FUNCTION
-    sensor_info fetch_metadata(
+    ouster::sdk::core::SensorInfo fetch_metadata(
         int timeout = 10  ///< [in] timeout for the request in seconds
     ) const;
 
     /// Get a SensorHttp client for this sensor.
     /// @return the SensorHttp client
     OUSTER_API_FUNCTION
-    std::shared_ptr<ouster::sensor::util::SensorHttp> http_client() const;
+    std::shared_ptr<ouster::sdk::sensor::SensorHttp> http_client() const;
 
     /// Get the desired config of this sensor.
     /// @return the desired config
     OUSTER_API_FUNCTION
-    inline const sensor_config& desired_config() const { return config_; }
+    inline const ouster::sdk::core::SensorConfig& desired_config() const {
+        return config_;
+    }
 
     /// Get the hostname of this sensor.
     /// @return the sensor hostname
@@ -112,41 +168,50 @@ class OUSTER_API_CLASS Sensor {
     inline const std::string& hostname() const { return hostname_; }
 
    private:
-    mutable std::shared_ptr<ouster::sensor::util::SensorHttp> http_client_;
+    mutable std::shared_ptr<ouster::sdk::sensor::SensorHttp> http_client_;
     std::string hostname_;
 
-    sensor_config config_;
+    ouster::sdk::core::SensorConfig config_;
 };
 
 /// SensorScanSource specific configuration options
-struct SensorPacketSourceOptions : private PacketSourceOptions {
+struct OUSTER_API_CLASS SensorPacketSourceOptions
+    : private PacketSourceOptions {
     using PacketSourceOptions::buffer_time_sec;
     using PacketSourceOptions::config_timeout;
-    using PacketSourceOptions::do_not_reinitialize;  // todo implement
+    using PacketSourceOptions::do_not_reinitialize;
     using PacketSourceOptions::extrinsics;
     using PacketSourceOptions::extrinsics_file;
     using PacketSourceOptions::imu_port;
     using PacketSourceOptions::lidar_port;
-    using PacketSourceOptions::no_auto_udp_dest;  // todo implement
+    using PacketSourceOptions::no_auto_udp_dest;
+    using PacketSourceOptions::reuse_ports;
     using PacketSourceOptions::sensor_config;
     using PacketSourceOptions::sensor_info;
     using PacketSourceOptions::timeout;
 
     using PacketSourceOptions::check;
 
+    /**
+     * Constructs SensorPacketSourceOptions
+     *
+     * @param[in] o The base options to initialize from.
+     */
+    OUSTER_API_FUNCTION
     SensorPacketSourceOptions(const PacketSourceOptions& o)
         : PacketSourceOptions(o) {}
 
-    SensorPacketSourceOptions() {}
+    OUSTER_API_FUNCTION
+    SensorPacketSourceOptions() = default;
 };
 
 class SensorPacketIteratorImpl;
 class SensorScanSource;
 /// An interface to configure and retrieve packets from one or multiple lidars
 class OUSTER_API_CLASS SensorPacketSource
-    : public core::PacketSource,
-      ouster::impl::PacketSourceBuilderMulti<ouster::core::IoType::SENSOR,
-                                             SensorPacketSource> {
+    : public ouster::sdk::core::PacketSource,
+      ouster::sdk::impl::PacketSourceBuilderMulti<
+          ouster::sdk::core::IoType::SENSOR, SensorPacketSource> {
    public:
     friend class SensorPacketIteratorImpl;
     friend class SensorScanSource;
@@ -159,6 +224,7 @@ class OUSTER_API_CLASS SensorPacketSource
     );
 
     /// Construct a sensor packet source for a multiple sensors
+    OUSTER_API_FUNCTION
     SensorPacketSource(
         const std::vector<std::string>& sources,  ///< [in] sensor hostnames
         SensorPacketSourceOptions options         ///< [in] source options
@@ -199,18 +265,20 @@ class OUSTER_API_CLASS SensorPacketSource
     OUSTER_API_FUNCTION
     SensorPacketSource(
         const std::vector<Sensor>& sensors,  ///< [in] sensors to connect to
-        const std::vector<ouster::sensor::sensor_info>&
+        const std::vector<ouster::sdk::core::SensorInfo>&
             infos,  ///< [in] metadata for each sensor, if present used instead
                     ///< of configuring each sensor
         double config_timeout_sec = 45,  ///< [in] timeout for sensor config
-        double buffer_time_sec = 0  ///< [in] time in seconds to buffer packets
-                                    ///< for. If zero no buffering is performed
-                                    ///< outside of the OS.
+        double buffer_time_sec = 0,  ///< [in] time in seconds to buffer packets
+                                     ///< for. If zero no buffering is performed
+                                     ///< outside of the OS.
+        bool reuse_ports = false  ///< [in] If true bind ports with port reuse
+                                  ///< enabled
     );
 
     /// Destruct the sensor client
     OUSTER_API_FUNCTION
-    ~SensorPacketSource();
+    ~SensorPacketSource() override;
 
     /// Retrieve a packet from the sensor with a given timeout.
     /// timeout_sec of 0 = return immediately, timeout_sec < 0 = wait forever
@@ -244,7 +312,7 @@ class OUSTER_API_CLASS SensorPacketSource
     bool is_live() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>&
     sensor_info() const override;
 
    protected:
@@ -255,7 +323,7 @@ class OUSTER_API_CLASS SensorPacketSource
    private:
     struct OUSTER_API_IGNORE InternalEvent {
         int source;
-        PacketType packet_type;
+        ouster::sdk::core::PacketType packet_type;
         ClientEvent::EventType event_type;
     };
 
@@ -265,9 +333,9 @@ class OUSTER_API_CLASS SensorPacketSource
         std::vector<uint8_t> data;
     };
 
-    std::vector<std::shared_ptr<ouster::sensor::sensor_info>> sensor_info_;
+    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> sensor_info_;
     std::vector<SOCKET> sockets_;
-    std::vector<std::shared_ptr<packet_format>> formats_;
+    std::vector<std::shared_ptr<ouster::sdk::core::PacketFormat>> formats_;
 
     bool do_buffer_ = false;
     uint64_t dropped_packets_ = 0;
@@ -277,9 +345,10 @@ class OUSTER_API_CLASS SensorPacketSource
     std::deque<BufferEvent> buffer_;
     double iterator_timeout_ = 1.0;
 
-    std::vector<uint8_t> staging_buffer;
-    ImuPacket imu_packet_;
-    LidarPacket lidar_packet_;
+    std::vector<uint8_t> staging_buffer_;
+    ouster::sdk::core::ImuPacket imu_packet_;
+    ouster::sdk::core::LidarPacket lidar_packet_;
+    ouster::sdk::core::ZonePacket zone_packet_;
     struct OUSTER_API_IGNORE Addr6 {
         uint8_t address[16];
         int sensor_index;
@@ -299,4 +368,5 @@ class OUSTER_API_CLASS SensorPacketSource
     );
 };
 }  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

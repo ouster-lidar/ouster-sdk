@@ -6,10 +6,13 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 
 namespace ouster {
+namespace sdk {
+namespace core {
 namespace impl {
 
 /// Abstract impl for a BaseIterator<T, Parent>
@@ -17,11 +20,11 @@ namespace impl {
 template <class T>
 class BaseIteratorImpl {
    public:
-    virtual ~BaseIteratorImpl() {}
+    virtual ~BaseIteratorImpl() = default;
 
     virtual bool advance(size_t offset) = 0;
 
-    virtual T& value() = 0;
+    virtual T value() = 0;
 
     virtual int64_t length() {
         throw std::runtime_error(
@@ -34,35 +37,35 @@ class BaseIteratorImpl {
 /// @tparam Parent type of parent container
 template <class T, class Parent>
 class BaseIterator {
-    std::unique_ptr<BaseIteratorImpl<T>> impl;
-    bool first = true;
+    std::unique_ptr<BaseIteratorImpl<T>> impl_;
+    bool first_ = true;
     uint64_t position_ = 0;
-    const void* parent_ =
-        0;  // used to check if these iterators are from the same container
+    const void* parent_ = nullptr;  // used to check if these iterators are from
+                                    // the same container
 
     void do_advance(size_t offset) {
-        first = false;
-        if (impl->advance(offset)) {
-            impl.reset();
+        first_ = false;
+        if (impl_->advance(offset)) {
+            impl_.reset();
         }
     }
 
    public:
     BaseIterator(const Parent* parent, BaseIteratorImpl<T>* i)
         : parent_(parent) {
-        impl.reset(i);
+        impl_.reset(i);
     }
 
     BaseIterator(const Parent* parent) : parent_(parent) {}
 
-    BaseIterator() {}
+    BaseIterator() = default;
 
     /// Advance iterator
     void operator++() {
-        if (!impl) {
+        if (!impl_) {
             throw std::runtime_error("Cannot advance end iterator");
         }
-        if (first) {
+        if (first_) {
             do_advance(1);
         }
         do_advance(1);
@@ -71,10 +74,10 @@ class BaseIterator {
 
     /// Advance iterator
     void operator++(int) {
-        if (!impl) {
+        if (!impl_) {
             throw std::runtime_error("Cannot advance end iterator");
         }
-        if (first) {
+        if (first_) {
             do_advance(1);
         }
         do_advance(1);
@@ -86,10 +89,10 @@ class BaseIterator {
         if (offset == 0) {
             return;
         }
-        if (!impl) {
+        if (!impl_) {
             throw std::runtime_error("Cannot advance end iterator");
         }
-        if (first) {
+        if (first_) {
             do_advance(1);
         }
         do_advance(offset);
@@ -99,23 +102,23 @@ class BaseIterator {
     /// Get difference between iterator positions
     int operator-(const BaseIterator<T, Parent>& o) {
         // both end
-        if (!impl && !o.impl) {
+        if (!impl_ && !o.impl_) {
             return 0;
         }
         // other was end
-        if (!o.impl) {
-            return position_ - impl->length();
+        if (!o.impl_) {
+            return position_ - impl_->length();
         }
         // we are end
-        if (!impl) {
-            return o.impl->length() - o.position_;
+        if (!impl_) {
+            return o.impl_->length() - o.position_;
         }
         return position_ - o.position_;
     }
 
     /// Compare two iterators
     bool operator!=(const BaseIterator<T, Parent>& o) {
-        if (first && impl) {
+        if (first_ && impl_) {
             do_advance(1);
         }
 
@@ -126,15 +129,15 @@ class BaseIterator {
         }
 
         // if we are both end, we match
-        if (!impl && !o.impl) {
+        if (!impl_ && !o.impl_) {
             return false;
         }
 
         // if only one is end, we dont match
-        if (!impl) {
+        if (!impl_) {
             return false;
         }
-        if (!o.impl) {
+        if (!o.impl_) {
             return true;
         }
         // finally check if they are at the same position
@@ -145,15 +148,17 @@ class BaseIterator {
     bool operator==(const BaseIterator<T, Parent>& o) { return !(*this != o); }
 
     /// Dereference an iterator
-    T& operator*() {
-        if (!impl) {
+    T operator*() {
+        if (!impl_) {
             throw std::runtime_error("Cannot dereference end iterator");
         }
-        if (first) {
+        if (first_) {
             do_advance(1);
         }
-        return impl->value();
+        return impl_->value();
     }
 };
 }  // namespace impl
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

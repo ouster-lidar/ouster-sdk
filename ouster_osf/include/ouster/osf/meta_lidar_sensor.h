@@ -8,18 +8,22 @@
  */
 #pragma once
 
-#include <iostream>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
+#include "ouster/osf/buffer.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
- * Metadata entry to store lidar sensor_info, i.e. Ouster sensor configuration.
+ * Metadata entry to store lidar SensorInfo, i.e. Ouster sensor configuration.
  *
  * OSF type:
  *   ouster/v1/os_sensor/LidarSensor
@@ -28,7 +32,7 @@ namespace osf {
  *   fb/os_sensor/lidar_sensor.fbs
  */
 class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
-    using sensor_info = ouster::sensor::sensor_info;
+    using sensor_info = ouster::sdk::core::SensorInfo;
 
    public:
     /**
@@ -56,8 +60,7 @@ class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
      * Returns the json string representation sensor_info associated
      * with the LidarSensor.
      *
-     * @return  ///< The json string representation of the
-     *          ///< sensor_info object.
+     * @return The json string representation of the sensor_info object.
      */
     OUSTER_API_FUNCTION
     const std::string& metadata() const;
@@ -79,8 +82,7 @@ class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
      * @return The new LidarSensor cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(
-        const std::vector<uint8_t>& buf);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf);
 
     /**
      * Get the string representation for the LidarSensor object.
@@ -135,4 +137,5 @@ struct OUSTER_API_CLASS MetadataTraits<LidarSensor> {
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

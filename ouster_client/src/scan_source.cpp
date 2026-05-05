@@ -1,9 +1,14 @@
 #include "ouster/scan_source.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <utility>
+#include <vector>
+
 namespace ouster {
+namespace sdk {
 namespace core {
-std::vector<std::shared_ptr<LidarScan>> ScanSource::operator[](
-    int start) const {
+LidarScanSet ScanSource::operator[](int start) const {
     auto iter = begin();
     if (start < 0) {
         auto len = end() - begin();
@@ -14,7 +19,7 @@ std::vector<std::shared_ptr<LidarScan>> ScanSource::operator[](
     if (iter == end()) {
         throw std::out_of_range("Indexed past the end of the scan source.");
     }
-    return {*iter};
+    return *iter;
 }
 
 size_t ScanSource::size() const { return end() - begin(); }
@@ -43,4 +48,5 @@ const std::vector<size_t>& ScanSource::scans_num() const {
 }
 
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

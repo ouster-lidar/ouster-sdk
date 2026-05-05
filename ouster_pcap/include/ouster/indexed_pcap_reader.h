@@ -4,51 +4,92 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <map>
+#include <nonstd/optional.hpp>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
+#include "ouster/deprecation.h"
 #include "ouster/os_pcap.h"
 #include "ouster/pcap.h"
 #include "ouster/types.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
-namespace sensor_utils {
+namespace sdk {
+namespace pcap {
 
+/**
+ * @brief Represents a global index for a frame in a pcap file.
+ *
+ * This structure contains the file offset, sensor index, and timestamp
+ * for a specific frame in the pcap file.
+ */
 struct OUSTER_API_CLASS GlobalIndex {
-    uint64_t file_offset;
-    uint64_t sensor_index;
-    uint64_t timestamp;
+    uint64_t
+        file_offset;  ///< Byte offset in the PCAP file where the frame starts.
+    uint64_t sensor_index;  ///< Sensor index corresponding to the frame
+    uint64_t timestamp;     ///< Timestamp associated with the packet.
 };
 
+/**
+ * @brief Indexing structure for efficient lookup of frames in a PCAP file.
+ *
+ * Provides indices to map sensor-specific and global frame
+ * numbers to their corresponding byte offsets in the PCAP file.
+ * This allows fast random access to lidar frames for analysis or replay.
+ */
 class OUSTER_API_CLASS PcapIndex {
    public:
     using frame_index =
         std::vector<uint64_t>;  ///< Maps a frame number to a file offset
 
-    std::vector<frame_index> frame_indices_;  ///< frame index for each sensor
+    std::vector<frame_index> frame_indices;  ///< frame index for each sensor
 
     std::vector<GlobalIndex>
-        global_frame_indices_;  ///< frame index for all sensors, contains the
-                                ///< offset followed by the index of each sensor
-
+        global_frame_indices;  ///< frame index for all sensors, contains the
+                               ///< offset followed by the index of each sensor
+    /**
+     * Used to locate packets based on precise capture timestamps.
+     */
     using timestamp_index = std::unordered_map<uint64_t, uint64_t>;
 
     // TODO: this isn't used for now but in the future might be used to
     //  solve the issue with the limited frame_id span (we could remove it)
-    std::vector<timestamp_index> frame_timestamp_indices_;
+    /**
+     * Used for efficient lookup of packets based on timestamps.
+     */
+    std::vector<timestamp_index> frame_timestamp_indices;
 
+    /**
+     * Allows lookup of packet positions based on frame IDs.
+     */
     using frame_id_index = std::unordered_map<int32_t, uint64_t>;
 
     // TODO[IMPORTANT]: this has an issue if the recorded pcap file to span
     // over 50 mins.
-    std::vector<frame_id_index> frame_id_indices_;
+    /**
+     * Used for efficient lookup of packets based on frame IDs.
+     */
+    std::vector<frame_id_index> frame_id_indices;
 
+    /**
+     * @brief Constructs a PcapIndex for the specified number of sensors.
+     *
+     * Initializes frame indices and timestamp-based indices for each sensor.
+     *
+     * @param[in] num_sensors The number of sensors captured in the PCAP.
+     */
     OUSTER_API_FUNCTION
     PcapIndex(size_t num_sensors)
-        : frame_indices_(num_sensors),
-          frame_timestamp_indices_(num_sensors),
-          frame_id_indices_(num_sensors) {}
+        : frame_indices(num_sensors),
+          frame_timestamp_indices(num_sensors),
+          frame_id_indices(num_sensors) {}
 
     /**
      * Simple method to clear the index.
@@ -87,10 +128,42 @@ class OUSTER_API_CLASS PcapIndex {
                        unsigned int frame_number);
 };
 
-enum class IdxErrorType { None, Size, Id };
+OUSTER_DIAGNOSTIC_PUSH
+OUSTER_DIAGNOSTIC_IGNORE_UNUSED
+/**
+ * @brief Error type returned during index validation or seeking operations.
+ */
+enum class IdxErrorType {
+    NONE,
+    SIZE,
+    ID,
+    None = IdxErrorType::NONE,
+    Size = IdxErrorType::SIZE,
+    Id = IdxErrorType::ID
+};
+OUSTER_DIAGNOSTIC_POP
 
+/**
+ * @brief Constructs the PcapDuplicatePortException with a descriptive message.
+ *
+ * @param[in] msg Description of the duplicate port error encountered during
+ * PCAP parsing.
+ */
 class OUSTER_API_CLASS PcapDuplicatePortException : public std::runtime_error {
    public:
+    /**
+     * @brief Exception thrown when duplicate sensor ports are detected during
+     * PCAP indexing.
+     *
+     * This exception is raised when two or more sensors are found to be using
+     * the same UDP port (for either lidar or IMU data), which would prevent
+     * unambiguous packet-to-sensor mapping during index construction.
+     *
+     * @param[in] msg Descriptive error message indicating the conflicting port
+     * and sensor serial.
+     *
+     * @throws PcapDuplicatePortException always
+     */
     OUSTER_API_FUNCTION
     PcapDuplicatePortException(const std::string& msg) : runtime_error(msg) {}
 };
@@ -124,7 +197,7 @@ class OUSTER_API_CLASS IndexedPcapReader : public PcapReader {
     OUSTER_API_FUNCTION
     IndexedPcapReader(
         const std::string& pcap_filename,
-        const std::vector<ouster::sensor::sensor_info>& sensor_infos);
+        const std::vector<ouster::sdk::core::SensorInfo>& sensor_infos);
 
     /**
      * This method constructs the index. Call this method before requesting the
@@ -199,18 +272,18 @@ class OUSTER_API_CLASS IndexedPcapReader : public PcapReader {
     static bool frame_id_rolled_over(uint16_t previous, uint16_t current);
 
     /**
-     * Get the sensor_info for each sensor in this pcap.
-     * @return the sensor_info for each sensor in this pcap
+     * Get the SensorInfo for each sensor in this pcap.
+     * @return the SensorInfo for each sensor in this pcap
      */
     OUSTER_API_FUNCTION
-    const std::vector<ouster::sensor::sensor_info>& sensor_info() const;
+    const std::vector<ouster::sdk::core::SensorInfo>& sensor_info() const;
 
    protected:
     void init_();
-    std::vector<ouster::sensor::sensor_info>
-        sensor_infos_;  ///< A vector of sensor_info that correspond to the
+    std::vector<ouster::sdk::core::SensorInfo>
+        sensor_infos_;  ///< A vector of SensorInfo that correspond to the
                         ///< provided metadata files
-    std::vector<ouster::sensor::packet_format> packet_formats_;
+    std::vector<ouster::sdk::core::PacketFormat> packet_formats_;
     PcapIndex index_;
 
     // TODO: remove, this should be a transient variable
@@ -221,5 +294,6 @@ class OUSTER_API_CLASS IndexedPcapReader : public PcapReader {
     std::string filename_;
 };
 
-}  // namespace sensor_utils
+}  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

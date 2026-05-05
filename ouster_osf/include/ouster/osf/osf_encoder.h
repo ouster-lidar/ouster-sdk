@@ -4,10 +4,13 @@
  */
 #pragma once
 
+#include <memory>
+
 #include "ouster/osf/lidarscan_encoder.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
@@ -19,10 +22,21 @@ namespace osf {
  */
 class OUSTER_API_CLASS Encoder {
    public:
+    /**
+     * @brief Construct an Encoder with a given LidarScanEncoder.
+     *
+     * @param[in] lidar_scan_encoder Shared pointer to the scan encoder
+     * instance.
+     */
     OUSTER_API_FUNCTION
     Encoder(const std::shared_ptr<LidarScanEncoder>& lidar_scan_encoder)
         : lidar_scan_encoder_{lidar_scan_encoder} {}
 
+    /**
+     * @brief Access the internal LidarScanEncoder instance.
+     *
+     * @return Reference to the LidarScanEncoder.
+     */
     OUSTER_API_FUNCTION
     LidarScanEncoder& lidar_scan_encoder() const {
         return *lidar_scan_encoder_;
@@ -33,4 +47,5 @@ class OUSTER_API_CLASS Encoder {
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

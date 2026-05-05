@@ -1,14 +1,25 @@
 #include "ouster/indexed_pcap_reader.h"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <nonstd/optional.hpp>
 #include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
+#include "nonstd/optional.hpp"
 #include "ouster/os_pcap.h"
 #include "ouster/packet.h"
 #include "ouster/types.h"
 
+using namespace ouster::sdk::core;
+
 namespace ouster {
-namespace sensor_utils {
+namespace sdk {
+namespace pcap {
 
 IndexedPcapReader::IndexedPcapReader(
     const std::string& pcap_filename,
@@ -18,7 +29,7 @@ IndexedPcapReader::IndexedPcapReader(
       previous_frame_ids_(metadata_filenames.size()),
       filename_(pcap_filename) {
     for (const std::string& metadata_filename : metadata_filenames) {
-        auto temp_info = ouster::sensor::metadata_from_json(metadata_filename);
+        auto temp_info = metadata_from_json(metadata_filename);
         sensor_infos_.push_back(temp_info);
     }
     init_();
@@ -26,7 +37,7 @@ IndexedPcapReader::IndexedPcapReader(
 
 IndexedPcapReader::IndexedPcapReader(
     const std::string& pcap_filename,
-    const std::vector<ouster::sensor::sensor_info>& sensor_infos)
+    const std::vector<SensorInfo>& sensor_infos)
     : PcapReader(pcap_filename),
       sensor_infos_(sensor_infos),
       index_(sensor_infos.size()),
@@ -35,16 +46,17 @@ IndexedPcapReader::IndexedPcapReader(
     init_();
 }
 
-static std::vector<std::pair<int, int>> guess_ports(
-    ouster::sensor_utils::stream_info& stream_info,
-    const ouster::sensor::sensor_info& sensor_info) {
-    ouster::sensor::packet_format pf(sensor_info);
+namespace {
+std::vector<std::pair<int, int>> guess_ports(StreamInfo& stream_info,
+                                             const SensorInfo& sensor_info) {
+    PacketFormat packet_format(sensor_info);
     std::vector<std::pair<int, int>> guesses;
-    for (const auto& guess : ouster::sensor_utils::guess_ports(
-             stream_info, pf.lidar_packet_size, pf.imu_packet_size,
+    for (const auto& guess : guess_ports(
+             stream_info, static_cast<int>(packet_format.lidar_packet_size),
+             static_cast<int>(packet_format.imu_packet_size),
              sensor_info.config.udp_port_lidar.value_or(0),
              sensor_info.config.udp_port_imu.value_or(0))) {
-        guesses.push_back({guess.lidar, guess.imu});
+        guesses.emplace_back(guess.lidar, guess.imu);
     }
     std::sort(guesses.begin(), guesses.end(), [](auto a, auto b) {
         // Prefer lidar port being present
@@ -60,11 +72,10 @@ static std::vector<std::pair<int, int>> guess_ports(
     });
     return guesses;
 }
-
-static ouster::sensor_utils::stream_info packet_info_stream(
-    const std::string& path, int n_packets) {
-    return *ouster::sensor_utils::get_stream_info(path, n_packets);
+StreamInfo packet_info_stream(const std::string& path, int n_packets) {
+    return *get_stream_info(path, n_packets);
 }
+}  // namespace
 
 void IndexedPcapReader::init_() {
     // sample pcap and attempt to find UDP ports consistent with metadatas
@@ -75,16 +86,19 @@ void IndexedPcapReader::init_() {
     uint64_t index = 0;
     for (auto& it : sensor_infos_) {
         std::string sn_lidar = std::to_string(it.sn);
-        std::string sn_imu = "LEGACY_IMU";
-        if (it.config.udp_profile_lidar ==
-            ouster::sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        std::string sn_zm = sn_lidar;
+        std::string sn_imu = sn_lidar;
+        if (it.config.udp_profile_lidar == UDPProfileLidar::LEGACY) {
             sn_lidar = "LEGACY_LIDAR";
         }
-        packet_formats_.push_back(ouster::sensor::packet_format(it));
+        if (it.config.udp_profile_imu == UDPProfileIMU::LEGACY) {
+            sn_imu = "LEGACY_IMU";
+        }
+        packet_formats_.emplace_back(it);
 
         // guess ports
         auto guesses = guess_ports(stats, it);
-        if (guesses.size() > 0) {
+        if (!guesses.empty()) {
             auto lidar_guess = guesses[0].first;
             auto imu_guess = guesses[0].second;
             if (!it.config.udp_port_lidar) {
@@ -95,37 +109,26 @@ void IndexedPcapReader::init_() {
             }
         }
 
-        if (!it.config.udp_port_lidar) {
-            // printf("WARNING: udp_port_lidar not known for sensor %s\n",
-            // sn_lidar.c_str());
-        } else if (port_map_[*it.config.udp_port_lidar].find(sn_lidar) !=
-                   port_map_[*it.config.udp_port_lidar].end()) {
-            std::cout << "Duplicate lidar port/sn found for indexing pcap: " +
-                             sn_lidar + ":" +
-                             std::to_string(*it.config.udp_port_lidar)
-                      << std::endl;
-            throw PcapDuplicatePortException(
-                "Duplicate lidar port/sn found for indexing pcap: " + sn_lidar +
-                ":" + std::to_string(*it.config.udp_port_lidar));
-        } else {
-            port_map_[*it.config.udp_port_lidar][sn_lidar] = index;
-        }
-        if (!it.config.udp_port_imu) {
-            // printf("WARNING: udp_port_imu not known for sensor %s\n",
-            // sn_lidar.c_str());
-        } else if (port_map_[*it.config.udp_port_imu].find(sn_imu) !=
-                   port_map_[*it.config.udp_port_imu].end()) {
-            std::cout << "Duplicate imu port/sn found for indexing pcap: " +
-                             sn_imu + ":" +
-                             std::to_string(*it.config.udp_port_imu)
-                      << std::endl;
-            throw PcapDuplicatePortException(
-                "Duplicate imu port/sn found for indexing pcap: " + sn_imu +
-                ":" + std::to_string(*it.config.udp_port_imu));
-        } else {
-            port_map_[*it.config.udp_port_imu][sn_imu] = index;
-        }
+        auto check_port = [&](const std::string& name,
+                              nonstd::optional<int> port,
+                              const std::string& sn) {
+            if (!port) {
+                // printf("WARNING: udp_port_lidar not known for sensor %s\n",
+                // sn_lidar.c_str());
+            } else if (*port == 0) {
+                // stream is disabled
+            } else if (port_map_[*port].find(sn) != port_map_[*port].end()) {
+                throw PcapDuplicatePortException(
+                    "Duplicate " + name + " port/sn found in pcap: " + sn +
+                    ":" + std::to_string(*port));
+            } else {
+                port_map_[*port][sn] = index;
+            }
+        };
 
+        check_port("lidar", it.config.udp_port_lidar, sn_lidar);
+        check_port("imu", it.config.udp_port_imu, sn_imu);
+        check_port("zm", it.config.udp_port_zm, sn_zm);
         index++;
     }
 }
@@ -143,17 +146,20 @@ IndexedPcapReader::check_sensor_idx_for_current_packet(
     const auto& pkt_info = current_info();
     auto temp_match = port_map_.find(pkt_info.dst_port);
     if (temp_match != port_map_.end()) {
-        for (auto it : temp_match->second) {
-            auto& pf = packet_formats_[it.second];
-            auto type = ouster::sensor::PacketType::Lidar;
-            if (pkt_info.payload_size == pf.imu_packet_size) {
-                type = ouster::sensor::PacketType::Imu;
+        for (const auto& it : temp_match->second) {
+            auto& packet_format = packet_formats_[it.second];
+            auto type = PacketType::Lidar;
+            if (pkt_info.payload_size == packet_format.imu_packet_size) {
+                type = PacketType::Imu;
+            } else if (pkt_info.payload_size ==
+                       packet_format.zone_packet_size) {
+                type = PacketType::Zone;
             }
-            auto res = validate_packet(sensor_infos_[it.second], pf, data_,
-                                       pkt_info.payload_size, type);
-            if (res == ouster::sensor::PacketValidationFailure::NONE) {
+            auto res = validate_packet(sensor_infos_[it.second], packet_format,
+                                       data_, pkt_info.payload_size, type);
+            if (res == PacketValidationFailure::NONE) {
                 return {IdxErrorType::None, it.second};
-            } else if (res == ouster::sensor::PacketValidationFailure::ID) {
+            } else if (res == PacketValidationFailure::ID) {
                 if (soft_id_check) {
                     if (value) {
                         throw std::runtime_error(
@@ -163,8 +169,7 @@ IndexedPcapReader::check_sensor_idx_for_current_packet(
                     value = it.second;
                 }
                 error = IdxErrorType::Id;
-            } else if (res ==
-                       ouster::sensor::PacketValidationFailure::PACKET_SIZE) {
+            } else if (res == PacketValidationFailure::PACKET_SIZE) {
                 // Dont let a size error override an id error
                 if (error == IdxErrorType::None) {
                     error = IdxErrorType::Size;
@@ -181,9 +186,9 @@ nonstd::optional<uint16_t> IndexedPcapReader::current_frame_id() const {
         return nonstd::nullopt;
     }
     if (nonstd::optional<size_t> sensor_idx = sensor_idx_for_current_packet()) {
-        const ouster::sensor::packet_format& pf =
-            ouster::sensor::packet_format(sensor_infos_[*sensor_idx]);
-        return pf.frame_id(current_data());
+        const PacketFormat& packet_format =
+            PacketFormat(sensor_infos_[*sensor_idx]);
+        return packet_format.frame_id(current_data());
     }
     return nonstd::nullopt;
 }
@@ -202,14 +207,14 @@ int IndexedPcapReader::update_index_for_current_packet() {
                 *previous_frame_ids_[*sensor_info_idx] < *frame_id ||
                 frame_id_rolled_over(*previous_frame_ids_[*sensor_info_idx],
                                      *frame_id)) {
-                index_.frame_indices_[*sensor_info_idx].push_back(
+                index_.frame_indices[*sensor_info_idx].push_back(
                     current_info().file_offset);
-                index_.frame_timestamp_indices_[*sensor_info_idx].insert(
+                index_.frame_timestamp_indices[*sensor_info_idx].insert(
                     {current_info().timestamp.count(),
                      current_info().file_offset});
-                index_.frame_id_indices_[*sensor_info_idx].insert(
+                index_.frame_id_indices[*sensor_info_idx].insert(
                     {*frame_id, current_info().file_offset});
-                index_.global_frame_indices_.push_back(
+                index_.global_frame_indices.push_back(
                     {current_info().file_offset, *sensor_info_idx,
                      static_cast<uint64_t>(current_info().timestamp.count())});
                 previous_frame_ids_[*sensor_info_idx] = *frame_id;
@@ -218,39 +223,41 @@ int IndexedPcapReader::update_index_for_current_packet() {
     }
 
     return static_cast<int>(100 * static_cast<float>(current_offset()) /
-                            file_size());
+                            static_cast<float>(file_size()));
 }
 
 void IndexedPcapReader::build_index() {
     index_.clear();
     reset();
-    while (next_packet() != 0) update_index_for_current_packet();
+    while (next_packet() != 0) {
+        update_index_for_current_packet();
+    }
     reset();
 }
 
-const std::vector<ouster::sensor::sensor_info>& IndexedPcapReader::sensor_info()
-    const {
+const std::vector<SensorInfo>& IndexedPcapReader::sensor_info() const {
     return sensor_infos_;
 }
 
 const PcapIndex& IndexedPcapReader::get_index() const { return index_; }
 
 void PcapIndex::clear() {
-    for (size_t i = 0; i < frame_indices_.size(); ++i) {
-        frame_indices_[i].clear();
-        frame_timestamp_indices_[i].clear();
-        frame_id_indices_[i].clear();
+    for (size_t i = 0; i < frame_indices.size(); ++i) {
+        frame_indices[i].clear();
+        frame_timestamp_indices[i].clear();
+        frame_id_indices[i].clear();
     }
 }
 
 void PcapIndex::seek_to_frame(PcapReader& reader, size_t sensor_index,
                               unsigned int frame_number) {
-    reader.seek(frame_indices_.at(sensor_index).at(frame_number));
+    reader.seek(frame_indices.at(sensor_index).at(frame_number));
 }
 
 size_t PcapIndex::frame_count(size_t sensor_index) const {
-    return frame_indices_.at(sensor_index).size();
+    return frame_indices.at(sensor_index).size();
 }
 
-}  // namespace sensor_utils
+}  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

@@ -7,18 +7,24 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstring>
 #include <list>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "ouster/types.h"
 
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
-using ouster::sensor::ChanFieldType;
-using ouster::sensor::UDPProfileLidar;
-using ouster::sensor::impl::MAX_NUM_PROFILES;
+using ouster::sdk::core::ChanFieldType;
+using ouster::sdk::core::UDPProfileLidar;
+using ouster::sdk::core::impl::MAX_NUM_PROFILES;
 
 namespace ouster {
+namespace sdk {
+namespace core {
 
 namespace impl {
 
@@ -36,19 +42,17 @@ static void extend_default_scan_fields(
     UDPProfileLidar profile,
     const std::vector<std::pair<std::string, ChanFieldType>>& scan_fields) {
     auto end = impl::default_scan_fields.end();
-    auto it = std::find_if(impl::default_scan_fields.begin(), end,
-                           [](const auto& kv) { return kv.first == 0; });
+    auto it = std::find_if(
+        impl::default_scan_fields.begin(), end, [](const auto& key_value) {
+            return key_value.first == UDPProfileLidar::UNKNOWN;
+        });
 
-    if (it == end)
+    if (it == end) {
         throw std::runtime_error("Limit of scan fields has been reached");
+    }
 
     *it = {profile, {scan_fields.data(), scan_fields.size()}};
 }
-
-}  // namespace impl
-
-namespace sensor {
-namespace impl {
 
 struct ExtendedProfile {
     UDPProfileLidar profile;
@@ -84,11 +88,14 @@ static void extend_profile_entries(
     const std::vector<std::pair<std::string, FieldInfo>>& fields,
     size_t chan_data_size) {
     auto end = impl::profiles.end();
-    auto it = std::find_if(impl::profiles.begin(), end,
-                           [](const auto& kv) { return kv.first == 0; });
+    auto it =
+        std::find_if(impl::profiles.begin(), end, [](const auto& key_value) {
+            return key_value.first == UDPProfileLidar::UNKNOWN;
+        });
 
-    if (it == end)
+    if (it == end) {
         throw std::runtime_error("Limit of parsing profiles has been reached");
+    }
 
     *it = {profile, {fields.data(), fields.size(), chan_data_size}};
 }
@@ -100,24 +107,28 @@ void extend_udp_profile_lidar_strings(UDPProfileLidar profile,
     auto begin = impl::udp_profile_lidar_strings.begin();
     auto end = impl::udp_profile_lidar_strings.end();
 
-    if (end != std::find_if(begin, end, [profile](const auto& p) {
-            return p.first == profile;
-        }))
+    if (end != std::find_if(begin, end, [profile](const auto& prof) {
+            return prof.first == profile;
+        })) {
         throw std::invalid_argument(
             "Lidar profile of given number already exists");
-    if (end != std::find_if(begin, end, [name](const auto& p) {
-            return p.second && std::strcmp(p.second, name) == 0;
-        }))
+    }
+    if (end != std::find_if(begin, end, [name](const auto& prof) {
+            return prof.second && std::strcmp(prof.second, name) == 0;
+        })) {
         throw std::invalid_argument(
             "Lidar profile of given name already exists");
+    }
 
     // Make sure to only check the string for zero intialization.
     // The profile enum can be 0 normally (and is for UNKNOWN).
-    auto it =
-        std::find_if(begin, end, [](const auto& kv) { return kv.second == 0; });
+    auto it = std::find_if(begin, end, [](const auto& key_value) {
+        return key_value.second == 0;
+    });
 
-    if (it == end)
+    if (it == end) {
         throw std::runtime_error("Limit of lidar profiles has been reached");
+    }
 
     *it = std::make_pair(profile, name);
 }
@@ -127,8 +138,9 @@ void add_custom_profile(
     const std::string& name,
     const std::vector<std::pair<std::string, impl::FieldInfo>>& fields,
     size_t chan_data_size) {
-    if (profile_nr == 0)
+    if (profile_nr == 0) {
         throw std::invalid_argument("profile_nr of 0 are not allowed");
+    }
 
     auto udp_profile = static_cast<UDPProfileLidar>(profile_nr);
 
@@ -138,9 +150,9 @@ void add_custom_profile(
             udp_profile, name, {}, {}, chan_data_size};
         for (auto&& pair : fields) {
             profile.slots.emplace_back(pair.first, pair.second.ty_tag);
-            ouster::sensor::impl::FieldInfo field = pair.second;
+            ouster::sdk::core::impl::FieldInfo field = pair.second;
             if (field.mask == 0) {
-                field.mask = sensor::field_type_mask(field.ty_tag);
+                field.mask = field_type_mask(field.ty_tag);
             }
             profile.fields.emplace_back(pair.first, field);
         }
@@ -155,8 +167,9 @@ void add_custom_profile(
     extend_udp_profile_lidar_strings(profile.profile, profile.name.c_str());
     impl::extend_profile_entries(profile.profile, profile.fields,
                                  profile.chan_data_size);
-    ouster::impl::extend_default_scan_fields(profile.profile, profile.slots);
+    impl::extend_default_scan_fields(profile.profile, profile.slots);
 }
 
-}  // namespace sensor
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

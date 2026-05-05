@@ -11,8 +11,8 @@
 #include "gtest/gtest.h"
 #include "ouster/impl/idx_range.h"
 
-using namespace ouster;
-using namespace ouster::impl;
+using namespace ouster::sdk::core;
+using namespace ouster::sdk::core::impl;
 
 TEST(ArrayView_tests, args_restride_test) {
     int32_t shape[4] = {1, 2, 3, 4};
@@ -206,9 +206,9 @@ TEST(ArrayView_tests, indexing_test) {
     auto a = ArrayView3<int>(src.data(), shape);
 
     int i = 0;
-    for (int x = 0; x < a.shape[0]; ++x)
-        for (int y = 0; y < a.shape[1]; ++y)
-            for (int z = 0; z < a.shape[2]; ++z) EXPECT_EQ(a(x, y, z), i++);
+    for (size_t x = 0; x < a.shape[0]; ++x)
+        for (size_t y = 0; y < a.shape[1]; ++y)
+            for (size_t z = 0; z < a.shape[2]; ++z) EXPECT_EQ(a(x, y, z), i++);
 
     auto b = ArrayView1<int>(src.data(), {5 * 6 * 7});
     for (size_t i = 0; i < src.size(); ++i) EXPECT_EQ(b(i), i);
@@ -222,9 +222,9 @@ TEST(ArrayView_tests, assignment_test) {
     auto a = ArrayView3<int>(src.data(), shape);
 
     int i = 0;
-    for (int x = 0; x < a.shape[0]; ++x)
-        for (int y = 0; y < a.shape[1]; ++y)
-            for (int z = 0; z < a.shape[2]; ++z) a(x, y, z) = i++;
+    for (size_t x = 0; x < a.shape[0]; ++x)
+        for (size_t y = 0; y < a.shape[1]; ++y)
+            for (size_t z = 0; z < a.shape[2]; ++z) a(x, y, z) = i++;
 
     for (size_t j = 0; j < src.size(); ++j) EXPECT_EQ(src[j], j);
 }
@@ -378,63 +378,63 @@ TEST(ArrayView_tests, reshape_test) {
         ConstArrayView2<int> reshaped = view.reshape(200 * 100, 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a)
+            for (size_t b = 0; b < reshaped.shape[1]; ++b)
                 EXPECT_EQ(reshaped(a, b), i++);
     }
     {
         ConstArrayView2<int> reshaped = view.reshape(2, 100 * 100 * 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a)
+            for (size_t b = 0; b < reshaped.shape[1]; ++b)
                 EXPECT_EQ(reshaped(a, b), i++);
     }
     {
         ConstArrayView2<int> reshaped = view.reshape(100 * 50, 4 * 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a)
+            for (size_t b = 0; b < reshaped.shape[1]; ++b)
                 EXPECT_EQ(reshaped(a, b), i++);
     }
     {
         ConstArrayView3<int> reshaped = view.reshape(200 * 10, 5, 2 * 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a)
+            for (size_t b = 0; b < reshaped.shape[1]; ++b)
+                for (size_t c = 0; c < reshaped.shape[2]; ++c)
                     EXPECT_EQ(reshaped(a, b, c), i++);
     }
     {
         ConstArrayView4<int> reshaped = view.reshape(2, 50, 200, 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
-                    for (int d = 0; d < reshaped.shape[3]; ++d)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a)
+            for (size_t b = 0; b < reshaped.shape[1]; ++b)
+                for (size_t c = 0; c < reshaped.shape[2]; ++c)
+                    for (size_t d = 0; d < reshaped.shape[3]; ++d)
                         EXPECT_EQ(reshaped(a, b, c, d), i++);
     }
     {
         ConstArrayView4<int> reshaped = view.reshape(100, 50, 4, 300);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
-                    for (int d = 0; d < reshaped.shape[3]; ++d)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a)
+            for (size_t b = 0; b < reshaped.shape[1]; ++b)
+                for (size_t c = 0; c < reshaped.shape[2]; ++c)
+                    for (size_t d = 0; d < reshaped.shape[3]; ++d)
                         EXPECT_EQ(reshaped(a, b, c, d), i++);
     }
     {
         ConstArrayView4<int> reshaped = view.reshape(100, 200, 100, 3);
 
         int i = 0;
-        for (int a = 0; a < reshaped.shape[0]; ++a)
-            for (int b = 0; b < reshaped.shape[1]; ++b)
-                for (int c = 0; c < reshaped.shape[2]; ++c)
-                    for (int d = 0; d < reshaped.shape[3]; ++d)
+        for (size_t a = 0; a < reshaped.shape[0]; ++a)
+            for (size_t b = 0; b < reshaped.shape[1]; ++b)
+                for (size_t c = 0; c < reshaped.shape[2]; ++c)
+                    for (size_t d = 0; d < reshaped.shape[3]; ++d)
                         EXPECT_EQ(reshaped(a, b, c, d), i++);
     }
 }
@@ -455,4 +455,12 @@ TEST(ArrayView_tests, iterator_test) {
 
     i = 0;
     for (auto& v : vec) EXPECT_EQ(v, i++);
+}
+
+TEST(ArrayView_tests, size_test) {
+    ArrayView1<int> view1{nullptr, {20}};
+    ArrayView4<int> view4{nullptr, {20, 320, 456, 18}};
+
+    EXPECT_EQ(20, view1.size());
+    EXPECT_EQ(20 * 320 * 456 * 18, view4.size());
 }

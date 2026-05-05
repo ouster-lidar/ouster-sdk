@@ -12,10 +12,15 @@
         "openssl",
         "tbb",
         "robin-map",
-        "sophus",
+        "zstd",
+        "libzip",
         { "name": "ceres", "features": ["eigensparse"] }
     ],
     "overrides": [
+        {
+            "name": "robin-map",
+            "version": "1.3.0"
+        },
         {
             "name": "flatbuffers",
             "version": "24.3.25"
@@ -23,8 +28,16 @@
         {
             "name": "ceres",
             "version": "2.0.0"
+        },
+        {
+            "name": "gtest",
+            "version": "1.16.0"
+        },
+        {
+            "name": "eigen3",
+            "version": "3.4.1#1"
         }
     ],
-    "builtin-baseline": "d5ec528843d29e3a52d745a64b469f810b2cedbf",
-    "version": "0.15.0"
+    "builtin-baseline": "66c0373dc7fca549e5803087b9487edfe3aca0a1",
+    "version": "0.16.1"
 }

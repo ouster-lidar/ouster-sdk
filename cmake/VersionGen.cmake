@@ -24,11 +24,8 @@ if(CMAKE_SCRIPT_MODE_FILE)
     ${VERSION_GEN_OUT_DIR}/build.h @ONLY)
 elseif(NOT TARGET ouster_build)
   # in configuration stage: expects OusterSDK_VERSION_STRING to be set
-  if(OusterSDK_VERSION_STRING MATCHES "^([0-9]+\.[0-9]+\.[0-9]+)(.([.0-9A-z]+))?$")
-    set(OusterSDK_VERSION "${CMAKE_MATCH_1}")
-    set(OusterSDK_VERSION_SUFFIX "${CMAKE_MATCH_3}")
-  else()
-    message(FATAL_ERROR "Failed to parse version string: ${OusterSDK_VERSION_STRING}")
+  if(NOT OusterSDK_VERSION_STRING)
+    message(FATAL_ERROR "OusterSDK_VERSION_STRING is not set")
   endif()
 
   add_custom_target(ouster_generate_header)
@@ -40,8 +37,7 @@ elseif(NOT TARGET ouster_build)
     -DVERSION_GEN_SOURCE_DIR="${CMAKE_CURRENT_LIST_DIR}"
     -DBUILD_TYPE="${CMAKE_BUILD_TYPE}"
     -DBUILD_SYSTEM="${CMAKE_SYSTEM_NAME}"
-    -DOusterSDK_VERSION="${OusterSDK_VERSION}"
-    -DOusterSDK_VERSION_SUFFIX="${OusterSDK_VERSION_SUFFIX}"
+    -DOusterSDK_VERSION_STRING="${OusterSDK_VERSION_STRING}"
     -P ${CMAKE_CURRENT_LIST_FILE})
 
   add_library(ouster_build INTERFACE)

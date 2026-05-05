@@ -1,22 +1,24 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <cmath>
+#include <limits>
 
 namespace Eigen {
-typedef Matrix<double, 6, 1> Vector6d;
-typedef Matrix<double, 7, 1> Vector7d;
-typedef Matrix<double, Dynamic, 3> MatrixX3d;
-typedef Matrix<double, 6, 6> Matrix6d;
-typedef Array<double, Dynamic, 3> ArrayX3d;
+using Vector6d = Matrix<double, 6, 1>;
+using Vector7d = Matrix<double, 7, 1>;
+using MatrixX3d = Matrix<double, Dynamic, 3>;
+using Matrix6d = Matrix<double, 6, 6>;
+using ArrayX3d = Array<double, Dynamic, 3>;
 }  // namespace Eigen
 
 namespace ouster {
 const double EPS = std::numeric_limits<double>::epsilon();
 const double NUMERIC_EPS = std::sqrt(std::numeric_limits<double>::epsilon());
 
-typedef Eigen::Quaterniond RotQ;
-typedef Eigen::Vector3d TransH;
-typedef Eigen::Vector3d TransV;
-typedef Eigen::Matrix6d AdjointH;
-typedef Eigen::Matrix6d AdjointV;
+using RotQ = Eigen::Quaterniond;
+using TransH = Eigen::Vector3d;
+using TransV = Eigen::Vector3d;
+using AdjointH = Eigen::Matrix6d;
+using AdjointV = Eigen::Matrix6d;
 }  // namespace ouster

@@ -7,18 +7,26 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <map>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "ouster/lidar_scan.h"
+#include "ouster/lidar_scan_set.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/osf_encoder.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 class LidarScanStream;
+class CollationStream;
+class SensorInfoStream;
 
 /**
  * Chunks writing strategy that decides when and how exactly write chunks
@@ -33,17 +41,26 @@ class OUSTER_API_CLASS ChunksWriter {
      * @param[in] receive_ts The receive timestamp for the messages.
      * @param[in] sensor_ts The sensor timestamp for the messages.
      * @param[in] buf A vector of message buffers to record.
+     * @param[in] type Message type string of the message being saved.
      */
     OUSTER_API_FUNCTION
     virtual void save_message(const uint32_t stream_id, const ts_t receive_ts,
                               const ts_t sensor_ts,
-                              const std::vector<uint8_t>& buf) = 0;
+                              const std::vector<uint8_t>& buf,
+                              const std::string& type) = 0;
 
     /**
      * Finish the process of saving messages and write out the stream stats.
      */
     OUSTER_API_FUNCTION
     virtual void finish() = 0;
+
+    /**
+     * Flush the latest chunk on this stream to disk.
+     * @param[in] stream_id id of the stream to flush
+     */
+    OUSTER_API_FUNCTION
+    virtual void flush(uint32_t stream_id) = 0;
 
     /**
      * Get the chunksize
@@ -60,6 +77,9 @@ class OUSTER_API_CLASS ChunksWriter {
     virtual ~ChunksWriter() = default;
 };
 
+namespace impl {
+class WriterImpl;
+}  // namespace impl
 /**
  * @class Writer
  * @brief OSF Writer provides the base universal interface to store the
@@ -104,7 +124,8 @@ class OUSTER_API_CLASS Writer {
      *                            Writer should encode the OSF.
      */
     OUSTER_API_FUNCTION
-    Writer(const std::string& filename, const ouster::sensor::sensor_info& info,
+    Writer(const std::string& filename,
+           const ouster::sdk::core::SensorInfo& info,
            const std::vector<std::string>& fields_to_write =
                std::vector<std::string>(),
            uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
@@ -124,7 +145,7 @@ class OUSTER_API_CLASS Writer {
      */
     OUSTER_API_FUNCTION
     Writer(const std::string& filename,
-           const std::vector<ouster::sensor::sensor_info>& info,
+           const std::vector<ouster::sdk::core::SensorInfo>& info,
            const std::vector<std::string>& fields_to_write =
                std::vector<std::string>(),
            uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
@@ -215,10 +236,12 @@ class OUSTER_API_CLASS Writer {
      * @param[in] receive_ts The receive timestamp to use for the message.
      * @param[in] sensor_ts The sensor timestamp to use for the message.
      * @param[in] buf The message to save in the form of a byte vector.
+     * @param[in] type Message type string of the message being saved.
      */
     OUSTER_API_FUNCTION
     void save_message(const uint32_t stream_id, const ts_t receive_ts,
-                      const ts_t sensor_ts, const std::vector<uint8_t>& buf);
+                      const ts_t sensor_ts, const std::vector<uint8_t>& buf,
+                      const std::string& type);
 
     /**
      * Adds info about a sensor to the OSF and returns the stream index to
@@ -233,7 +256,7 @@ class OUSTER_API_CLASS Writer {
      * @return The stream index for the newly added sensor.
      */
     OUSTER_API_FUNCTION
-    uint32_t add_sensor(const ouster::sensor::sensor_info& info,
+    uint32_t add_sensor(const ouster::sdk::core::SensorInfo& info,
                         const std::vector<std::string>& fields_to_write =
                             std::vector<std::string>());
 
@@ -241,12 +264,12 @@ class OUSTER_API_CLASS Writer {
      * Save a single scan to the specified stream_index in an OSF
      * file.
      *
-     * The concept of the stream_index is related to the sensor_info vector.
+     * The concept of the stream_index is related to the SensorInfo vector.
      * Consider the following:
      @code{.cpp}
-     sensor_info info1; // The first sensor in this OSF file
-     sensor_info info2; // The second sensor in this OSF file
-     sensor_info info3; // The third sensor in this OSF file
+     SensorInfo info1; // The first sensor in this OSF file
+     SensorInfo info2; // The second sensor in this OSF file
+     SensorInfo info3; // The third sensor in this OSF file
 
      Writer output = Writer(filename, {info1, info2, info3});
 
@@ -269,12 +292,12 @@ class OUSTER_API_CLASS Writer {
      * @throws std::logic_error ///< Will throw exception on
      *                          ///< out of bound stream_index.
      *
-     * @param[in] stream_index The index of the corrosponding sensor_info to
+     * @param[in] stream_index The index of the corrosponding SensorInfo to
      *                         use.
      * @param[in] scan The scan to save.
      */
     OUSTER_API_FUNCTION
-    void save(uint32_t stream_index, const LidarScan& scan);
+    void save(uint32_t stream_index, const ouster::sdk::core::LidarScan& scan);
 
     /**
      * Save a single scan with the specified timestamp to the
@@ -284,24 +307,24 @@ class OUSTER_API_CLASS Writer {
      * @throws std::logic_error ///< Will throw exception on
      *                          ///< out of bound stream_index.
      *
-     * @param[in] stream_index The index of the corrosponding sensor_info to
+     * @param[in] stream_index The index of the corrosponding SensorInfo to
      *                         use.
      * @param[in] scan The scan to save.
      * @param[in] timestamp Receive timestamp to index this scan with.
      */
     OUSTER_API_FUNCTION
-    void save(uint32_t stream_index, const LidarScan& scan,
-              ouster::osf::ts_t timestamp);
+    void save(uint32_t stream_index, const ouster::sdk::core::LidarScan& scan,
+              ouster::sdk::osf::ts_t timestamp);
 
     /**
      * Save multiple scans to the OSF file.
      *
-     * The concept of the stream_index is related to the sensor_info vector.
+     * The concept of the stream_index is related to the SensorInfo vector.
      * Consider the following:
      @code{.cpp}
-     sensor_info info1; // The first sensor in this OSF file
-     sensor_info info2; // The second sensor in this OSF file
-     sensor_info info3; // The third sensor in this OSF file
+     SensorInfo info1; // The first sensor in this OSF file
+     SensorInfo info2; // The second sensor in this OSF file
+     SensorInfo info3; // The third sensor in this OSF file
 
      Writer output = Writer(filename, {info1, info2, info3});
 
@@ -319,8 +342,54 @@ class OUSTER_API_CLASS Writer {
      *
      * @param[in] scans The vector of scans to save.
      */
+    [[deprecated(
+        "use save(const LidarScanSet&) "
+        "instead")]] OUSTER_API_FUNCTION void
+    save(const std::vector<ouster::sdk::core::LidarScan>& scans);
+
+    /**
+     * @copydoc save(const std::vector<ouster::sdk::core::LidarScan>& scans)
+     */
+    [[deprecated(
+        "use save(const LidarScanSet&) "
+        "instead")]] OUSTER_API_FUNCTION void
+    save(const std::vector<std::shared_ptr<ouster::sdk::core::LidarScan>>&
+             scans);
+
+    /**
+     * Save collation of scans to the OSF file.
+     *
+     * The concept of the stream_index is related to the SensorInfo vector.
+     * Consider the following:
+     @code{.cpp}
+     SensorInfo info1; // The first sensor in this OSF file
+     SensorInfo info2; // The second sensor in this OSF file
+     SensorInfo info3; // The third sensor in this OSF file
+
+     Writer output = Writer(filename, {info1, info2, info3});
+
+     LidarScan sensor1_scan = RANDOM_SCAN_HERE;
+     LidarScan sensor2_scan = RANDOM_SCAN_HERE;
+     LidarScan sensor3_scan = RANDOM_SCAN_HERE;
+
+     // To save the scans matched appropriately to their sensors, you would do
+     // the following.
+     LidarScanSet collation({sensor1_scan, sensor2_scan, sensor3_scan});
+
+     // Collation also optionally allows saving custom fields directly to it
+     // which are saved directly to osf
+     collation.add_field("my_field", fd_array<double>(100, 200));
+
+     output.save(collation);
+     @endcode
+     *
+     *
+     * @throws std::logic_error Will throw exception on writer being closed
+     *
+     * @param[in] collation The LidarScanSet to save
+     */
     OUSTER_API_FUNCTION
-    void save(const std::vector<LidarScan>& scans);
+    void save(const ouster::sdk::core::LidarScanSet& collation);
 
     /**
      * Returns the metadata store. This is used for getting the entire
@@ -377,47 +446,47 @@ class OUSTER_API_CLASS Writer {
      * Return the sensor info vector.
      * Consider the following:
      @code{.cpp}
-     sensor_info info1; // The first sensor in this OSF file
-     sensor_info info2; // The second sensor in this OSF file
-     sensor_info info3; // The third sensor in this OSF file
+     SensorInfo info1; // The first sensor in this OSF file
+     SensorInfo info2; // The second sensor in this OSF file
+     SensorInfo info3; // The third sensor in this OSF file
 
      Writer output = Writer(filename, {info1, info2, info3});
 
      // The following will be true
-     output.sensor_info() == std::vector<sensor_info>{info1, info2, info3};
+     output.sensor_info() == std::vector<SensorInfo>{info1, info2, info3};
      @endcode
      *
      * @return The sensor info vector.
      */
     OUSTER_API_FUNCTION
-    const std::vector<ouster::sensor::sensor_info>& sensor_info() const;
+    const std::vector<ouster::sdk::core::SensorInfo>& sensor_info() const;
 
     /**
      * Get the specified sensor info
      * Consider the following:
      @code{.cpp}
-     sensor_info info1; // The first sensor in this OSF file
-     sensor_info info2; // The second sensor in this OSF file
-     sensor_info info3; // The third sensor in this OSF file
+     SensorInfo info1; // The first sensor in this OSF file
+     SensorInfo info2; // The second sensor in this OSF file
+     SensorInfo info3; // The third sensor in this OSF file
 
      Writer output = Writer(filename, {info1, info2, info3});
 
      // The following will be true
-     output.sensor_info(0) == info1;
-     output.sensor_info(1) == info2;
-     output.sensor_info(2) == info3;
+     output.SensorInfo(0) == info1;
+     output.SensorInfo(1) == info2;
+     output.SensorInfo(2) == info3;
      @endcode
      *
      * @param[in] stream_index The sensor info to return.
      * @return The correct sensor info.
      */
     OUSTER_API_FUNCTION
-    const ouster::sensor::sensor_info sensor_info(int stream_index) const;
+    const ouster::sdk::core::SensorInfo sensor_info(int stream_index) const;
 
     /**
-     * Get the number of sensor_info objects.
+     * Get the number of SensorInfo objects.
      *
-     * @return The sensor_info count.
+     * @return The SensorInfo count.
      */
     OUSTER_API_FUNCTION
     uint32_t sensor_info_count() const;
@@ -426,9 +495,10 @@ class OUSTER_API_CLASS Writer {
      * Finish file with a proper metadata object, and header.
      * This method blocks until all remaining tasks generated by save() have
      * been finalized.
+     * @param[in] fsync If true, force all writes on this file to disk.
      */
     OUSTER_API_FUNCTION
-    void close();
+    void close(bool fsync = false);
 
     /**
      * Returns if the writer is closed or not.
@@ -476,6 +546,9 @@ class OUSTER_API_CLASS Writer {
     OUSTER_API_FUNCTION
     Writer& operator=(Writer&&) = delete;
 
+   protected:
+    std::unique_ptr<impl::WriterImpl> impl_;
+
    private:
     /**
      * A runnable used to handle writes in the thread 'save_thread_'.
@@ -501,7 +574,9 @@ class OUSTER_API_CLASS Writer {
      * @param[in] scan The scan to save.
      * @param[in] time Timestamp to use to index scan.
      */
-    void _save(uint32_t stream_index, const LidarScan& scan, const ts_t time);
+    void save_internal(uint32_t stream_index,
+                       const ouster::sdk::core::LidarScan& scan,
+                       const ts_t time);
 
     /**
      * Writes buf to the file with CRC32 appended and return the number of
@@ -557,11 +632,6 @@ class OUSTER_API_CLASS Writer {
     bool finished_{false};
 
     /**
-     * The internal vector of chunks.
-     */
-    std::vector<ouster::osf::gen::ChunkOffset> chunks_{};
-
-    /**
      * The lowest timestamp in the OSF file.
      */
     ts_t start_ts_{ts_t::max()};
@@ -572,6 +642,12 @@ class OUSTER_API_CLASS Writer {
     ts_t end_ts_{ts_t::min()};
 
     /**
+     * The timestamp we save all SensorInfo messages at.
+     * Determined by time of first saved scan.
+     */
+    ts_t info_ts_{ts_t::min()};
+
+    /**
      * Cache of the chunk offset.
      */
     uint64_t next_chunk_offset_{0};
@@ -580,11 +656,6 @@ class OUSTER_API_CLASS Writer {
      * The metadata id label.
      */
     std::string metadata_id_{};
-
-    /**
-     * The internal chunk layout of the OSF file.
-     */
-    ChunksLayout chunks_layout_{ChunksLayout::LAYOUT_STANDARD};
 
     /**
      * The store of metadata entries.
@@ -599,7 +670,7 @@ class OUSTER_API_CLASS Writer {
     /**
      * Internal store of field types to serialize for lidar scans
      */
-    std::vector<LidarScanFieldTypes> field_types_;
+    std::vector<ouster::sdk::core::LidarScanFieldTypes> field_types_;
 
     /**
      * Internal store of what fields the user wants to save from each scan.
@@ -614,17 +685,25 @@ class OUSTER_API_CLASS Writer {
     /**
      * Internal stream index to LidarScanStream map.
      */
-    std::map<uint32_t, std::unique_ptr<ouster::osf::LidarScanStream>>
+    std::map<uint32_t, std::unique_ptr<ouster::sdk::osf::LidarScanStream>>
         lidar_streams_;
 
+    std::unique_ptr<ouster::sdk::osf::SensorInfoStream> sensor_info_stream_;
     /**
-     * The internal sensor_info store ordered by stream_index.
+     * Internal CollationStream.
      */
-    std::vector<ouster::sensor::sensor_info> sensor_info_;
+    std::unique_ptr<ouster::sdk::osf::CollationStream> collation_stream_;
+
+    /**
+     * The internal SensorInfo store ordered by stream_index.
+     */
+    std::vector<ouster::sdk::core::SensorInfo> sensor_info_;
 
     // TODO[tws] make private, access from LidarScanStream via "friend class"
     std::shared_ptr<Encoder> encoder_;
 };
+
+class ChunkBuilderImpl;
 
 /**
  * Encapsulate chunk seriualization operations.
@@ -632,7 +711,10 @@ class OUSTER_API_CLASS Writer {
 class OUSTER_API_CLASS ChunkBuilder {
    public:
     OUSTER_API_FUNCTION
-    ChunkBuilder(){};
+    ChunkBuilder();
+
+    OUSTER_API_FUNCTION
+    ~ChunkBuilder();
 
     /**
      * Save messages to the serialized chunks.
@@ -643,11 +725,12 @@ class OUSTER_API_CLASS ChunkBuilder {
      * @param[in] receive_ts The receive timestamp to use for the message.
      * @param[in] sensor_ts The sensor timestamp to use for the message.
      * @param[in] msg_buf The message to save in the form of a byte vector.
+     * @param[in] type Message type string of the message being saved.
      */
     OUSTER_API_FUNCTION
     void save_message(const uint32_t stream_id, const ts_t receive_ts,
-                      const ts_t sensor_ts,
-                      const std::vector<uint8_t>& msg_buf);
+                      const ts_t sensor_ts, const std::vector<uint8_t>& msg_buf,
+                      const std::string& type);
 
     /**
      * Completely wipe all data and start the chunk anew.
@@ -697,6 +780,8 @@ class OUSTER_API_CLASS ChunkBuilder {
     ts_t end_ts() const;
 
    private:
+    std::shared_ptr<ChunkBuilderImpl> impl_;
+
     /**
      * Internal method for updating the correct start and end
      * timestamps.
@@ -710,10 +795,7 @@ class OUSTER_API_CLASS ChunkBuilder {
      */
     bool finished_{false};
 
-    /**
-     * Internal FlatBufferBuilder object used for the serialization.
-     */
-    flatbuffers::FlatBufferBuilder fbb_{0x7fff};
+    std::string type_;
 
     /**
      * The lowest timestamp in the chunk.
@@ -724,12 +806,8 @@ class OUSTER_API_CLASS ChunkBuilder {
      * The highest timestamp in the chunk.
      */
     ts_t end_ts_{ts_t::min()};
-
-    /**
-     * Internal store of messages to be contained within the chunk
-     */
-    std::vector<flatbuffers::Offset<gen::StampedMessage>> messages_{};
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

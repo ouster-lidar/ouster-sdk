@@ -69,6 +69,14 @@ cloud, as demonstrated in the :func:`.examples.pcap.pcap_3d_one_scan` example:
     :linenos:
     :dedent:
 
+Once you  have the ``xyz`` numpy array, you can create an Open3d point cloud and visualize it as follows:
+
+.. literalinclude:: /../python/src/ouster/sdk/examples/pcap.py
+    :start-after: [doc-stag-open3d-one-scan-pointcloud]
+    :end-before: [doc-etag-open3d-one-scan-pointcloud]
+    :linenos:
+    :dedent:
+
 The :mod:`.examples.open3d` module contains a more fully-featured visualizer built using the Open3d
 library, which can be used to replay pcap files or visualize a running sensor. The bulk of the
 visualizer is implemented in the :func:`.examples.open3d.viewer_3d` function.
@@ -158,7 +166,8 @@ Let's read from ``source`` until we get to the 50th frame of data:
 
    from contextlib import closing
    from more_itertools import nth
-   with closing(client.Scans(source)) as scans:
+   import ouster.sdk.core as core
+   with closing(core.Scans(source)) as scans:
        scan = nth(scans, 50)
 
 .. note::
@@ -166,13 +175,13 @@ Let's read from ``source`` until we get to the 50th frame of data:
     If you're using a sensor and it takes a few seconds, don't be alarmed! It has to get to the 50th
     frame of data, which would be 5.0 seconds for a sensor running in 1024x10 mode.
 
-We can extract the range measurements from the frame of data stored in the :py:class:`.LidarScan`
+We can extract the range measurements from the frame of data stored in the :py:class:`.core.LidarScan`
 datatype and plot a range image where each column corresponds to a single azimuth angle:
 
 .. code:: python
 
-   range_field = scan.field(client.ChanField.RANGE)
-   range_img = client.destagger(info, range_field)
+   range_field = scan[0].field(core.ChanField.RANGE)
+   range_img = core.destagger(sensor_info, range_field)
 
 We can plot the results using standard Python tools that work with numpy data types. Here, we extract
 a column segment of the range data and display the result:
@@ -203,7 +212,7 @@ produce X, Y, Z coordinates from our scan data with shape (H x W x 3):
 
 .. code:: python
 
-    xyzlut = client.XYZLut(info)
+    xyzlut = core.XYZLut(sensor_info)
     xyz = xyzlut(scan[0])
 
 Now we rearrange the resulting numpy array into a shape that's suitable for plotting:
@@ -261,6 +270,6 @@ From 0.15.0, you can now set an image mode or coloring mode using visualization 
       sviz._scan_viz.select_img_mode(0, "RANGE")
       for scan in src:
           yield scan
-          
+
   sviz = viz.SimpleViz(src.sensor_info)
   sviz.run(iter())

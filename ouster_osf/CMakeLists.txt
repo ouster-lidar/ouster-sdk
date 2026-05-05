@@ -30,7 +30,7 @@ endif()
 # builds.
 # STORY: We need to make it static (but with -fPIC) for Python bindings.
 #        However in Debian packages we can only use shared libs because static
-#        are not compiled with PIC. Though in vcpkg it uses static lib, 
+#        are not compiled with PIC. Though in vcpkg it uses static lib,
 #        which we've confirmed to be the case and what we need for manylinux.
 # find_library(flatbuffers_lib NAMES flatbuffers REQUIRED)
 # set(flatbuffers_lib flatbuffers::flatbuffers)
@@ -71,7 +71,6 @@ build_cpp_fb_modules(
   SOURCE_GEN_DIR "${FB_CPP_GENERATED_DIR}"
   BINARY_SCHEMA_DIR "${FB_BINARY_SCHEMA_DIR}"
   )
-
 # === Always generate C++ stubs ==============
 #   and skip Typescript and Python code from FB specs generation
 #   since they not needed during a regular OSF lib builds
@@ -82,20 +81,42 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/basics.cpp
                               src/crc32.cpp
                               src/metadata.cpp
+                              src/metadata_impl.cpp
                               src/meta_lidar_sensor.cpp
                               src/meta_extrinsics.cpp
                               src/meta_streaming_info.cpp
                               src/stream_lidar_scan.cpp
                               src/layout_streaming.cpp
+                              src/buffer.cpp
                               src/file.cpp
+                              src/stream_osf_file.cpp
+                              src/memory_mapped_osf_file.cpp
+                              src/reader_base.cpp
                               src/reader.cpp
+                              src/chunk.cpp
                               src/operations.cpp
                               src/osf_scan_source.cpp
                               src/fb_utils.cpp
                               src/writer.cpp
                               src/async_writer.cpp
+                              src/sensor_info_stream.cpp
                               src/png_lidarscan_encoder.cpp
+                              src/zpng_lidarscan_encoder.cpp
+                              src/fb_common.cpp
+                              src/collation_stream.cpp
+                              src/offset.cpp
 )
+
+add_library(ouster_osf_internal_impl STATIC src/empty_file.cpp)
+target_include_directories(ouster_osf_internal_impl
+  PUBLIC
+    $<BUILD_INTERFACE:${FB_CPP_GENERATED_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty>
+)
+target_link_libraries(ouster_osf_internal_impl
+  PUBLIC
+    flatbuffers::flatbuffers)
+
 set_property(TARGET ouster_osf PROPERTY POSITION_INDEPENDENT_CODE ON)
 if(BUILD_SHARED_LIBRARY)
   set_target_properties(ouster_osf PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -114,25 +135,22 @@ if (OUSTER_OSF_NO_THREADING)
   target_compile_definitions(ouster_osf PRIVATE OUSTER_OSF_NO_THREADING)
 endif()
 
-# Include Flatbuffers generated C++ headers
-target_include_directories(ouster_osf INTERFACE ${FLATBUFFERS_INCLUDE_DIR})
-
-target_include_directories(ouster_osf PUBLIC
+target_include_directories(ouster_osf
+  PRIVATE
     $<BUILD_INTERFACE:${FB_CPP_GENERATED_DIR}>
-    $<INSTALL_INTERFACE:include/fb_generated>
-    PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty>
 )
 target_link_libraries(ouster_osf
   PUBLIC
-    OusterSDK::ouster_client 
-    OusterSDK::ouster_pcap
-    flatbuffers::flatbuffers
+    OusterSDK::ouster_client
   PRIVATE
+    flatbuffers::flatbuffers
     PNG::PNG
     ZLIB::ZLIB
+    zpng
 )
-target_include_directories(ouster_osf PUBLIC
+target_include_directories(ouster_osf
+  PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -147,11 +165,6 @@ if(CLIENT_OPTIONS MATCHES ".*-mavx2.*")
   target_compile_options(ouster_osf PUBLIC -mavx2)
 endif()
 
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
-  enable_testing()
-  add_subdirectory(tests)
-endif()
-
 # ==== Install =========================================================
 install(TARGETS ouster_osf
         EXPORT ouster-sdk-targets
@@ -161,4 +174,3 @@ install(TARGETS ouster_osf
         INCLUDES DESTINATION include)
 
 install(DIRECTORY include/ouster DESTINATION include)
-install(DIRECTORY ${FB_CPP_GENERATED_DIR}/ DESTINATION include/fb_generated)

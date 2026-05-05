@@ -1,0 +1,11 @@
+flufl.lock
+click
+gitpython
+jinja2
+google-cloud-storage
+bs4
+python-gitlab
+tqdm
+packaging
+flake8
+mypy

@@ -9,33 +9,43 @@
 #include <ouster/open_source.h>
 #include <ouster/packet_source.h>
 
-#include <chrono>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace ouster {
+namespace sdk {
 namespace pcap {
 
 /// Finds associated metadata json files for the given data source filename
+/// @param[in] data_path Path to find metadata for.
 /// @return list of metadata filenames
 OUSTER_API_FUNCTION
-std::vector<std::string> resolve_metadata_multi(
-    const std::string& data_path  /// <[in] path to find metadata for
-);
+std::vector<std::string> resolve_metadata_multi(const std::string& data_path);
 
 /// Options for PcapPacketSource
 struct OUSTER_API_CLASS PcapPacketSourceOptions
-    : private ouster::PacketSourceOptions {
-    using ouster::PacketSourceOptions::check;
-    using ouster::PacketSourceOptions::extrinsics;
-    using ouster::PacketSourceOptions::extrinsics_file;
-    using ouster::PacketSourceOptions::index;
-    using ouster::PacketSourceOptions::meta;
-    using ouster::PacketSourceOptions::sensor_info;
-    using ouster::PacketSourceOptions::soft_id_check;
+    : private ouster::sdk::PacketSourceOptions {
+    using PacketSourceOptions::check;
+    using PacketSourceOptions::extrinsics;
+    using PacketSourceOptions::extrinsics_file;
+    using PacketSourceOptions::index;
+    using PacketSourceOptions::meta;
+    using PacketSourceOptions::sensor_info;
+    using PacketSourceOptions::soft_id_check;
 
+    /**
+     * Construct PcapPacketSourceOptions from a PacketSourceOptions object.
+     *
+     * Allows the Pcap-specific options to be initialized from a more general
+     * PacketSourceOptions instance, enabling reuse of configuration values
+     * across multiple packet source types.
+     *
+     * @param[in] o A PacketSourceOptions object to copy configuration from.
+     */
     OUSTER_API_FUNCTION
     PcapPacketSourceOptions(const PacketSourceOptions& o);
 
@@ -48,10 +58,10 @@ class PcapPacketIteratorImpl;
 class PcapScanIteratorImpl;
 /// PacketSource that produces packets from a given PCAP file
 class OUSTER_API_CLASS PcapPacketSource
-    : public ouster::core::PacketSource,
-      ouster::impl::PacketSourceBuilder<ouster::core::IoType::PCAP,
-                                        PcapPacketSource> {
-    std::unique_ptr<ouster::sensor_utils::IndexedPcapReader> reader_;
+    : public ouster::sdk::core::PacketSource,
+      ouster::sdk::impl::PacketSourceBuilder<ouster::sdk::core::IoType::PCAP,
+                                             PcapPacketSource> {
+    std::unique_ptr<ouster::sdk::pcap::IndexedPcapReader> reader_;
     friend class PcapPacketIteratorImpl;
     friend class PcapScanSource;
     friend class PcapScanIteratorImpl;
@@ -65,10 +75,11 @@ class OUSTER_API_CLASS PcapPacketSource
 
     // maps from port + serial number to sensor index
     std::map<uint16_t, std::map<uint64_t, int>> port_info_;
-    std::vector<std::shared_ptr<ouster::sensor::packet_format>> packet_formats_;
-    std::vector<std::shared_ptr<ouster::sensor::sensor_info>> sensor_info_;
+    std::vector<std::shared_ptr<ouster::sdk::core::PacketFormat>>
+        packet_formats_;
+    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> sensor_info_;
 
-    ouster::core::PacketIterator begin_scan(uint64_t scan_index) const;
+    ouster::sdk::core::PacketIterator begin_scan(uint64_t scan_index) const;
 
    public:
     /// open_source compatible constructor
@@ -87,10 +98,10 @@ class OUSTER_API_CLASS PcapPacketSource
     );
 
     OUSTER_API_FUNCTION
-    ouster::core::PacketIterator begin() const override;
+    ouster::sdk::core::PacketIterator begin() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>&
     sensor_info() const override;
 
     OUSTER_API_FUNCTION
@@ -112,4 +123,5 @@ class OUSTER_API_CLASS PcapPacketSource
 };
 
 }  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

@@ -9,7 +9,7 @@ Intended to run with `python -m ouster.sdk.examples.viz`
 """
 
 import argparse
-from ouster.sdk import client, viz
+from ouster.sdk import core, viz
 from ouster.sdk import open_source
 import os
 import sys
@@ -150,12 +150,12 @@ def main():
     img_screen_len = img_screen_height / img_aspect
 
     # prepare field data
-    ranges = scan.field(client.ChanField.RANGE)
-    ranges = client.destagger(meta, ranges)
+    ranges = scan.field(core.ChanField.RANGE)
+    ranges = core.destagger(meta, ranges)
     ranges = np.divide(ranges, np.amax(ranges), dtype=np.float32)
 
-    signal = scan.field(client.ChanField.REFLECTIVITY)
-    signal = client.destagger(meta, signal)
+    signal = scan.field(core.ChanField.REFLECTIVITY)
+    signal = core.destagger(meta, signal)
     signal = np.divide(signal, np.amax(signal), dtype=np.float32)
 
     # creating Image viz elements
@@ -185,14 +185,14 @@ def main():
     print("Ex 1.3:\tImages and Labels: Adding labels")
 
     # [doc-stag-scan-fields-images-labels]
-    range_label = viz.Label(str(client.ChanField.RANGE),
+    range_label = viz.Label(str(core.ChanField.RANGE),
                             0.5,
                             0,
                             align_top=True)
     range_label.set_scale(1)
     point_viz.add(range_label)
 
-    signal_label = viz.Label(str(client.ChanField.REFLECTIVITY),
+    signal_label = viz.Label(str(core.ChanField.REFLECTIVITY),
                              0.5,
                              1 - img_screen_height / 2,
                              align_top=True)
@@ -209,7 +209,7 @@ def main():
 
     # [doc-stag-scan-structured]
     cloud_scan = viz.Cloud(meta)
-    cloud_scan.set_range(scan.field(client.ChanField.RANGE))
+    cloud_scan.set_range(scan.field(core.ChanField.RANGE))
     cloud_scan.set_key(signal)
     point_viz.add(cloud_scan)
     # [doc-etag-scan-structured]
@@ -225,8 +225,8 @@ def main():
 
     # [doc-stag-scan-unstructured]
     # transform scan data to 3d points
-    xyzlut = client.XYZLut(meta)
-    xyz = xyzlut(scan.field(client.ChanField.RANGE))
+    xyzlut = core.XYZLut(meta)
+    xyz = xyzlut(scan.field(core.ChanField.RANGE))
 
     cloud_xyz = viz.Cloud(xyz.shape[0] * xyz.shape[1])
     cloud_xyz.set_xyz(np.reshape(xyz, (-1, 3)))

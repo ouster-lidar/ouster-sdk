@@ -47,13 +47,14 @@ def test_custom_copycat_profile_matches_original(packets: core.PacketSource) -> 
         (ChanField.NEAR_IR, FieldInfo(np.uint16, 12, 0, 0)),
         (ChanField.FLAGS2, FieldInfo(np.uint8, 6, 0b11111000, 3)),
         (ChanField.FLAGS, FieldInfo(np.uint8, 2, 0b11111000, 3)),
+        (ChanField.WINDOW, FieldInfo(np.uint8, 15, 0, 0)),
     ]
 
-    _client.add_custom_profile(11, "DUAL_COPYCAT", custom_fields, 16)
+    _client.add_custom_profile(21, "DUAL_COPYCAT", custom_fields, 16)
 
     ls_orig = next(iter(core.Scans(packets)))[0]
     assert ls_orig is not None
-    packets.sensor_info[0].format.udp_profile_lidar = _client.UDPProfileLidar(11)
+    packets.sensor_info[0].format.udp_profile_lidar = _client.UDPProfileLidar(21)
     ls_custom = next(iter(core.Scans(packets)))[0]
     assert ls_custom is not None
 

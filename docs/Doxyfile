@@ -58,7 +58,7 @@ PROJECT_LOGO           =
 # entered, it will be relative to the location where doxygen was started. If
 # left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = $output_dir
+OUTPUT_DIRECTORY       =  "$output_dir"
 
 # If the CREATE_SUBDIRS tag is set to YES then doxygen will create 4096 sub-
 # directories (in 2 levels) under the output directory of each output format and
@@ -167,7 +167,8 @@ SHORT_NAMES            = NO
 # description.)
 # The default value is: NO.
 
-JAVADOC_AUTOBRIEF      = NO
+# We dont always use @brief
+JAVADOC_AUTOBRIEF      = YES
 
 # If the JAVADOC_BANNER tag is set to YES then doxygen will interpret a line
 # such as
@@ -521,7 +522,7 @@ RESOLVE_UNNAMED_PARAMS = YES
 # section is generated. This option has no effect if EXTRACT_ALL is enabled.
 # The default value is: NO.
 
-HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_MEMBERS     = NO
 
 # If the HIDE_UNDOC_CLASSES tag is set to YES, doxygen will hide all
 # undocumented classes that are normally visible in the class hierarchy. If set
@@ -529,7 +530,14 @@ HIDE_UNDOC_MEMBERS     = YES
 # has no effect if EXTRACT_ALL is enabled.
 # The default value is: NO.
 
-HIDE_UNDOC_CLASSES     = YES
+HIDE_UNDOC_CLASSES     = NO
+
+# If the HIDE_UNDOC_NAMESPACES tag is set to YES, Doxygen will hide all 
+# undocumented namespaces that are normally visible in the namespace hierarchy. 
+# If set to NO, these namespaces will be included in the various overviews. This option 
+# has no effect if EXTRACT_ALL is enabled.
+# The default value is: YES.
+HIDE_UNDOC_NAMESPACES  = NO
 
 # If the HIDE_FRIEND_COMPOUNDS tag is set to YES, doxygen will hide all friend
 # declarations. If set to NO, these declarations will be included in the
@@ -671,7 +679,7 @@ STRICT_PROTO_MATCHING  = NO
 # list. This list is created by putting \todo commands in the documentation.
 # The default value is: YES.
 
-GENERATE_TODOLIST      = YES
+GENERATE_TODOLIST      = NO
 
 # The GENERATE_TESTLIST tag can be used to enable (YES) or disable (NO) the test
 # list. This list is created by putting \test commands in the documentation.
@@ -690,7 +698,7 @@ GENERATE_BUGLIST       = YES
 # the documentation.
 # The default value is: YES.
 
-GENERATE_DEPRECATEDLIST= YES
+GENERATE_DEPRECATEDLIST = YES
 
 # The ENABLED_SECTIONS tag can be used to enable conditional documentation
 # sections, marked by \if <section_label> ... \endif and \cond <section_label>
@@ -816,6 +824,13 @@ WARN_IF_INCOMPLETE_DOC = "$enhanced_warnings"
 
 WARN_NO_PARAMDOC       = "$enhanced_warnings"
 
+# If WARN_IF_UNDOC_ENUM_VAL option is set to YES, Doxygen will warn about undocumented 
+# enumeration values. If set to NO, Doxygen will accept undocumented enumeration values. 
+# If EXTRACT_ALL is set to YES then this flag will automatically be disabled.
+# The default value is: NO.
+
+WARN_IF_UNDOC_ENUM_VAL = YES
+
 # If the WARN_AS_ERROR tag is set to YES then doxygen will immediately stop when
 # a warning is encountered. If the WARN_AS_ERROR tag is set to FAIL_ON_WARNINGS
 # then doxygen will continue running as if WARN_AS_ERROR tag is set to NO, but
@@ -937,7 +952,8 @@ RECURSIVE              = YES
 # Note that relative paths are relative to the directory from which doxygen is
 # run.
 
-EXCLUDE                = ../ouster_client/include/optional-lite \
+EXCLUDE                = ../ouster_viz/imgui \
+                         ../ouster_client/include/optional-lite \
                          ../ouster_pcap/src/ip_reassembler.h \
                          ../ouster_pcap/src/ip_reassembler.cpp
 
@@ -959,7 +975,8 @@ EXCLUDE_PATTERNS       = */impl/* \
                          *.cpp    \
                          */src/*  \
                          */test/* \
-                         */tests/*
+                         */tests/* \
+                         **/impl/**
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
@@ -970,7 +987,7 @@ EXCLUDE_PATTERNS       = */impl/* \
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories use the pattern */test/*
 
-EXCLUDE_SYMBOLS        =
+EXCLUDE_SYMBOLS        =  *::impl*
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include
@@ -2178,7 +2195,7 @@ MACRO_EXPANSION        = YES
 # The default value is: NO.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-EXPAND_ONLY_PREDEF     = NO
+EXPAND_ONLY_PREDEF     = YES
 
 # If the SEARCH_INCLUDES tag is set to YES, the include files in the
 # INCLUDE_PATH will be searched if a #include is found.
@@ -2212,7 +2229,12 @@ INCLUDE_FILE_PATTERNS  =
 
 PREDEFINED             = "OUSTER_API_FUNCTION= " \
                          "OUSTER_API_CLASS= " \
-                         "OUSTER_API_IGNORE= "
+                         "OUSTER_API_IGNORE= " \
+                         protected=private \
+                         "OUSTER_DEPRECATED_TYPE(old_symbol, new_symbol, deprecation_version)=typedef new_symbol old_symbol;" \
+                         "OUSTER_DEPRECATED_MSG(new_symbol, deprecation_version)= " \
+                         "OUSTER_DEPRECATED_CONSTEXP= " \
+                         OUSTER_DEPRECATED_LAST_SUPPORTED_0_16 = "
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The
@@ -2221,7 +2243,12 @@ PREDEFINED             = "OUSTER_API_FUNCTION= " \
 # definition found in the source code.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-EXPAND_AS_DEFINED      =
+EXPAND_AS_DEFINED      = PYBIND11_MODULE
+
+
+PYTHON_EXTENSION_HANDLING = YES
+
+CLANG_ASSISTED_PARSING = NO
 
 # If the SKIP_FUNCTION_MACROS tag is set to YES then doxygen's preprocessor will
 # remove all references to function-like macros that are alone on a line, have
@@ -2370,7 +2397,7 @@ COLLABORATION_GRAPH    = NO
 # The default value is: YES.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-GROUP_GRAPHS           = NO
+GROUP_GRAPHS           = YES
 
 # If the UML_LOOK tag is set to YES, doxygen will generate inheritance and
 # collaboration diagrams in a style similar to the OMG's Unified Modeling
@@ -2421,7 +2448,7 @@ DOT_WRAP_THRESHOLD     = 17
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-TEMPLATE_RELATIONS     = NO
+TEMPLATE_RELATIONS     = YES
 
 # If the INCLUDE_GRAPH, ENABLE_PREPROCESSING and SEARCH_INCLUDES tags are set to
 # YES then doxygen will generate a graph for each documented file showing the
@@ -2470,7 +2497,7 @@ CALLER_GRAPH           = NO
 # The default value is: YES.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-GRAPHICAL_HIERARCHY    = NO
+GRAPHICAL_HIERARCHY    = YES
 
 # If the DIRECTORY_GRAPH tag is set to YES then doxygen will show the
 # dependencies a directory has on other directories in a graphical way. The

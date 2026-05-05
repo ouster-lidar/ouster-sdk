@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Dict, Optional, List, Union
-from ouster.sdk.core import LidarScan, ChanField
+from ouster.sdk.core import ChanField, LidarScanSet
 from ouster.sdk.core import dewarp
 from ouster.sdk._bindings.viz import Cloud, PointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
@@ -134,11 +134,11 @@ class MapAccumulator(AccumulatorBase):
 
             idxs: Union[List[int], np.ndarray]
             if not self._map_overflow or self._map_overflow_start:
-                idxs = list(range(self._map_idx, self._map_idx + xyz_num))
+                idxs = list(range(self._map_idx, self._map_idx + xyz_num))  # type: ignore
             else:
                 idxs = np.random.choice(self._map_xyz.shape[0],
                                         xyz_num,
-                                        replace=False)
+                                        replace=False)  # type: ignore
             self._map_xyz[idxs] = xyz
 
             for mode in sensor._cloud_modes.values():
@@ -152,7 +152,7 @@ class MapAccumulator(AccumulatorBase):
             self._map_idx += xyz_num
 
     def update(self,
-               scan: List[Optional[LidarScan]],
+               scan: LidarScanSet,
                scan_num: Optional[int] = None) -> None:
         super().update(scan, scan_num)
         self._update_map()

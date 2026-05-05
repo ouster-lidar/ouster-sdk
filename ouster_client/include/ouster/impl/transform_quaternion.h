@@ -3,10 +3,12 @@
 #include "ouster/impl/transform_typedefs.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 namespace impl {
 
 class PoseV;
-typedef Eigen::Vector3d TransQ;
+using TransQ = Eigen::Vector3d;
 
 class PoseQ : public Eigen::Vector7d {
    public:
@@ -35,4 +37,6 @@ class PoseQ : public Eigen::Vector7d {
 };
 
 }  // namespace impl
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

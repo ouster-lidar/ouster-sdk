@@ -1,7 +1,5 @@
 from os import path
 import numpy as np
-from ouster.sdk.core import SensorInfo
-from ouster.sdk.util import resolve_extrinsics
 from ouster.sdk import open_source
 
 PCAP_WITH_NO_EXT_DATA_DIR = path.join(path.dirname(
@@ -19,72 +17,6 @@ EXT_PATH = path.join(PCAP_WITH_EXT_DATA_DIR, "extrinsic_parameters.json")
 
 
 sensor_names = ["122150000150", "992313000353", "992225001114"]
-
-
-def test_resolve_extrinsics_with_no_extrinscs():
-    extrinsics = resolve_extrinsics(
-        data_path=PCAP_PATH_WITH_NO_EXT, sensor_names=sensor_names)
-    assert len(extrinsics) == 0
-
-
-def test_resolve_extrinsics_with_sensor_names():
-    extrinsics = resolve_extrinsics(data_path=PCAP_PATH_WITH_EXT)
-    assert len(extrinsics) == 0
-
-    extrinsics = resolve_extrinsics(
-        data_path=PCAP_PATH_WITH_EXT, sensor_names=[sensor_names[0]])
-    assert len(extrinsics) == 1
-    assert extrinsics[0][0].shape == (4, 4)
-    assert extrinsics[0][1] == EXT_PATH
-
-    extrinsics = resolve_extrinsics(
-        data_path=PCAP_PATH_WITH_EXT, sensor_names=sensor_names)
-    assert len(extrinsics) == 3
-    for ext, src in extrinsics:
-        assert ext.shape == (4, 4)
-        assert src == EXT_PATH
-
-
-def test_resolve_extrinsics_with_sensor_infos():
-
-    sensor_infos = [SensorInfo()] * len(sensor_names)
-    for si, sn in zip(sensor_infos, sensor_names):
-        si.sn = int(sn)
-
-    extrinsics = resolve_extrinsics(data_path=PCAP_PATH_WITH_EXT)
-    assert len(extrinsics) == 0
-
-    extrinsics = resolve_extrinsics(
-        data_path=PCAP_PATH_WITH_EXT, infos=[sensor_infos[0]])
-    assert len(extrinsics) == 1
-    assert extrinsics[0][0].shape == (4, 4)
-    assert extrinsics[0][1] == EXT_PATH
-
-    extrinsics = resolve_extrinsics(
-        data_path=PCAP_PATH_WITH_EXT, infos=sensor_infos)
-    assert len(extrinsics) == 3
-    for ext, src in extrinsics:
-        assert ext.shape == (4, 4)
-        assert src == EXT_PATH
-
-
-def test_resolve_extrinsics_using_dir():
-
-    extrinsics = resolve_extrinsics(data_path=PCAP_WITH_EXT_DATA_DIR)
-    assert len(extrinsics) == 0
-
-    extrinsics = resolve_extrinsics(
-        data_path=PCAP_WITH_EXT_DATA_DIR, sensor_names=[sensor_names[0]])
-    assert len(extrinsics) == 1
-    assert extrinsics[0][0].shape == (4, 4)
-    assert extrinsics[0][1] == EXT_PATH
-
-    extrinsics = resolve_extrinsics(
-        data_path=PCAP_WITH_EXT_DATA_DIR, sensor_names=sensor_names)
-    assert len(extrinsics) == 3
-    for ext, src in extrinsics:
-        assert ext.shape == (4, 4)
-        assert src == EXT_PATH
 
 
 def test_open_source_with_file_that_has_no_valid_extrinsics():

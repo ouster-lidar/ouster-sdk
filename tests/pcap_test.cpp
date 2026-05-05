@@ -14,8 +14,7 @@
 #include "ouster/indexed_pcap_reader.h"
 #include "ouster/os_pcap.h"
 
-namespace ouster {
-namespace sensor_utils {
+using namespace ouster::sdk::pcap;
 
 inline std::string getenvs(const std::string& var) {
     char* res = std::getenv(var.c_str());
@@ -123,7 +122,7 @@ class TestIndexedPcapReader : public IndexedPcapReader {
         : IndexedPcapReader(pcap_filename, metadata_filenames) {}
     TestIndexedPcapReader(
         const std::string& pcap_filename,
-        const std::vector<ouster::sensor::sensor_info>& sensor_infos)
+        const std::vector<ouster::sdk::core::SensorInfo>& sensor_infos)
         : IndexedPcapReader(pcap_filename, sensor_infos) {}
     PcapIndex& get_index_non_const() { return this->index_; }
     std::vector<nonstd::optional<uint16_t>> get_previous_frame_ids() {
@@ -142,7 +141,7 @@ TEST(IndexedPcapReader, constructor) {
         std::vector<std::string>{
             data_dir + "/same_ports_nonlegacy.1.json",
             data_dir + "/same_ports_nonlegacy.2.non_colliding_imu.json"});
-    EXPECT_EQ(pcap.get_index().frame_indices_.size(), 2);
+    EXPECT_EQ(pcap.get_index().frame_indices.size(), 2);
     EXPECT_EQ(pcap.get_previous_frame_ids().size(), 2);
 }
 
@@ -152,9 +151,9 @@ TEST(IndexedPcapReader, frame_count) {
     std::string filename =
         data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
     TestIndexedPcapReader pcap(filename, std::vector<std::string>{});
-    pcap.get_index_non_const().frame_indices_.push_back(
+    pcap.get_index_non_const().frame_indices.push_back(
         PcapIndex::frame_index());
-    pcap.get_index_non_const().frame_indices_.at(0).push_back(0);
+    pcap.get_index_non_const().frame_indices.at(0).push_back(0);
 
     EXPECT_EQ(pcap.get_index().frame_count(0), 1);
     EXPECT_THROW(pcap.get_index().frame_count(1), std::out_of_range);
@@ -184,7 +183,7 @@ TEST(IndexedPcapReader, seek_to_frame) {
     }
     EXPECT_EQ(progress[progress.size() - 1],
               100);  // last progress value is 100
-    pcap.get_index_non_const().frame_indices_.push_back(
+    pcap.get_index_non_const().frame_indices.push_back(
         PcapIndex::frame_index());
 
     EXPECT_EQ(pcap.get_index().frame_count(0), 1);
@@ -214,8 +213,8 @@ void IndexedPcapReader_imu_collision_impl(std::string path) {
         error_string = std::string(e.what());
     }
     std::regex error_match(
-        "Duplicate (lidar|imu) port\\/sn found for "
-        "indexing pcap: LEGACY_(IMU|LIDAR):750(2|3)");
+        "Duplicate (lidar|imu) port\\/sn found in "
+        "pcap: LEGACY_(IMU|LIDAR):750(2|3)");
     EXPECT_TRUE(std::regex_search(error_string, error_match));
 }
 
@@ -260,5 +259,3 @@ TEST(IndexedPcapReader,
     EXPECT_EQ(pcap.get_index().frame_count(1), 1);
     EXPECT_THROW(pcap.get_index().frame_count(2), std::out_of_range);
 }
-}  // namespace sensor_utils
-}  // namespace ouster

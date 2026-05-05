@@ -4,17 +4,13 @@ All rights reserved.
 """
 
 from enum import Enum
-from typing import Callable, List, Union
+from typing import Callable, Union
 import logging
 
 import numpy as np
 
 from ouster.sdk._bindings.client import (LidarScan, SensorInfo, Packet)
-
-from ouster.sdk._bindings.client import (destagger_int8, destagger_int16, destagger_int32,
-                      destagger_int64, destagger_uint8, destagger_uint16,
-                      destagger_uint32, destagger_uint64, destagger_float,
-                      destagger_double, destagger_bool)
+from ouster.sdk._bindings.client import destagger as _destagger
 
 from ouster.sdk._bindings.client import XYZLut as client_XYZLut
 from ouster.sdk._bindings.client import XYZLutFloat as client_XYZLutFloat
@@ -30,11 +26,17 @@ class ChanField:
     RANGE2 = "RANGE2"
     SIGNAL = "SIGNAL"
     SIGNAL2 = "SIGNAL2"
+    R = "R"
+    G = "G"
+    B = "B"
+    RGB = "RGB"
     REFLECTIVITY = "REFLECTIVITY"
     REFLECTIVITY2 = "REFLECTIVITY2"
     NEAR_IR = "NEAR_IR"
     FLAGS = "FLAGS"
     FLAGS2 = "FLAGS2"
+    WINDOW = "WINDOW"
+    ZONE = "ZONE"
     RAW_HEADERS = "RAW_HEADERS"
     RAW32_WORD1 = "RAW32_WORD1"
     RAW32_WORD2 = "RAW32_WORD2"
@@ -45,6 +47,23 @@ class ChanField:
     RAW32_WORD7 = "RAW32_WORD7"
     RAW32_WORD8 = "RAW32_WORD8"
     RAW32_WORD9 = "RAW32_WORD9"
+    NORMALS = "NORMALS"
+    NORMALS2 = "NORMALS2"
+    IMU_ACC = "IMU_ACC"
+    IMU_GYRO = "IMU_GYRO"
+    IMU_TIMESTAMP = "IMU_TIMESTAMP"
+    IMU_MEASUREMENT_ID = "IMU_MEASUREMENT_ID"
+    IMU_STATUS = "IMU_STATUS"
+    IMU_PACKET_TIMESTAMP = "IMU_PACKET_TIMESTAMP"
+    IMU_ALERT_FLAGS = "IMU_ALERT_FLAGS"
+    POSITION_STRING = "POSITION_STRING"
+    POSITION_LAT_LONG = "POSITION_LAT_LONG"
+    POSITION_TIMESTAMP = "POSITION_TIMESTAMP"
+    LIVE_ZONESET_HASH = "LIVE_ZONESET_HASH"
+    ZONE_TIMESTAMP = "ZONE_TIMESTAMP"
+    ZONE_PACKET_TIMESTAMP = "ZONE_PACKET_TIMESTAMP"
+    ZONE_STATES = "ZONE_STATES"
+    ZONE_ALERT_FLAGS = "ZONE_ALERT_FLAGS"
 
 
 class ColHeader(Enum):
@@ -60,23 +79,6 @@ class ColHeader(Enum):
 
     def __int__(self) -> int:
         return self.value
-
-
-def _destagger(field: np.ndarray, shifts: List[int],
-               inverse: bool) -> np.ndarray:
-    return {
-        np.dtype(bool): destagger_bool,
-        np.dtype(np.int8): destagger_int8,
-        np.dtype(np.int16): destagger_int16,
-        np.dtype(np.int32): destagger_int32,
-        np.dtype(np.int64): destagger_int64,
-        np.dtype(np.uint8): destagger_uint8,
-        np.dtype(np.uint16): destagger_uint16,
-        np.dtype(np.uint32): destagger_uint32,
-        np.dtype(np.uint64): destagger_uint64,
-        np.dtype(np.single): destagger_float,
-        np.dtype(np.double): destagger_double,
-    }[field.dtype](field, shifts, inverse)
 
 
 def stagger(info: SensorInfo,
@@ -116,21 +118,12 @@ def destagger(info: SensorInfo,
     Returns:
         A destaggered numpy array of the same shape
     """
-    h = info.format.pixels_per_column
-    w = info.format.columns_per_frame
     shifts = info.format.pixel_shift_by_row
 
-    # remember original shape
-    shape = fields.shape
-    fields = fields.reshape((h, w, -1))
+    if fields.shape[0] != info.h or fields.shape[1] != info.w:
+        raise ValueError("Array must match SensorInfo dimension.")
 
-    # apply destagger to each channel
-    # note: astype() needed due to some strange behavior of the pybind11
-    # bindings. The wrong overload is chosen otherwise (due to the indexing?)
-    return np.dstack([
-        _destagger(fields[:, :, i], shifts, inverse)
-        for i in range(fields.shape[2])
-    ]).reshape(shape)
+    return _destagger(fields, shifts, inverse)
 
 
 def XYZLut(

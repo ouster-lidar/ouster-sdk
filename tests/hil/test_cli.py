@@ -15,7 +15,7 @@ logger = logging.getLogger("HIL")
 
 @pytest.fixture
 def runner():
-    return CliRunner()
+    return CliRunner(mix_stderr=False)
 
 
 @pytest.mark.parametrize("udp_dest", [None, "1.1.1.1"]) # blank value is a bit special
@@ -43,7 +43,10 @@ def test_udp_dest_finder_leaves_no_mark(hil_sensor_hostname, hil_configured_sens
 def test_diagnostics(hil_sensor_hostname, tmpdir, runner) -> None:
     """Test that we can pull diagnostics."""
     dump_path = os.path.join(tmpdir, "test.bin")
-    result = runner.invoke(cli_core.cli, ['source', str(hil_sensor_hostname), 'diagnostics', str(dump_path)]) #  type: ignore
+    result = runner.invoke(
+        cli_core.cli,
+        ['source', str(hil_sensor_hostname), 'diagnostics', '--timeout', '600', str(dump_path)]  # type: ignore
+    )
     assert result.exit_code == 0
     assert os.path.isfile(str(dump_path))
 

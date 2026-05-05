@@ -10,6 +10,7 @@
 #include "ouster/point_viz.h"
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 
@@ -27,4 +28,5 @@ struct CameraData {
 
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

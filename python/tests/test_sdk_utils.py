@@ -4,6 +4,7 @@ import tempfile
 import os
 import re
 from tests.conftest import PCAPS_DATA_DIR
+from ouster.sdk import core
 from ouster.sdk.core import SensorInfo, LidarMode, UDPProfileLidar, PacketWriter, LidarScan, ScanBatcher
 from os.path import commonprefix
 from pathlib import Path
@@ -114,9 +115,9 @@ def test_resolve_metadata_multi_exception_raised():
 
 def test_img_aspect_ratio():
     # aspect ratio is independent of the mode
-    assert img_aspect_ratio(SensorInfo.from_default(LidarMode.MODE_1024x10)) == pytest.approx(0.09228333333333334)
-    assert img_aspect_ratio(SensorInfo.from_default(LidarMode.MODE_2048x10)) == pytest.approx(0.09228333333333334)
-    assert img_aspect_ratio(SensorInfo.from_default(LidarMode.MODE_512x10)) == pytest.approx(0.09228333333333334)
+    assert img_aspect_ratio(SensorInfo.from_default(LidarMode._1024x10)) == pytest.approx(0.09228333333333334)
+    assert img_aspect_ratio(SensorInfo.from_default(LidarMode._2048x10)) == pytest.approx(0.09228333333333334)
+    assert img_aspect_ratio(SensorInfo.from_default(LidarMode._512x10)) == pytest.approx(0.09228333333333334)
 
 
 def test_scan_to_packets():
@@ -125,7 +126,7 @@ def test_scan_to_packets():
     To test this, we'll create a scan, convert it to packets, and then batch
     the packets back into a new scan and compare the scans.
     """
-    profile = UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    profile = UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
     info = SensorInfo()
     info.init_id = 1234
     info.sn = 5678
@@ -134,14 +135,16 @@ def test_scan_to_packets():
     info.format.columns_per_packet = 16
     info.format.pixels_per_column = 128
     info.format.udp_profile_lidar = profile
+    info.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
+    info.format.header_type = core.HeaderType.STANDARD
     info.format.column_window = (0, 1024)  # ScanBatcher depends on this being set
 
-    writer = PacketWriter.from_profile(profile, info.format.pixels_per_column, info.format.columns_per_packet)
+    writer = PacketWriter.from_info(info)
     scan = LidarScan(info)
     scan.frame_status = 0xabcdef0123456789
     scan.alert_flags[:] = range(len(scan.alert_flags))
-    assert scan.shot_limiting() == 0x08      # derived from frame_status
-    assert scan.thermal_shutdown() == 0x09   # derived from frame_status
+    assert int(scan.shot_limiting()) == 0x08      # derived from frame_status
+    assert int(scan.thermal_shutdown()) == 0x09   # derived from frame_status
     scan.shutdown_countdown = 30
     scan.shot_limiting_countdown = 29
     scan.frame_id = 100

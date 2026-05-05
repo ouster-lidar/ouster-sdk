@@ -17,6 +17,7 @@ sensor data in both languages. The SDK includes APIs for:
 * Conversion of raw data to range/signal/near_ir/reflectivity images (destaggering)
 * Efficient projection of range measurements to Cartesian (x, y, z) coordinates
 * Visualization of multi-beam flash lidar data
+* Zone monitor capabilities
 
 Additionally, in Python, the SDK also provides: 
 
@@ -34,10 +35,10 @@ Supported Platforms
 
 Pre-built binaries are provided on `PyPI`_ for the following platforms:
 
-- Most glibc-based Linux distributions on x86_64 and ARM64 platforms (``manylinux2010_x86_64``,
+- Most glibc-based Linux distributions on x86_64 and ARM64 platforms (``manylinux_2_28_x86_64``,
   ``manylinux_2_28_aarch64``)
-- macOS >= 11.7.10 on x86_64 platforms (``macosx_11_7_10_x86_64``)
-- macOS >= 11.7.10 on Apple M1 for Python >= 3.8 (``macosx_11_7_10_arm64``)
+- macOS >= 11.7.10 on x86_64 platforms (``macosx_11_0_x86_64``)
+- macOS >= 11.7.10 on Apple M1 for Python >= 3.8 (``macosx_11_0_arm64``)
 - Windows 10 on x86_64 platforms (``win_amd64``)
 
 Building from source is supported on:

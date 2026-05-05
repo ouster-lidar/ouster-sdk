@@ -8,14 +8,18 @@
  */
 #pragma once
 
-#include <iostream>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
+#include "ouster/osf/buffer.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
@@ -41,8 +45,8 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
      *                 ///< originator of the extrinsics information.
      */
     OUSTER_API_FUNCTION
-    explicit Extrinsics(const mat4d& extrinsics, uint32_t ref_meta_id = 0,
-                        const std::string& name = "");
+    explicit Extrinsics(const ouster::sdk::core::mat4d& extrinsics,
+                        uint32_t ref_meta_id = 0, const std::string& name = "");
 
     /**
      * Get the extrinsics matrix.
@@ -50,7 +54,7 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
      * @return The eigen extrinsics matrix.
      */
     OUSTER_API_FUNCTION
-    const mat4d& extrinsics() const;
+    const ouster::sdk::core::mat4d& extrinsics() const;
 
     /**
      * Get the extrinsics name.
@@ -85,8 +89,7 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
      * @return The new Extrinsics cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(
-        const std::vector<uint8_t>& buf);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf);
 
     /**
      * Get the string representation for the Extrinsics object.
@@ -105,7 +108,7 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
      * Flat Buffer Reference:
      *   fb/os_sensor/extrinsics.fbs :: Extrinsics :: extrinsics
      */
-    mat4d extrinsics_;
+    ouster::sdk::core::mat4d extrinsics_;
 
     /**
      * The internal flatbuffer metadata reference id.
@@ -142,4 +145,5 @@ struct OUSTER_API_CLASS MetadataTraits<Extrinsics> {
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

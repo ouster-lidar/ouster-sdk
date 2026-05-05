@@ -1,15 +1,16 @@
 from enum import IntEnum
 from functools import wraps
 from ouster.sdk.core import LidarScan, ScanSource
-from typing import (Callable, List, Any, Union, Tuple,
+from typing import (Callable, List, Any, Tuple,
                     Dict, Optional, Iterator, Iterable)
 from threading import Event
 from dataclasses import dataclass
 from ouster.sdk.sensor import ClientTimeout
+from ouster.sdk.zone_monitor import ZoneSet
 import queue
 import click
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class SourceCommandType(IntEnum):
@@ -24,13 +25,14 @@ class SourceCommandContext:
     source_uri: Optional[str]
     source_options: Dict[str, Any]
     other_options: Dict[str, Any]
-    scan_source: Optional[Union[ScanSource, Any]]
+    scan_source: Optional[ScanSource]
     scan_iter: Optional[Iterable[List[Optional[LidarScan]]]]
     terminate_evt: Optional[Event]
     main_thread_fn: Optional[Callable[[None], None]]
     invoked_command_names: List[str]
     misc: Dict[Any, Any]
     terminate_exception: Optional[Exception]
+    emulated_zone_monitoring_configuration: Optional[ZoneSet]
 
     def __init__(self) -> None:
         self.source_uri = ""
@@ -167,4 +169,4 @@ def _join_with_conjunction(things_to_join: List[str], separator: str = ', ', con
 
 
 def _nanos_to_string(nanos):
-    return datetime.utcfromtimestamp(nanos / 1e9).strftime('%Y-%m-%d %H:%M:%S.%f')
+    return datetime.fromtimestamp(nanos / 1e9, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f %Z')

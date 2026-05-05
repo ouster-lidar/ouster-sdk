@@ -5,7 +5,17 @@
 
 #include "ouster/scan_source_utils.h"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <map>
+#include <memory>
+#include <utility>
+#include <vector>
+
 namespace ouster {
+namespace sdk {
 namespace core {
 
 template <class T>
@@ -13,18 +23,21 @@ class CollatorManager {
     std::vector<T> list_;
     int64_t min_ts_ = -1;
     int64_t max_ts_ = -1;
-    int64_t dt_ = 100000000;
+    int64_t delta_t_ = 100000000;
 
    public:
-    CollatorManager(int len, int64_t dt) : dt_(dt) { list_.resize(len); }
+    CollatorManager(int len, int64_t delta_t) : delta_t_(delta_t) {
+        list_.resize(len);
+    }
 
     // returns true if the list is complete
-    bool collate(int index, T& item, int64_t ts, bool& consumed) {
+    bool collate(int index, T& item, int64_t timestamp, bool& consumed) {
         consumed = false;
         // if we collated for too long, return early
         if (min_ts_ < 0 || max_ts_ < 0 ||
-            (ts >= min_ts_ + dt_ || ts < max_ts_ - dt_)) {
-            min_ts_ = max_ts_ = ts;  // stash the scan for later
+            (timestamp >= min_ts_ + delta_t_ ||
+             timestamp < max_ts_ - delta_t_)) {
+            min_ts_ = max_ts_ = timestamp;  // stash the scan for later
             // if we have any, yield
             bool any = false;
             for (const auto& item : list_) {
@@ -40,7 +53,7 @@ class CollatorManager {
 
         // break early if we get a second from a single sensor
         if (list_[index]) {
-            min_ts_ = max_ts_ = ts;
+            min_ts_ = max_ts_ = timestamp;
             return true;
         }
 
@@ -56,7 +69,7 @@ class CollatorManager {
             }
         }
         if (full) {
-            min_ts_ = max_ts_ = ts;
+            min_ts_ = max_ts_ = timestamp;
         }
         return full;
     }
@@ -77,17 +90,16 @@ class DefaultCollatedScanIteratorImpl : public ScanIteratorImpl {
     int sensor_count_;
     int i_ = -1;
     int64_t length_ = 0;
-    bool first_ = true;
     std::vector<int32_t> index_;
 
     CollatorManager<std::shared_ptr<LidarScan>> collator_;
 
    public:
-    DefaultCollatedScanIteratorImpl(const ScanSource* source, uint64_t dt)
+    DefaultCollatedScanIteratorImpl(const ScanSource* source, uint64_t delta_t)
         : source_(source),
           sensor_count_(source->sensor_info().size()),
           i_(0),
-          collator_(source->sensor_info().size(), dt) {
+          collator_(source->sensor_info().size(), delta_t) {
         // build a map of sensor_info to sensor idx
         int i = 0;
         for (auto& si : source->sensor_info()) {
@@ -98,16 +110,17 @@ class DefaultCollatedScanIteratorImpl : public ScanIteratorImpl {
 
         // calculate the length by collating the index
         if (source_->is_indexed()) {
-            CollatorManager<int> collator(sensor_count_, dt);
+            CollatorManager<int> collator(sensor_count_, delta_t);
 
             // while we collate also build an index of the first scan in each
             // collated set to use for random access
             length_ = 0;
             for (size_t i = 0; i < source_->full_index().size();) {
-                int v = i + 1;
+                int value = i + 1;
                 auto& item = source->full_index()[i];
                 bool consumed = false;
-                if (collator.collate(item.second, v, item.first, consumed)) {
+                if (collator.collate(item.second, value, item.first,
+                                     consumed)) {
                     length_++;
 
                     auto min = std::numeric_limits<int>::max();
@@ -178,7 +191,7 @@ class DefaultCollatedScanIteratorImpl : public ScanIteratorImpl {
                     "scans.");
             }
 
-            int64_t ts = val[0]->get_first_valid_packet_timestamp();
+            int64_t timestamp = val[0]->get_first_valid_packet_timestamp();
 
             auto index_iter = ids_.find(val[0]->sensor_info.get());
             if (index_iter == ids_.end()) {
@@ -187,7 +200,8 @@ class DefaultCollatedScanIteratorImpl : public ScanIteratorImpl {
                     "sensor_info()");
             }
             bool consumed = false;
-            if (collator_.collate(index_iter->second, val[0], ts, consumed)) {
+            if (collator_.collate(index_iter->second, val[0], timestamp,
+                                  consumed)) {
                 if (consumed) {
                     iter_++;
                 }
@@ -216,18 +230,15 @@ class DefaultCollatedScanIteratorImpl : public ScanIteratorImpl {
         return true;  // hit end of file
     }
 
-    virtual std::vector<std::shared_ptr<LidarScan>>& value() override {
-        return collator_.list();
-    }
+    LidarScanSet value() override { return LidarScanSet{collator_.list()}; }
 };
 
 Collator::Collator(const ScanSource& source, uint64_t dt_ns)
     : source_(&source), dt_(dt_ns) {}
 
-Collator::Collator(ouster::core::ScanSource&& copy, uint64_t dt_ns) {
+Collator::Collator(ScanSource&& copy, uint64_t dt_ns) {
     dt_ = dt_ns;
-    parent_ = std::unique_ptr<ouster::core::ScanSource>(
-        (ouster::core::ScanSource*)copy.move());
+    parent_ = std::unique_ptr<ScanSource>(copy.move());
     source_ = parent_.get();
 }
 
@@ -248,10 +259,11 @@ ScanIterator Collator::begin(int /*sensor_index*/) const {
         "this on the uncollated source instead.");
 }
 
-ScanSource* Collator::move() { return new Collator(std::move(*this)); }
+std::unique_ptr<ScanSource> Collator::move() {
+    return std::make_unique<Collator>(std::move(*this));
+}
 
-const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-Collator::sensor_info() const {
+const std::vector<std::shared_ptr<SensorInfo>>& Collator::sensor_info() const {
     return source_->sensor_info();
 }
 
@@ -270,6 +282,13 @@ const std::vector<std::pair<uint64_t, uint64_t>>& Collator::full_index() const {
 
 const std::vector<size_t>& Collator::scans_num() const {
     return source_->scans_num();
+}
+
+size_t Collator::size_hint() const {
+    if (source_->is_indexed()) {
+        return size();
+    }
+    return source_->size_hint() / source_->sensor_info().size();
 }
 
 void Collator::close() { parent_.reset(); }
@@ -294,10 +313,9 @@ Singler::Singler(const ScanSource& source, size_t idx)
     begin();
 }
 
-Singler::Singler(ouster::core::ScanSource&& source, size_t idx) {
+Singler::Singler(ScanSource&& source, size_t idx) {
     idx_ = idx;
-    parent_ = std::unique_ptr<ouster::core::ScanSource>(
-        (ouster::core::ScanSource*)source.move());
+    parent_ = std::unique_ptr<ScanSource>(source.move());
     source_ = parent_.get();
     if (idx >= source_->sensor_info().size()) {
         throw std::invalid_argument(
@@ -312,7 +330,7 @@ Singler::Singler(ouster::core::ScanSource&& source, size_t idx) {
     begin();
 }
 
-Singler::Singler(std::unique_ptr<ouster::core::ScanSource> source, size_t idx)
+Singler::Singler(std::unique_ptr<ScanSource> source, size_t idx)
     : parent_(std::move(source)) {
     idx_ = idx;
     source_ = parent_.get();
@@ -334,12 +352,12 @@ void Singler::build_index() {
     auto& index = individual_index_[0];
     int i = 0;
     for (auto& item : source_->individual_index()[idx_]) {
-        index.push_back({item.first, i++});
+        index.emplace_back(item.first, i++);
     }
 
     for (auto& item : source_->full_index()) {
         if (item.second == idx_) {
-            full_index_.push_back({item.first, 0});
+            full_index_.emplace_back(item.first, 0);
         }
     }
 }
@@ -361,7 +379,9 @@ const std::vector<std::pair<uint64_t, uint64_t>>& Singler::full_index() const {
     return full_index_;
 }
 
-ScanSource* Singler::move() { return new Singler(std::move(*this)); }
+std::unique_ptr<ScanSource> Singler::move() {
+    return std::make_unique<Singler>(std::move(*this));
+}
 
 ScanIterator Singler::begin() const { return source_->begin(idx_); }
 
@@ -375,20 +395,26 @@ ScanIterator Singler::begin(int idx) const {
 
 ScanIterator Singler::end() const { return source_->end(); }
 
+size_t Singler::size_hint() const {
+    if (source_->is_indexed()) {
+        return source_->size();
+    }
+    return source_->size_hint() / source_->sensor_info().size();
+}
+
 bool Singler::is_live() const { return source_->is_live(); }
 
 bool Singler::is_indexed() const { return source_->is_indexed(); }
 
 const std::vector<size_t>& Singler::scans_num() const {
-    if (scans_num_.size()) {
+    if (!scans_num_.empty()) {
         return scans_num_;
     }
     throw std::runtime_error(
         "'scans_num' not supported on unindexed scan sources.");
 }
 
-const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-Singler::sensor_info() const {
+const std::vector<std::shared_ptr<SensorInfo>>& Singler::sensor_info() const {
     return sensor_info_;
 }
 
@@ -459,16 +485,16 @@ class SlicerScanIteratorImpl : public Base {
 
     int64_t length() override { return length_; }
 
-    virtual Return& value() override { return *iter_; }
+    Return value() override { return *iter_; }
 };
 
-static void normalize_slice(const ScanSource* s, int& start, int& end,
+static void normalize_slice(const ScanSource* source, int& start, int& end,
                             int& step) {
     if (step <= 0) {
         throw std::invalid_argument("Step size must be > 0 for slice.");
     }
     // normalize start and end
-    auto length = s->end() - s->begin();
+    auto length = source->end() - source->begin();
 
     // clamp our length at the length, but don't throw if end is past the end
     if (end > length) {
@@ -505,8 +531,7 @@ ScanIterator Slicer::begin() const {
     return ScanIterator(
         this,
         new SlicerScanIteratorImpl<ScanSource, ScanIterator, ScanIteratorImpl,
-                                   std::vector<std::shared_ptr<LidarScan>>>(
-            source_, start_, end_, step_));
+                                   LidarScanSet>(source_, start_, end_, step_));
 }
 
 ScanIterator Slicer::begin(int /*idx*/) const {
@@ -514,7 +539,9 @@ ScanIterator Slicer::begin(int /*idx*/) const {
     throw std::runtime_error("Not yet supported. Please single then slice.");
 }
 
-ScanSource* Slicer::move() { return new Slicer(std::move(*this)); }
+std::unique_ptr<ScanSource> Slicer::move() {
+    return std::make_unique<Slicer>(std::move(*this));
+}
 
 void Slicer::build_index() {
     individual_index_.resize(source_->individual_index().size());
@@ -535,7 +562,7 @@ void Slicer::build_index() {
         scans_num_[item.second]++;
 
         full_index_.push_back(item);
-        individual_index_[item.second].push_back({item.first, index});
+        individual_index_[item.second].emplace_back(item.first, index);
         index++;
     }
 }
@@ -569,10 +596,11 @@ bool Slicer::is_live() const { return source_->is_live(); }
 
 bool Slicer::is_indexed() const { return source_->is_indexed(); }
 
-const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-Slicer::sensor_info() const {
+const std::vector<std::shared_ptr<SensorInfo>>& Slicer::sensor_info() const {
     return source_->sensor_info();
 }
+
+size_t Slicer::size_hint() const { return size(); }
 
 void Slicer::close() { parent_.reset(); }
 
@@ -585,8 +613,8 @@ ScanIterator AnyScanSource::begin(int idx) const { return source_->begin(idx); }
 
 ScanIterator AnyScanSource::end() const { return source_->end(); }
 
-const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-AnyScanSource::sensor_info() const {
+const std::vector<std::shared_ptr<SensorInfo>>& AnyScanSource::sensor_info()
+    const {
     return source_->sensor_info();
 }
 
@@ -595,6 +623,8 @@ bool AnyScanSource::is_live() const { return source_->is_live(); }
 bool AnyScanSource::is_indexed() const { return source_->is_indexed(); }
 
 size_t AnyScanSource::size() const { return source_->size(); }
+
+size_t AnyScanSource::size_hint() const { return source_->size_hint(); }
 
 const std::vector<std::vector<std::pair<uint64_t, uint64_t>>>&
 AnyScanSource::individual_index() const {
@@ -610,8 +640,8 @@ const std::vector<size_t>& AnyScanSource::scans_num() const {
     return source_->scans_num();
 }
 
-ScanSource* AnyScanSource::move() {
-    return new AnyScanSource(std::move(*this));
+std::unique_ptr<ScanSource> AnyScanSource::move() {
+    return std::make_unique<AnyScanSource>(std::move(*this));
 }
 
 std::shared_ptr<ScanSource> AnyScanSource::child() const { return source_; }
@@ -625,8 +655,8 @@ PacketIterator AnyPacketSource::begin() const { return source_->begin(); }
 
 PacketIterator AnyPacketSource::end() const { return source_->end(); }
 
-const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-AnyPacketSource::sensor_info() const {
+const std::vector<std::shared_ptr<SensorInfo>>& AnyPacketSource::sensor_info()
+    const {
     return source_->sensor_info();
 }
 
@@ -636,4 +666,5 @@ std::shared_ptr<PacketSource> AnyPacketSource::child() const { return source_; }
 
 void AnyPacketSource::close() { source_.reset(); }
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

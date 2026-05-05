@@ -59,8 +59,13 @@ std::vector<Eigen::Vector3d> Preprocessor::Preprocess(const std::vector<Eigen::V
         if (!deskew_ || timestamps.empty()) {
             return frame;
         } else {
+            const auto min_max = std::minmax_element(timestamps.cbegin(), timestamps.cend());
+            const double min_time = *min_max.first;
+            const double max_time = *min_max.second;
+            const auto normalize = [&](const double t) {
+                return (t - min_time) / (max_time - min_time);
+            };
             const auto &omega = relative_motion.log();
-            const Sophus::SE3d &inverse_motion = relative_motion.inverse();
             std::vector<Eigen::Vector3d> deskewed_frame(frame.size());
             tbb::parallel_for(
                 // Index Range
@@ -69,8 +74,8 @@ std::vector<Eigen::Vector3d> Preprocessor::Preprocess(const std::vector<Eigen::V
                 [&](const tbb::blocked_range<size_t> &r) {
                     for (size_t idx = r.begin(); idx < r.end(); ++idx) {
                         const auto &point = frame.at(idx);
-                        const auto &stamp = timestamps.at(idx);
-                        const auto pose = inverse_motion * Sophus::SE3d::exp(stamp * omega);
+                        const auto &stamp = normalize(timestamps.at(idx));
+                        const auto pose = Sophus::SE3d::exp((stamp - 1.0) * omega);
                         deskewed_frame.at(idx) = pose * point;
                     };
                 });

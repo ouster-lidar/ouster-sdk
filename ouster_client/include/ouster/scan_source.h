@@ -5,21 +5,33 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <limits>
+#include <memory>
+#include <nonstd/optional.hpp>
+#include <utility>
+#include <vector>
+
 #include "ouster/impl/iterator_base.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/lidar_scan_set.h"
 #include "ouster/types.h"
 
 namespace ouster {
+namespace sdk {
 namespace core {
 
 class ScanSource;
+
 /// Iterator for ScanSources
-typedef ouster::impl::BaseIterator<std::vector<std::shared_ptr<LidarScan>>,
-                                   ScanSource>
-    ScanIterator;
+using ScanIterator =
+    ouster::sdk::core::impl::BaseIterator<LidarScanSet, ScanSource>;
+
 /// Iterator implementation for ScanSources
-typedef ouster::impl::BaseIteratorImpl<std::vector<std::shared_ptr<LidarScan>>>
-    ScanIteratorImpl;
+using ScanIteratorImpl =
+    ouster::sdk::core::impl::BaseIteratorImpl<LidarScanSet>;
 
 /// Describes a slice into an array-like datastructure
 struct OUSTER_API_CLASS Slice {
@@ -36,7 +48,7 @@ class Singler;
 class OUSTER_API_CLASS ScanSource {
    public:
     OUSTER_API_FUNCTION
-    virtual ~ScanSource() {}
+    virtual ~ScanSource() = default;
 
     /// Provides each scan from all sensors in time order
     /// @return start iterator for all sensors
@@ -45,6 +57,7 @@ class OUSTER_API_CLASS ScanSource {
 
     /// Provides scans from a single sensor in time order
     /// If idx < 0 provides scans from all sensors
+    /// @param[in] sensor_index sensor index
     /// @return start iterator for the sensor with the given index
     /// @throw std::runtime_error if sensor_idx >= number of sensors
     OUSTER_API_FUNCTION
@@ -59,8 +72,8 @@ class OUSTER_API_CLASS ScanSource {
     /// Get the sensor info for each sensor in this dataset
     /// @return sensor info for each sensor
     OUSTER_API_FUNCTION
-    virtual const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-    sensor_info() const = 0;
+    virtual const std::vector<std::shared_ptr<SensorInfo>>& sensor_info()
+        const = 0;
 
     /// Indicates if the source is streaming from a device, such as a sensor
     /// @return if live or not
@@ -72,21 +85,11 @@ class OUSTER_API_CLASS ScanSource {
     OUSTER_API_FUNCTION
     virtual bool is_indexed() const;
 
-    /// timestamp based index of all scans in the file for each sensor, each
-    /// pair is timestamp followed by global scan index
-    /// @return index
-    /// @throw std::runtime_error if unindexed
+    /// The approximate length of the source if unindexed, or the real size if
+    /// indexed. Live sources or sources with undefined length will return 0.
+    /// @return approximate length of source
     OUSTER_API_FUNCTION
-    virtual const std::vector<std::vector<std::pair<uint64_t, uint64_t>>>&
-    individual_index() const;
-
-    /// timestamp based index of all scans in the file, each pair is timestamp
-    /// followed by sensor index
-    /// @return index
-    /// @throw std::runtime_error if unindexed
-    OUSTER_API_FUNCTION
-    virtual const std::vector<std::pair<uint64_t, uint64_t>>& full_index()
-        const;
+    virtual size_t size_hint() const = 0;
 
     // The below operations are only supported on indexed scan sources
 
@@ -108,38 +111,56 @@ class OUSTER_API_CLASS ScanSource {
     /// Supports negative indices for python-like indexing behavior.
     /// @return scan at given index
     OUSTER_API_FUNCTION
-    virtual std::vector<std::shared_ptr<LidarScan>> operator[](int index) const;
+    virtual LidarScanSet operator[](int index) const;
 
-    // move into a newly allocated item
+    /// timestamp based index of all scans in the file for each sensor, each
+    /// pair is timestamp followed by global scan index
+    /// @return index
+    /// @throw std::runtime_error if unindexed
     OUSTER_API_FUNCTION
-    virtual ScanSource* move() = 0;
+    virtual const std::vector<std::vector<std::pair<uint64_t, uint64_t>>>&
+    individual_index() const;
+
+    /// timestamp based index of all scans in the file, each pair is timestamp
+    /// followed by sensor index
+    /// @return index
+    /// @throw std::runtime_error if unindexed
+    OUSTER_API_FUNCTION
+    virtual const std::vector<std::pair<uint64_t, uint64_t>>& full_index()
+        const;
 
     // Other useful methods
 
+    /// move into a newly allocated item
+    /// @return a unique pointer to a newly allocated `ScanSource` instance
+    ///         containing the moved-from state.
+    OUSTER_API_FUNCTION
+    virtual std::unique_ptr<ScanSource> move() = 0;
+
     /// Get only a single sensor's stream from this source
     /// @tparam T hack to allow usage of yet-undefined class. Do not change.
+    /// @param[in] sensor_idx Index of the sensor.
     /// @return singled scan source
     template <class T = Singler>
-    T single(int sensor_idx = 0  /// <[in] index of sensor
-    ) const& {
+    T single(int sensor_idx = 0) const& {
         return T(*this, sensor_idx);
     }
 
     /// Get only a single sensor's stream from this source
     /// @tparam T hack to allow usage of yet-undefined class. Do not change.
+    /// @param[in] sensor_idx Index of the sensor.
     /// @return singled scan source
     template <class T = Singler>
-    T single(int sensor_idx = 0  /// <[in] index of sensor
-             ) && {
+    T single(int sensor_idx = 0) && {
         return T(std::move(*this), sensor_idx);
     }
 
     /// Slice a scan source
     /// @tparam T hack to allow usage of yet-undefined class. Do not change.
+    /// @param[in] l slice
     /// @return sliced scan source
     template <class T = Slicer>
-    T operator[](std::initializer_list<nonstd::optional<int>> l  /// <[in] slice
-    ) const& {
+    T operator[](std::initializer_list<nonstd::optional<int>> l) const& {
         Slice s;
         if (l.size() >= 1 && l.begin()->has_value()) {
             s.start = l.begin()->value();
@@ -174,4 +195,5 @@ class OUSTER_API_CLASS ScanSource {
 };
 
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

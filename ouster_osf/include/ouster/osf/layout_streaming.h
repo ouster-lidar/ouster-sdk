@@ -8,11 +8,18 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/writer.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /** @defgroup OSFStreamingDefaultSize OSF Streaming Default Size. */
@@ -57,8 +64,8 @@ class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
      */
     OUSTER_API_FUNCTION
     void save_message(const uint32_t stream_id, const ts_t receive_ts,
-                      const ts_t sensor_ts,
-                      const std::vector<uint8_t>& buf) override;
+                      const ts_t sensor_ts, const std::vector<uint8_t>& buf,
+                      const std::string& type) override;
 
     /**
      * @copydoc ChunksWriter::finish
@@ -66,11 +73,20 @@ class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
     OUSTER_API_FUNCTION
     void finish() override;
 
-    /**
-     * @copydoc ChunksWriter::chunk_size
-     */
+    OUSTER_API_FUNCTION
+    void flush(uint32_t stream_id) override;
+
     OUSTER_API_FUNCTION
     uint32_t chunk_size() const override;
+
+    /**
+     * Get stats for a specific stream;
+     *
+     * @param[in] stream_id stream id
+     * @return StreamStats of selected stream_id
+     */
+    OUSTER_API_FUNCTION
+    const StreamStats& get_stats(uint32_t stream_id) const;
 
    private:
     /**
@@ -126,4 +142,5 @@ class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

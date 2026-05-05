@@ -8,18 +8,20 @@
  */
 
 //! [doc-stag-osf-read-cpp]
+#include <cstdlib>
 #include <iostream>
+#include <string>
 
 #include "ouster/impl/build.h"
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_scan.h"
 
-using namespace ouster;
+using namespace ouster::sdk;
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
-                  << ouster::BUILD_SYSTEM << ")"
+        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM
+                  << ")"
                   << "\n\nUsage: osf_reader_example <osf_file>" << std::endl;
 
         return (argc == 1) ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -31,19 +33,19 @@ int main(int argc, char* argv[]) {
     osf::Reader reader(osf_file);
 
     // read all messages from OSF in timestamp order
-    for (const auto& m : reader.messages()) {
-        std::cout << "m.ts: " << m.ts().count() << ", m.id: " << m.id()
-                  << std::endl;
+    for (const auto& message : reader.messages()) {
+        std::cout << "message.ts: " << message.ts().count()
+                  << ", message.id: " << message.id() << std::endl;
 
         // In OSF file there maybe different type of messages stored, so here we
         // only interested in LidarScan messages
-        if (m.is<osf::LidarScanStream>()) {
+        if (message.is<osf::LidarScanStream>()) {
             // Decoding LidarScan messages
-            auto ls = m.decode_msg<osf::LidarScanStream>();
+            auto lidar_scan = message.decode_msg<osf::LidarScanStream>();
 
             // if decoded successfully just print on the screen LidarScan
-            if (ls) {
-                std::cout << "ls = " << to_string(*ls) << std::endl;
+            if (lidar_scan) {
+                std::cout << "ls = " << to_string(*lidar_scan) << std::endl;
             }
         }
     }
