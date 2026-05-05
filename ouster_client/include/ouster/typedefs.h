@@ -2,6 +2,24 @@
 #include <Eigen/Core>
 #include <unsupported/Eigen/CXX11/Tensor>
 
+#if !EIGEN_VERSION_AT_LEAST(3,4,0)
+namespace Eigen {
+
+    template<typename Scalar, int Rows>
+    using Vector = Matrix<Scalar, Rows, 1>;
+
+    template<typename Scalar>
+    using Vector3 = Vector<Scalar, 3>;
+
+    template <typename Scalar>
+    using VectorX = Vector<Scalar, Eigen::Dynamic>;
+
+    template <typename Scalar>
+    using ArrayX = Array<Scalar, Eigen::Dynamic, 1>;
+
+}
+#endif
+
 #include "ouster/visibility.h"
 
 namespace ouster {
