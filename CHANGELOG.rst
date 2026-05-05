@@ -2,6 +2,15 @@
 Changelog
 =========
 
+[0.16.2]
+=========
+* Add support for RGB lidar packet profiles ``RNG19_RFL8_SIG16_NIR16_RGB16`` and ``RNG19_RFL8_SIG16_NIR16_RGB16_DUAL``, including new chan fields ``R``, ``G``, ``B``, ``RGB`` and ``ChanFieldType::FLOAT16`` support.
+* Add HDR RGB visualization path for float16 RGB fields in viz, update default image/cloud mode selection to prefer RGB when present.
+* Add color-aware PLY/PCD loading for map visualization, so ``ouster-cli source <pointcloud> viz`` now displays colored point clouds.
+* Improve zone emulation workflow: add ``--keep-live-ids`` and ``--keep-sensor-to-body`` to ``emulate_zones``, add ``--extrinsics zone`` to source extrinsics handling, and fix zone mesh transform usage for BODY-frame rendering.
+* Apply autoexposure to exported float16 RGB point cloud data during mapping point cloud conversion to produce properly normalized RGB output.
+* [BREAKING] Python image processing correctors now use ``update()`` instead of being called directly.
+
 [0.16.1]
 =========
 

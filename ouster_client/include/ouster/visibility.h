@@ -19,6 +19,7 @@
     #define OUSTER_API_FUNCTION __attribute__((annotate("OUSTER_API_FUNCTION")))
     #define OUSTER_API_CLASS __attribute__((annotate("OUSTER_API_CLASS")))
     #define OUSTER_API_IGNORE __attribute__((annotate("OUSTER_API_IGNORE")))
+    #define OUSTER_API_VAR
     #define OUSTER_API_DEFINES
 
 /**
@@ -45,6 +46,7 @@
             #define OUSTER_API_FUNCTION __declspec( dllexport )
             #define OUSTER_API_CLASS
             #define OUSTER_API_DEFINES
+            #define OUSTER_API_VAR
 
         /**
          * Currently compiling the code requiring the ouster
@@ -54,6 +56,7 @@
             #define OUSTER_API_FUNCTION __declspec( dllimport )
             #define OUSTER_API_CLASS
             #define OUSTER_API_DEFINES
+            #define OUSTER_API_VAR
         #endif
 
     /**
@@ -68,6 +71,7 @@
             #define _OUSTER_API_UNIX_ATTR __attribute__((visibility("default")))
             #define OUSTER_API_FUNCTION _OUSTER_API_UNIX_ATTR
             #define OUSTER_API_CLASS _OUSTER_API_UNIX_ATTR
+            #define OUSTER_API_VAR _OUSTER_API_UNIX_ATTR
             #define OUSTER_API_DEFINES
         #endif
     #endif
@@ -82,5 +86,6 @@
     #define OUSTER_API_FUNCTION
     #define OUSTER_API_CLASS
     #define OUSTER_API_DEFINES
+    #define OUSTER_API_VAR
 #endif
 // clang-format on

@@ -17,6 +17,7 @@
 namespace ouster {
 namespace sdk {
 namespace core {
+namespace image {
 
 namespace {
 
@@ -42,6 +43,13 @@ const size_t AE_MIN_NONZERO_POINTS = 100;
 /* default percentile for scaling in autoexposure */
 const double AE_DEFAULT_PERCENTILE = 0.1;
 
+uint32_t f16_bits_to_f32_bits_fast(uint16_t bits) {
+    // Zero (no-return sentinel) must map to f32 zero; the bias-shift formula
+    // produces a garbage value for bits==0 so we guard with a cmov (no branch).
+    const uint32_t expanded = static_cast<uint32_t>(bits + 0x1C000u) << 13;
+    return bits != 0 ? expanded : 0u;
+}
+
 }  // namespace
 
 AutoExposure::AutoExposure()
@@ -61,7 +69,7 @@ AutoExposure::AutoExposure(double lo_percentile, double hi_percentile,
       ae_update_every_(update_every) {}
 
 template <typename T>
-void AutoExposure::update(Eigen::Ref<img_t<T>> image, bool update_state) {
+void AutoExposure::apply(Eigen::Ref<img_t<T>> image, bool update_state) {
     Eigen::Map<Eigen::Array<T, -1, 1>> key_eigen(image.data(), image.size());
 
     // int a;
@@ -142,14 +150,118 @@ void AutoExposure::update(Eigen::Ref<img_t<T>> image, bool update_state) {
 }
 
 // use overloads vs templates so implicit conversion to Eigen::Ref still works
-void AutoExposure::operator()(Eigen::Ref<img_t<float>> image,
-                              bool update_state) {
-    update(image, update_state);
+void AutoExposure::update(Eigen::Ref<img_t<float>> image, bool update_state) {
+    apply(image, update_state);
 }
 
-void AutoExposure::operator()(Eigen::Ref<img_t<double>> image,
-                              bool update_state) {
-    update(image, update_state);
+void AutoExposure::update(Eigen::Ref<img_t<double>> image, bool update_state) {
+    apply(image, update_state);
+}
+
+template <typename T>
+void AutoExposure::apply(Eigen::TensorMap<rgb_img_t<T>> image,
+                         bool update_state) {
+    const Eigen::Index pixel_count_index =
+        image.dimension(0) * image.dimension(1);
+    const auto pixel_count = static_cast<size_t>(pixel_count_index);
+
+    if (counter_ == 0 && update_state) {
+        Eigen::Tensor<T, 2, Eigen::RowMajor> lum =
+            image.chip(0, 2) * static_cast<T>(0.299) +
+            image.chip(1, 2) * static_cast<T>(0.587) +
+            image.chip(2, 2) * static_cast<T>(0.114);
+
+        Eigen::Map<Eigen::Array<T, -1, 1>> lum_flat(lum.data(),
+                                                    pixel_count_index);
+
+        std::vector<size_t> indices;
+        indices.reserve(pixel_count);
+        for (size_t i = 0; i < pixel_count; i += AE_STRIDE) {
+            if (lum_flat[i] > 0) {
+                indices.push_back(i);
+            }
+        }
+        if (indices.size() < AE_MIN_NONZERO_POINTS) {
+            return;
+        }
+
+        auto cmp = [&](const size_t a, const size_t b) {
+            return lum_flat[a] < lum_flat[b];
+        };
+
+        const size_t lo_k = static_cast<size_t>(
+            static_cast<double>(indices.size()) * lo_percentile_);
+        const auto lo_offset = static_cast<std::ptrdiff_t>(lo_k);
+        auto lo_iter = indices.begin() + lo_offset;
+        std::nth_element(indices.begin(), lo_iter, indices.end(), cmp);
+        lo_ = lum_flat[indices[lo_k]];
+
+        const size_t hi_k = static_cast<size_t>(
+            static_cast<double>(indices.size()) * hi_percentile_);
+        const auto hi_offset = static_cast<std::ptrdiff_t>(hi_k);
+        auto hi_iter = indices.end() - hi_offset - 1;
+        std::nth_element(lo_iter, hi_iter, indices.end(), cmp);
+        hi_ = lum_flat[*hi_iter];
+
+        if (!initialized_) {
+            initialized_ = true;
+            lo_state_ = lo_;
+            hi_state_ = hi_;
+        }
+    }
+
+    if (!initialized_) {
+        return;
+    }
+
+    if (update_state) {
+        lo_state_ = AE_DAMPING * lo_state_ + (1.0 - AE_DAMPING) * lo_;
+        hi_state_ = AE_DAMPING * hi_state_ + (1.0 - AE_DAMPING) * hi_;
+    }
+
+    Eigen::Map<Eigen::Array<T, -1, 1>> all_flat(image.data(), image.size());
+    double lo_hi_scale =
+        (1.0 - (lo_percentile_ + hi_percentile_)) / (hi_state_ - lo_state_);
+
+    if (std::isinf(lo_hi_scale) || std::isnan(lo_hi_scale)) {
+        all_flat *= static_cast<T>(0.5 / hi_state_);
+    } else if (lo_hi_scale * (0.0 - lo_state_) + lo_percentile_ <= 0.0) {
+        all_flat -= static_cast<T>(lo_state_);
+        all_flat *= static_cast<T>(lo_hi_scale);
+        all_flat += static_cast<T>(lo_percentile_);
+    } else {
+        all_flat *= static_cast<T>((1.0 - hi_percentile_) / hi_state_);
+    }
+
+    all_flat = all_flat.max(static_cast<T>(0)).min(static_cast<T>(1));
+
+    if (update_state) {
+        counter_ = (counter_ + 1) % ae_update_every_;
+    }
+}
+
+void AutoExposure::update(Eigen::TensorMap<rgb_img_t<float>> image,
+                          bool update_state) {
+    apply(image, update_state);
+}
+
+void AutoExposure::update(Eigen::TensorMap<rgb_img_t<double>> image,
+                          bool update_state) {
+    apply(image, update_state);
+}
+
+void AutoExposure::update(Eigen::TensorMap<const rgb_img_t<float16_t>> input,
+                          Eigen::TensorMap<rgb_img_t<float>> out,
+                          bool update_state) {
+    auto in_ptr = reinterpret_cast<const uint16_t*>(input.data());
+    const auto count = static_cast<size_t>(input.dimension(0)) *
+                       static_cast<size_t>(input.dimension(1)) *
+                       static_cast<size_t>(input.dimension(2));
+    for (size_t i = 0; i < count; i++) {
+        auto result = f16_bits_to_f32_bits_fast(in_ptr[i]);
+        memcpy(&out.data()[i], &result, sizeof(float));
+    }
+    apply(out, update_state);
 }
 
 namespace {
@@ -228,8 +340,8 @@ static Eigen::Array<T, -1, 1> compute_dark_count(
 }
 
 template <typename T>
-void BeamUniformityCorrector::update(Eigen::Ref<img_t<T>> image,
-                                     bool update_state) {
+void BeamUniformityCorrector::apply(Eigen::Ref<img_t<T>> image,
+                                    bool update_state) {
     const auto image_h = image.rows();
 
     // compute dark counts, if necessary
@@ -251,16 +363,17 @@ void BeamUniformityCorrector::update(Eigen::Ref<img_t<T>> image,
     image = image.cwiseMax(static_cast<T>(0));
 }
 
-void BeamUniformityCorrector::operator()(Eigen::Ref<img_t<float>> image,
-                                         bool update_state) {
-    update(image, update_state);
+void BeamUniformityCorrector::update(Eigen::Ref<img_t<float>> image,
+                                     bool update_state) {
+    apply(image, update_state);
 }
 
-void BeamUniformityCorrector::operator()(Eigen::Ref<img_t<double>> image,
-                                         bool update_state) {
-    update(image, update_state);
+void BeamUniformityCorrector::update(Eigen::Ref<img_t<double>> image,
+                                     bool update_state) {
+    apply(image, update_state);
 }
 
+}  // namespace image
 }  // namespace core
 }  // namespace sdk
 }  // namespace ouster

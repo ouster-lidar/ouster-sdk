@@ -3,10 +3,16 @@ FROM ubuntu:22.04 AS BASE_IMAGE
 ENV INSTALL_DIR="/usr/local"
 ENV WORKSPACE=/root
 ARG APT_PROXY=""
+ARG APT_MIRROR=""
 
 RUN /bin/sh -c "if ! [ -z \"$APT_PROXY\" ]; then \
         echo 'Using Proxy for APT'; \
         echo 'Acquire::http::Proxy \"$APT_PROXY\";' > /etc/apt/apt.conf.d/01proxy; \
+    fi"
+
+RUN /bin/sh -c "if ! [ -z \"$APT_MIRROR\" ]; then \
+        sed -i \"s|http://archive.ubuntu.com/ubuntu|$APT_MIRROR|g\" /etc/apt/sources.list; \
+        sed -i \"s|http://security.ubuntu.com/ubuntu|$APT_MIRROR|g\" /etc/apt/sources.list; \
     fi"
 
 RUN apt-get update \

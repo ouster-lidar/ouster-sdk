@@ -1,23 +1,6 @@
 #pragma once
 #include <Eigen/Core>
-
-#if !EIGEN_VERSION_AT_LEAST(3,4,0)
-namespace Eigen {
-
-    template<typename Scalar, int Rows>
-    using Vector = Matrix<Scalar, Rows, 1>;
-
-    template<typename Scalar>
-    using Vector3 = Vector<Scalar, 3>;
-
-    template <typename Scalar>
-    using VectorX = Vector<Scalar, Eigen::Dynamic>;
-
-    template <typename Scalar>
-    using ArrayX = Array<Scalar, Eigen::Dynamic, 1>;
-
-}
-#endif
+#include <unsupported/Eigen/CXX11/Tensor>
 
 #include "ouster/visibility.h"
 
@@ -129,6 +112,15 @@ using ArrayX3dR = ArrayX3R<double>;
 template <typename T>
 using img_t = Eigen::Array<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
+/**
+ * For RGB image operations. A rank-3 tensor with shape (H, W, 3) where
+ * the last dimension indexes the R, G, and B channels respectively.
+ *
+ * @tparam T The data type for each channel element.
+ */
+template <typename T>
+using rgb_img_t = Eigen::Tensor<T, 3, Eigen::RowMajor>;
+
 // TODO: deprecate mat4d in favor of Matrix4dR
 /** Used for transformations. */
 using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
@@ -175,6 +167,28 @@ using PointsD [[deprecated("Use PointCloudXYZd instead of PointsD")]] =
     PointCloudXYZd;
 using PointsF [[deprecated("Use PointCloudXYZf instead of PointsF")]] =
     PointCloudXYZf;
+
+/**
+ * A 16-bit floating-point scalar type stored as a raw uint16_t.
+ *
+ * Used to represent half-precision (IEEE 754 float16) field data in
+ * LidarScan channels.
+ */
+#pragma pack(push, 1)
+struct OUSTER_API_CLASS float16_t {
+    /** Raw bit pattern of the 16-bit float value. */
+    uint16_t data;
+
+    /** Uninitialized construction of a 16-bit float. */
+    OUSTER_API_FUNCTION float16_t() {}
+
+    /**
+     * Constructs a float16_t from a raw integer bit pattern.
+     * @param[in] i raw uint16 bit pattern.
+     */
+    OUSTER_API_FUNCTION explicit float16_t(uint16_t i) { data = i; }
+};
+#pragma pack(pop)
 
 }  // namespace core
 }  // namespace sdk

@@ -21,6 +21,29 @@ struct iterator_holder {
     bool first_or_done = true;
 };
 
+namespace py = pybind11;
+
+namespace pybind11 {
+namespace detail {
+template <>
+struct npy_format_descriptor<ouster::sdk::core::float16_t> {
+    static pybind11::dtype dtype() {
+        // 23 == NPY_HALF, from the NPY_TYPES enum in numpy/ndarraytypes.h
+        // See: https://github.com/pybind/pybind11/issues/1776
+        handle ptr = npy_api::get().PyArray_DescrFromType_(23);
+        return reinterpret_borrow<pybind11::dtype>(ptr);
+    }
+    static std::string format() {
+        // following:
+        // https://docs.python.org/3/library/struct.html#format-characters "e"
+        // is the struct format character for IEEE 754 binary16 (float16)
+        return "e";
+    }
+    static constexpr auto name = const_name("float16");
+};
+}  // namespace detail
+}  // namespace pybind11
+
 void parse_packet_source_options(const pybind11::kwargs& args,
                                  ouster::sdk::PacketSourceOptions& options);
 void parse_scan_source_options(const pybind11::kwargs& args,

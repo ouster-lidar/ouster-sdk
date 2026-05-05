@@ -66,17 +66,30 @@ class OUSTER_API_CLASS PacketWriter : public PacketFormat {
     void set_shutdown_countdown(uint8_t* lidar_buf,
                                 uint8_t shutdown_countdown) const;
 
-    template <typename T>
-    void set_block(Eigen::Ref<const img_t<T>> field, const std::string& i,
-                   uint8_t* lidar_buf) const;
-
     /**
-     * Note: measurement_id indices will be taken from lidar_buf itself,
-     * so this method expects those to be pre-filled
+     * Set the specified channel field into a packet measurement block.
+     * @tparam T The field type.
+     * @param[in] data source array containing field data to write.
+     * @param[in] cols number of columns in the source array.
+     * @param[in] field_name the name of the channel field to set.
+     * @param[in,out] lidar_buf the lidar buffer.
      */
     template <typename T>
-    void unpack_raw_headers(Eigen::Ref<const img_t<T>> field,
-                            uint8_t* lidar_buf) const;
+    OUSTER_API_FUNCTION void set_block(const T* data, int cols,
+                                       const std::string& field_name,
+                                       uint8_t* lidar_buf) const;
+
+    /**
+     * Unpack the RAW_HEADERS field from a scan into the lidar packet buffer.
+     * Note: measurement_id indices will be taken from lidar_buf itself,
+     * so this method expects those to be pre-filled
+     * @tparam T The field type.
+     * @param[in] field source eigen array
+     * @param[in,out] lidar_buf the lidar buffer.
+     */
+    template <typename T>
+    OUSTER_API_FUNCTION void unpack_raw_headers(
+        Eigen::Ref<const img_t<T>> field, uint8_t* lidar_buf) const;
 
     OUSTER_API_FUNCTION
     void set_imu_nmea_ts(uint8_t* imu_buf, uint64_t timestamp) const;
@@ -115,6 +128,54 @@ class OUSTER_API_CLASS PacketWriter : public PacketFormat {
  */
 OUSTER_DEPRECATED_TYPE(packet_writer, PacketWriter,
                        OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
+
+// Inline definition of PacketWriter::unpack_raw_headers<T>. Defined here
+// (rather than in parsing.cpp with explicit instantiations) to work around
+// an Apple Clang mangling bug for the dependent default StrideType
+// expression in Eigen::Ref. See the note on the declaration above.
+template <typename T>
+inline void PacketWriter::unpack_raw_headers(Eigen::Ref<const img_t<T>> field,
+                                             uint8_t* lidar_buf) const {
+    using ColMajorView = Eigen::Map<Eigen::Array<T, -1, 1, Eigen::ColMajor>>;
+
+    if (sizeof(T) > 4) {
+        throw std::invalid_argument(
+            "RAW_HEADERS field should be of type"
+            "uint32_t or smaller to work correctly");
+    }
+
+    uint8_t* col_zero = nth_col(0, lidar_buf);
+    uint16_t m_id = col_measurement_id(col_zero);
+
+    size_t ch_size = col_header_size / sizeof(T);
+    size_t cf_size = col_footer_size / sizeof(T);
+    size_t ph_size = packet_header_size / sizeof(T);
+    size_t pf_size = packet_footer_size / sizeof(T);
+
+    size_t ch_offset = 0;
+    size_t cf_offset = ch_offset + ch_size;
+    size_t ph_offset = cf_offset + cf_size;
+    size_t pf_offset = ph_offset + ph_size;
+
+    // fill in header and footer, col0 is sufficient for that
+    ColMajorView ph_view(reinterpret_cast<T*>(lidar_buf), ph_size);
+    ColMajorView pf_view(reinterpret_cast<T*>(footer(lidar_buf)), pf_size);
+    ph_view = field.block(ph_offset, m_id, ph_size, 1);
+    pf_view = field.block(pf_offset, m_id, pf_size, 1);
+
+    for (uint32_t icol = 0; icol < columns_per_packet; ++icol) {
+        uint8_t* col_buf = nth_col(icol, lidar_buf);
+        uint8_t* colf_ptr = col_buf + col_size - col_footer_size;
+
+        ColMajorView colh_view(reinterpret_cast<T*>(col_buf), ch_size);
+        ColMajorView colf_view(reinterpret_cast<T*>(colf_ptr), cf_size);
+
+        m_id = col_measurement_id(col_buf);
+
+        colh_view = field.block(ch_offset, m_id, ch_size, 1);
+        colf_view = field.block(cf_offset, m_id, cf_size, 1);
+    }
+}
 
 }  // namespace impl
 }  // namespace core

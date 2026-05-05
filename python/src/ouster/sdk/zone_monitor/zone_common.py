@@ -78,6 +78,9 @@ class EmulatedZoneMon:
                 bitmask_field[trigger_mask] |= (1 << live_index)
         return counts, occlusion_counts, invalid_counts, min_range, max_range, avg_range
 
+    def set_live_zones(self, live_zones: List[int]):
+        self.live_zones = live_zones
+
     def calc_triggers(self, range_field, bitmask_field = None):
         self.zone_counts, self.occlusion_counts, self.invalid_counts, self.zone_mins, self.zone_maxes, self.zone_avgs =\
              self._calc_counts(range_field, bitmask_field)

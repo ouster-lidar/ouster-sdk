@@ -45,9 +45,8 @@ namespace core {
 
 namespace impl {
 
-extern const Table<LidarMode, const char*, 7> LIDAR_MODE_STRINGS;
 extern const Table<TimestampMode, const char*, 4> TIMESTAMP_MODE_STRINGS;
-extern const Table<ouster::sdk::core::OperatingMode, const char*, 2>
+extern const Table<ouster::sdk::core::OperatingMode, const char*, 3>
     OPERATING_MODE_STRINGS;
 extern const Table<ouster::sdk::core::MultipurposeIOMode, const char*, 6>
     MULTIPURPOSE_IO_MODE_STRINGS;
@@ -253,7 +252,8 @@ void init_client_data(py::module& module, py::module& /*unused*/) {
                        "Timestamp mode of sensor. See class TimestampMode.")
         .def_readwrite("lidar_mode", &SensorConfig::lidar_mode,
                        "Horizontal and Vertical Resolution rate of sensor as "
-                       "mode, e.g., 1024x10. See class LidarMode.")
+                       "mode, e.g., 1024x10. See class LidarMode.",
+                       py::return_value_policy::copy)
         .def_readwrite("operating_mode", &SensorConfig::operating_mode,
                        "Operating Mode of sensor. See class OperatingMode.")
         .def_readwrite(
@@ -286,6 +286,7 @@ void init_client_data(py::module& module, py::module& /*unused*/) {
                        "UART input $GPRMC messages.")
         .def_readwrite(
             "nmea_ignore_valid_char", &SensorConfig::nmea_ignore_valid_char,
+
             "NMEA Ignore Valid Char. True corresponds to 1 and False to 0 for "
             "property; see sensor documentation for details.")
         .def_readwrite("nmea_leap_seconds", &SensorConfig::nmea_leap_seconds,
@@ -505,20 +506,40 @@ void init_client_data(py::module& module, py::module& /*unused*/) {
         None
     )");
 
-    auto lidar_mode = py::enum_<LidarMode>(module, "LidarMode", R"(
-    Possible Lidar Modes of sensor.
+    auto lidar_mode =
+        py::class_<LidarMode>(module, "LidarMode",
+                              R"(Possible Lidar Modes of sensor.
 
     Determines to horizontal and vertical resolution rates of sensor. See
-    sensor documentation for details.)");
-    def_enum(lidar_mode, ouster::sdk::core::impl::LIDAR_MODE_STRINGS, "MODE_");
-    // Part of DEPRECATION: retainining these for backward compatibility
-    lidar_mode.value("MODE_UNSPEC", LidarMode::UNSPECIFIED);
-    lidar_mode.value("UNSPECIFIED", LidarMode::UNSPECIFIED);
-    lidar_mode.attr("from_string") = py::cpp_function(
-        [](const std::string& s) {
-            return ouster::sdk::core::lidar_mode_of_string(s);
-        },
-        py::name("from_string"), "Create LidarMode from string.");
+    sensor documentation for details.)")
+            .def(py::init<unsigned int, unsigned int>(), R"(
+        Construct a mode with a given column count and fps.
+    )",
+                 py::arg("columns"), py::arg("fps"))
+            .def(py::init([](const std::string& mode_string) {
+                     return LidarMode(mode_string);
+                 }),
+                 py::arg("mode_string"), R"(
+    Args:
+        mode_string (str): mode string to parse
+    )")
+            .def_readonly("columns", &LidarMode::columns,
+                          "Number of columns per scan.")
+            .def_readonly("fps", &LidarMode::fps, "Framerate of scans.")
+            .def_readonly_static("_512x10", &LidarMode::_512x10)
+            .def_readonly_static("_512x20", &LidarMode::_512x20)
+            .def_readonly_static("_1024x10", &LidarMode::_1024x10)
+            .def_readonly_static("_1024x20", &LidarMode::_1024x20)
+            .def_readonly_static("_2048x10", &LidarMode::_2048x10)
+            .def_readonly_static("_4096x5", &LidarMode::_4096x5)
+            .def("__str__",
+                 [](const LidarMode& self) { return to_string(self); })
+            .def("__eq__", [](const LidarMode& left, const py::object& right) {
+                if (!py::isinstance<LidarMode>(right)) {
+                    return false;
+                }
+                return left == py::cast<const LidarMode&>(right);
+            });
 
     auto timestamp_mode = py::enum_<TimestampMode>(module, "TimestampMode", R"(
     Possible Timestamp modes of sensor.See sensor documentation for details.)");

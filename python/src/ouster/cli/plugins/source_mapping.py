@@ -20,7 +20,8 @@ from ouster.sdk.core import (ChanField,
                              LidarScanSet,
                              XYZLut,
                              first_valid_column_pose,
-                             dewarp)
+                             dewarp,
+                             AutoExposure)
 from ouster.sdk import open_source
 from ouster.cli.plugins.source_util import (source_multicommand,
                                             SourceCommandType,
@@ -557,6 +558,8 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
             points_down_removed = 0
 
         logger.info("Start processing...")
+        first = True
+        auto_exposures = {}
         try:
             for scan_idx, scans in enumerate(scans_iter()):
                 # if we saved after a loop, just quietly yield thereafter
@@ -567,6 +570,15 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                 for idx, scan in enumerate(scans):
                     if scan is None:
                         continue
+
+                    if first:
+                        first = False
+                        if scan.has_field(field):
+                            field_data = scan.field(field)
+                            if field_data.ndim != 2:
+                                auto_exposures[field] = AutoExposure(lo_percentile=0.05,
+                                                                     hi_percentile=0.02,
+                                                                     update_every=3)
 
                     # Pose attribute is per col global pose so we use identity for scan
                     # pose
@@ -581,6 +593,11 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                         keys = None
                     else:
                         keys = scan.field(field)
+                    # Autoexpose RGB float16 data to convert it to 0-1 float32s
+                    if keys.ndim == 3 and keys.shape[2] == 3:
+                        if keys.dtype == np.float16 and ("RGB" in field.upper()):
+                            if field in auto_exposures:
+                                keys = auto_exposures[field].update(keys)
                     normals_field = None
                     if scan.has_field(ChanField.NORMALS):
                         try:

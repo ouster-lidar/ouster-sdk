@@ -44,6 +44,10 @@ static constexpr cf_type FLAGS2 = "FLAGS2";      ///< 2nd return flags
 static constexpr cf_type NORMALS = "NORMALS";    ///< 1st return normal values
 static constexpr cf_type NORMALS2 = "NORMALS2";  ///< 2nd return normal values
 static constexpr cf_type WINDOW = "WINDOW";      ///< window blockage
+static constexpr cf_type R = "R";                ///< Red channel
+static constexpr cf_type G = "G";                ///< Green channel
+static constexpr cf_type B = "B";                ///< Blue channel
+static constexpr cf_type RGB = "RGB";            ///< Combined RGB channel
 static constexpr cf_type ZONE_MASK =
     "ZONE_MASK";  ///< per pixel mask describing zone occupancy
 static constexpr cf_type RAW_HEADERS =
@@ -119,6 +123,7 @@ enum class ChanFieldType {
     FLOAT32 = 9,
     FLOAT64 = 10,
     CHAR = 11,
+    FLOAT16 = 12,
     /* offsetting 30 for structs to pad their numbers for versioning */
     ZONE_STATE = 30,
     UNREGISTERED = 100

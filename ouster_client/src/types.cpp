@@ -43,23 +43,16 @@ namespace impl {
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-extern const Table<LidarMode, const char*, 7> LIDAR_MODE_STRINGS{
-    {{LidarMode::UNSPECIFIED, "UNKNOWN"},
-     {LidarMode::_512x10, "512x10"},
-     {LidarMode::_512x20, "512x20"},
-     {LidarMode::_1024x10, "1024x10"},
-     {LidarMode::_1024x20, "1024x20"},
-     {LidarMode::_2048x10, "2048x10"},
-     {LidarMode::_4096x5, "4096x5"}}};
-
 extern const Table<TimestampMode, const char*, 4> TIMESTAMP_MODE_STRINGS{
     {{TimestampMode::UNSPECIFIED, "UNKNOWN"},
      {TimestampMode::TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
      {TimestampMode::TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
      {TimestampMode::TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
 
-extern const Table<OperatingMode, const char*, 2> OPERATING_MODE_STRINGS{
-    {{OperatingMode::NORMAL, "NORMAL"}, {OperatingMode::STANDBY, "STANDBY"}}};
+extern const Table<OperatingMode, const char*, 3> OPERATING_MODE_STRINGS{
+    {{OperatingMode::UNSPECIFIED, "UNKNOWN"},
+     {OperatingMode::NORMAL, "NORMAL"},
+     {OperatingMode::STANDBY, "STANDBY"}}};
 
 extern const Table<MultipurposeIOMode, const char*, 6>
     MULTIPURPOSE_IO_MODE_STRINGS{
@@ -104,6 +97,10 @@ Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{
         {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_ZONE16,
          "RNG19_RFL8_SIG16_NIR16_ZONE16"},
         {UDPProfileLidar::RNG15_RFL8_WIN8, "RNG15_RFL8_WIN8"},
+        {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16,
+         "RNG19_RFL8_SIG16_NIR16_RGB16"},
+        {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16_DUAL,
+         "RNG19_RFL8_SIG16_NIR16_RGB16_DUAL"},
         {UDPProfileLidar::OFF, "OFF"},
     }};
 
@@ -219,37 +216,49 @@ bool operator!=(const SensorConfig& lhs, const SensorConfig& rhs) {
 
 /* Misc operations */
 
-uint32_t n_cols_of_lidar_mode(LidarMode mode) {
-    switch (mode) {
-        case LidarMode::_512x10:
-        case LidarMode::_512x20:
-            return 512;
-        case LidarMode::_1024x10:
-        case LidarMode::_1024x20:
-            return 1024;
-        case LidarMode::_2048x10:
-            return 2048;
-        case LidarMode::_4096x5:
-            return 4096;
-        default:
-            throw std::invalid_argument{"n_cols_of_lidar_mode"};
+LidarMode::LidarMode(const std::string& mode) {
+    auto split = mode.find('x');
+    try {
+        if (split == std::string::npos) {
+            throw std::invalid_argument("");
+        }
+        auto str_cols = mode.substr(0, split);
+        auto str_fps = mode.substr(split + 1);
+        int cols_int = std::stoi(str_cols);
+        int fps_int = std::stoi(str_fps);
+        if (cols_int < 0 || fps_int < 0) {
+            throw std::invalid_argument("");
+        }
+        columns = cols_int;
+        fps = fps_int;
+    } catch (std::invalid_argument&) {
+        throw std::invalid_argument("Invalid lidar mode string \"" + mode +
+                                    "\".");
     }
 }
 
-int frequency_of_lidar_mode(LidarMode mode) {
-    switch (mode) {
-        case LidarMode::_4096x5:
-            return 5;
-        case LidarMode::_512x10:
-        case LidarMode::_1024x10:
-        case LidarMode::_2048x10:
-            return 10;
-        case LidarMode::_512x20:
-        case LidarMode::_1024x20:
-            return 20;
-        default:
-            throw std::invalid_argument{"frequency_of_lidar_mode"};
-    }
+LidarMode::LidarMode(unsigned int cols, unsigned int framerate)
+    : columns(cols), fps(framerate) {}
+
+const LidarMode LidarMode::_512x10 = {512, 10};
+const LidarMode LidarMode::_512x20 = {512, 20};
+const LidarMode LidarMode::_1024x10 = {1024, 10};
+const LidarMode LidarMode::_1024x20 = {1024, 20};
+const LidarMode LidarMode::_2048x10 = {2048, 10};
+const LidarMode LidarMode::_4096x5 = {4096, 5};
+
+// todo deprecate
+uint32_t n_cols_of_lidar_mode(LidarMode mode) { return mode.columns; }
+
+// todo deprecate
+unsigned int frequency_of_lidar_mode(LidarMode mode) { return mode.fps; }
+
+bool operator==(const LidarMode& lhs, const LidarMode& rhs) {
+    return (lhs.fps == rhs.fps && lhs.columns == rhs.columns);
+}
+
+bool operator!=(const LidarMode& lhs, const LidarMode& rhs) {
+    return !(lhs == rhs);
 }
 
 std::string client_version() {
@@ -281,13 +290,15 @@ static optional<K> rlookup(const impl::Table<K, const char*, N>& table,
 }
 
 std::string to_string(LidarMode mode) {
-    auto res = lookup(impl::LIDAR_MODE_STRINGS, mode);
-    return res ? res.value() : "UNKNOWN";
+    return std::to_string(mode.columns) + "x" + std::to_string(mode.fps);
 }
 
-LidarMode lidar_mode_of_string(const std::string& str) {
-    auto res = rlookup(impl::LIDAR_MODE_STRINGS, str.c_str());
-    return res ? res.value() : LidarMode::UNSPECIFIED;
+optional<LidarMode> lidar_mode_of_string(const std::string& str) {
+    try {
+        return LidarMode(str);
+    } catch (std::invalid_argument& ex) {
+        return {};
+    }
 }
 
 std::string to_string(TimestampMode mode) {

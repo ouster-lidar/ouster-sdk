@@ -1134,37 +1134,27 @@ class LidarMode:
     _1024x20: ClassVar[LidarMode]
     _2048x10: ClassVar[LidarMode]
     _4096x5: ClassVar[LidarMode]
-    UNKNOWN: ClassVar[LidarMode]
-    __members__: ClassVar[Dict[str, LidarMode]]
-    values: ClassVar[Iterator[LidarMode]]
 
-    def __init__(self, code: int) -> None:
+    @overload
+    def __init__(self, mode: str) -> None:
         """__init__(self: ouster.sdk._bindings.client.LidarMode, value: int) -> None
 """
         ...
 
-    def __int__(self) -> int:
-        """__int__(self: ouster.sdk._bindings.client.LidarMode) -> int
+    @overload
+    def __init__(self, columns: int, fps: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.LidarMode, value: int) -> None
 """
         ...
 
     @property
-    def name(self) -> str:
-        """The name of the Enum member."""
+    def fps(self) -> int:
         ...
 
     @property
-    def value(self) -> int:
-        """The value of the Enum member."""
+    def columns(self) -> int:
         ...
 
-    @staticmethod
-    def from_string(s: str) -> LidarMode:
-        """from_string(arg0: str) -> ouster.sdk._bindings.client.LidarMode
-
-Create LidarMode from string.
-"""
-        ...
 
 class TimestampMode:
     UNSPECIFIED: ClassVar[TimestampMode]
@@ -1424,6 +1414,9 @@ class UDPProfileLidar:
     RNG15_RFL8_NIR8_DUAL: ClassVar[UDPProfileLidar]
     RNG15_RFL8_NIR8_ZONE16: ClassVar[UDPProfileLidar]
     RNG19_RFL8_SIG16_NIR16_ZONE16: ClassVar[UDPProfileLidar]
+    RNG15_RFL8_WIN8: ClassVar[UDPProfileLidar]
+    RNG19_RFL8_SIG16_NIR16_RGB16: ClassVar[UDPProfileLidar]
+    RNG19_RFL8_SIG16_NIR16_RGB16_DUAL: ClassVar[UDPProfileLidar]
     UNKNOWN: ClassVar[UDPProfileLidar]
     OFF: ClassVar[UDPProfileLidar]
     __members__: ClassVar[Dict[str, UDPProfileLidar]]
@@ -3768,6 +3761,16 @@ Return an iterator to the indices for scans that are valid.
 """
         ...
 
+def destagger(field: ndarray, shifts: List[int], inverse: bool = ...) -> ndarray:
+    """destagger(field, shifts, inverse=False) -> ndarray
+
+Destagger a 2-D or 3-D array according to pixel shift offsets.
+
+Overloaded at the C++ level to support bool, int8/16/32/64,
+uint8/16/32/64, float16, float32, and float64 arrays.
+"""
+    ...
+
 def destagger_bool(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
     """destagger_bool(arg0: numpy.ndarray[bool[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[bool[m, n]]
 """
@@ -4081,6 +4084,21 @@ Overloaded function.
 """
         ...
 
+    def update(self, image: ndarray, update_state: bool = ...) -> Optional[ndarray]:
+        """update(*args, **kwargs)
+Overloaded function.
+
+1. update(self: ouster.sdk._bindings.client.AutoExposure, image: numpy.ndarray[numpy.float32], update_state: bool = True) -> None
+
+2. update(self: ouster.sdk._bindings.client.AutoExposure, image: numpy.ndarray[numpy.float64], update_state: bool = True) -> None
+
+3. update(self: ouster.sdk._bindings.client.AutoExposure, image: numpy.ndarray[numpy.float16[m, n, 3]], update_state: bool = True) -> numpy.ndarray[numpy.float32]
+
+Note: returns None for float32/float64 inputs (in-place), returns a new float32
+array for float16 H x W x 3 inputs (HDR path).
+"""
+        ...
+
 class BeamUniformityCorrector:
 
     def __init__(self) -> None:
@@ -4095,6 +4113,16 @@ Overloaded function.
 1. __call__(self: ouster.sdk._bindings.client.BeamUniformityCorrector, image: numpy.ndarray[numpy.float32], update_state: bool = True) -> None
 
 2. __call__(self: ouster.sdk._bindings.client.BeamUniformityCorrector, image: numpy.ndarray[numpy.float64], update_state: bool = True) -> None
+"""
+        ...
+
+    def update(self, image: ndarray, update_state: bool = ...) -> None:
+        """update(*args, **kwargs)
+Overloaded function.
+
+1. update(self: ouster.sdk._bindings.client.BeamUniformityCorrector, image: numpy.ndarray[numpy.float32], update_state: bool = True) -> None
+
+2. update(self: ouster.sdk._bindings.client.BeamUniformityCorrector, image: numpy.ndarray[numpy.float64], update_state: bool = True) -> None
 """
         ...
 

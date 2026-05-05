@@ -4,7 +4,7 @@ from ouster.sdk.core import ChanField, LidarScan, SensorInfo, LidarMode, Version
 from ouster.sdk.viz import WindowCtx, MouseButtonEvent, MouseButton, EventModifierKeys
 from ouster.sdk.viz.model import LidarScanVizModel, SensorModel, Palettes
 from ouster.sdk.viz.core import LidarScanViz, _Seekable
-from ouster.sdk.viz.view_mode import SimpleMode, RGBMode
+from ouster.sdk.viz.view_mode import SimpleMode, RGBMode, HdrRgbMode
 
 
 def test_use_default_view_modes_1():
@@ -17,6 +17,37 @@ def test_use_default_view_modes_1():
     assert model._cloud_mode_name == ChanField.REFLECTIVITY
     assert model._image_mode_names[0] == ChanField.REFLECTIVITY
     assert model._image_mode_names[1] == ChanField.NEAR_IR
+
+
+def test_use_default_view_modes_prefers_rgb_for_second_image():
+    """It will prefer the RGB field for the second image when available."""
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    model = LidarScanVizModel(viz, [meta], _img_aspect_ratio=0)
+    scan = LidarScan(meta.h, meta.w)
+    scan.add_field("RGB", np.zeros((meta.h, meta.w, 3), dtype=np.uint8))
+
+    model._amend_view_modes_all([scan])
+
+    assert model._cloud_mode_name == ChanField.RGB
+    assert model._image_mode_names[0] == ChanField.REFLECTIVITY
+    assert model._image_mode_names[1] == ChanField.RGB
+
+
+def test_use_default_view_modes_rgb_without_reflectivity():
+    """It will use RGB for the second image even when reflectivity is unavailable."""
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    model = LidarScanVizModel(viz, [meta], _img_aspect_ratio=0)
+    scan = LidarScan(meta.h, meta.w, [])
+    scan.add_field("customfield", np.zeros((meta.h, meta.w), dtype=np.uint8))
+    scan.add_field("RGB", np.zeros((meta.h, meta.w, 3), dtype=np.uint8))
+
+    model._amend_view_modes_all([scan])
+
+    assert model._cloud_mode_name == ChanField.RGB
+    assert model._image_mode_names[0] == "customfield"
+    assert model._image_mode_names[1] == ChanField.RGB
 
 
 def test_use_default_view_modes_2():
@@ -432,6 +463,18 @@ def test_create_view_mode_for_field_6():
 
     scan.add_field("customfield2", np.zeros((1024, 1024)), FieldClass.SCAN_FIELD)
     assert sensor._create_view_mode_for_field("customfield2", scan) is None
+
+
+def test_create_view_mode_for_field_7():
+    """It should add an HdrRgbMode for a field with a 3rd dimension of length 3 and float16."""
+    viz = MockPointViz()
+    meta = SensorInfo.from_default(LidarMode._1024x10)
+    sensor = SensorModel(viz, meta)
+    scan = LidarScan(meta.h, meta.w, [])
+    assert not scan.fields
+    scan.add_field("rgb", np.ndarray((meta.h, meta.w, 3), dtype=np.float16))
+    mode = sensor._create_view_mode_for_field("rgb", scan)
+    assert type(mode) is HdrRgbMode
 
 
 def test_setup_sensor_toggle_keys():

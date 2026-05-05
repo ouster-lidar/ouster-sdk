@@ -427,6 +427,8 @@ ProductInfo SensorInfo::get_product_info() const {
 int SensorInfo::num_returns() const {
     if (format.udp_profile_lidar ==
             UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL ||
+        format.udp_profile_lidar ==
+            UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16_DUAL ||
         format.udp_profile_lidar == UDPProfileLidar::RNG15_RFL8_NIR8_DUAL ||
         format.udp_profile_lidar ==
             UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL) {

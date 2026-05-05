@@ -1,0 +1,4 @@
+[submodule "sdk-extensions"]
+	path = sdk-extensions
+	url = ../sdk-extensions.git
+	branch = master
