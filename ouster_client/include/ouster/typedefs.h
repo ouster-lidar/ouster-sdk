@@ -17,8 +17,8 @@ namespace Eigen {
     template <typename Scalar>
     using ArrayX = Array<Scalar, Eigen::Dynamic, 1>;
 
-}
-#endif
+}   // namespace Eigen
+#endif   // !EIGEN_VERSION_AT_LEAST(3,4,0)
 
 #include "ouster/visibility.h"
 
