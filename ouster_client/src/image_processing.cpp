@@ -250,6 +250,112 @@ void AutoExposure::update(Eigen::TensorMap<rgb_img_t<double>> image,
     apply(image, update_state);
 }
 
+template <typename T>
+void AutoExposure::apply(Eigen::Ref<img_t<T>> r, Eigen::Ref<img_t<T>> g,
+                         Eigen::Ref<img_t<T>> b, bool update_state) {
+    const Eigen::Index pixel_count_index = r.size();
+    const auto pixel_count = static_cast<size_t>(pixel_count_index);
+
+    if (counter_ == 0 && update_state) {
+        img_t<T> lum = r * static_cast<T>(0.299) +
+                       g * static_cast<T>(0.587) +
+                       b * static_cast<T>(0.114);
+
+        Eigen::Map<Eigen::Array<T, -1, 1>> lum_flat(lum.data(),
+                                                    pixel_count_index);
+
+        std::vector<size_t> indices;
+        indices.reserve(pixel_count);
+        for (size_t i = 0; i < pixel_count; i += AE_STRIDE) {
+            if (lum_flat[i] > 0) {
+                indices.push_back(i);
+            }
+        }
+        if (indices.size() < AE_MIN_NONZERO_POINTS) {
+            return;
+        }
+
+        auto cmp = [&](const size_t a, const size_t b) {
+            return lum_flat[a] < lum_flat[b];
+        };
+
+        const size_t lo_k = static_cast<size_t>(
+            static_cast<double>(indices.size()) * lo_percentile_);
+        const auto lo_offset = static_cast<std::ptrdiff_t>(lo_k);
+        auto lo_iter = indices.begin() + lo_offset;
+        std::nth_element(indices.begin(), lo_iter, indices.end(), cmp);
+        lo_ = lum_flat[indices[lo_k]];
+
+        const size_t hi_k = static_cast<size_t>(
+            static_cast<double>(indices.size()) * hi_percentile_);
+        const auto hi_offset = static_cast<std::ptrdiff_t>(hi_k);
+        auto hi_iter = indices.end() - hi_offset - 1;
+        std::nth_element(lo_iter, hi_iter, indices.end(), cmp);
+        hi_ = lum_flat[*hi_iter];
+
+        if (!initialized_) {
+            initialized_ = true;
+            lo_state_ = lo_;
+            hi_state_ = hi_;
+        }
+    }
+
+    if (!initialized_) {
+        return;
+    }
+
+    if (update_state) {
+        lo_state_ = AE_DAMPING * lo_state_ + (1.0 - AE_DAMPING) * lo_;
+        hi_state_ = AE_DAMPING * hi_state_ + (1.0 - AE_DAMPING) * hi_;
+    }
+
+    Eigen::Map<Eigen::Array<T, -1, 1>> r_flat(r.data(), r.size());
+    Eigen::Map<Eigen::Array<T, -1, 1>> g_flat(g.data(), g.size());
+    Eigen::Map<Eigen::Array<T, -1, 1>> b_flat(b.data(), b.size());
+    double lo_hi_scale =
+        (1.0 - (lo_percentile_ + hi_percentile_)) / (hi_state_ - lo_state_);
+
+    if (std::isinf(lo_hi_scale) || std::isnan(lo_hi_scale)) {
+        r_flat *= static_cast<T>(0.5 / hi_state_);
+        g_flat *= static_cast<T>(0.5 / hi_state_);
+        b_flat *= static_cast<T>(0.5 / hi_state_);
+    } else if (lo_hi_scale * (0.0 - lo_state_) + lo_percentile_ <= 0.0) {
+        r_flat -= static_cast<T>(lo_state_);
+        g_flat -= static_cast<T>(lo_state_);
+        b_flat -= static_cast<T>(lo_state_);
+        r_flat *= static_cast<T>(lo_hi_scale);
+        g_flat *= static_cast<T>(lo_hi_scale);
+        b_flat *= static_cast<T>(lo_hi_scale);
+        r_flat += static_cast<T>(lo_percentile_);
+        g_flat += static_cast<T>(lo_percentile_);
+        b_flat += static_cast<T>(lo_percentile_);
+    } else {
+        r_flat *= static_cast<T>((1.0 - hi_percentile_) / hi_state_);
+        g_flat *= static_cast<T>((1.0 - hi_percentile_) / hi_state_);
+        b_flat *= static_cast<T>((1.0 - hi_percentile_) / hi_state_);
+    }
+
+    r_flat = r_flat.max(static_cast<T>(0)).min(static_cast<T>(1));
+    g_flat = g_flat.max(static_cast<T>(0)).min(static_cast<T>(1));
+    b_flat = b_flat.max(static_cast<T>(0)).min(static_cast<T>(1));
+
+    if (update_state) {
+        counter_ = (counter_ + 1) % ae_update_every_;
+    }
+}
+
+void AutoExposure::update(Eigen::Ref<img_t<float>> r,
+                          Eigen::Ref<img_t<float>> g,
+                          Eigen::Ref<img_t<float>> b, bool update_state) {
+    apply(r, g, b, update_state);
+}
+
+void AutoExposure::update(Eigen::Ref<img_t<double>> r,
+                          Eigen::Ref<img_t<double>> g,
+                          Eigen::Ref<img_t<double>> b, bool update_state) {
+    apply(r, g, b, update_state);
+}
+
 void AutoExposure::update(Eigen::TensorMap<const rgb_img_t<float16_t>> input,
                           Eigen::TensorMap<rgb_img_t<float>> out,
                           bool update_state) {

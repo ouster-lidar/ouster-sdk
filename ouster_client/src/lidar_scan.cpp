@@ -98,12 +98,14 @@ static const Table<std::string, ChanFieldType, 6> SINGLE_FIELD_SLOTS{{
     {ChanField::WINDOW, ChanFieldType::UINT8},
 }};
 
-static const Table<std::string, ChanFieldType, 6> RGB_FIELD_SLOTS{{
+static const Table<std::string, ChanFieldType, 8> RGB_FIELD_SLOTS{{
     {ChanField::RANGE, ChanFieldType::UINT32},
     {ChanField::SIGNAL, ChanFieldType::UINT16},
     {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
-    {ChanField::RGB, ChanFieldType::FLOAT16},  // this is turned into a 3d array
+    {ChanField::R, ChanFieldType::UINT16},
+    {ChanField::G, ChanFieldType::UINT16},
+    {ChanField::B, ChanFieldType::UINT16},
     {ChanField::FLAGS, ChanFieldType::UINT8},
 }};
 
@@ -115,7 +117,9 @@ static const Table<std::string, ChanFieldType, 10> DUAL_RGB_FIELD_SLOTS{{
     {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
     {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
-    {ChanField::RGB, ChanFieldType::FLOAT16},
+    {ChanField::R, ChanFieldType::UINT16},
+    {ChanField::G, ChanFieldType::UINT16},
+    {ChanField::B, ChanFieldType::UINT16},
     {ChanField::FLAGS, ChanFieldType::UINT8},
     {ChanField::FLAGS2, ChanFieldType::UINT8},
 }};

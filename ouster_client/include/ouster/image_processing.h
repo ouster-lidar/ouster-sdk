@@ -41,6 +41,10 @@ class OUSTER_API_CLASS AutoExposure {
     template <typename T>
     void apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_state);
 
+    template <typename T>
+    void apply(Eigen::Ref<img_t<T>> r, Eigen::Ref<img_t<T>> g,
+               Eigen::Ref<img_t<T>> b, bool update_state);
+
    public:
     /** Default constructor using default percentile and update values. */
     OUSTER_API_FUNCTION
@@ -109,6 +113,32 @@ class OUSTER_API_CLASS AutoExposure {
     OUSTER_API_FUNCTION
     void update(Eigen::TensorMap<rgb_img_t<double>> image,
                 bool update_state = true);
+
+    /**
+     * Apply global RGB auto-exposure in-place stretching constrast between 0
+     * and 1.
+     *
+     * @param[in] r Red channel image, modified in-place.
+     * @param[in] g Green channel image, modified in-place.
+     * @param[in] b Blue channel image, modified in-place.
+     * @param[in] update_state Update lo/hi luminance percentiles if true.
+     */
+    OUSTER_API_FUNCTION
+    void update(Eigen::Ref<img_t<float>> r, Eigen::Ref<img_t<float>> g,
+                Eigen::Ref<img_t<float>> b, bool update_state = true);
+
+    /**
+     * Apply global RGB auto-exposure in-place stretching constrast between 0
+     * and 1.
+     *
+     * @param[in] r Red channel image, modified in-place.
+     * @param[in] g Green channel image, modified in-place.
+     * @param[in] b Blue channel image, modified in-place.
+     * @param[in] update_state Update lo/hi luminance percentiles if true.
+     */
+    OUSTER_API_FUNCTION
+    void update(Eigen::Ref<img_t<double>> r, Eigen::Ref<img_t<double>> g,
+                Eigen::Ref<img_t<double>> b, bool update_state = true);
 
     /**
      * Convert fp16-bit RGB to float and apply global RGB auto-exposure
