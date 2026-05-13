@@ -109,7 +109,7 @@ static const Table<std::string, ChanFieldType, 8> RGB_FIELD_SLOTS{{
     {ChanField::FLAGS, ChanFieldType::UINT8},
 }};
 
-static const Table<std::string, ChanFieldType, 10> DUAL_RGB_FIELD_SLOTS{{
+static const Table<std::string, ChanFieldType, 12> DUAL_RGB_FIELD_SLOTS{{
     {ChanField::RANGE, ChanFieldType::UINT32},
     {ChanField::RANGE2, ChanFieldType::UINT32},
     {ChanField::SIGNAL, ChanFieldType::UINT16},
