@@ -11,11 +11,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ouster/core/visibility.h"
 #include "ouster/osf/basics.h"
-#include "ouster/visibility.h"
 
-using StreamChunksMap =
-    std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
+using StreamChunksMap = std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
 
 namespace ouster {
 namespace sdk {
@@ -27,17 +26,15 @@ ChunkState::ChunkState(uint64_t off, ts_t start, ts_t end)
 // =======================================================
 // =========== ChunksPile ================================
 // =======================================================
-ChunksPile::ChunksPile(const std::vector<ChunkState>& chunk_states,
-                       uint64_t last_chunk_buf_offset) {
-    for (const auto& chunk_state : chunk_states) {
+ChunksPile::ChunksPile(const std::vector<ChunkState>& chunks, uint64_t end_of_chunks_offset) {
+    for (const auto& chunk_state : chunks) {
         pile_.emplace(chunk_state.offset, chunk_state);
         chunk_offsets_.push_back(chunk_state.offset);
     }
-    link_chunks(last_chunk_buf_offset);
+    link_chunks(end_of_chunks_offset);
 }
 
-void ChunksPile::add_info(uint64_t offset, uint32_t stream_id,
-                          uint32_t message_count) {
+void ChunksPile::add_info(uint64_t offset, uint32_t stream_id, uint32_t message_count) {
     auto chunk_state = get(offset);
     if (chunk_state == nullptr) {
         // allowing adding info on chunks that already present with
@@ -68,8 +65,7 @@ ChunkInfoNode* ChunksPile::get_info(uint64_t offset) {
     return &cit->second;
 }
 
-ChunkInfoNode* ChunksPile::get_info_by_message_idx(uint32_t stream_id,
-                                                   uint32_t message_idx) {
+ChunkInfoNode* ChunksPile::get_info_by_message_idx(uint32_t stream_id, uint32_t message_idx) {
     if (!has_message_idx()) {
         return nullptr;
     }
@@ -85,27 +81,24 @@ ChunkInfoNode* ChunksPile::get_info_by_message_idx(uint32_t stream_id,
         return nullptr;
     }
 
-    auto lower_bound_it = std::lower_bound(
-        schunks->second->begin(), schunks->second->end(), message_idx,
-        [&](uint64_t a, uint32_t m_idx) {
-            const auto* ci = get_info(a);
-            return ci->message_start_idx + ci->message_count - 1 < m_idx;
-        });
+    auto lower_bound_it =
+        std::lower_bound(schunks->second->begin(), schunks->second->end(), message_idx,
+                         [&](uint64_t a, uint32_t m_idx) {
+                             const auto* ci = get_info(a);
+                             return ci->message_start_idx + ci->message_count - 1 < m_idx;
+                         });
 
     return get_info(*lower_bound_it);
 }
 
-ChunkState* ChunksPile::get_by_lower_bound_ts(uint32_t stream_id,
-                                              const ts_t timestamp) {
+ChunkState* ChunksPile::get_by_lower_bound_ts(uint32_t stream_id, const ts_t timestamp) {
     auto schunks = stream_chunks_.find(stream_id);
     if (schunks == stream_chunks_.end()) {
         return nullptr;
     }
     auto lb_offset =
-        std::lower_bound(schunks->second->begin(), schunks->second->end(),
-                         timestamp, [&](uint64_t a, const ts_t timestamp) {
-                             return get(a)->end_ts < timestamp;
-                         });
+        std::lower_bound(schunks->second->begin(), schunks->second->end(), timestamp,
+                         [&](uint64_t a, const ts_t cmp_ts) { return get(a)->end_ts < cmp_ts; });
     if (lb_offset == schunks->second->end()) {
         return nullptr;
     }
@@ -137,7 +130,9 @@ ChunkState* ChunksPile::first() {
     return get(chunk_offsets_.front());
 }
 
-size_t ChunksPile::size() const { return pile_.size(); }
+size_t ChunksPile::size() const {
+    return pile_.size();
+}
 
 bool ChunksPile::has_message_idx() const {
     // return true if we have no chunks (we're functionally indexed)
@@ -149,11 +144,12 @@ bool ChunksPile::has_message_idx() const {
     // ChunkBuilder and StreamingLayoutCW)
     // In other words we can't have Chunks with 0 messages written to OSF
     // file
-    return (!pile_info_.empty()) &&
-           pile_info_.begin()->second.message_count > 0;
+    return (!pile_info_.empty()) && pile_info_.begin()->second.message_count > 0;
 }
 
-StreamChunksMap& ChunksPile::stream_chunks() { return stream_chunks_; }
+StreamChunksMap& ChunksPile::stream_chunks() {
+    return stream_chunks_;
+}
 
 // NOTE - this computes chunk sizes with the assumption that chunks are
 // contiguous and continue up to the beginning of the metadata.
@@ -191,8 +187,7 @@ void ChunksPile::link_stream_chunks() {
         // Do the next_offset links by streams
         auto curr_chunk = first();
         if (curr_chunk == nullptr) {
-            throw std::runtime_error(
-                "Invalid OSF file: could not find the first Chunk.");
+            throw std::runtime_error("Invalid OSF file: could not find the first Chunk.");
         }
 
         while (curr_chunk != nullptr) {
@@ -213,13 +208,11 @@ void ChunksPile::link_stream_chunks() {
                 // get prev chunk info and update next_offset
                 auto prev_ci = get_info(prev_chunk_offset);
                 prev_ci->next_offset = curr_chunk->offset;
-                ci->message_start_idx =
-                    prev_ci->message_start_idx + prev_ci->message_count;
+                ci->message_start_idx = prev_ci->message_start_idx + prev_ci->message_count;
                 stream_chunks_[ci->stream_id]->push_back(curr_chunk->offset);
             } else {
-                stream_chunks_.insert(
-                    {ci->stream_id, std::make_shared<std::vector<uint64_t>>(
-                                        1, curr_chunk->offset)});
+                stream_chunks_.insert({ci->stream_id, std::make_shared<std::vector<uint64_t>>(
+                                                          1, curr_chunk->offset)});
             }
             curr_chunk = get(curr_chunk->next_offset);
         }
@@ -228,8 +221,7 @@ void ChunksPile::link_stream_chunks() {
 
 std::string to_string(const ChunkState& chunk_state) {
     std::stringstream stream;
-    stream << "{offset = " << chunk_state.offset
-           << ", next_offset = " << chunk_state.next_offset
+    stream << "{offset = " << chunk_state.offset << ", next_offset = " << chunk_state.next_offset
            << ", start_ts = " << chunk_state.start_ts.count()
            << ", end_ts = " << chunk_state.end_ts.count()
            << ", status = " << static_cast<int>(chunk_state.status) << "}";
@@ -238,8 +230,7 @@ std::string to_string(const ChunkState& chunk_state) {
 
 std::string to_string(const ChunkInfoNode& chunk_info) {
     std::stringstream stream;
-    stream << "{offset = " << chunk_info.offset
-           << ", next_offset = " << chunk_info.next_offset
+    stream << "{offset = " << chunk_info.offset << ", next_offset = " << chunk_info.next_offset
            << ", stream_id = " << chunk_info.stream_id
            << ", message_count = " << chunk_info.message_count
            << ", message_start_idx = " << chunk_info.message_start_idx << "}";

@@ -2,14 +2,161 @@
 Changelog
 =========
 
-[0.16.2]
+
+[1.0.0]
 =========
+* Refactor map export to downsample points as they get added into the map, flushing the pointcloud data to disk as the map accumulates.
+* Added ``ouster::sdk::core::Vector3iHash``, a non-``std`` voxel-index hash with a splitmix64 finalizer that produces good 64-bit dispersion.
+* [CLI/BREAKING] Dropped ``--max-z`` and ``--min-z`` options from ``ouster-cli source ... save (.pcd/.ply)``
+  and ``ouster-cli source ... save``; use ``filter Z`` to crop points along the Z axis before saving.
+* [BREAKING] Change ``lidar_mode_of_string()`` and ``timestamp_mode_of_string()`` to return an optional instead of unknown/unspecified if the enum was not found.
+* [BREAKING] Switch pose and extrinsic matrix storage to row-major/C-style ordering across core, mapping, viz, OSF, Python bindings, and related array/serialization helpers.
+* Use Nanobind instead of Pybind for bindings.
+* [BREAKING] Remove duplicate deprecated enums following old naming conventions in favor of their new namesakes.
+* [BREAKING] Remove deprecated ``ImuPacket`` accessors such as ``la_x`` and ``av_x`` in favor of new accessors such as ``accel()`` and ``gyro()``.
+* [BREAKING] Remove deprecated ``osf::Writer.save(List[LidarScan])`` and C++ analogues in favor of ``osf::Writer.save(LidarScanSet)``.
+* [BREAKING] Remove deprecated duplicate definitions for classes and enums renamed in 0.16 such as ``sensor_info`` in favor of their new namesakes.
+* [BREAKING] Remove deprecated ``Client`` (C++) and ``SensorConnection`` (C++) in favor of ``SensorPacketSource``.
+* [BREAKING] Remove deprecated ``get_field_types(UDPProfileLidar)`` method in favor of ``get_field_types(SensorInfo)``.
+* [BREAKING] Moved ``ouster::sdk::core::make_xyz_lut`` to impl. Use ``ouster::sdk::core::XYZLut`` instead.
+* Add cached ``SensorInfo::xyzlut()`` accessors in C++ and Python (``xyzlut_float``/``xyzlut_double``).
+* [BREAKING] Cached ``SensorInfo`` LUT accessors always include extrinsics; remove the ``use_extrinsics`` argument from ``SensorInfo::xyzlut()`` and ``xyzlut_float``/``xyzlut_double``. To omit extrinsics, construct ``XYZLut`` with ``use_extrinsics=false`` (C++) or ``use_extrinsics=False`` (Python).
+* [BREAKING] Moved ``ouster.sdk.core._utils.AutoExposure`` and ``ouster.sdk.core._utils.BeamUniformityCorrector`` to ``ouster.sdk.core``.
+* [BREAKING] Removed ``ouster.sdk.core.io_types``; import ``OusterIoType``, ``io_type``, ``io_type_from_extension``, and ``extension_from_io_type`` from ``ouster.sdk.core`` instead.
+* [BREAKING] Changed return types of ``ouster::sdk::sensor::get_config`` and ``set_config`` to match Python.
+* [BREAKING] Remove ``SensorHttp`` re-export from ``ouster.sdk.core``; import from ``ouster.sdk.sensor`` instead.
+* Add Python binding for ``SensorHttp.get_firmware_version_string()``.
+* [BREAKING] Moved ``ouster::sdk::core::cartesianT()`` to impl.
+* [BREAKING] Removed ``ouster.sdk.viz.util.push_point_viz_handler`` and ``ouster.sdk.viz.BoundMethod``. Their functionality is no longer necessary and the ``push`` functions on ``PointViz`` can just be used directly.
+* [FUTURE BREAKING] Deprecated ``ouster::sdk::core::cartesian()`` in favor of ``XYZLut operator()``.
+* [BREAKING] Change ``ouster::sdk::core::LidarScan`` constructors in C++ to take height then width rather than the opposite to match Python.
+* Mark ``LidarScan`` move construction and move assignment ``noexcept`` in C++.
+* Allow constructing ``ouster::sdk::viz::Cloud`` from an ``XYZLut``.
+* [BREAKING] Rename ``--auto-constraints`` to ``--auto-gps`` in ``ouster-cli source ... pose_optimize``.
+* Add ``--auto-loop`` and ``PoseOptimizer::add_relative_loop_constraints()`` for loop-closure generation.
+* Improve pose optimizer viz with constraint selection/removal and pose-to-pose cloud highlights.
+* Add ``align_clouds()`` for scan/point-cloud alignment, including ``LidarScanSet`` multi-sensor alignment in C++ and Python (``ouster.sdk.algorithm``), and ``ouster-cli source ... align``.
+* Add the ``ouster_algorithm`` C++ package for shared mapping and perception algorithms, including point-cloud alignment, normal estimation, ground segmentation, and averaging voxel downsampling.
+* Improve ``ouster-cli source ... plumb``: averaged IMU acceleration is now rotated into the body frame, and the computed correction is composed with the existing sensor extrinsics instead of replacing them.
+* [BREAKING] Move C++ ``normals`` from ``ouster::sdk::core`` (header ``ouster/normals.h``) to ``ouster::sdk::algorithm`` (header ``ouster/algorithm/normals.h``); Python ``normals`` is now available from ``ouster.sdk.algorithm`` instead of ``ouster.sdk.core``.
+* [FUTURE BREAKING] Deprecated the Python compatibility import ``ouster.sdk.perception.normals`` in favor of ``ouster.sdk.algorithm.normals``.
+* Add ``ouster::sdk::core::Pose`` and ``ouster.sdk.core.Pose``, a translation-plus-quaternion pose type with matrix and Euler conversions in C++/Python.
+* Add ``GroundSegEngine`` in C++/Python and ``ouster-cli source ... ground`` to annotate scans with a ``GROUND`` mask.
+  Ground segmentation uses SLAM scan poses when present, otherwise uses sensor extrinsics; pre-plumb sources with IMU data before
+  segmentation for gravity-aligned results.
+* [BREAKING] Change ``PoseOptimizer.initialize_trajectory_alignment()`` to return the applied 4x4 transform instead of ``bool``.
+* [BREAKING] Pose Optimizer point-constraint row/column ids now use staggered ids instead of destaggered.
+* [BREAKING] Changed ``ouster::sdk::core::LidarMode`` to a struct from an enum to support arbitrary sensor lidar modes without requiring additional changes.
+* [BREAKING] Removed now unused ``UNSPECIFIED`` enum values.
+* [BREAKING] Made members of ``ouster::sdk::core::XYZLut`` const.
+* Greatly reduced memory use of visualizer especially in accumulating use cases.
+* [BUGFIX] Handle the case when slam is passed scans with invalid poses leading to problems downstream in the slam pipeline.
+* [BREAKING] ``ouster::sdk::osf::Writer::save(const LidarScanSet&)`` and ``ouster::sdk::osf::AsyncWriter::save(const LidarScanSet&)`` will now throw an exception on receiving scans with missing timestamps.
+* [FUTURE BREAKING] Deprecated ``ouster-cli source <source> metadata`` in favor of ``ouster-cli source <source> sensor_info`` to match naming in the rest of the SDK.
+* [BUGFIX] Fix csv export to filter non PIXEL_FIELDs, handle multi sensor save and handle 3D PIXEL_FIELDs.
+* Updated LidarScan collation methodology to have improved results with synchronized sensors when autodetected.
+* No longer save collations via the CLI in OSF unless they were in the original source or added via the detect command.
+* [BREAKING] OSF files now index/order scans by the greatest valid packet timestamp rather than the first valid packet timestamp. This better replicates the behavior of PCAP or Sensor scan sources especially with partial scans.
+* [BREAKING] Disallow implicit ndarray type and ordering conversions for Python bindings to prevent accidental mismatches and performance degradation.
+* [BREAKING] Removed redundant Python ``ouster.sdk.viz.Cloud.set_key_rgb`` and ``ouster.sdk.viz.Cloud.set_key_rgba`` functions. Use ``ouster.sdk.viz.Cloud.set_key`` instead.
+* [BUGFIX] No longer read past the end of legacy IMU packets while parsing to avoid possible crashes.
+* Add FOV cycling in the visualizer: ``CTRL+-`` / ``CTRL+=`` cycle through field-of-view levels (30°–150° in 15° steps, default 90°) in perspective mode.
+* Add ``--resolution`` option to ``ouster-cli source <source> viz`` to control the initial window resolution. Accepts ``<width>x<height>`` (e.g. ``1920x1080``) or a named resolution (e.g. ``1080p``, ``2k``, ``4k``). Ignored when ``--maximize`` or ``--fullscreen`` is set.
+* Add support for directly visualizing RGB8 images in PointViz.
+* [BREAKING] Change ``ouster::sdk::core::LidarScanSet::valid_scans()`` to yield ``std::shared_ptr<LidarScan>&`` instead of ``LidarScan&`` to match normal iteration and resolve accidental copies occurring in the Python bindings.
+* [BREAKING] Change Python ``LidarScanSet.valid_scans()`` and ``LidarScanSet.valid_indices()`` to return lists instead of iterators.
+* Add SLAM local map visualization to ``ouster-cli source slam viz`` with ``--viz-local-map``.
+* [FUTURE BREAKING] Deprecate ``ouster::sdk::core::n_cols_of_lidar_mode()`` in favor of ``LidarMode.columns``.
+* [FUTURE BREAKING] Deprecate ``ouster::sdk::core::frequency_of_lidar_mode()`` in favor of ``LidarMode.fps``.
+* [BREAKING] Remove deprecated ``ouster::sdk::core::to_string(const SensorInfo&)``; use ``SensorInfo::to_json_string()`` instead.
+* [BREAKING] Rename ``ouster::sdk::core::default_sensor_info()`` to ``ouster::sdk::core::SensorInfo::from_default()`` to match Python.
+* [FUTURE BREAKING] Add new ``ouster::sdk::core::add_custom_profile()`` method which allocates and returns its own enum value for the new profile and deprecated the old method.
+* [FUTURE BREAKING] Deprecate ``ouster::sdk::core::LidarScan`` constructors that provided insufficient information such as ``LidarScan(h, w)``, ``LidarScan(DataFormat)``, ``LidarScan(h, w, profile, columns_per_packet)``, and the ``LidarScan(sensor_info)`` constructor that does not take in a shared pointer.
+* [BREAKING] Require providing ``columns_per_packet`` argument on some ``ouster::sdk::core::LidarScan`` constructors to avoid issues with REV8 sensors.
+* [BREAKING] Rename ``ouster::sdk::osf::slice_with_cast`` to ``ouster::sdk::osf::slice_and_cast`` to match Python.
+* Add ``--max-iterations`` option to ``ouster-cli source slam`` and ``ouster-cli source localize`` to set the maximum number of ICP registration iterations.
+* Make ``ouster-cli source <source> sensor_replay`` able to be chained.
+* Add ``ouster-cli source --lidar-profile <UDPProfileLidar>`` option to spoof the profile of a source to allow converting it to another profile.
+* [BUGFIX] Fix ``ouster::sdk::core::destagger`` implementation not working with Eigen::Tensor.
+* [BUGFIX] Fix parsing of shot_limiting in packet headers.
+* [BUGFIX] Fix collation accidentally waiting for an additional scan before yielding. This could lead to up to an extra frame of latency with SensorScanSources.
+* [BREAKING] ``ouster::sdk::core::PacketFormat::thermal_shutdown()`` and ``ouster::sdk::core::PacketFormat::shot_limiting()`` as well as ``ouster::sdk::core::Packet::thermal_shutdown()`` and ``ouster::sdk::core::Packet::shot_limiting()`` now return their respective enum types rather than ``uint8_t``.
+* [BREAKING] Removed indexed/count ``sensor_info`` accessors from OSF Writer in C++ (``ouster::sdk::osf::Writer::sensor_info(int)``, ``ouster::sdk::osf::Writer::sensor_info_count()``) and Python (``writer.sensor_info(stream_index)``, ``writer.sensor_info_count()``). Use ``sensor_info()`` to get the full collection, then use normal indexing and length operations (``operator[]``/``size()`` in C++, ``[]``/``len()`` in Python).
+* [BREAKING] Merge ``PacketWriter`` into ``PacketFormat`` and remove the separate ``PacketWriter`` Python/C++ API surface. Use ``PacketFormat`` for packet serialization (e.g. ``PacketFormat.from_info()``); helpers such as ``scan_to_packets()`` now take ``PacketFormat`` instead of ``PacketWriter``.
+* [BREAKING] Move ``ouster.sdk.zone_monitor`` API surface to ``ouster.sdk.core``.
+* [BREAKING] Rename ``FieldInfo`` to ``FieldDecodeInfo`` in C++ and Python.
+* [BREAKING] Refactor SLAM/localization APIs: remove ``SlamBackend`` and ``LocalizationBackend``. Removed selecting engine implementations with a ``kind`` string at ``create()`` time (e.g. ``"kiss"``); instead use ``SlamEngine::create()`` and ``LocalizationEngine::create()`` with ``LIOSlamConfig``/``LIOLocalizationConfig``. The supported backend identifier changed from ``"kiss"`` to ``"lio"`` for ``SlamConfig.create()``/``LocalizationConfig.create()`` in Python.
+* [BREAKING] Remove unused ``Triangle::inside()`` from the public C++ API.
+* [BREAKING] Remove dead ``ouster-cli util benchmark`` and ``ouster-cli util benchmark-sensor`` CLI commands.
+* [BREAKING] Clean up indexed PCAP frame-id APIs by removing ``IndexedPcapReader::frame_id_rolled_over()`` and changing ``current_frame_id()`` to return ``optional<uint32_t>`` instead of ``optional<uint16_t>``.
+* [BREAKING] Rename core library layout from ``ouster_client`` to ``ouster_core``.
+* [BREAKING] Change metadata ``client_version`` strings written by the SDK from the ``ouster_client`` prefix to ``ouster_core`` (for example, ``ouster_core 1.0.0``). Existing metadata files that record the old string remain readable; only newly written metadata uses the new value.
+* [BREAKING] Standardize SDK code layout and public include paths by splitting headers into module-scoped namespaces such as ``ouster/core``, ``ouster/sensor``, ``ouster/pcap``, ``ouster/mapping`` and ``ouster/viz``.
+* [FUTURE BREAKING] Deprecate ``PacketFormat.from_metadata()`` in favor of ``PacketFormat.from_info()``.
+* [FUTURE BREAKING] Deprecate default/size-only packet constructors for ``LidarPacket``, ``ImuPacket``, and ``ZonePacket`` in favor of constructors that take ``PacketFormat``.
+* [FUTURE BREAKING] Deprecate ``ScanBatcher`` call syntax (``operator()`` / ``__call__()``) in favor of ``ScanBatcher.batch()``.
+* [BREAKING] Delete ``ScanBatcher`` move-assignment; use move construction instead.
+* [BUGFIX] Improve viz stability and correctness (GL buffer cleanup, GIF save crash/deadlock handling, AOI fixes, palette/type mismatches, and race-condition fixes when callbacks and rendering overlap).
+* [BUGFIX] Add a guard for ``None`` scans before printing shot-limiting warnings in viz paths.
+* [BUGFIX] Improve CLI and processing robustness (``filter``/``clip``/``mask`` correctness with non-pixel fields, ``LidarScan.__str__`` fixes, unsupported chan-field handling in OSF read, and safer error handling in save/CRC paths).
+* [BUGFIX] Improve SLAM reliability and determinism across multi-sensor and sparse-data edge cases, including IMU availability and deskew behavior.
+* [BUGFIX] Fix null-pointer dereferences in OSF scan source iteration when message decoding fails.
+* [BUGFIX] Improve recovery of OSF files truncated by a few bytes at the end of the file.
+* [BUGFIX] Fix ``reduce`` dropping ``columns_per_packet`` from ``sensor_info``, which could crash downstream processing.
+* [BUGFIX] Fix ``--initial-pose`` so it is used again for SLAM and localization.
+* Add viz workflow improvements including 3D point selection, object overlays/selection, IMU-gap rendering, non-blocking GIF export, Ctrl+S to toggle sky visualization in SimpleViz, and a per-column ``TIMESTAMP`` point-cloud coloring mode.
+* Add ``--clear-on-loop`` to ``ouster-cli source <source> viz`` (and ``SimpleViz(clear_on_loop=...)``) to clear accumulated history and trajectories when a looping source restarts; default is to preserve history across loops.
+* Make ``RGB`` the default cloud coloring mode for viz accumulation when present; otherwise fall back to ``REFLECTIVITY`` as per legacy behavior.
+* Show thermal shutdown and shot-limiting warnings in the viz window instead of printing them to the console.
+* Improve viz UI scaling on macOS: text now follows the actual window content scale rather than a hardcoded 2x scale, the OSD scale also applies to the right-side OSD, and a 0.5x UI scale step is available.
+* Add ``MouseEventType`` and a ``mode`` argument to ``PointViz.push_mouse_button_handler``/``push_mouse_pos_handler`` in C++ and Python so mouse callbacks can specify which buttons they handle.
+* Add zone emulation and detection workflow improvements, including additional emulation options and richer object outputs.
+* ``ouster-cli source ... stats`` now reports object totals for ``LidarScanSet``-level and per-scan ``objects``.
+* ``ouster-cli source ... stats`` now counts lidar, IMU, and zone packets and reports missing packet counts for incomplete frames.
+* Make ``SensorInfo.beam_azimuth_angles``, ``beam_altitude_angles``, and ``DataFormat.pixel_shift_by_row`` mutable NumPy arrays in Python bindings.
+* Add support for opening Ouster Studio Web links (including share links) in the CLI and via Python ``ouster.sdk.open_source()``.
+* Add support for downloading Ouster Studio Web links in the CLI via ``ouster-cli source <data-app-url> download <filename>``.
+* ``ouster-cli source <url> dump`` and ``info`` now work directly on web-hosted OSF files; add ``osf::Reader::size()`` (``Reader.size`` in Python).
+* [FUTURE BREAKING] Deprecate ``LidarScan::pose()`` accessor; it has been renamed to ``LidarFrame::body_to_world()``.
+* [BREAKING] C++ side ``SensorInfo::extrinsic`` renamed to ``SensorInfo::sensor_to_body``.
+* [FUTURE BREAKING] Python side ``SensorInfo.extrinsic`` is deprecated. Access via ``SensorInfo.sensor_to_body`` instead.
+* [BREAKING] This release drops support for macOS 11.x, 12.x and 13.x.
+* Ouster SDK now supports Python 3.14 and wheels are available on PyPI.
+* [FUTURE BREAKING] Deprecated ``ls_show`` viz function; use ``lf_show`` instead.
+* [FUTURE BREAKING] Deprecated ``LidarScan`` type alias; use ``LidarFrame`` directly. ``LidarScanSet`` is deprecated in favor of ``FrameSet``. ``ScanSource``, ``ScanSourceOptions``, and ``ScanSourceMetadata`` are deprecated in favor of ``FrameSetSource``, ``FrameSetSourceOptions``, and ``FrameSetSourceMetadata``. ``ScanBatcher`` and ``ScanIterator`` are deprecated in favor of ``FrameBatcher`` and ``FrameSetIterator``. ``ScanSourceWrapper``, ``AnyScanSource``, and ``MultiScanSource`` are deprecated in favor of ``FrameSetSourceWrapper``, ``AnyFrameSetSource``, and ``MultiFrameSetSource``. ``PcapScanSource``, ``OsfScanSource``, and ``SensorScanSource`` are deprecated in favor of their ``FrameSetSource`` counterparts.
+* [FUTURE BREAKING] Deprecated forwarding headers ``ouster/core/lidar_scan.h``, ``ouster/core/lidar_scan_set.h``, ``ouster/core/scan_source.h``, ``ouster/core/scan_source_utils.h``, ``ouster/osf/lidarscan_encoder.h``, ``ouster/osf/png_lidarscan_encoder.h``, ``ouster/osf/zpng_lidarscan_encoder.h``, ``ouster/osf/stream_lidar_scan.h``, ``ouster/osf/osf_scan_source.h``, ``ouster/pcap/pcap_scan_source.h``, and ``ouster/sensor/sensor_scan_source.h``; include the renamed headers directly.
+* [FUTURE BREAKING] Deprecated Python module paths ``ouster.sdk.core.scan_ops``, ``ouster.sdk.core.clipped_scan_source``, ``ouster.sdk.core.masked_scan_source``, ``ouster.sdk.core.reduced_scan_source``, ``ouster.sdk.bag.bag_scan_source``, ``ouster.sdk.viz.scans_accumulator``, and ``ouster.sdk.examples.lidar_scan``; import from the renamed modules instead (e.g. ``ouster.sdk.core.frame_ops``).
+* [FUTURE BREAKING] Deprecated ``FieldClass::SCAN_FIELD``; use ``FieldClass::FRAME_FIELD`` instead.
+* [FUTURE BREAKING] Renamed ``FrameSet::scans()`` to ``FrameSet::frames()`` and ``FrameSet::valid_scans()`` to ``FrameSet::valid_frames()``. Deprecated aliases are provided for both.
+* [FUTURE BREAKING] Renamed ``SensorFrameSetSource::dropped_scans()`` to ``dropped_frames()`` and ``get_scan()`` to ``get_frame()``. Deprecated aliases are provided for both.
+* [BREAKING] Renamed ``PcapPacketSource::begin_scan()`` to ``begin_frame()``.
+* [BREAKING] Renamed Python ``FrameSet.__init__`` keyword argument ``scans`` to ``frames``; renamed ``Writer.save()`` and ``AsyncWriter.save()`` keyword arguments ``scan`` to ``frame`` and ``scans`` to ``frames``; renamed ``align_clouds()`` keyword arguments ``source_scan`` and ``target_scan`` to ``source_frame`` and ``target_frame``.
+* [FUTURE BREAKING] Renamed Python viz properties ``scan_num`` to ``frame_num`` and ``scans_per_sec`` to ``frames_per_sec``. Deprecated aliases are provided for both.
+* [BREAKING] ``LidarFrame::get_first_valid_column_timestamp`` and ``LidarFrame::get_last_valid_column_timestamp`` methods have been removed. Use ``frame.timestamp()[frame.get_first_valid_column()]`` and ``frame.timestamp()[frame.get_last_valid_column()]`` pattern instead.
+* [FUTURE BREAKING] ``LidarFrame::get_first_valid_lidar_packet_timestamp`` and ``LidarFrame::get_last_valid_lidar_packet_timestamp`` methods have been deprecated. Use ``LidarFrame::get_first_valid_packet_timestamp(PacketType::Lidar)`` and ``LidarFrame::get_last_valid_packet_timestamp(PacketType::Lidar)`` instead.
+* [BREAKING] ``LidarFrame::get_first_valid_column`` and ``LidarFrame::get_last_valid_column`` will now throw if no valid columns are available.
+* [BREAKING] ``LidarFrame::get_first_valid_packet_timestamp`` and ``LidarFrame::get_last_valid_packet_timestamp`` will now throw if no valid packet timestamps are available.
+* Port frame_ops to C++ and add a new ``select`` operation to pick specific beams from a scan.
+* Add ``ouster-cli source <source> save_extrinsics <filename>`` command to save extrinsics to a json file.
+* [BUGFIX] Fixed windows header issue in cmake files
+* Change ``ouster-cli source <source> sensor_replay`` command to support either Hypercorn, Waitress or Flask.
+* [FUTURE BREAKING] Deprecated ``ouster::sdk::pcap::PcapReader`` and ``ouster::sdk::pcap::IndexedPcapReader``. Use ``ouster::sdk::pcap::PcapPacketSource`` instead.
+* [FUTURE BREAKING] Deprecated ``ouster::sdk::pcap::PcapWriter``. Use ``ouster::sdk::pcap::RecordHandle`` instead.
+* [FUTURE BREAKING] Deprecated ``ouster::sdk::pcap::PlaybackHandle``. Use ``ouster::sdk::pcap::PcapPacketSource`` instead.
+* Add support for LAS/LAZ file reading and writing with RGB in ``ouster-cli source <source> viz`` and ``ouster-cli source <source> save``.
+* Update the ``voxel_downsample`` method to support different strategies ``FIRST_N_POINT``, ``AVERAGE_POINT``, and ``RANDOM`` with ``RANDOM`` being the default strategy.
+* Add support for ``ouster-cli source <source> save --downsample <voxel_size> --strategy <strategy>`` command to downsample the point cloud.
+
+
+[0.16.2]
+========
 * Add support for RGB lidar packet profiles ``RNG19_RFL8_SIG16_NIR16_RGB16`` and ``RNG19_RFL8_SIG16_NIR16_RGB16_DUAL``, including new chan fields ``R``, ``G``, ``B``, ``RGB`` and ``ChanFieldType::FLOAT16`` support.
 * Add HDR RGB visualization path for float16 RGB fields in viz, update default image/cloud mode selection to prefer RGB when present.
 * Add color-aware PLY/PCD loading for map visualization, so ``ouster-cli source <pointcloud> viz`` now displays colored point clouds.
 * Improve zone emulation workflow: add ``--keep-live-ids`` and ``--keep-sensor-to-body`` to ``emulate_zones``, add ``--extrinsics zone`` to source extrinsics handling, and fix zone mesh transform usage for BODY-frame rendering.
 * Apply autoexposure to exported float16 RGB point cloud data during mapping point cloud conversion to produce properly normalized RGB output.
 * [BREAKING] Python image processing correctors now use ``update()`` instead of being called directly.
+* [BREAKING] Removed ``core.Scans`` from the Python API. Use ``ouster::sdk::open_source`` instead.
 
 [0.16.1]
 =========
@@ -186,7 +333,7 @@ ouster_client/Python SDK
 * Add generic ``destagger`` to C++ API.
 * [BREAKING] Remove ``ouster.sdk.core.FieldDType`` used in type annotations and replaced with ``type``.
 * [BREAKING] Remove ``ouster.sdk.core.FieldTypes`` used in type annotations and replaced with ``List[ouster.sdk.coreFieldTypes]``.
-* Add a new method `ls_show` to view a set of LidarScans to the viz API.
+* Add a new method `lf_show` to view a set of LidarFrames to the viz API.
 * Add python 3.13 support
 * [BREAKING] Deprecate ``auto_start_flag`` in favor of ``operating_mode``.
 * [BREAKING] Deprecate ``parse_config`` in favor of ``parse_and_validate_config``.

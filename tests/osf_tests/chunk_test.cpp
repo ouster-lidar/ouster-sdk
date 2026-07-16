@@ -21,8 +21,7 @@ TEST(ChunksPile, defaultConstructor) {
 
 TEST(ChunksPile, constructor) {
     uint64_t end_of_chunks_offset = 456;
-    std::vector<ChunkState> chunk_states = {
-        {100, 0ns, 0ns}, {200, 0ns, 0ns}, {300, 0ns, 0ns}};
+    std::vector<ChunkState> chunk_states = {{100, 0ns, 0ns}, {200, 0ns, 0ns}, {300, 0ns, 0ns}};
 
     ChunksPile pile(chunk_states, end_of_chunks_offset);
     EXPECT_EQ(pile.size(), chunk_states.size());
@@ -30,8 +29,7 @@ TEST(ChunksPile, constructor) {
 
     EXPECT_EQ(pile.first()->offset, chunk_states[0].offset);
     EXPECT_EQ(pile.first()->next_offset, chunk_states[1].offset);
-    EXPECT_EQ(pile.first()->size,
-              chunk_states[1].offset - chunk_states[0].offset);
+    EXPECT_EQ(pile.first()->size, chunk_states[1].offset - chunk_states[0].offset);
 
     // check size of last chunk
     EXPECT_EQ(pile.get(chunk_states[2].offset)->size,

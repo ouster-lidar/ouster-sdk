@@ -1,0 +1,32 @@
+{%- if release -%}
+{%- if versions and versions|length > 1 -%}
+<details class="version-switcher" data-component="version-switcher">
+  <summary class="version-switcher__current">
+    <span class="version-switcher__label">Version: {{ current_version }} ({{ release }})</span>
+    <span class="version-switcher__chevron" aria-hidden="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="sidebar-arrow">
+        <path d="M8 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    </span>
+  </summary>
+  <div class="version-switcher__menu" role="region" aria-label="Other versions">
+    <dl>
+      <dt>Versions</dt>
+      {%- for version_name, version_url in versions %}
+      <dd class="{% if version_name == current_version %}is-active{% endif %}">
+        <a href="{{ version_url }}">
+          {{ version_name }}
+        </a>
+      </dd>
+      {%- endfor %}
+    </dl>
+  </div>
+</details>
+{%- else -%}
+<div class="version-switcher version-switcher--label-only" data-component="version-switcher">
+  <div class="version-switcher__current">
+    <span class="version-switcher__label">Version: {{ current_version }} ({{ release }})</span>
+  </div>
+</div>
+{%- endif -%}
+{%- endif -%}

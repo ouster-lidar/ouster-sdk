@@ -9,139 +9,98 @@
  * file changes. See the mypy documentation for details.
  */
 
-#include <pybind11/eigen.h>
-#include <pybind11/functional.h>
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/stl_bind.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/array.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/vector.h>
 #include <pyerrors.h>
 #include <warnings.h>
 
+#include <stdexcept>
 #include <tuple>
 
 #include "client_common.h"
-#include "ouster/cloud_io.h"
-#include "ouster/downsample.h"
-#include "ouster/image_processing.h"
-#include "ouster/lidar_scan.h"
-#include "ouster/normals.h"
-#include "ouster/packet.h"
-#include "ouster/pose_conversion.h"
-#include "ouster/pose_util.h"
-#include "ouster/typedefs.h"
-#include "ouster/types.h"
+#include "eigen_dense.h"
+#include "ndarray_helpers.h"
+#include "ouster/core/cloud_io.h"
+#include "ouster/core/image_processing.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/object_util.h"
+#include "ouster/core/packet.h"
+#include "ouster/core/pose_conversion.h"
+#include "ouster/core/pose_util.h"
+#include "ouster/core/typedefs.h"
+#include "ouster/core/types.h"
+#include "ouster/core/voxel_hash_map.h"
 
-namespace py = pybind11;
-using ouster::sdk::core::cartesianT;
+using ouster::sdk::core::FrameBatcher;
 using ouster::sdk::core::img_t;
-using ouster::sdk::core::LidarScan;
+using ouster::sdk::core::LidarFrame;
+using ouster::sdk::core::MatrixX16R;
+using ouster::sdk::core::Object;
 using ouster::sdk::core::Packet;
-using ouster::sdk::core::PointsT;
-using ouster::sdk::core::PosesT;
+using ouster::sdk::core::PointCloudXYZ;
 using ouster::sdk::core::rgb_img_t;
-using ouster::sdk::core::ScanBatcher;
 using ouster::sdk::core::SensorInfo;
 using ouster::sdk::core::XYZLut;
 using ouster::sdk::core::XYZLutT;
 using ouster::sdk::core::image::AutoExposure;
 using ouster::sdk::core::image::BeamUniformityCorrector;
+using ouster::sdk::core::image::LocalToneMapper;
+using ouster::sdk::core::impl::cartesianT;
+using ouster::sdk::python::ensure_c_contig;
+using ouster::sdk::python::ensure_c_contig_floating;
 
+namespace {
 // alias for non-casting row-major array arguments
 template <typename T>
-using pyimg_t = py::array_t<T, py::array::c_style>;
+using pyimg_t = py::ndarray<T, py::ndim<2>, py::c_contig>;
 
 template <typename T, typename U>
 void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
-    if (image.ndim() != 2) {
-        throw std::invalid_argument("Expected a 2d array");
-    }
-    self.update(Eigen::Map<img_t<U>>(image.mutable_data(), image.shape(0),
-                                     image.shape(1)),
-                update_state);
+    self.update(Eigen::Map<img_t<U>>(image.data(), image.shape(0), image.shape(1)), update_state);
 }
 
 template <typename T>
-void auto_exposure_update(AutoExposure& self,
-                          py::array_t<T, py::array::c_style> image,
+void auto_exposure_update(AutoExposure& self, py::ndarray<T, py::ndim<3>, py::c_contig> image,
                           bool update_state) {
-    if (image.ndim() == 2) {
-        self.update(Eigen::Map<img_t<T>>(image.mutable_data(), image.shape(0),
-                                         image.shape(1)),
-                    update_state);
-    } else if (image.ndim() == 3 && image.shape(2) == 3) {
-        const auto h = static_cast<Eigen::Index>(image.shape(0));
-        const auto w = static_cast<Eigen::Index>(image.shape(1));
-        // rgb_img_t is RowMajor, matching numpy C-contiguous layout
-        Eigen::TensorMap<rgb_img_t<T>> tensor_map(image.mutable_data(), h, w,
-                                                  3);
-        self.update(tensor_map, update_state);
-    } else {
-        throw std::invalid_argument(
-            "Expected a 2D (H x W) or 3D (H x W x 3) array");
+    if (image.ndim() != 3 || image.shape(2) != 3) {
+        throw std::invalid_argument("Expected an H x W x 3 array");
     }
+    const auto h = static_cast<Eigen::Index>(image.shape(0));
+    const auto w = static_cast<Eigen::Index>(image.shape(1));
+
+    // rgb_img_t is RowMajor, matching numpy C-contiguous layout
+    Eigen::TensorMap<rgb_img_t<T>> tensor_map(image.data(), h, w, 3);
+
+    self.update(tensor_map, update_state);
 }
 
-std::pair<Eigen::Matrix<double, Eigen::Dynamic, 3>,
-          Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>>
-downsample_point_cloud(const py::array_t<double>& voxel_size,
-                       const py::array_t<double>& pts,
-                       const py::array_t<double>& attributes,
-                       int min_points_per_voxel) {
-    auto size_buf = voxel_size.request();
-    auto size_ptr = static_cast<double*>(size_buf.ptr);
-    Eigen::Matrix<double, 3, 1> eigen_voxel_size;
-    if (voxel_size.size() == 1) {
-        eigen_voxel_size(0, 0) = size_ptr[0];
-        eigen_voxel_size(1, 0) = size_ptr[0];
-        eigen_voxel_size(2, 0) = size_ptr[0];
-    } else if (voxel_size.size() == 3) {
-        eigen_voxel_size(0, 0) = size_ptr[0];
-        eigen_voxel_size(1, 0) = size_ptr[1];
-        eigen_voxel_size(2, 0) = size_ptr[2];
-    } else {
-        throw std::invalid_argument(
-            "Expected a float/double or 3x1 array for voxel size.");
+template <typename T>
+py::capsule make_capsule(T* data) {
+    return py::capsule(data, [](void* pointer) noexcept { delete[] static_cast<T*>(pointer); });
+}
+
+template <typename T>
+py::ndarray<py::numpy, T, py::c_contig> make_array(const std::vector<size_t>& shape) {
+    size_t size = 0;
+    for (const auto& dim : shape) {
+        if (size == 0) {
+            size = dim;
+            continue;
+        } else {
+            size *= dim;
+        }
     }
+    T* data = new T[size];
 
-    if (pts.ndim() != 2 || pts.shape(1) != 3) {
-        throw std::invalid_argument("Points array must have a shape of Nx3");
-    }
+    py::ndarray<py::numpy, T, py::c_contig> result(data, shape.size(), shape.data(),
+                                                   make_capsule(data));
 
-    py::array_t<double> c_style_points;
-    py::array_t<double> c_style_attrs;
-
-    // Create a C-style copy of arrays if it's neither C-style nor F-style
-    const py::array_t<double>* points_ptr = &pts;
-    if ((pts.flags() & py::array::c_style) == 0) {
-        c_style_points = py::array_t<double, py::array::c_style>(pts);
-        points_ptr = &c_style_points;  // Use the C-style array for processing
-    }
-    const py::array_t<double>* attr_ptr = &attributes;
-    if ((attributes.flags() & py::array::c_style) == 0) {
-        c_style_attrs = py::array_t<double, py::array::c_style>(attributes);
-        attr_ptr = &c_style_attrs;  // Use the C-style array for processing
-    }
-
-    auto pts_buf = points_ptr->request();
-    auto attr_buf = attr_ptr->request();
-
-    Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>>
-        points_mat(static_cast<double*>(pts_buf.ptr), pts_buf.shape[0],
-                   pts_buf.shape[1]);
-
-    Eigen::Map<
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-        attr_mat(static_cast<double*>(attr_buf.ptr), attr_buf.shape[0],
-                 attr_buf.shape[1]);
-
-    Eigen::Matrix<double, Eigen::Dynamic, 3> eigen_out_pts;
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> eigen_out_attr;
-    ouster::sdk::core::voxel_downsample(eigen_voxel_size, points_mat, attr_mat,
-                                        eigen_out_pts, eigen_out_attr,
-                                        min_points_per_voxel);
-
-    return {eigen_out_pts, eigen_out_attr};
+    return result;
 }
 
 /**
@@ -169,83 +128,36 @@ downsample_point_cloud(const py::array_t<double>& voxel_size,
  * after applying the corresponding 4x4 transformation matrices to the points.
  *
  */
-
 template <typename T>
-py::array_t<T> dewarp(const py::array_t<T>& points,
-                      const py::array_t<T>& poses) {
-    auto poses_buf = poses.request();
-    auto points_buf = points.request();
-
-    // Validate poses dims: (W, 4, 4)
-    if (poses_buf.ndim != 3 || poses_buf.shape[1] != 4 ||
-        poses_buf.shape[2] != 4) {
-        throw std::runtime_error("Invalid shape for poses, expected (W, 4, 4)");
-    }
-
-    // Validate points dims: (H, W, 3)
-    if (points_buf.ndim != 3 || points_buf.shape[2] != 3) {
-        throw std::runtime_error(
-            "Invalid shape for points, expected (H, W, 3)");
-    }
-
-    const int num_poses = poses_buf.shape[0];            // W
-    const int num_rows = points_buf.shape[0];            // H
-    const int num_points_per_col = points_buf.shape[1];  // W
+py::ndarray<py::numpy, T, py::c_contig> dewarp(
+    const py::ndarray<const T, py::c_contig, py::shape<-1, -1, 3>>& points,
+    const py::ndarray<const T, py::c_contig, py::shape<-1, 4, 4>>& poses) {
+    const int num_poses = poses.shape(0);            // W
+    const int num_rows = points.shape(0);            // H
+    const int num_points_per_col = points.shape(1);  // W
     const int point_dim = 3;
 
     if (num_points_per_col != num_poses) {
-        throw std::runtime_error(
-            "Number of points per set must match number of poses");
+        throw std::runtime_error("Number of points per set must match number of poses");
     }
-
-    py::array_t<T> c_style_points{};
-    py::array_t<T> c_style_poses{};
-
-    // Create a C-style copy of arrays if it's neither C-style nor F-style
-    const py::array_t<T>* points_ptr = &points;
-    if ((points.flags() & py::array::c_style) == 0) {
-        c_style_points = py::array_t<T, py::array::c_style>(points);
-        points_ptr = &c_style_points;  // Use the C-style array for processing
-    }
-    const py::array_t<T>* poses_ptr = &poses;
-    if ((poses.flags() & py::array::c_style) == 0) {
-        c_style_poses = py::array_t<T, py::array::c_style>(poses);
-        poses_ptr = &c_style_poses;  // Use the C-style array for processing
-    }
-
-    // Map the poses and points to Eigen matrices with zero-copy approach
-    auto poses_buf_ptr = poses_ptr->request();
-
-    // Always use zero-copy mapping with custom strides - no fallback copying
-    // needed! Create a strided Eigen::Map that can handle any memory layout
-    using StrideType = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
-    StrideType pose_stride(
-        poses_buf_ptr.strides[0] / sizeof(T),  // outer stride (between poses)
-        poses_buf_ptr.strides[2] /
-            sizeof(T)  // inner stride (between elements within 4x4)
-    );
 
     // Map poses as a matrix where each row is a flattened 4x4 pose matrix
     // This handles both contiguous and non-contiguous layouts without copying
-    Eigen::Map<
-        const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>,
-        0, StrideType>
-        poses_strided_map{poses_ptr->data(), num_poses, 16, pose_stride};
+    Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+        poses_strided_map{poses.data(), num_poses, 16};
 
     // Convert to the expected PosesT format (this is just a view, no copy)
-    PosesT<T> poses_eigen = poses_strided_map;
+    MatrixX16R<T> poses_eigen = poses_strided_map;
 
-    Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 3, Eigen::RowMajor>>
-        points_map{points_ptr->data(), num_rows * num_points_per_col, 3};
+    Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 3, Eigen::RowMajor>> points_map{
+        points.data(), num_rows * num_points_per_col, 3};
 
-    // Create C-style output array to ensure consistent memory layout
-    std::vector<ssize_t> result_shape = {num_rows, num_poses, point_dim};
-    auto result = py::array_t<T, py::array::c_style>(result_shape);
-    auto result_buf = result.request();
-    Eigen::Map<PointsT<T>> dewarped_points{static_cast<T*>(result_buf.ptr),
-                                           num_rows * num_poses, point_dim};
+    py::ndarray<py::numpy, T, py::c_contig> result =
+        make_array<T>({static_cast<size_t>(num_rows), static_cast<size_t>(num_poses),
+                       static_cast<size_t>(point_dim)});
 
-    // Call your templated, in-place dewarp
+    Eigen::Map<PointCloudXYZ<T>> dewarped_points(result.data(), num_rows * num_poses, point_dim);
+
     ouster::sdk::core::dewarp<T>(dewarped_points, points_map, poses_eigen);
 
     return result;
@@ -277,73 +189,39 @@ py::array_t<T> dewarp(const py::array_t<T>& points,
  *
  */
 template <typename T>
-py::array_t<T> transform(const py::array_t<T>& points,
-                         const py::array_t<T>& pose) {
-    // Ensure the pose is a 4x4 matrix
-    if (pose.ndim() != 2 || pose.shape(0) != 4 || pose.shape(1) != 4) {
-        throw std::runtime_error("pose array must have shape (4, 4)");
-    }
-
-    py::array_t<T> c_style_points{};
-    py::array_t<T> c_style_pose{};
-
-    // Create a C-style copy of points if it's neither C-style nor F-style
-    const py::array_t<T>* points_ptr = &points;
-    if (!(points.flags() & py::array::c_style)) {
-        c_style_points = py::array_t<T, py::array::c_style>(points);
-        points_ptr = &c_style_points;  // Use the C-style array for processing
-    }
-    const py::array_t<T>* pose_ptr = &pose;
-    if (!(pose.flags() & py::array::c_style)) {
-        c_style_pose = py::array_t<T, py::array::c_style>(pose);
-        pose_ptr = &c_style_pose;  // Use the C-style array for processing
-    }
-
+py::ndarray<py::numpy, T, py::c_contig> transform(
+    const py::ndarray<const T, py::c_contig>& points,
+    const py::ndarray<const T, py::c_contig, py::shape<4, 4>>& pose) {
     // Convert pose to Eigen format
-    Eigen::Map<const Eigen::Matrix<T, 1, 16, Eigen::RowMajor>> pose_eigen{
-        pose_ptr->data()};
+    Eigen::Map<const Eigen::Matrix<T, 1, 16, Eigen::RowMajor>> pose_eigen{pose.data()};
 
     // Handle case where points is a 2D array: (N, 3)
-    if (points_ptr->ndim() == 2 && points_ptr->shape(1) == 3) {
-        const int num_points = points_ptr->shape(0);
+    Eigen::Index num_points = 0;
+    py::ndarray<py::numpy, T, py::c_contig> result;
+    if (points.ndim() == 2 && points.shape(1) == 3) {
+        num_points = points.shape(0);
 
-        // Define a matrix type for points using the template parameter
-        using PointsMatrix =
-            Eigen::Matrix<T, Eigen::Dynamic, 3, Eigen::RowMajor>;
-        Eigen::Map<const PointsMatrix> points_eigen{points_ptr->data(),
-                                                    num_points, 3};
-
-        auto result = py::array_t<T>({num_points, 3});
-        auto result_buf = result.request();
-        Eigen::Map<PointsMatrix> transformed{static_cast<T*>(result_buf.ptr),
-                                             num_points, 3};
-
-        ouster::sdk::core::transform<T>(transformed, points_eigen, pose_eigen);
-        return result;
+        result = make_array<T>({static_cast<size_t>(num_points), 3});
     }
-
     // Handle case where points is a 3D array: (H, W, 3)
-    else if (points_ptr->ndim() == 3 && points_ptr->shape(2) == 3) {
-        const int h = points_ptr->shape(0);
-        const int w = points_ptr->shape(1);
+    else if (points.ndim() == 3 && points.shape(2) == 3) {
+        const Eigen::Index h = points.shape(0);
+        const Eigen::Index w = points.shape(1);
+        num_points = h * w;
 
-        // Define a matrix type for points using the template parameter
-        using PointsMatrix =
-            Eigen::Matrix<T, Eigen::Dynamic, 3, Eigen::RowMajor>;
-        Eigen::Map<const PointsMatrix> points_eigen{points_ptr->data(), h * w,
-                                                    3};
-
-        auto result = py::array_t<T>({h, w, 3});
-        auto result_buf = result.request();
-        Eigen::Map<PointsMatrix> transformed{static_cast<T*>(result_buf.ptr),
-                                             h * w, 3};
-
-        ouster::sdk::core::transform<T>(transformed, points_eigen, pose_eigen);
-        return result;
+        result = make_array<T>({static_cast<size_t>(h), static_cast<size_t>(w), 3});
     } else {
-        throw std::invalid_argument(
-            "points array must have shape (n, 3) or (h, w, 3)");
+        throw std::invalid_argument("points array must have shape (n, 3) or (h, w, 3)");
     }
+
+    // Define a matrix type for points using the template parameter
+    using PointsMatrix = Eigen::Matrix<T, Eigen::Dynamic, 3, Eigen::RowMajor>;
+    Eigen::Map<const PointsMatrix> points_eigen{points.data(), num_points, 3};
+
+    Eigen::Map<PointsMatrix> transformed{static_cast<T*>(result.data()), num_points, 3};
+
+    ouster::sdk::core::transform<T>(transformed, points_eigen, pose_eigen);
+    return result;
 }
 
 /**
@@ -359,43 +237,22 @@ py::array_t<T> transform(const py::array_t<T>& points,
  * @return NumPy array of shape (N, 4, 4) containing the interpolated 4x4 pose
  * matrices.
  */
-
-// Templated interpolate_pose for pybind11, matching pose_util.h: TX for x,
-// TPOSE for pose
 template <typename TX, typename TPOSE>
-py::array_t<TPOSE> interp_pose(const py::array_t<TX>& x_interp,
-                               const py::array_t<TX>& x_known,
-                               const py::array_t<TPOSE>& poses_known) {
-    // Ensure C-style for poses_known
-    const py::array_t<TPOSE>* poses_known_ptr = &poses_known;
-    py::array_t<TPOSE> c_style_poses{};
-    if ((poses_known.flags() & py::array::c_style) == 0) {
-        c_style_poses = py::array_t<TPOSE, py::array::c_style>(poses_known);
-        poses_known_ptr = &c_style_poses;
-    }
-
-    py::buffer_info x_interp_buf = x_interp.request();
-    py::buffer_info x_known_buf = x_known.request();
-    py::buffer_info poses_known_buf = poses_known_ptr->request();
-
+py::ndarray<py::numpy, TPOSE, py::c_contig> interp_pose(
+    const py::ndarray<const TX, py::c_contig>& x_interp,
+    const py::ndarray<const TX, py::c_contig>& x_known,
+    const py::ndarray<const TPOSE, py::c_contig, py::shape<-1, 4, 4>>& poses_known) {
     // Check input dimensions
-    if (x_interp_buf.ndim != 1 &&
-        (x_interp_buf.ndim != 2 || x_interp_buf.shape[1] != 1)) {
+    if (x_interp.ndim() != 1 && (x_interp.ndim() != 2 || x_interp.shape(1) != 1)) {
         throw std::runtime_error("x_interp must have shape (N,) or (N,1)");
     }
-    if (x_known_buf.ndim != 1 &&
-        (x_known_buf.ndim != 2 || x_known_buf.shape[1] != 1)) {
+    if (x_known.ndim() != 1 && (x_known.ndim() != 2 || x_known.shape(1) != 1)) {
         throw std::runtime_error("x_known must have shape (N,) or (N,1)");
     }
-    if (poses_known_buf.ndim != 3 || poses_known_buf.shape[1] != 4 ||
-        poses_known_buf.shape[2] != 4) {
-        throw std::runtime_error(
-            "poses_known must be a 3D array with shape (M, 4, 4)");
-    }
 
-    size_t n_dim = static_cast<size_t>(x_interp_buf.shape[0]);
-    size_t m_dim = static_cast<size_t>(x_known_buf.shape[0]);
-    size_t poses_dim = static_cast<size_t>(poses_known_buf.shape[0]);
+    size_t n_dim = static_cast<size_t>(x_interp.shape(0));
+    size_t m_dim = static_cast<size_t>(x_known.shape(0));
+    size_t poses_dim = static_cast<size_t>(poses_known.shape(0));
     if (m_dim != poses_dim) {
         throw std::runtime_error(
             "The number of poses in poses_known must match the number of "
@@ -403,82 +260,294 @@ py::array_t<TPOSE> interp_pose(const py::array_t<TX>& x_interp,
     }
 
     // Map input data directly using Eigen::Map for x_interp and x_known
-    TX* x_interp_ptr = static_cast<TX*>(x_interp_buf.ptr);
-    TX* x_known_ptr = static_cast<TX*>(x_known_buf.ptr);
+    const TX* x_interp_ptr = static_cast<const TX*>(x_interp.data());
+    const TX* x_known_ptr = static_cast<const TX*>(x_known.data());
 
     const Eigen::Index n_dim_idx = static_cast<Eigen::Index>(n_dim);
     const Eigen::Index m_dim_idx = static_cast<Eigen::Index>(m_dim);
-    Eigen::Map<const Eigen::Matrix<TX, Eigen::Dynamic, 1>> x_interp_map{
-        x_interp_ptr, n_dim_idx};
-    Eigen::Map<const Eigen::Matrix<TX, Eigen::Dynamic, 1>> x_known_map{
-        x_known_ptr, m_dim_idx};
+    Eigen::Map<const Eigen::Matrix<TX, Eigen::Dynamic, 1>> x_interp_map{x_interp_ptr, n_dim_idx};
+    Eigen::Map<const Eigen::Matrix<TX, Eigen::Dynamic, 1>> x_known_map{x_known_ptr, m_dim_idx};
 
     // Map poses_known to PosesT format (flattened 4x4 matrices)
-    TPOSE* poses_ptr = static_cast<TPOSE*>(poses_known_buf.ptr);
-    Eigen::Map<const Eigen::Matrix<TPOSE, Eigen::Dynamic, 16, Eigen::RowMajor>>
-        poses_map{poses_ptr, m_dim_idx, 16};
+    const TPOSE* poses_ptr = static_cast<const TPOSE*>(poses_known.data());
+    Eigen::Map<const Eigen::Matrix<TPOSE, Eigen::Dynamic, 16, Eigen::RowMajor>> poses_map{
+        poses_ptr, m_dim_idx, 16};
 
     // Call templated C++ core::interp_pose
-    auto result_poses = ouster::sdk::core::interp_pose<TX, TPOSE>(
-        x_interp_map, x_known_map, poses_map);
+    auto result_poses =
+        ouster::sdk::core::interp_pose<TX, TPOSE>(x_interp_map, x_known_map, poses_map);
 
-    // Create C-style output array with shape (N, 4, 4) to ensure consistent
-    // memory layout
-    std::vector<ssize_t> shape = {static_cast<ssize_t>(result_poses.rows()), 4,
-                                  4};
-    auto out = py::array_t<TPOSE, py::array::c_style>(shape);
-    auto out_buf = out.request();
+    py::ndarray<py::numpy, TPOSE, py::c_contig> result =
+        make_array<TPOSE>({static_cast<size_t>(result_poses.rows()), 4, 4});
 
     // Map output array as N×16 row-major matrix and assign directly from
     // result_poses
-    Eigen::Map<Eigen::Matrix<TPOSE, Eigen::Dynamic, 16, Eigen::RowMajor>>
-        out_map{static_cast<TPOSE*>(out_buf.ptr), result_poses.rows(), 16};
+    Eigen::Map<Eigen::Matrix<TPOSE, Eigen::Dynamic, 16, Eigen::RowMajor>> out_map{
+        static_cast<TPOSE*>(result.data()), result_poses.rows(), 16};
     out_map = result_poses;
 
-    return out;
-}
-
-Eigen::Map<const ouster::sdk::core::MatrixX3dR> to_matrixx3d(
-    const py::array& arr) {
-    if (arr.ndim() != 2 || arr.shape(1) != 3) {
-        throw std::invalid_argument("Expected a 2D array with shape (N, 3)");
-    }
-    const Eigen::Index num_points = static_cast<Eigen::Index>(arr.shape(0));
-    py::array_t<double, py::array::c_style | py::array::forcecast> c_style_arr{
-        arr};
-    return Eigen::Map<const ouster::sdk::core::MatrixX3dR>(
-        static_cast<const double*>(c_style_arr.data()), num_points, 3);
-}
-
-Eigen::Map<const ouster::sdk::core::PointCloudXYZd> to_pointcloudxyzd(
-    const py::array& arr) {
-    if (arr.ndim() != 3 || arr.shape(2) != 3) {
-        throw std::invalid_argument("Expected a 3D array with shape (H, W, 3)");
-    }
-    const Eigen::Index num_points = static_cast<Eigen::Index>(arr.shape(0)) *
-                                    static_cast<Eigen::Index>(arr.shape(1));
-    py::array_t<double, py::array::c_style | py::array::forcecast> c_style_arr{
-        arr};
-    return Eigen::Map<const ouster::sdk::core::PointCloudXYZd>(
-        static_cast<const double*>(c_style_arr.data()), num_points, 3);
-}
-
-Eigen::Map<const ouster::sdk::core::img_t<uint32_t>> to_imgt_uint32(
-    const py::array& arr) {
-    if (arr.ndim() != 2) {
-        throw std::invalid_argument("Expected a 2D array");
-    }
-    py::array_t<uint32_t, py::array::c_style | py::array::forcecast>
-        c_style_arr{arr};
-    return Eigen::Map<const ouster::sdk::core::img_t<uint32_t>>(
-        static_cast<const uint32_t*>(c_style_arr.data()), arr.shape(0),
-        arr.shape(1));
+    return result;
 }
 
 template <typename T>
-inline py::array_t<T> destagger2(const py::array_t<T, py::array::c_style>& img,
-                                 const std::vector<int>& pixel_shift_by_row,
-                                 bool inverse) {
+py::ndarray<py::numpy, T, py::c_contig> dewarp_any(
+    const py::ndarray<py::ro, py::shape<-1, -1, 3>>& points,
+    const py::ndarray<py::ro, py::shape<-1, 4, 4>>& poses) {
+    return dewarp<T>(ensure_c_contig_floating<T, py::shape<-1, -1, 3>>(points),
+                     ensure_c_contig_floating<T, py::shape<-1, 4, 4>>(poses));
+}
+
+py::object dewarp_dispatch(const py::ndarray<py::ro, py::shape<-1, -1, 3>>& points,
+                           const py::ndarray<py::ro, py::shape<-1, 4, 4>>& poses) {
+    if (!ouster::sdk::python::detail::is_floating_dtype(points.dtype()) ||
+        !ouster::sdk::python::detail::is_floating_dtype(poses.dtype())) {
+        throw py::type_error("points and poses must be floating-point arrays");
+    }
+    if (points.dtype() == py::dtype<float>()) {
+        return py::cast(dewarp_any<float>(points, poses));
+    }
+    return py::cast(dewarp_any<double>(points, poses));
+}
+
+template <typename T>
+py::ndarray<py::numpy, T, py::c_contig> transform_any(
+    const py::ndarray<py::ro>& points, const py::ndarray<py::ro, py::shape<4, 4>>& pose) {
+    return transform<T>(ensure_c_contig_floating<T>(points),
+                        ensure_c_contig_floating<T, py::shape<4, 4>>(pose));
+}
+
+py::object transform_dispatch(const py::ndarray<py::ro>& points,
+                              const py::ndarray<py::ro, py::shape<4, 4>>& pose) {
+    if (!ouster::sdk::python::detail::is_floating_dtype(points.dtype()) ||
+        !ouster::sdk::python::detail::is_floating_dtype(pose.dtype())) {
+        throw py::type_error("points and pose must be floating-point arrays");
+    }
+    if (points.dtype() == py::dtype<float>()) {
+        return py::cast(transform_any<float>(points, pose));
+    }
+    return py::cast(transform_any<double>(points, pose));
+}
+
+template <typename TX, typename TPOSE>
+py::ndarray<py::numpy, TPOSE, py::c_contig> interp_pose_any(
+    const py::ndarray<py::ro>& x_interp, const py::ndarray<py::ro>& x_known,
+    const py::ndarray<py::ro, py::shape<-1, 4, 4>>& poses_known) {
+    return interp_pose<TX, TPOSE>(
+        ensure_c_contig_floating<TX>(x_interp), ensure_c_contig_floating<TX>(x_known),
+        ensure_c_contig_floating<TPOSE, py::shape<-1, 4, 4>>(poses_known));
+}
+
+template <typename T>
+py::ndarray<py::numpy, T, py::c_contig> xyzlut_call_any(
+    const XYZLutT<T>& self, const py::ndarray<py::ro, py::shape<-1, -1>>& range) {
+    const auto range_c = ensure_c_contig<uint32_t, py::shape<-1, -1>>(range);
+    if (static_cast<size_t>(range_c.shape(0)) != self.h ||
+        static_cast<size_t>(range_c.shape(1)) != self.w) {
+        throw std::invalid_argument("Image dimensions do not match lut.");
+    }
+
+    auto result = make_array<T>({self.h, self.w, 3});
+    Eigen::Map<ouster::sdk::core::PointCloudXYZ<T>> pts{
+        static_cast<T*>(result.data()), static_cast<Eigen::Index>(self.h * self.w), 3};
+    Eigen::Map<const img_t<uint32_t>> range_map{static_cast<const uint32_t*>(range_c.data()),
+                                                static_cast<Eigen::Index>(self.h),
+                                                static_cast<Eigen::Index>(self.w)};
+    cartesianT<T>(pts, range_map, self.direction, self.offset);
+    return result;
+}
+
+template <typename T>
+py::ndarray<uint32_t, py::c_contig> restore_instance_ids(
+    const Object& object, const py::ndarray<const T, py::c_contig>& points,
+    py::ndarray<uint32_t, py::c_contig>& instance_ids) {
+    // Validate points dims: (H, W, 3)
+    if (points.ndim() != 3 || points.shape(2) != 3) {
+        throw std::runtime_error("Invalid shape for points, expected (H, W, 3)");
+    }
+
+    const size_t num_rows = points.shape(0);            // H
+    const size_t num_points_per_col = points.shape(1);  // W
+    const size_t point_dim = 3;
+
+    // Validate instance_ids dims: (H, W)
+    if (instance_ids.ndim() != 2 || instance_ids.shape(0) != num_rows ||
+        instance_ids.shape(1) != num_points_per_col) {
+        throw std::runtime_error("Invalid shape for instance ids, expected (H, W)");
+    }
+
+    Eigen::Map<const PointCloudXYZ<T>> points_map(points.data(), num_rows * num_points_per_col,
+                                                  point_dim);
+
+    Eigen::Map<img_t<uint32_t>> instance_ids_map(instance_ids.data(), num_rows, num_points_per_col);
+
+    ouster::sdk::core::restore_instance_ids<T>(object, points_map, instance_ids_map);
+
+    return instance_ids;
+}
+
+// VoxelHashMap binding helpers ------------------------------------------
+//
+// Templated so we can register the four MapT specializations from a single
+// implementation. Returns a Python ValueError-style exception (via
+// std::invalid_argument) for wrong-shape inputs instead of letting Eigen
+// abort or hit UB.
+
+template <typename MapT>
+void bind_voxel_hash_map_common(py::class_<MapT>& cls) {
+    using PointType = typename MapT::point_type;
+    constexpr bool FIXED_SIZE_POINT = PointType::SizeAtCompileTime != Eigen::Dynamic;
+    constexpr std::size_t BASE_COL_COUNT = 3;
+
+    auto map_point =
+        [FIXED_SIZE_POINT, BASE_COL_COUNT](
+            const py::ndarray<py::numpy, const double, py::ndim<1>, py::c_contig>& point) {
+            const auto got = static_cast<std::size_t>(point.shape(0));
+            if (FIXED_SIZE_POINT) {
+                if (got != BASE_COL_COUNT) {
+                    throw std::invalid_argument("VoxelHashMap method expects a 3-element point");
+                }
+            } else if (got < BASE_COL_COUNT) {
+                throw std::invalid_argument(
+                    "VoxelHashMap method expects a (3+attributes)-element point");
+            }
+            return Eigen::Map<const PointType>(point.data(), static_cast<Eigen::Index>(got));
+        };
+
+    auto to_numpy = [](const ouster::sdk::core::ArrayXXdR& arr) {
+        const std::size_t rows = static_cast<std::size_t>(arr.rows());
+        const std::size_t cols = static_cast<std::size_t>(arr.cols());
+        auto result = make_array<double>({rows, cols});
+        std::copy(arr.data(), arr.data() + arr.size(), static_cast<double*>(result.data()));
+        return result;
+    };
+
+    cls.def_prop_ro("empty", &MapT::empty)
+        .def("clear", &MapT::clear)
+        .def(
+            "add_points",
+            [FIXED_SIZE_POINT, BASE_COL_COUNT](
+                MapT& self,
+                const py::ndarray<py::numpy, const double, py::ndim<2>, py::c_contig>& points) {
+                const std::size_t cols = static_cast<std::size_t>(points.shape(1));
+                if (FIXED_SIZE_POINT) {
+                    if (cols != BASE_COL_COUNT) {
+                        throw std::invalid_argument("add_points expects an Nx3 array");
+                    }
+                } else if (cols < BASE_COL_COUNT) {
+                    throw std::invalid_argument(
+                        "add_points expects at least Nx(3+num_attributes) "
+                        "columns");
+                }
+                const Eigen::Map<const ouster::sdk::core::ArrayXXdR> mapped(points.data(),
+                                                                            points.shape(0), cols);
+                self.add_points(mapped);
+            },
+            py::arg("points"))
+        .def("point_cloud", [&to_numpy](const MapT& self) { return to_numpy(self.pointcloud()); })
+        .def(
+            "remove_voxels_far_from_location",
+            [map_point](
+                MapT& self,
+                const py::ndarray<py::numpy, const double, py::ndim<1>, py::c_contig>& point) {
+                self.remove_voxels_far_from_location(map_point(point));
+            },
+            py::arg("point"))
+        .def(
+            "extract_voxels_far_from_location",
+            [map_point, to_numpy](
+                MapT& self,
+                const py::ndarray<py::numpy, const double, py::ndim<1>, py::c_contig>& point) {
+                return to_numpy(self.extract_voxels_far_from_location(map_point(point)));
+            },
+            py::arg("point"))
+        .def(
+            "get_closest_neighbor",
+            [map_point](
+                const MapT& self,
+                const py::ndarray<py::numpy, const double, py::ndim<1>, py::c_contig>& point,
+                double max_distance_sq) {
+                return self.get_closest_neighbor(map_point(point), max_distance_sq);
+            },
+            py::arg("point"), py::arg("max_distance_sq") = std::numeric_limits<double>::max());
+}
+
+template <typename MapT>
+void bind_voxel_hash_map_dynamic(py::class_<MapT>& cls) {
+    using PointType = typename MapT::point_type;
+    constexpr bool FIXED_SIZE_POINT = PointType::SizeAtCompileTime != Eigen::Dynamic;
+    constexpr std::size_t BASE_COL_COUNT = 3;
+
+    auto map_point =
+        [FIXED_SIZE_POINT, BASE_COL_COUNT](
+            const py::ndarray<py::numpy, const double, py::ndim<1>, py::c_contig>& point) {
+            const auto got = static_cast<std::size_t>(point.shape(0));
+            if (FIXED_SIZE_POINT) {
+                if (got != BASE_COL_COUNT) {
+                    throw std::invalid_argument("VoxelHashMap method expects a 3-element point");
+                }
+            } else if (got < BASE_COL_COUNT) {
+                throw std::invalid_argument(
+                    "VoxelHashMap method expects a (3+attributes)-element point");
+            }
+            return Eigen::Map<const PointType>(point.data(), static_cast<Eigen::Index>(got));
+        };
+}
+
+ouster::sdk::core::ArrayXXdR voxel_downsample_xd_wrapper(
+    py::ndarray<const double, py::c_contig>& frame, double voxel_size,
+    std::size_t max_points_per_voxel, std::size_t min_pts_threshold,
+    ouster::sdk::core::VoxelDownsampleStrategy strategy) {
+    if (frame.ndim() != 2 || frame.shape(1) < 3)
+        throw std::invalid_argument(
+            "voxel_downsample_xd: frame must be Nx>=3 (x,y,z + optional attributes)");
+
+    const Eigen::Index rows = static_cast<Eigen::Index>(frame.shape(0));
+    const Eigen::Index cols = static_cast<Eigen::Index>(frame.shape(1));
+    // C-contiguous numpy matches RowMajor Eigen — map directly, no copy
+    Eigen::Map<const ouster::sdk::core::ArrayXXdR> mat(frame.data(), rows, cols);
+    return ouster::sdk::core::voxel_downsample_xd(mat, voxel_size, max_points_per_voxel,
+                                                  min_pts_threshold, strategy);
+}
+
+ouster::sdk::core::ArrayX3dR voxel_downsample_3d_wrapper(
+    py::ndarray<const double, py::c_contig>& frame, double voxel_size,
+    std::size_t max_points_per_voxel, std::size_t min_pts_threshold,
+    ouster::sdk::core::VoxelDownsampleStrategy strategy) {
+    if (frame.ndim() != 2 || frame.shape(1) != 3)
+        throw std::invalid_argument("voxel_downsample_3d: frame must be Nx3");
+
+    const Eigen::Index rows = static_cast<Eigen::Index>(frame.shape(0));
+    Eigen::Map<const ouster::sdk::core::ArrayX3dR> mat(frame.data(), rows, 3);
+    return ouster::sdk::core::voxel_downsample_3d(mat, voxel_size, max_points_per_voxel,
+                                                  min_pts_threshold, strategy);
+}
+
+}  // namespace
+
+template <typename T>
+inline py::ndarray<py::numpy, T, py::c_contig> destagger_impl(
+    const std::vector<size_t>& shape, const void* data, const std::vector<int>& pixel_shift_by_row,
+    bool inverse) {
+    int dim3 = 1;
+    for (size_t i = 2; i < shape.size(); i++) {
+        dim3 *= shape[i];
+    }
+
+    const T* real_data = reinterpret_cast<const T*>(data);
+    auto result = make_array<T>(shape);
+
+    Eigen::TensorMap<const Eigen::Tensor<T, 3, Eigen::RowMajor>> eigen_img(real_data, shape[0],
+                                                                           shape[1], dim3);
+
+    Eigen::TensorMap<Eigen::Tensor<T, 3, Eigen::RowMajor>> destaggered(result.data(), shape[0],
+                                                                       shape[1], dim3);
+    ouster::sdk::core::destagger_into<T, 3>(eigen_img, pixel_shift_by_row, inverse, destaggered);
+
+    return result;
+}
+
+inline py::object destagger2(const py::ndarray<py::numpy, py::ro, py::c_contig>& img,
+                             const std::vector<int>& pixel_shift_by_row, bool inverse = false) {
     // make sure the image is at least 2d
     if (img.ndim() < 2) {
         throw std::invalid_argument("Must have at least 2 dimensions.");
@@ -488,222 +557,252 @@ inline py::array_t<T> destagger2(const py::array_t<T, py::array::c_style>& img,
         throw std::invalid_argument("Cannot have any dimensions of zero.");
     }
 
-    int dim3 = 1;
-    for (size_t i = 2; i < img.ndim(); i++) {
-        dim3 *= img.shape(i);
-    }
-
     std::vector<size_t> shape;
     for (size_t i = 0; i < img.ndim(); i++) {
         shape.push_back(img.shape(i));
     }
-    auto result = py::array_t<T>(shape);
 
-    Eigen::TensorMap<const Eigen::Tensor<T, 3, Eigen::RowMajor>> eigen_img(
-        img.data(), img.shape(0), img.shape(1), dim3);
+    if (img.dtype() == py::dtype<bool>()) {
+        return destagger_impl<bool>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<uint8_t>()) {
+        return destagger_impl<uint8_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<uint16_t>()) {
+        return destagger_impl<uint16_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<uint32_t>()) {
+        return destagger_impl<uint32_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<uint64_t>()) {
+        return destagger_impl<uint64_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<float>()) {
+        return destagger_impl<float>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<double>()) {
+        return destagger_impl<double>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<ouster::sdk::core::float16_t>()) {
+        return destagger_impl<ouster::sdk::core::float16_t>(shape, img.data(), pixel_shift_by_row,
+                                                            inverse)
+            .cast();
+    } else if (img.dtype() == py::dtype<int8_t>()) {
+        return destagger_impl<int8_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<int16_t>()) {
+        return destagger_impl<int16_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<int32_t>()) {
+        return destagger_impl<int32_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else if (img.dtype() == py::dtype<int64_t>()) {
+        return destagger_impl<int64_t>(shape, img.data(), pixel_shift_by_row, inverse).cast();
+    } else {
+        throw std::invalid_argument("Destagger called with unsupported dtype.");
+    }
+}
 
-    Eigen::TensorMap<Eigen::Tensor<T, 3, Eigen::RowMajor>> destaggered(
-        result.mutable_data(), img.shape(0), img.shape(1), dim3);
-    ouster::sdk::core::destagger_into<T, 3>(eigen_img, pixel_shift_by_row,
-                                            inverse, destaggered);
+inline py::object destagger3(const SensorInfo& sensor_info,
+                             const py::ndarray<py::numpy, py::ro, py::c_contig>& img,
+                             bool inverse = false) {
+    if (img.ndim() < 2) {
+        throw std::invalid_argument("Must have at least 2 dimensions.");
+    }
 
-    return result;
+    if (img.shape(0) != sensor_info.format.pixels_per_column ||
+        img.shape(1) != sensor_info.format.columns_per_frame ||
+        img.shape(0) != sensor_info.format.pixel_shift_by_row.size()) {
+        throw std::invalid_argument("Image resolution must match SensorInfo.");
+    }
+    return destagger2(img, sensor_info.format.pixel_shift_by_row, inverse);
 }
 
 void init_client_processing(py::module_& module, py::module_& /*unused*/) {
-    module.def("destagger", &destagger2<bool>);
-    module.def("destagger", &destagger2<int8_t>);
-    module.def("destagger", &destagger2<int16_t>);
-    module.def("destagger", &destagger2<int32_t>);
-    module.def("destagger", &destagger2<int64_t>);
-    module.def("destagger", &destagger2<uint8_t>);
-    module.def("destagger", &destagger2<uint16_t>);
-    module.def("destagger", &destagger2<uint32_t>);
-    module.def("destagger", &destagger2<uint64_t>);
-    module.def("destagger", &destagger2<ouster::sdk::core::float16_t>);
-    module.def("destagger", &destagger2<float>);
-    module.def("destagger", &destagger2<double>);
-
+    module.def("destagger", &destagger2, py::arg("img"), py::arg("pixel_shift_by_row"),
+               py::arg("inverse") = false,
+               py::sig("def destagger(img: Annotated[NDArray, dict(order='C', writable=False)], "
+                       "pixel_shift_by_row: Sequence[int], inverse: bool = False) -> "
+                       "Annotated[NDArray, dict(order='C')]"));
     module.def(
-        "normals",
-        [](const py::array& xyz_arr, const py::array& range_arr,
-           const py::array& sensor_origins_obj, int pixel_search_range,
-           double min_angle_of_incidence_rad, double target_distance_m) {
-            int h = static_cast<int>(xyz_arr.shape(0));
-            int w = static_cast<int>(xyz_arr.shape(1));
-            int num_points = h * w;
+        "destagger", &destagger3, py::arg("sensor_info"), py::arg("img"),
+        py::arg("inverse") = false,
+        py::sig("def destagger(sensor_info: SensorInfo, img: Annotated[NDArray, dict(order='C', "
+                "writable=False)], inverse: bool = False) -> Annotated[NDArray, dict(order='C')]"));
 
-            auto normals_matrix = ouster::sdk::core::normals(
-                to_pointcloudxyzd(xyz_arr), to_imgt_uint32(range_arr),
-                to_matrixx3d(sensor_origins_obj), pixel_search_range,
-                min_angle_of_incidence_rad, target_distance_m);
-
-            // Create output array with correct shape (H, W, 3)
-            auto result = py::array_t<double>({h, w, 3});
-            auto result_buf = result.request();
-
-            // Map the output array to Eigen matrix and copy the data
-            Eigen::Map<ouster::sdk::core::PointCloudXYZd> normals_output_map{
-                static_cast<double*>(result_buf.ptr), num_points, 3};
-            normals_output_map = normals_matrix;
-
-            return result;
-        },
-        R"doc(
-Compute normals from destaggered XYZ/range arrays.
-
-Args:
-    xyz: destaggered XYZ coordinates for the first return (H, W, 3)
-    range: destaggered range image for the first return (H, W)
-    sensor_origins_xyz: per-column sensor origins in the same frame as xyz/range,
-        shape (W, 3). For world-frame xyz, use
-        (scan.pose @ scan.sensor_info.extrinsic)[:, :3, 3].
-        For sensor-frame xyz, pass zeros with shape (W, 3) (e.g. np.zeros((w, 3))).
-    pixel_search_range: axial search radius (in pixels) when gathering neighbours
-    min_angle_of_incidence_rad: minimum allowable incidence angle between a beam and
-        surface (radians) (default: 1 deg, ~0.01745 rad)
-    target_distance_m: target neighbour distance used when selecting candidate points
-
-Returns:
-    A destaggered normal array of shape (H, W, 3) for the provided return.
-)doc",
-        py::arg("xyz"), py::arg("range"), py::arg("sensor_origins_xyz"),
-        py::arg("pixel_search_range") = 1,
-        py::arg("min_angle_of_incidence_rad") =
-            ouster::sdk::core::DEFAULT_MIN_ANGLE_INCIDENCE_RAD,
-        py::arg("target_distance_m") =
-            ouster::sdk::core::DEFAULT_TARGET_DISTANCE_METER);
-
-    module.def(
-        "normals",
-        [](const py::array& xyz_arr, const py::array& range_arr,
-           const py::array& xyz2_arr, const py::array& range2_arr,
-           const py::array& sensor_origins_obj, int pixel_search_range,
-           double min_angle_of_incidence_rad, double target_distance_m) {
-            py::array_t<uint32_t, py::array::c_style | py::array::forcecast>
-                range(range_arr);
-            py::array_t<uint32_t, py::array::c_style | py::array::forcecast>
-                range2(range2_arr);
-
-            int h = static_cast<int>(xyz_arr.shape(0));
-            int w = static_cast<int>(xyz_arr.shape(1));
-            int num_points = h * w;
-
-            auto normals_pair = ouster::sdk::core::normals(
-                to_pointcloudxyzd(xyz_arr), to_imgt_uint32(range_arr),
-                to_pointcloudxyzd(xyz2_arr), to_imgt_uint32(range2_arr),
-                to_matrixx3d(sensor_origins_obj), pixel_search_range,
-                min_angle_of_incidence_rad, target_distance_m);
-
-            // Create output arrays with correct shape (H, W, 3)
-            auto first = py::array_t<double>({h, w, 3});
-            auto second = py::array_t<double>({h, w, 3});
-            auto first_buf = first.request();
-            auto second_buf = second.request();
-
-            // Map the output arrays to Eigen matrices and copy the data
-            Eigen::Map<ouster::sdk::core::PointCloudXYZd> first_output_map{
-                static_cast<double*>(first_buf.ptr), num_points, 3};
-            Eigen::Map<ouster::sdk::core::PointCloudXYZd> second_output_map{
-                static_cast<double*>(second_buf.ptr), num_points, 3};
-
-            first_output_map = normals_pair.first;
-            second_output_map = normals_pair.second;
-
-            return std::make_tuple(first, second);
-        },
-        R"doc(
-Compute normals for both first and second returns from destaggered XYZ/range arrays.
-
-Args:
-    xyz: destaggered XYZ coordinates for the first return (H, W, 3)
-    range: destaggered range image for the first return (H, W)
-    xyz2: destaggered XYZ coordinates for the second return (H, W, 3)
-    range2: destaggered range image for the second return (H, W)
-    sensor_origins_xyz: per-column sensor origins in the same frame as xyz/range,
-        shape (W, 3). For world-frame xyz, use
-        (scan.pose @ scan.sensor_info.extrinsic)[:, :3, 3].
-        For sensor-frame xyz, pass zeros.
-    pixel_search_range: axial search radius (in pixels) when gathering neighbours
-    min_angle_of_incidence_rad: minimum allowable incidence angle between a beam and
-        surface (radians) (default: 1 deg, ~0.01745 rad)
-    target_distance_m: target neighbour distance used when selecting candidate points
-
-Returns:
-    A tuple of destaggered normal arrays (first_return_normals, second_return_normals).
-)doc",
-        py::arg("xyz"), py::arg("range"), py::arg("xyz2"), py::arg("range2"),
-        py::arg("sensor_origins_xyz"), py::arg("pixel_search_range") = 1,
-        py::arg("min_angle_of_incidence_rad") =
-            ouster::sdk::core::DEFAULT_MIN_ANGLE_INCIDENCE_RAD,
-        py::arg("target_distance_m") =
-            ouster::sdk::core::DEFAULT_TARGET_DISTANCE_METER);
-
-    py::class_<ScanBatcher>(module, "ScanBatcher")
+    py::class_<FrameBatcher>(module, "FrameBatcher")
         .def(py::init<std::shared_ptr<SensorInfo>>())
-        .def("reset", &ScanBatcher::reset)
-        .def("batched_packets", &ScanBatcher::batched_packets)
+        .def("reset", &FrameBatcher::reset)
+        .def("batched_packets", &FrameBatcher::batched_packets)
+        .def("dropped_packets", &FrameBatcher::dropped_packets)
+        .def("set_max_cache_size", &FrameBatcher::set_max_cache_size)
+        .def("get_max_cache_size", &FrameBatcher::get_max_cache_size)
         .def("__call__",
-             [](ScanBatcher& self, Packet& packet, LidarScan& lidar_scan) {
-                 return self(packet, lidar_scan);
-             });
+             [](FrameBatcher& self, Packet& packet, LidarFrame& lidar_frame) {
+                 PyErr_WarnEx(PyExc_FutureWarning,
+                              "FrameBatcher.__call__() is deprecated, use "
+                              "FrameBatcher.batch() instead",
+                              1);
+                 return self.batch(packet, lidar_frame);
+             })
+        .def("batch", &FrameBatcher::batch);
 
-    // XYZ Projection
     py::class_<XYZLutT<float>>(module, "XYZLutFloat")
-        .def(py::init([](const SensorInfo& sensor, bool use_extrinsics) {
-                 XYZLutT<float> lut = XYZLutT<float>(sensor, use_extrinsics);
-                 return lut;
-             }),
-             py::arg("info"), py::arg("use_extrinsics"))
-        .def("__call__",
-             [](const XYZLutT<float>& self,
-                const Eigen::Ref<const img_t<uint32_t>>& range) {
-                 return cartesianT<float>(range, self.direction, self.offset);
-             })
-        .def("__call__",
-             [](const XYZLutT<float>& self, const LidarScan& scan) {
-                 return cartesianT<float>(scan, self.direction, self.offset);
-             })
-        .def_property_readonly(
-            "direction", [](const XYZLut& self) { return self.direction; })
-        .def_property_readonly("offset",
-                               [](const XYZLut& self) { return self.offset; });
+        .def(
+            "__init__",
+            [](XYZLutT<float>* self, const SensorInfo& sensor, bool use_extrinsics) {
+                new (self) XYZLutT<float>(sensor, use_extrinsics);
+            },
+            py::arg("info"), py::arg("use_extrinsics") = true, R"doc(
+Return a function that can project frames into Cartesian coordinates.
+
+If called with a numpy array representing a range image, the range image
+must be in "staggered" form, where each column corresponds to a single
+measurement block. LidarFrame fields are always staggered.
+
+Internally, this will pre-compute a lookup table using the supplied
+intrinsic parameters. XYZ points are returned as a H x W x 3 array of
+doubles, where H is the number of beams and W is the horizontal resolution
+of the frame.
+
+The coordinates are reported in meters in the *sensor frame* (when
+``use_extrinsics`` is False, default True) as defined in the sensor documentation.
+
+However, the result is returned in the "extrinsics frame" if
+``use_extrinsics`` is True, which makes additional transform from
+"sensor frame" to "extrinsics frame" using the homogeneous 4x4 transform
+matrix from ``info.sensor_to_body`` property.
+
+Args:
+    info: sensor metadata
+    use_extrinsics: if True, applies the ``info.sensor_to_body`` transform to the
+                    resulting "sensor frame" coordinates and returns the
+                    result in "extrinsics frame".
+
+Returns:
+    A function that computes a point cloud given a range image)doc")
+        .def("__call__", &xyzlut_call_any<float>, py::arg("range"))
+        .def(
+            "__call__",
+            [](const XYZLutT<float>& self, const LidarFrame& frame) {
+                if (frame.w != self.w || frame.h != self.h) {
+                    throw std::invalid_argument("Frame dimensions do not match lut.");
+                }
+
+                // Create output array with correct shape (H, W, 3)
+                auto result = make_array<float>({self.h, self.w, 3});
+
+                // Map the output array to Eigen matrix and copy the data
+                Eigen::Map<ouster::sdk::core::PointCloudXYZ<float>> pts{
+                    static_cast<float*>(result.data()), static_cast<Eigen::Index>(self.h * self.w),
+                    3};
+
+                cartesianT<float>(pts, frame.field(ouster::sdk::core::ChanField::RANGE),
+                                  self.direction, self.offset);
+                return result;
+            },
+            py::arg("frame"))
+        .def_prop_ro("h", [](const XYZLutT<float>& self) { return self.h; })
+        .def_prop_ro("w", [](const XYZLutT<float>& self) { return self.w; })
+        .def_prop_ro(
+            "direction",
+            [](const XYZLutT<float>& self) {
+                return py::ndarray<py::numpy, const float, py::c_contig>(self.direction.data(),
+                                                                         {self.h * self.w, 3});
+            },
+            py::rv_policy::reference_internal)
+        .def_prop_ro(
+            "offset",
+            [](const XYZLutT<float>& self) {
+                return py::ndarray<py::numpy, const float, py::c_contig>(self.offset.data(),
+                                                                         {self.h * self.w, 3});
+            },
+            py::rv_policy::reference_internal);
 
     py::class_<XYZLutT<double>>(module, "XYZLut")
-        .def(py::init([](const SensorInfo& sensor, bool use_extrinsics) {
-                 return ouster::sdk::core::make_xyz_lut(sensor, use_extrinsics);
-             }),
-             py::arg("info"), py::arg("use_extrinsics"))
-        .def("__call__",
-             [](const XYZLutT<double>& self,
-                const Eigen::Ref<const img_t<uint32_t>>& range) {
-                 return cartesianT<double>(range, self.direction, self.offset);
-             })
-        .def("__call__",
-             [](const XYZLutT<double>& self, const LidarScan& scan) {
-                 return cartesianT<double>(scan, self.direction, self.offset);
-             });
+        .def(
+            "__init__",
+            [](XYZLutT<double>* self, const SensorInfo& sensor, bool use_extrinsics) {
+                new (self) XYZLutT<double>(sensor, use_extrinsics);
+            },
+            py::arg("info"), py::arg("use_extrinsics") = false, R"doc(
+Return a function that can project frames into Cartesian coordinates.
+
+If called with a numpy array representing a range image, the range image
+must be in "staggered" form, where each column corresponds to a single
+measurement block. LidarFrame fields are always staggered.
+
+Internally, this will pre-compute a lookup table using the supplied
+intrinsic parameters. XYZ points are returned as a H x W x 3 array of
+doubles, where H is the number of beams and W is the horizontal resolution
+of the frame.
+
+The coordinates are reported in meters in the *sensor frame* (when
+``use_extrinsics`` is False, default) as defined in the sensor documentation.
+
+However, the result is returned in the "extrinsics frame" if
+``use_extrinsics`` is True, which makes additional transform from
+"sensor frame" to "extrinsics frame" using the homogeneous 4x4 transform
+matrix from ``info.sensor_to_body`` property.
+
+Args:
+    info: sensor metadata
+    use_extrinsics: if True, applies the ``info.sensor_to_body`` transform to the
+                    resulting "sensor frame" coordinates and returns the
+                    result in "extrinsics frame".
+
+Returns:
+    A function that computes a point cloud given a range image)doc")
+        .def("__call__", &xyzlut_call_any<double>, py::arg("range"))
+        .def(
+            "__call__",
+            [](const XYZLutT<double>& self, const LidarFrame& frame) {
+                if (frame.w != self.w || frame.h != self.h) {
+                    throw std::invalid_argument("Frame dimensions do not match lut.");
+                }
+
+                // Create output array with correct shape (H, W, 3)
+                auto result = make_array<double>({self.h, self.w, 3});
+
+                // Map the output array to Eigen matrix and copy the data
+                Eigen::Map<ouster::sdk::core::PointCloudXYZ<double>> pts{
+                    static_cast<double*>(result.data()), static_cast<Eigen::Index>(self.h * self.w),
+                    3};
+
+                cartesianT<double>(pts, frame.field(ouster::sdk::core::ChanField::RANGE),
+                                   self.direction, self.offset);
+                return result;
+            },
+            py::arg("frame"))
+        .def_prop_ro("h", [](const XYZLutT<double>& self) { return self.h; })
+        .def_prop_ro("w", [](const XYZLutT<double>& self) { return self.w; })
+        .def_prop_ro(
+            "direction",
+            [](const XYZLutT<double>& self) {
+                return py::ndarray<py::numpy, const double, py::c_contig>(self.direction.data(),
+                                                                          {self.h * self.w, 3});
+            },
+            py::rv_policy::reference_internal)
+        .def_prop_ro(
+            "offset",
+            [](const XYZLutT<double>& self) {
+                return py::ndarray<py::numpy, const double, py::c_contig>(self.offset.data(),
+                                                                          {self.h * self.w, 3});
+            },
+            py::rv_policy::reference_internal);
 
     // Image processing
     py::class_<AutoExposure>(module, "AutoExposure")
         .def(py::init<>())
-        .def(py::init(
-                 [](int update_every) { return AutoExposure(update_every); }),
-             py::arg("update_every"))
-        .def(py::init([](double low, double high, int update_every) {
-                 return AutoExposure(low, high, update_every);
-             }),
-             py::arg("lo_percentile"), py::arg("hi_percentile"),
-             py::arg("update_every"))
-        .def("update", &auto_exposure_update<float>,
-             py::arg("image").noconvert(), py::arg("update_state") = true)
-        .def("update", &auto_exposure_update<double>,
-             py::arg("image").noconvert(), py::arg("update_state") = true)
+        .def(
+            "__init__",
+            [](AutoExposure* self, int update_every) { new (self) AutoExposure(update_every); },
+            py::arg("update_every"))
+        .def(
+            "__init__",
+            [](AutoExposure* self, double low, double high, int update_every, double damping) {
+                new (self) AutoExposure(low, high, update_every, damping);
+            },
+            py::arg("lo_percentile"), py::arg("hi_percentile"), py::arg("update_every"),
+            py::arg("damping") = 0.9)
+        .def("update", &auto_exposure_update<float>, py::arg("image").noconvert(),
+             py::arg("update_state") = true)
+        .def("update", &auto_exposure_update<double>, py::arg("image").noconvert(),
+             py::arg("update_state") = true)
         .def(
             "update",
             [](AutoExposure& self,
-               const py::array_t<ouster::sdk::core::float16_t,
-                                 py::array::c_style>& image,
+               const py::ndarray<ouster::sdk::core::float16_t, py::ndim<3>, py::c_contig>& image,
                bool update_state) {
                 if (image.ndim() != 3 || image.shape(2) != 3) {
                     throw std::invalid_argument("Expected an H x W x 3 array");
@@ -711,19 +810,21 @@ Returns:
                 const auto h = static_cast<Eigen::Index>(image.shape(0));
                 const auto w = static_cast<Eigen::Index>(image.shape(1));
 
-                auto result = py::array_t<float>(
-                    std::vector<ssize_t>{image.shape(0), image.shape(1), 3});
+                auto result = make_array<float>({image.shape(0), image.shape(1), 3});
 
-                Eigen::TensorMap<const rgb_img_t<ouster::sdk::core::float16_t>>
-                    in_map(image.data(), h, w, 3);
-                Eigen::TensorMap<rgb_img_t<float>> out_map(
-                    result.mutable_data(), h, w, 3);
+                Eigen::TensorMap<const rgb_img_t<ouster::sdk::core::float16_t>> in_map(image.data(),
+                                                                                       h, w, 3);
+                Eigen::TensorMap<rgb_img_t<float>> out_map(result.data(), h, w, 3);
 
                 self.update(in_map, out_map, update_state);
 
                 return result;
             },
-            py::arg("image").noconvert(), py::arg("update_state") = true);
+            py::arg("image").noconvert(), py::arg("update_state") = true)
+        .def("update", &image_proc_call<AutoExposure, float>, py::arg("image").noconvert(),
+             py::arg("update_state") = true)
+        .def("update", &image_proc_call<AutoExposure, double>, py::arg("image").noconvert(),
+             py::arg("update_state") = true);
 
     py::class_<BeamUniformityCorrector>(module, "BeamUniformityCorrector")
         .def(py::init<>())
@@ -732,9 +833,47 @@ Returns:
         .def("update", &image_proc_call<BeamUniformityCorrector, double>,
              py::arg("image").noconvert(), py::arg("update_state") = true);
 
-    module.def("dewarp",
-               py::overload_cast<const py::array_t<double>&,
-                                 const py::array_t<double>&>(&dewarp<double>),
+    py::class_<LocalToneMapper>(module, "LocalToneMapper")
+        .def(py::init<>())
+        .def(
+            "__init__",
+            [](LocalToneMapper* self, int update_every) {
+                new (self) LocalToneMapper(update_every);
+            },
+            py::arg("update_every"))
+        .def(
+            "__init__",
+            [](LocalToneMapper* self, double low, double high, int update_every, double damping,
+               bool compress_dr, bool color_correct) {
+                new (self)
+                    LocalToneMapper(low, high, update_every, damping, compress_dr, color_correct);
+            },
+            py::arg("lo_percentile"), py::arg("hi_percentile"), py::arg("update_every"),
+            py::arg("damping"), py::arg("compress_dr"), py::arg("color_correct"))
+        .def(
+            "update",
+            [](LocalToneMapper& self,
+               py::ndarray<ouster::sdk::core::float16_t, py::ndim<3>, py::c_contig> image,
+               bool update_state) {
+                if (image.ndim() != 3 || image.shape(2) != 3) {
+                    throw std::invalid_argument("Expected an H x W x 3 array");
+                }
+                const auto h = static_cast<Eigen::Index>(image.shape(0));
+                const auto w = static_cast<Eigen::Index>(image.shape(1));
+
+                auto result = make_array<float>({image.shape(0), image.shape(1), 3});
+
+                Eigen::TensorMap<const rgb_img_t<ouster::sdk::core::float16_t>> in_map(image.data(),
+                                                                                       h, w, 3);
+                Eigen::TensorMap<rgb_img_t<float>> out_map(result.data(), h, w, 3);
+
+                self.update(in_map, out_map, update_state);
+
+                return result;
+            },
+            py::arg("image").noconvert(), py::arg("update_state") = true);
+
+    module.def("dewarp", &dewarp_dispatch,
                R"(
 Applies a set of 4x4 pose transformations to a collection of 3D points.
 Args:
@@ -746,22 +885,7 @@ Return:
     )",
                py::arg("points"), py::arg("poses"));
 
-    module.def(
-        "dewarp",
-        py::overload_cast<const py::array_t<float>&, const py::array_t<float>&>(
-            &dewarp<float>),
-        R"(
-Applies a set of 4x4 pose transformations to a collection of 3D points (float precision).
-Args:
-    points: A NumPy array of shape (H, W, 3) representing the 3D points (float32).
-    poses: A NumPy array of shape (W, 4, 4) representing the 4x4 pose (float32)
-
-Return:
-    A NumPy array of shape (H, W, 3) containing the dewarped 3D points (float32)
-    )",
-        py::arg("points"), py::arg("poses"));
-
-    module.def("transform", &transform<double>,
+    module.def("transform", &transform_dispatch,
                R"(
     Applies a single of 4x4 pose transformations to a collection of 3D points.
     Args:
@@ -770,18 +894,6 @@ Return:
 
     Return:
     A NumPy array of shape (H, W, 3) or (N, 3) containing the transformed 3D points
-    after applying the corresponding 4x4 transformation matrices to the points
-    )",
-               py::arg("points"), py::arg("pose"));
-    module.def("transform", &transform<float>,
-               R"(
-    Applies a single of 4x4 pose transformations to a collection of 3D points (float precision).
-    Args:
-    points: A NumPy array of shape (H, W, 3), or (N, 3) (float32)
-    pose: A NumPy array of shape (4, 4) representing the 4x4 pose (float32)
-
-    Return:
-    A NumPy array of shape (H, W, 3) or (N, 3) containing the transformed 3D points (float32)
     after applying the corresponding 4x4 transformation matrices to the points
     )",
                py::arg("points"), py::arg("pose"));
@@ -798,8 +910,18 @@ Return:
             A 4x4 homogeneous transformation matrix.
         )");
 
-    module.def("quaternion_pose_to_matrix",
-               &ouster::sdk::core::quaternion_pose_to_matrix,
+    module.def("matrix_to_euler", &ouster::sdk::core::matrix_to_euler,
+               R"(
+        Extract ZYX Euler angles (roll, pitch, yaw) from a 3x3 rotation matrix.
+
+        Args:
+            matrix: A 3x3 rotation matrix (numpy array, float64).
+
+        Returns:
+            A length-3 array [roll, pitch, yaw] in radians.
+        )");
+
+    module.def("quaternion_pose_to_matrix", &ouster::sdk::core::quaternion_pose_to_matrix,
                R"(
         Convert a pose given as a quaternion and translation to a 4x4 transformation matrix.
 
@@ -810,23 +932,62 @@ Return:
             A 4x4 homogeneous transformation matrix.
         )");
 
-    module.def("voxel_downsample", &downsample_point_cloud,
-               py::arg("voxel_size"), py::arg("pts"), py::arg("attributes"),
-               py::arg("min_points_per_voxel") = 1,
+    module.def("get_rot_matrix_to_align_to_gravity",
+               &ouster::sdk::core::get_rot_matrix_to_align_to_gravity, py::arg("accel_x"),
+               py::arg("accel_y"), py::arg("accel_z"), py::arg("fix_yaw") = true,
                R"(
-        [BETA] Downsample a pointcloud using a voxel grid of the requested resolution.
+        Computes a 3x3 rotation matrix that aligns acceleration to gravity
+        [0, 0, 1].
 
         Args:
-            voxel_size: The size of the voxel grid.
-            pts: Nx3 matrix of points to downsample.
-            attributes: A dictionary of attributes to downsample.
-            min_points_per_voxel: Minimum number of points per voxel to keep.
+            accel_x: x-component of acceleration.
+            accel_y: y-component of acceleration.
+            accel_z: z-component of acceleration.
+            fix_yaw: if true (default), neutralize yaw; if false, keep the
+                shortest gravity-alignment rotation without forced yaw.
+        )");
+
+    py::enum_<ouster::sdk::core::VoxelDownsampleStrategy>(module, "VoxelDownsampleStrategy")
+        .value("FIRST_N_POINT", ouster::sdk::core::VoxelDownsampleStrategy::FIRST_N_POINT)
+        .value("AVERAGE_POINT", ouster::sdk::core::VoxelDownsampleStrategy::AVERAGE_POINT)
+        .value("RANDOM", ouster::sdk::core::VoxelDownsampleStrategy::RANDOM);
+
+    module.def("voxel_downsample_3d", &voxel_downsample_3d_wrapper, py::arg("frame"),
+               py::arg("voxel_size"), py::arg("max_points_per_voxel") = std::size_t{1},
+               py::arg("min_pts_threshold") = std::size_t{1},
+               py::arg("strategy") = ouster::sdk::core::VoxelDownsampleStrategy::RANDOM,
+               R"(
+        [BETA] Downsample an Nx3 pointcloud using a voxel hash map.
+
+        Args:
+            frame: Nx3 array of points (x,y,z).
+            voxel_size: Edge length of each cubic voxel.
+            max_points_per_voxel: Maximum points kept per voxel (FIRST_N_POINT, RANDOM).
+            min_pts_threshold: Minimum raw insertions required before a voxel
+                contributes to the output (AVERAGE_POINT).
+            strategy: VoxelDownsampleStrategy selecting the per-voxel reduction.
 
         Returns:
-            A tuple containing the downsampled points and attributes.
+            Mx3 array of downsampled points (M <= N).
+        )");
 
-        Note:
-            This is a beta feature and its API may change in future releases.
+    module.def("voxel_downsample_xd", &voxel_downsample_xd_wrapper, py::arg("frame"),
+               py::arg("voxel_size"), py::arg("max_points_per_voxel") = std::size_t{1},
+               py::arg("min_pts_threshold") = std::size_t{1},
+               py::arg("strategy") = ouster::sdk::core::VoxelDownsampleStrategy::RANDOM,
+               R"(
+        [BETA] Downsample an NxD pointcloud using a voxel hash map.
+
+        Args:
+            frame: NxD array of points (D >= 3; first 3 columns are x,y,z).
+            voxel_size: Edge length of each cubic voxel.
+            max_points_per_voxel: Maximum points kept per voxel (FIRST_N_POINT, RANDOM).
+            min_pts_threshold: Minimum raw insertions required before a voxel
+                contributes to the output (AVERAGE_POINT).
+            strategy: VoxelDownsampleStrategy selecting the per-voxel reduction.
+
+        Returns:
+            MxD array of downsampled points (M <= N, same column layout as input).
         )");
 
     module.def("read_pointcloud", &ouster::sdk::core::read_pointcloud,
@@ -842,14 +1003,10 @@ Return:
 
         Note:
             This is a beta feature and its API may change in future releases.
-        )");
+         )");
 
-    module.def("interp_pose",
-               py::overload_cast<const py::array_t<double>&,
-                                 const py::array_t<double>&,
-                                 const py::array_t<double>&>(
-                   &interp_pose<double, double>),
-               py::arg("x_interp"), py::arg("x_known"), py::arg("poses_known"),
+    module.def("interp_pose", &interp_pose_any<double, double>, py::arg("x_interp"),
+               py::arg("x_known"), py::arg("poses_known"),
                R"(
         Interpolate 4x4 pose matrices at given x-coordinate values (double precision).
         Args:
@@ -860,12 +1017,8 @@ Return:
             (N, 4, 4) array of interpolated pose matrices (float64)
         )");
 
-    module.def("interp_pose_float",
-               py::overload_cast<const py::array_t<double>&,
-                                 const py::array_t<double>&,
-                                 const py::array_t<float>&>(
-                   &interp_pose<double, float>),
-               py::arg("x_interp"), py::arg("x_known"), py::arg("poses_known"),
+    module.def("interp_pose_float", &interp_pose_any<double, float>, py::arg("x_interp"),
+               py::arg("x_known"), py::arg("poses_known"),
                R"(
         Interpolate 4x4 pose matrices at given x-coordinate values (float precision for poses).
         Args:
@@ -876,22 +1029,77 @@ Return:
             (N, 4, 4) array of interpolated pose matrices (float32)
         )");
 
+    // 100m is a sensible default for SLAM-scale data and avoids the
+    // previous default of 0.0 (which always threw at construction time).
+    constexpr double DEFAULT_VOXEL_SIZE = 0.1;
+    constexpr double DEFAULT_MAX_DISTANCE = 100.0;
+    constexpr std::size_t DEFAULT_MAX_POINTS_PER_VOXEL = 20;
+    constexpr std::size_t DEFAULT_MIN_PTS_THRESHOLD = 1;
+
+    {
+        auto cls = py::class_<ouster::sdk::core::VoxelHashMap3d>(module, "VoxelHashMap3d")
+                       .def(py::init<double, double, std::size_t, std::size_t>(),
+                            py::arg("voxel_size") = DEFAULT_VOXEL_SIZE,
+                            py::arg("max_distance") = DEFAULT_MAX_DISTANCE,
+                            py::arg("max_points_per_voxel") = DEFAULT_MAX_POINTS_PER_VOXEL,
+                            py::arg("min_pts_threshold") = DEFAULT_MIN_PTS_THRESHOLD);
+        bind_voxel_hash_map_common(cls);
+    }
+
+    {
+        auto cls = py::class_<ouster::sdk::core::VoxelHashMapXd>(module, "VoxelHashMapXd")
+                       .def(py::init<double, double, std::size_t, std::size_t, std::size_t>(),
+                            py::arg("voxel_size") = DEFAULT_VOXEL_SIZE,
+                            py::arg("max_distance") = DEFAULT_MAX_DISTANCE,
+                            py::arg("max_points_per_voxel") = DEFAULT_MAX_POINTS_PER_VOXEL,
+                            py::arg("min_pts_threshold") = DEFAULT_MIN_PTS_THRESHOLD,
+                            py::arg("num_attributes") = 0);
+        bind_voxel_hash_map_common(cls);
+    }
+
     auto mesh_cls = py::class_<ouster::sdk::core::Mesh>(module, "Mesh");
     mesh_cls.def(py::init<>())
         .def(py::init<std::vector<ouster::sdk::core::Triangle>>())
         .def("load_from_stl", &ouster::sdk::core::Mesh::load_from_stl)
-        .def_property_readonly("triangles",
-                               &ouster::sdk::core::Mesh::triangles);
-
-    auto coord_cls = py::class_<ouster::sdk::core::Coord>(module, "Coord");
-    (void)coord_cls;
+        .def("save_stl_binary", py::overload_cast<const std::string&>(
+                                    &ouster::sdk::core::Mesh::save_stl_binary, py::const_))
+        .def_prop_ro("triangles", &ouster::sdk::core::Mesh::triangles)
+        .def("__eq__", [](const ouster::sdk::core::Mesh& left, const py::object& right) {
+            if (!py::isinstance<ouster::sdk::core::Mesh>(right)) {
+                return false;
+            }
+            return left == py::cast<const ouster::sdk::core::Mesh&>(right);
+        });
 
     auto tri_cls = py::class_<ouster::sdk::core::Triangle>(module, "Triangle");
     tri_cls
-        .def(py::init<const ouster::sdk::core::Coord&,
-                      const ouster::sdk::core::Coord&,
+        .def(py::init<const ouster::sdk::core::Coord&, const ouster::sdk::core::Coord&,
                       const ouster::sdk::core::Coord&>())
-        .def_readwrite("coords", &ouster::sdk::core::Triangle::coords)
-        .def_readwrite("edges", &ouster::sdk::core::Triangle::edges)
-        .def_readwrite("normal", &ouster::sdk::core::Triangle::normal);
+        .def_rw("coords", &ouster::sdk::core::Triangle::coords)
+        .def_rw("edges", &ouster::sdk::core::Triangle::edges)
+        .def_rw("normal", &ouster::sdk::core::Triangle::normal);
+
+    module.def("restore_instance_ids", &restore_instance_ids<double>,
+               R"(
+Fills instance_ids pixel field based on object's oriented bounding box.
+Args:
+    object: an object, such as one produced by detection engine
+    points: A NumPy array of shape (H, W, 3) representing the 3D points.
+    instance_ids: A NumPy array of shape (H, W) representing the instance ids
+Return:
+    (H, W) updated instance_ids field
+               )",
+               py::arg("object"), py::arg("points").noconvert(), py::arg("poses").noconvert());
+
+    module.def("restore_instance_ids", &restore_instance_ids<float>,
+               R"(
+Fills instance_ids pixel field based on object's oriented bounding box.
+Args:
+    object: an object, such as one produced by detection engine
+    points: A NumPy array of shape (H, W, 3) representing the 3D points.
+    instance_ids: A NumPy array of shape (H, W) representing the instance ids
+Return:
+    (H, W) updated instance_ids field
+               )",
+               py::arg("object"), py::arg("points").noconvert(), py::arg("poses").noconvert());
 }

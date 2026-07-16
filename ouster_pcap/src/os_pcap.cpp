@@ -4,7 +4,7 @@
  *
  */
 
-#include "ouster/os_pcap.h"
+#include "ouster/pcap/os_pcap.h"
 
 #include <algorithm>
 #include <chrono>
@@ -16,8 +16,11 @@
 #include <string>
 #include <vector>
 
-#include "ouster/indexed_pcap_reader.h"
-#include "ouster/pcap.h"
+#include "ouster/pcap/indexed_pcap_reader.h"
+#include "ouster/pcap/pcap.h"
+
+OUSTER_DIAGNOSTIC_PUSH
+OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
 
 namespace ouster {
 namespace sdk {
@@ -27,8 +30,7 @@ namespace pcap {
 // use the same fencing mechansim or switch to use OOP style
 
 struct RecordHandle {
-    RecordHandle(const std::string& path, PcapWriter::PacketEncapsulation encap,
-                 uint16_t frag_size)
+    RecordHandle(const std::string& path, PcapWriter::PacketEncapsulation encap, uint16_t frag_size)
         : writer{std::make_unique<PcapWriter>(path, encap, frag_size)} {}
 
     std::unique_ptr<PcapWriter> writer;
@@ -60,18 +62,16 @@ std::ostream& operator<<(std::ostream& stream_in, const PacketInfo& data) {
     stream_in << "Payload Size: " << data.payload_size << std::endl;
     stream_in << "Timestamp: " << data.timestamp.count() << std::endl;
 
-    stream_in << "Fragments In Packet: " << data.fragments_in_packet
-              << std::endl;
-    stream_in << "Encapsulation Protocol: " << data.encapsulation_protocol
-              << std::endl;
+    stream_in << "Fragments In Packet: " << data.fragments_in_packet << std::endl;
+    stream_in << "Encapsulation Protocol: " << data.encapsulation_protocol << std::endl;
     stream_in << "Network Protocol: " << data.network_protocol << std::endl;
 
     return stream_in;
 }
 
 bool StreamKey::operator==(const struct StreamKey& other) const {
-    return dst_ip == other.dst_ip && src_ip == other.src_ip &&
-           src_port == other.src_port && dst_port == other.dst_port;
+    return dst_ip == other.dst_ip && src_ip == other.src_ip && src_port == other.src_port &&
+           dst_port == other.dst_port;
 }
 
 std::ostream& operator<<(std::ostream& stream_in, const StreamKey& data) {
@@ -86,20 +86,17 @@ std::ostream& operator<<(std::ostream& stream_in, const StreamData& data) {
     stream_in << "Count: " << data.count << " ";
     stream_in << "Payload Sizes: " << std::endl;
     for (auto const& it : data.payload_size_counts) {
-        stream_in << "Size: " << it.first << " Count: " << it.second
-                  << std::endl;
+        stream_in << "Size: " << it.first << " Count: " << it.second << std::endl;
     }
 
     stream_in << "Fragments In Packets: " << std::endl;
     for (auto const& it : data.fragment_counts) {
-        stream_in << "Number of Fragments: " << it.first
-                  << " Count: " << it.second << std::endl;
+        stream_in << "Number of Fragments: " << it.first << " Count: " << it.second << std::endl;
     }
 
     stream_in << "IP Versions: " << std::endl;
     for (auto const& it : data.ip_version_counts) {
-        stream_in << "IP Version: " << it.first << " Count: " << it.second
-                  << std::endl;
+        stream_in << "IP Version: " << it.first << " Count: " << it.second << std::endl;
     }
 
     return stream_in;
@@ -107,8 +104,7 @@ std::ostream& operator<<(std::ostream& stream_in, const StreamData& data) {
 
 std::ostream& operator<<(std::ostream& stream_in, const StreamInfo& data) {
     stream_in << "Total Packets: " << data.total_packets << std::endl;
-    stream_in << "Encapsultion Protocol: " << data.encapsulation_protocol
-              << std::endl;
+    stream_in << "Encapsultion Protocol: " << data.encapsulation_protocol << std::endl;
     stream_in << "Max Timestamp: " << data.timestamp_max.count() << std::endl;
     stream_in << "Min Timestamp: " << data.timestamp_min.count() << std::endl;
 
@@ -120,12 +116,13 @@ std::ostream& operator<<(std::ostream& stream_in, const StreamInfo& data) {
     return stream_in;
 }
 
-std::shared_ptr<PlaybackHandle> replay_initialize(
-    const std::string& file_path) {
+std::shared_ptr<PlaybackHandle> replay_initialize(const std::string& file_path) {
     return std::make_shared<PlaybackHandle>(file_path);
 }
 
-void replay_uninitialize(PlaybackHandle& handle) { handle.pcap.reset(); }
+void replay_uninitialize(PlaybackHandle& handle) {
+    handle.pcap.reset();
+}
 
 void replay_reset(PlaybackHandle& handle) {
     handle = PlaybackHandle{handle.path};
@@ -149,32 +146,31 @@ size_t read_packet(PlaybackHandle& handle, uint8_t* buf, size_t buffer_size) {
     return len;
 }
 
-std::shared_ptr<RecordHandle> record_initialize(const std::string& file_name,
-                                                int frag_size,
+std::shared_ptr<RecordHandle> record_initialize(const std::string& file_name, int frag_size,
                                                 bool use_sll_encapsulation) {
-    PcapWriter::PacketEncapsulation encap =
-        (use_sll_encapsulation) ? PcapWriter::PacketEncapsulation::SLL
-                                : PcapWriter::PacketEncapsulation::ETHERNET;
+    PcapWriter::PacketEncapsulation encap = (use_sll_encapsulation)
+                                                ? PcapWriter::PacketEncapsulation::SLL
+                                                : PcapWriter::PacketEncapsulation::ETHERNET;
     return std::make_shared<RecordHandle>(file_name, encap, frag_size);
 }
 
-void record_uninitialize(RecordHandle& handle) { handle.writer.reset(); }
+void record_uninitialize(RecordHandle& handle) {
+    handle.writer.reset();
+}
 
-void record_packet(RecordHandle& handle, const PacketInfo& info,
-                   const uint8_t* buf, size_t buffer_size) {
+void record_packet(RecordHandle& handle, const PacketInfo& info, const uint8_t* buf,
+                   size_t buffer_size) {
     handle.writer->write_packet(buf, buffer_size, info);
 }
 
-void record_packet(RecordHandle& handle, const std::string& src_ip,
-                   const std::string& dst_ip, int src_port, int dst_port,
-                   const uint8_t* buf, size_t buffer_size,
+void record_packet(RecordHandle& handle, const std::string& src_ip, const std::string& dst_ip,
+                   int src_port, int dst_port, const uint8_t* buf, size_t buffer_size,
                    uint64_t microsecond_timestamp) {
     if (!handle.writer) {
         return;
     }
     auto time = PacketInfo::ts{microsecond_timestamp};
-    handle.writer->write_packet(buf, buffer_size, src_ip, dst_ip, src_port,
-                                dst_port, time);
+    handle.writer->write_packet(buf, buffer_size, src_ip, dst_ip, src_port, dst_port, time);
 }
 
 // TODO: make a member of `PcapReader` ?
@@ -201,8 +197,8 @@ std::shared_ptr<StreamInfo> get_stream_info(
         // TODO: if `pcap_reader` is an IndexedPcapReader,
         // get the `sensor_info` that matches the packet
         // and the `packet_format` from the `sensor_info`
-        // and possibly use a `ScanBatcher` (one for each sensor stream)
-        // to determine if a scan boundary has been found
+        // and possibly use a `FrameBatcher` (one for each sensor stream)
+        // to determine if a frame boundary has been found
         if (IndexedPcapReader* indexed_pcap_reader_ptr =
                 dynamic_cast<IndexedPcapReader*>(&pcap_reader)) {
             indexed_pcap_reader_ptr->update_index_for_current_packet();
@@ -240,8 +236,7 @@ std::shared_ptr<StreamInfo> get_stream_info(
         diff_acc += (info.file_offset - prev_location);
         last_current = info.file_offset;
 
-        if (callback_count > packets_per_callback &&
-            packets_per_callback >= 0) {
+        if (callback_count > packets_per_callback && packets_per_callback >= 0) {
             progress_callback(info.file_offset, diff_acc, file_size);
             diff_acc = 0;
             callback_count = 0;
@@ -263,14 +258,13 @@ std::shared_ptr<StreamInfo> get_stream_info(
     int packets_per_callback, int packets_to_process) {
     auto handle = replay_initialize(file);
     if (handle) {
-        return get_stream_info(*(handle->pcap), progress_callback,
-                               packets_per_callback, packets_to_process);
+        return get_stream_info(*(handle->pcap), progress_callback, packets_per_callback,
+                               packets_to_process);
     }
     return std::make_shared<StreamInfo>();
 }
 
-std::shared_ptr<StreamInfo> get_stream_info(const std::string& file,
-                                            int packets_to_process) {
+std::shared_ptr<StreamInfo> get_stream_info(const std::string& file, int packets_to_process) {
     return get_stream_info(
         file, [](uint64_t, uint64_t, uint64_t) {}, -1, packets_to_process);
 }
@@ -283,9 +277,8 @@ std::shared_ptr<StreamInfo> get_stream_info(const std::string& file,
    same sensor (have matching source IPs) 4) and finally, filter out the pairs
    that contradict any ports specified in the metadata.
 */
-std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_sizes,
-                                      int imu_packet_sizes, int lidar_spec,
-                                      int imu_spec) {
+std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_size, int imu_packet_size,
+                                      int expected_lidar_port, int expected_imu_port) {
     std::vector<GuessedPorts> temp_result;
     std::vector<GuessedPorts> lidar_result;
     std::vector<GuessedPorts> imu_result;
@@ -297,11 +290,11 @@ std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_sizes,
     std::vector<std::string> imu_src_ips;
 
     for (const auto& it : info.udp_streams) {
-        if (it.second.payload_size_counts.count(lidar_packet_sizes) > 0) {
+        if (it.second.payload_size_counts.count(lidar_packet_size) > 0) {
             lidar_keys.push_back(it.first);
             lidar_src_ips.push_back(it.first.src_ip);
         }
-        if (it.second.payload_size_counts.count(imu_packet_sizes) > 0) {
+        if (it.second.payload_size_counts.count(imu_packet_size) > 0) {
             imu_keys.push_back(it.first);
             imu_src_ips.push_back(it.first.src_ip);
         }
@@ -320,8 +313,8 @@ std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_sizes,
                 temp_result.push_back(ports);
             }
             // This case runs if we just have an IMU unmatched with the lidar
-            else if (std::find(lidar_src_ips.begin(), lidar_src_ips.end(),
-                               imu_it.src_ip) == lidar_src_ips.end()) {
+            else if (std::find(lidar_src_ips.begin(), lidar_src_ips.end(), imu_it.src_ip) ==
+                     lidar_src_ips.end()) {
                 GuessedPorts ports{};
                 ports.lidar = 0;
                 ports.imu = imu_it.dst_port;
@@ -329,8 +322,8 @@ std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_sizes,
             }
         }
         // This case runs if we just have Lidar data
-        if (!imu_processed && std::find(imu_src_ips.begin(), imu_src_ips.end(),
-                                        lidar_it.src_ip) == imu_src_ips.end()) {
+        if (!imu_processed && std::find(imu_src_ips.begin(), imu_src_ips.end(), lidar_it.src_ip) ==
+                                  imu_src_ips.end()) {
             GuessedPorts ports{};
             ports.lidar = lidar_it.dst_port;
             ports.imu = 0;
@@ -347,14 +340,12 @@ std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_sizes,
         }
     }
 
-    temp_result.insert(temp_result.end(), lidar_result.begin(),
-                       lidar_result.end());
+    temp_result.insert(temp_result.end(), lidar_result.begin(), lidar_result.end());
     temp_result.insert(temp_result.end(), imu_result.begin(), imu_result.end());
 
     for (auto it : temp_result) {
-        if (((it.lidar == lidar_spec) || (lidar_spec == 0) ||
-             (it.lidar == 0)) &&
-            ((it.imu == imu_spec) || (imu_spec == 0) || (it.imu == 0))) {
+        if (((it.lidar == expected_lidar_port) || (expected_lidar_port == 0) || (it.lidar == 0)) &&
+            ((it.imu == expected_imu_port) || (expected_imu_port == 0) || (it.imu == 0))) {
             result.push_back(it);
         }
     }
@@ -364,3 +355,5 @@ std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_sizes,
 }  // namespace pcap
 }  // namespace sdk
 }  // namespace ouster
+
+OUSTER_DIAGNOSTIC_POP

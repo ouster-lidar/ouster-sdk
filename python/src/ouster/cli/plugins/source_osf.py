@@ -2,12 +2,15 @@ import click
 
 from typing import Any, Iterator, Dict, cast
 
+import numpy as np
+
 from ouster.sdk import core
 import ouster.sdk._bindings.osf as osf
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
                           source_multicommand,
                           _nanos_to_string)
+from ouster.sdk.open_source import _url_to_osf_url
 
 
 @click.group(name="osf", hidden=True)
@@ -23,13 +26,13 @@ def osf_group(ctx) -> None:
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bool) -> None:
-    """Print metdata information from an OSF file to stdout.
+    """Print metadata information from an OSF file to stdout.
 
     Parses all metadata entries, output is in JSON format.
     """
     file = ctx.source_uri or ""
 
-    print(osf.dump_metadata(file, not short))
+    print(osf.dump_metadata(_url_to_osf_url(file), not short))
 
 
 @click.command
@@ -48,29 +51,29 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     """
     file = ctx.source_uri or ""
 
-    from ouster.sdk._bindings.osf import LidarScanStream
-    import os
+    from ouster.sdk._bindings.osf import LidarFrameStream
 
-    reader = osf.Reader(file)
+    reader = osf.Reader(_url_to_osf_url(file))
 
     orig_layout = "Streaming" if reader.has_stream_info else "Standard"
     if orig_layout == "Streaming" and reader.has_message_idx:
         orig_layout = "Streaming, Indexed"
 
     # count of messages in each stream
-    lidar_streams: Dict[str, Dict[str, Any]]
+    lidar_streams: Dict[int, Dict[str, Any]]
     lidar_streams = {}
-    other_streams: Dict[str, Dict[str, Any]]
+    other_streams: Dict[int, Dict[str, Any]]
     other_streams = {}
 
     start = 0
     end = 0
     count = 0
-    size = os.path.getsize(file)
+    size = reader.size
 
     sensors = {}
     msensors = reader.meta_store.find(osf.LidarSensor)
     for sensor_id, sensor_meta in msensors.items():
+        assert type(sensor_meta) is osf.LidarSensor
         info = sensor_meta.info
         sensors[sensor_id] = info
 
@@ -78,6 +81,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     obj: Dict[str, Any]
     mstats = reader.meta_store.find(osf.StreamingInfo)
     for sensor_id, meta in mstats.items():
+        assert type(meta) is osf.StreamingInfo
         for id, stats in meta.stream_stats:
             parent = reader.meta_store[id]
             count += stats.message_count
@@ -105,10 +109,10 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
             end = max(stats.end_ts, end)
 
             if obj["type"] == "ouster/v1/os_sensor/LidarSensor":
-                # get fields of the first scan
+                # get fields of the first frame
                 for msg in reader.messages([id], stats.start_ts, stats.start_ts):
-                    if msg.of(LidarScanStream):
-                        ls = msg.decode()
+                    if msg.of(LidarFrameStream):
+                        ls = cast(core.LidarFrame, msg.decode())
                         obj["fields"] = ls.field_types
 
     # fallback for when there's no index
@@ -121,7 +125,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         else:
             start = min(msg.ts, start)
         end = max(msg.ts, end)
-        if not msg.of(LidarScanStream):
+        if type(msg) is not LidarFrameStream:
             if msg.id not in other_streams:
                 obj = {}
                 obj["count"] = 1
@@ -133,17 +137,18 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
                 obj["count"] = obj["count"] + 1
                 obj["end"] = max(obj["end"], msg.ts)
         else:
-            ls = msg.decode()
+            ls = cast(core.LidarFrame, msg.decode())
             if ls:
                 if msg.id not in lidar_streams:
+                    stream_meta = cast(osf.LidarFrameStreamMeta, reader.meta_store[msg.id])
                     # get sensor id
                     obj = {}
                     obj["count"] = 1
                     obj["start"] = msg.ts
                     obj["end"] = msg.ts
-                    obj["type"] = reader.meta_store[msg.id].type
+                    obj["type"] = stream_meta.type
                     obj["fields"] = ls.field_types
-                    obj["sensor"] = sensors[reader.meta_store[msg.id].sensor_meta_id]
+                    obj["sensor"] = sensors[stream_meta.sensor_meta_id]
                     lidar_streams[msg.id] = obj
                 else:
                     obj = lidar_streams[msg.id]
@@ -156,10 +161,10 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     print(f"Filename: {file}\nLayout: {orig_layout}")
     print(f"OSF Version: {reader.version.major}.{reader.version.minor}.{reader.version.patch}")
     print(f"Metadata ID: '{reader.metadata_id}'")
-    print(f"Size: {size/1000000} MB")
-    print(f"Start: {start/1000000000.0} ({_nanos_to_string(start)})")
-    print(f"End: {end/1000000000.0} ({_nanos_to_string(end)})")
-    print(f"Duration: {(end-start)/1000000000.0}")
+    print(f"Size: {size / 1000000} MB")
+    print(f"Start: {start / 1000000000.0} ({_nanos_to_string(start)})")
+    print(f"End: {end / 1000000000.0} ({_nanos_to_string(end)})")
+    print(f"Duration: {(end - start) / 1000000000.0}")
     print(f"Messages: {count}\n")
 
     # print out info about each stream
@@ -172,21 +177,21 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         sensor_end = stream['sensor_end'] / 1000000000.0
         sensor = stream["sensor"]
         print(f"Stream {k} {stream['type']}: ")
-        print(f"  Scan Count: {count}")
+        print(f"  Frame Count: {count}")
         print(f"  Start: {start} ({_nanos_to_string(stream['start'])})")
         print(f"  End: {end} ({_nanos_to_string(stream['end'])})")
         print(f"  Sensor Start: {sensor_start} ({_nanos_to_string(stream['sensor_start'])})")
         print(f"  Sensor End: {sensor_end} ({_nanos_to_string(stream['sensor_end'])})")
-        print(f"  Duration: {end-start} seconds")
+        print(f"  Duration: {end - start} seconds")
         if end == start:
             print("  Rate: N/A")
         else:
-            print(f"  Rate: {count/(end-start)} Hz")
+            print(f"  Rate: {count / (end - start)} Hz")
         print(f"  Product Line: {sensor.prod_line}")
-        print(f"  Sensor Mode: {sensor.config.lidar_mode}")
+        print(f"  Lidar Mode: {sensor.config.lidar_mode}")
+        print(f"  FW Version: {sensor.image_rev}")
         if verbose:
             print(f"  Sensor SN: {sensor.sn}")
-            print(f"  Sensor FW Rev: {sensor.fw_rev}")
             print("  Fields:")
             if stream["fields"] is None:
                 print("  NO CONSISTENT FIELD TYPE")
@@ -203,9 +208,9 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         print(f"  Message Count: {count}")
         print(f"  Start: {start} ({_nanos_to_string(stream['start'])})")
         print(f"  End: {end} ({_nanos_to_string(stream['end'])})")
-        print(f"  Duration: {end-start} seconds")
+        print(f"  Duration: {end - start} seconds")
         if end - start:
-            print(f"  Rate: {count/(end-start)} Hz")
+            print(f"  Rate: {count / (end - start)} Hz")
 
 
 @click.command
@@ -213,12 +218,12 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
 @click.option('-v',
               '--verbose',
               is_flag=True,
-              help="Verbose LidarScan outputs (only when used with -d option)")
+              help="Verbose LidarFrame outputs (only when used with -d option)")
 @click.option('-r',
               '--check-raw-headers',
               is_flag=True,
               help="Check RAW_HEADERS fields by reconstructing lidar_packets"
-              " and batching LidarScan back (without fields data) and compare."
+              " and batching LidarFrame back (without fields data) and compare."
               "(applies only when used with -d option)")
 @click.option('-s',
               '--standard',
@@ -237,29 +242,33 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
     file = ctx.source_uri or ""
 
     # NOTE[pb]: Mypy quirks or some of our Python packages structure quirks, idk :(
-    from ouster.sdk.util.parsing import scan_to_packets, packets_to_scan, cut_raw32_words  # type: ignore
+    from ouster.sdk.util.parsing import frame_to_packets, packets_to_frame, cut_raw32_words  # type: ignore
 
-    reader = osf.Reader(file)
+    reader = osf.Reader(_url_to_osf_url(file))
 
     orig_layout = "STREAMING" if reader.has_stream_info else "STANDARD"
 
     print(f"filename: {file}, layout: {orig_layout}")
 
     # map stream_id to metadata entry
-    scan_stream_sensor: Dict[int, osf.LidarSensor]
-    scan_stream_sensor = {}
-    for scan_stream_id, scan_stream_meta in reader.meta_store.find(
-            osf.LidarScanStream).items():
-        scan_stream_sensor[scan_stream_id] = reader.meta_store[
-            scan_stream_meta.sensor_meta_id]
+    frame_stream_sensor: Dict[int, osf.LidarSensor]
+    frame_stream_sensor = {}
+    for frame_stream_id, frame_stream_meta in reader.meta_store.find(
+            osf.LidarFrameStream).items():
+        assert type(frame_stream_meta) is osf.LidarFrameStreamMeta
+        frame_stream_sensor[frame_stream_id] = cast(osf.LidarSensor, reader.meta_store[
+            frame_stream_meta.sensor_meta_id])
 
     ls_cnt = 0
     other_cnt = 0
 
+    def poses_present(frame: core.LidarFrame) -> bool:
+        return not np.allclose(np.eye(4), frame.body_to_world)
+
     def proc_msgs(msgs: Iterator[osf.MessageRef]):
-        nonlocal ls_cnt, other_cnt, decode
+        nonlocal ls_cnt, other_cnt
         for m in msgs:
-            if m.of(osf.LidarScanStream):
+            if m.of(osf.LidarFrameStream):
                 prefix = "Ls"
                 ls_cnt += 1
             else:
@@ -270,11 +279,11 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
             if decode:
                 obj = m.decode()
                 d = "[D]" if obj else ""
-                if m.of(osf.LidarScanStream):
-                    ls = cast(core.LidarScan, obj)
+                if m.of(osf.LidarFrameStream):
+                    ls = cast(core.LidarFrame, obj)
 
                     d = d + \
-                        (" [poses: YES]" if core.poses_present(ls) else "")
+                        (" [poses: YES]" if poses_present(ls) else "")
 
                     if verbose:
                         verbose_str += f"{ls}"
@@ -282,20 +291,20 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
                     if check_raw_headers:
                         d = d + " " if d else ""
                         if core.ChanField.RAW_HEADERS in ls.fields:
-                            sinfo = scan_stream_sensor[m.id].info
+                            sinfo = frame_stream_sensor[m.id].info
 
-                            # roundtrip: LidarScan -> packets -> LidarScan
-                            packets = scan_to_packets(ls, sinfo)
+                            # roundtrip: LidarFrame -> packets -> LidarFrame
+                            packets = frame_to_packets(ls, sinfo)
 
-                            # recovered lidar scan
+                            # recovered lidar frame
                             field_types = ls.field_types
-                            ls_rec = packets_to_scan(
+                            ls_rec = packets_to_frame(
                                 packets, sinfo, fields=field_types)
 
                             ls_no_raw32 = cut_raw32_words(ls)
                             ls_rec_no_raw32 = cut_raw32_words(ls_rec)
 
-                            assert ls_rec_no_raw32 == ls_no_raw32, "LidarScan should be" \
+                            assert ls_rec_no_raw32 == ls_no_raw32, "LidarFrame should be" \
                                 " equal when recontructed from RAW_HEADERS fields" \
                                 " packets back"
 
@@ -325,5 +334,5 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
 
     print()
     print(f"SUMMARY: [layout: {orig_layout}] {showed_as_str}")
-    print(f"  lidar_scan    (Ls)    count = {ls_cnt}")
+    print(f"  lidar_frame   (Lf)    count = {ls_cnt}")
     print(f"  other                 count = {other_cnt}")

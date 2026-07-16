@@ -12,7 +12,7 @@ viz = PointViz('Image Events')
 img = Image()
 img_size = (randrange(4, 7), randrange(7, 11))
 
-img_data = 0.5 * np.random.rand(*img_size)
+img_data = 0.5 * np.random.rand(*img_size).astype(np.float32)
 img.set_image(img_data)
 img_pos = (-0.85, 0.0, -0.35, 0.75)
 img.set_position(*img_pos)

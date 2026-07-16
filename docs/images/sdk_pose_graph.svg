@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="614" viewBox="0 116 900 614" font-family="sans-serif" font-size="13">
+
+  <defs>
+    <marker id="arrow-fw" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L0,7 L9,3.5 z" fill="#555"/>
+    </marker>
+    <marker id="arrow-mount" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L0,7 L9,3.5 z" fill="#555"/>
+    </marker>
+    <marker id="arrow-snapshot" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L0,7 L9,3.5 z" fill="#8b4a8b"/>
+    </marker>
+    <marker id="arrow-dynamic" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="12" refX="1" refY="6" orient="auto">
+      <path d="M0,0 L0,12 L12,6 z" fill="#1a6ebd"/>
+    </marker>
+  </defs>
+
+  <!-- ============ SensorInfo (sensor A) ============ -->
+  <rect x="12" y="132" width="250" height="172" rx="8" ry="8" fill="#f6f9fe" stroke="#4a7ab5" stroke-width="1.2" stroke-dasharray="4,3"/>
+  <text x="24" y="152" fill="#4a7ab5" font-size="12" font-weight="bold">SensorInfo (sensor A)</text>
+
+  <rect x="150" y="166" width="100" height="32" rx="6" ry="6" fill="#f0f4fa" stroke="#4a7ab5" stroke-width="1.5"/>
+  <text x="200" y="187" text-anchor="middle" fill="#1a2f4a" font-weight="bold">lidar_A</text>
+  <rect x="150" y="246" width="100" height="32" rx="6" ry="6" fill="#f0f4fa" stroke="#4a7ab5" stroke-width="1.5"/>
+  <text x="200" y="267" text-anchor="middle" fill="#1a2f4a" font-weight="bold">sensor_A</text>
+  <rect x="22" y="246" width="78" height="32" rx="6" ry="6" fill="#f0f4fa" stroke="#4a7ab5" stroke-width="1.5"/>
+  <text x="61" y="267" text-anchor="middle" fill="#1a2f4a" font-weight="bold">imu_A</text>
+
+  <line x1="200" y1="198" x2="200" y2="242" stroke="#555" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-fw)"/>
+  <text x="192" y="220" text-anchor="end" fill="#444" font-size="9">lidar_to_sensor_transform</text>
+  <line x1="100" y1="262" x2="146" y2="262" stroke="#555" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-fw)"/>
+  <text x="123" y="292" text-anchor="middle" fill="#444" font-size="9">imu_to_sensor_transform</text>
+
+  <!-- ============ SensorInfo (sensor B) ============ -->
+  <rect x="638" y="132" width="250" height="172" rx="8" ry="8" fill="#f6f9fe" stroke="#4a7ab5" stroke-width="1.2" stroke-dasharray="4,3"/>
+  <text x="650" y="152" fill="#4a7ab5" font-size="12" font-weight="bold">SensorInfo (sensor B)</text>
+
+  <rect x="650" y="166" width="100" height="32" rx="6" ry="6" fill="#f0f4fa" stroke="#4a7ab5" stroke-width="1.5"/>
+  <text x="700" y="187" text-anchor="middle" fill="#1a2f4a" font-weight="bold">lidar_B</text>
+  <rect x="650" y="246" width="100" height="32" rx="6" ry="6" fill="#f0f4fa" stroke="#4a7ab5" stroke-width="1.5"/>
+  <text x="700" y="267" text-anchor="middle" fill="#1a2f4a" font-weight="bold">sensor_B</text>
+  <rect x="800" y="246" width="78" height="32" rx="6" ry="6" fill="#f0f4fa" stroke="#4a7ab5" stroke-width="1.5"/>
+  <text x="839" y="267" text-anchor="middle" fill="#1a2f4a" font-weight="bold">imu_B</text>
+
+  <line x1="700" y1="198" x2="700" y2="242" stroke="#555" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-fw)"/>
+  <line x1="800" y1="262" x2="754" y2="262" stroke="#555" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-fw)"/>
+  <text x="763" y="298" text-anchor="middle" fill="#888" font-size="9">(same transforms as A)</text>
+
+  <!-- ============ Shared body / world ============ -->
+  <rect x="400" y="350" width="100" height="34" rx="6" ry="6" fill="#e8f0e8" stroke="#3a7a3a" stroke-width="2"/>
+  <text x="450" y="372" text-anchor="middle" fill="#1a2f4a" font-weight="bold">body</text>
+
+  <rect x="400" y="480" width="100" height="34" rx="6" ry="6" fill="#fdf3e3" stroke="#b07a1a" stroke-width="1.5"/>
+  <text x="450" y="503" text-anchor="middle" fill="#1a2f4a" font-weight="bold">world</text>
+
+  <!-- sensor_to_body edges (both sensors -> body) -->
+  <line x1="200" y1="278" x2="408" y2="344" stroke="#555" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-mount)"/>
+  <line x1="700" y1="278" x2="492" y2="344" stroke="#555" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-mount)"/>
+  <text x="450" y="318" text-anchor="middle" fill="#444" font-size="10">SensorInfo::sensor_to_body</text>
+  <text x="450" y="331" text-anchor="middle" fill="#888" font-size="9">(each sensor to body)</text>
+
+  <!-- body_to_world edge owned by LidarFrame -->
+  <line x1="436" y1="384" x2="436" y2="467" stroke="#1a6ebd" stroke-width="2" marker-end="url(#arrow-dynamic)"/>
+  <text x="426" y="426" text-anchor="end" fill="#1a4a8a" font-size="10" font-weight="bold">LidarFrame::body_to_world</text>
+  <text x="426" y="439" text-anchor="end" fill="#1a4a8a" font-size="9">per-column (w, 4, 4)</text>
+
+  <!-- ============ Object ============ -->
+  <rect x="654" y="350" width="112" height="34" rx="6" ry="6" fill="#f7f0f7" stroke="#8b4a8b" stroke-width="1.5"/>
+  <text x="710" y="373" text-anchor="middle" fill="#1a2f4a" font-weight="bold">object</text>
+
+  <!-- object_to_body -->
+  <line x1="654" y1="367" x2="504" y2="367" stroke="#8b4a8b" stroke-width="1.5" stroke-dasharray="2,3" marker-end="url(#arrow-snapshot)"/>
+  <text x="585" y="360" text-anchor="middle" fill="#8b4a8b" font-size="9">Object::object_to_body</text>
+
+  <!-- object body_to_world snapshot: drawn body -> world (single dynamic sample) -->
+  <line x1="464" y1="384" x2="464" y2="467" stroke="#1a6ebd" stroke-width="2" marker-end="url(#arrow-dynamic)"/>
+  <text x="474" y="424" fill="#1a4a8a" font-size="9">Object::body_to_world</text>
+  <text x="474" y="436" fill="#1a4a8a" font-size="8">(sampled from LidarFrame trajectory)</text>
+
+  <!-- ============ Legend: static vs dynamic ============ -->
+  <rect x="20" y="548" width="420" height="172" rx="6" ry="6" fill="#fafafa" stroke="#aaa" stroke-width="1"/>
+
+  <text x="34" y="584" fill="#333" font-size="11" font-weight="bold">Static &#8212; fixed across the dataset</text>
+  <line x1="40" y1="601" x2="100" y2="601" stroke="#555" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="110" y="605" fill="#444" font-size="10.5">Firmware calibrated</text>
+  <line x1="40" y1="621" x2="100" y2="621" stroke="#555" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <text x="110" y="625" fill="#444" font-size="10.5">Per mounting configuration</text>
+  <line x1="40" y1="641" x2="100" y2="641" stroke="#8b4a8b" stroke-width="1.5" stroke-dasharray="2,3"/>
+  <text x="110" y="645" fill="#8b4a8b" font-size="10.5">Per-detection snapshot</text>
+
+  <text x="34" y="669" fill="#1a4a8a" font-size="11" font-weight="bold">Dynamic &#8212; varies by timestamp</text>
+  <line x1="40" y1="686" x2="100" y2="686" stroke="#1a6ebd" stroke-width="2"/>
+  <text x="110" y="690" fill="#1a4a8a" font-size="10.5">body &#8594; world</text>
+
+  <!-- ============ Panel: where poses are stored ============ -->
+  <rect x="470" y="548" width="410" height="172" rx="6" ry="6" fill="#fafafa" stroke="#aaa" stroke-width="1"/>
+  <text x="675" y="568" text-anchor="middle" fill="#333" font-size="12" font-weight="bold">Where poses are stored</text>
+  <text x="485" y="585" fill="#4a7ab5" font-size="11" font-weight="bold">SensorInfo (one per sensor)</text>
+  <text x="495" y="598" fill="#444" font-size="10">lidar_to_sensor_transform, imu_to_sensor_transform,</text>
+  <text x="495" y="609" fill="#444" font-size="10">sensor_to_body</text>
+  <text x="485" y="626" fill="#3a7a3a" font-size="11" font-weight="bold">LidarFrame</text>
+  <text x="495" y="639" fill="#444" font-size="10">body_to_world : per-column trajectory, (w, 4, 4)</text>
+  <text x="505" y="650" fill="#666" font-size="9" font-style="italic">where the body is, in the world (full trajectory)</text>
+  <text x="485" y="667" fill="#8b4a8b" font-size="11" font-weight="bold">Object</text>
+  <text x="495" y="680" fill="#444" font-size="10">object_to_body : Pose <tspan fill="#888" font-size="9">(measured per detection)</tspan></text>
+  <text x="505" y="691" fill="#888" font-size="9" font-style="italic">where the object is, relative to the body</text>
+  <text x="495" y="704" fill="#444" font-size="10">body_to_world : Pose <tspan fill="#888" font-size="9">(@ Object.timestamp)</tspan></text>
+  <text x="505" y="715" fill="#888" font-size="9" font-style="italic">the same body pose, sampled at this detection</text>
+
+</svg>

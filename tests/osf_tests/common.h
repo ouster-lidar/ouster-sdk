@@ -15,10 +15,10 @@
 #include <random>
 #include <string>
 
-#include "ouster/lidar_scan.h"
+#include "ouster/core/lidar_frame.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/impl/compat_ops.h"
-#include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/osf/stream_lidar_frame.h"
 
 namespace ouster {
 namespace sdk {
@@ -36,8 +36,7 @@ inline bool get_test_data_dir(std::string& test_data_dir) {
         printf("DATA_DIR: %s\n", test_data_dir_var.c_str());
         if (!test_data_dir_var.empty()) {
             if (!is_dir(test_data_dir_var)) {
-                printf("WARNING: DATA_DIR: %s doesn't exist\n",
-                       test_data_dir_var.c_str());
+                printf("WARNING: DATA_DIR: %s doesn't exist\n", test_data_dir_var.c_str());
                 return false;
             }
             test_data_dir = test_data_dir_var;
@@ -54,8 +53,7 @@ bool get_output_dir(std::string& output_dir) {
     if (get_env_var("BUILD_DIR", build_dir)) {
         if (!build_dir.empty()) {
             if (!is_dir(build_dir)) {
-                printf("ERROR: BUILD_DIR: %s doesn't exist yet\n",
-                       build_dir.c_str());
+                printf("ERROR: BUILD_DIR: %s doesn't exist yet\n", build_dir.c_str());
                 return false;
             }
             output_dir = std::string{build_dir} + "/" + OSF_OUTPUT_DIR;
@@ -79,8 +77,7 @@ inline double normal_d(const double m, const double s) {
     return d(gen);
 }
 
-inline uint32_t normal_d_bounded(const double m, const double s,
-                                 const double b = 1 << 20) {
+inline uint32_t normal_d_bounded(const double m, const double s, const double b = 1 << 20) {
     std::random_device rd;
     std::mt19937 gen{rd()};
     std::normal_distribution<double> d{m, s};
@@ -100,37 +97,31 @@ std::array<double, N> normal_arr(const double& m, const double& s) {
 }
 
 template <typename T>
-void set_random(Eigen::Ref<ouster::sdk::core::img_t<T>> field_dest,
-                size_t mask_bits = 0) {
+void set_random(Eigen::Ref<ouster::sdk::core::img_t<T>> field_dest, size_t mask_bits = 0) {
     field_dest = field_dest.unaryExpr([=](T) {
         double sr = static_cast<double>(std::rand()) / RAND_MAX;
-        return static_cast<T>(
-            sr * static_cast<double>(std::numeric_limits<T>::max()));
+        return static_cast<T>(sr * static_cast<double>(std::numeric_limits<T>::max()));
     });
     if (mask_bits && sizeof(T) * 8 > mask_bits) {
-        field_dest = field_dest.unaryExpr(
-            [=](T a) { return static_cast<T>(a & ((1LL << mask_bits) - 1)); });
+        field_dest =
+            field_dest.unaryExpr([=](T a) { return static_cast<T>(a & ((1LL << mask_bits) - 1)); });
     }
 }
 
 template <typename T>
-void set_random(Eigen::Ref<ouster::sdk::core::img_t<float>> field_dest,
-                size_t /*mask_bits*/ = 0) {
+void set_random(Eigen::Ref<ouster::sdk::core::img_t<float>> field_dest, size_t /*mask_bits*/ = 0) {
     field_dest = field_dest.unaryExpr([=](float) {
         double sr = static_cast<double>(std::rand()) / RAND_MAX;
-        return static_cast<float>(
-            sr * static_cast<double>(std::numeric_limits<float>::max()));
+        return static_cast<float>(sr * static_cast<double>(std::numeric_limits<float>::max()));
     });
     // mask bits arent supported for floats
 }
 
 template <typename T>
-void set_random(Eigen::Ref<ouster::sdk::core::img_t<double>> field_dest,
-                size_t /*mask_bits*/ = 0) {
+void set_random(Eigen::Ref<ouster::sdk::core::img_t<double>> field_dest, size_t /*mask_bits*/ = 0) {
     field_dest = field_dest.unaryExpr([=](double) {
         double sr = static_cast<double>(std::rand()) / RAND_MAX;
-        return static_cast<double>(
-            sr * static_cast<double>(std::numeric_limits<double>::max()));
+        return static_cast<double>(sr * static_cast<double>(std::numeric_limits<double>::max()));
     });
     // mask bits arent supported for doubles
 }
@@ -139,21 +130,18 @@ void set_random(Eigen::Ref<ouster::sdk::core::img_t<double>> field_dest,
 // bits to mask
 struct set_to_random {
     template <typename T>
-    void operator()(Eigen::Ref<ouster::sdk::core::img_t<T>> field_dest,
-                    size_t mask_bits = 0) {
+    void operator()(Eigen::Ref<ouster::sdk::core::img_t<T>> field_dest, size_t mask_bits = 0) {
         set_random<T>(field_dest, mask_bits);
     }
 };
 
-inline void random_lidar_scan_data(ouster::sdk::core::LidarScan& ls) {
+inline void random_lidar_frame_data(ouster::sdk::core::LidarFrame& ls) {
     using ouster::sdk::core::ChanFieldType;
 
     for (auto f : ls.field_types()) {
-        if (f.name == core::ChanField::RANGE ||
-            f.name == core::ChanField::RANGE2) {
+        if (f.name == core::ChanField::RANGE || f.name == core::ChanField::RANGE2) {
             // Closer to reality that RANGE is just 20bits and not all 32
-            ouster::sdk::core::impl::visit_field(ls, f.name, set_to_random(),
-                                                 20);
+            ouster::sdk::core::impl::visit_field(ls, f.name, set_to_random(), 20);
         } else {
             ouster::sdk::core::impl::visit_field(ls, f.name, set_to_random());
         }
@@ -171,13 +159,11 @@ inline void random_lidar_scan_data(ouster::sdk::core::LidarScan& ls) {
             ls.timestamp()[i] = t_start;
         else
             ls.timestamp()[i] = ls.timestamp()[i - 1] + dt;
-        ls.status()[i] = static_cast<uint32_t>(
-            (std::numeric_limits<uint32_t>::max() / ls.w) * i);
-        ls.measurement_id()[i] = static_cast<uint16_t>(
-            (std::numeric_limits<uint16_t>::max() / ls.w) * i);
+        ls.status()[i] = static_cast<uint32_t>((std::numeric_limits<uint32_t>::max() / ls.w) * i);
+        ls.measurement_id()[i] =
+            static_cast<uint16_t>((std::numeric_limits<uint16_t>::max() / ls.w) * i);
 
-        Eigen::Ref<ouster::sdk::core::img_t<double>> pose =
-            ls.pose().subview(i);
+        Eigen::Ref<ouster::sdk::core::img_t<double>> pose = ls.body_to_world().subview(i);
         pose = ouster::sdk::core::mat4d::Random();
 
         const int32_t pi = i / columns_per_packet;
@@ -188,27 +174,17 @@ inline void random_lidar_scan_data(ouster::sdk::core::LidarScan& ls) {
     }
 }
 
-inline core::LidarScan get_random_lidar_scan(
-    const size_t w = 1024, const size_t h = 64,
-    core::UDPProfileLidar profile =
-        core::UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL) {
-    core::LidarScan ls{w, h, profile};
-    random_lidar_scan_data(ls);
+inline core::LidarFrame get_random_lidar_frame(const core::SensorInfo& si) {
+    core::LidarFrame ls{si};
+    random_lidar_frame_data(ls);
     return ls;
 }
 
-inline core::LidarScan get_random_lidar_scan(
-    const size_t w = 1024, const size_t h = 64,
-    core::LidarScanFieldTypes field_types = {}) {
-    core::LidarScan ls{w, h, field_types.begin(), field_types.end()};
-    random_lidar_scan_data(ls);
+inline core::LidarFrame get_random_lidar_frame(const core::SensorInfo& si,
+                                               core::LidarFrameFieldTypes field_types) {
+    core::LidarFrame ls{si, field_types};
+    random_lidar_frame_data(ls);
     return ls;
-}
-
-inline core::LidarScan get_random_lidar_scan(const core::SensorInfo& si) {
-    return get_random_lidar_scan(si.format.columns_per_frame,
-                                 si.format.pixels_per_column,
-                                 si.format.udp_profile_lidar);
 }
 
 template <typename T, typename GEN, typename DISTRIBUTION>
@@ -220,9 +196,10 @@ void randomize_field(core::Field& field, GEN& gen, DISTRIBUTION& d) {
 }
 
 template <typename T, typename GEN, typename DISTRIBUTION>
-core::Field randomized_field(GEN& gen, DISTRIBUTION& d,
-                             std::vector<size_t> shape) {
-    auto field = core::Field{core::FieldDescriptor::array<T>(shape)};
+core::Field randomized_field(
+    GEN& gen, DISTRIBUTION& d, std::vector<size_t> shape,
+    ouster::sdk::core::FieldClass field_class = ouster::sdk::core::FieldClass::FRAME_FIELD) {
+    auto field = core::Field{core::FieldDescriptor::array<T>(shape), field_class};
     randomize_field<T>(field, gen, d);
     return field;
 }

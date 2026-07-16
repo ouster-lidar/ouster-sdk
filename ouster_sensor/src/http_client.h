@@ -115,8 +115,7 @@ class HttpClient {
      * @return the result of the execution. If request fails it returns an empty
      * string.
      */
-    virtual std::string post(const std::string& url,
-                             const std::vector<uint8_t>& data,
+    virtual std::string post(const std::string& url, const std::vector<uint8_t>& data,
                              int timeout_sec) const = 0;
 
     /**
@@ -142,8 +141,7 @@ class HttpClient {
      * @return the result of the execution. If request fails it returns an empty
      * string.
      */
-    virtual std::string put(const std::string& url,
-                            const std::vector<uint8_t>& data,
+    virtual std::string put(const std::string& url, const std::vector<uint8_t>& data,
                             int timeout_sec) const = 0;
 
     /**

@@ -13,7 +13,7 @@
 #include "osf_test.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/reader.h"
-#include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/osf/stream_lidar_frame.h"
 #include "ouster/osf/writer.h"
 
 namespace ouster {
@@ -98,7 +98,9 @@ TEST_F(FileOpsTest, PathConcats) {
 #endif
 }
 
-TEST_F(FileOpsTest, TestDataDirCheck) { EXPECT_TRUE(is_dir(test_data_dir())); }
+TEST_F(FileOpsTest, TestDataDirCheck) {
+    EXPECT_TRUE(is_dir(test_data_dir()));
+}
 
 TEST_F(FileOpsTest, TestFileSize) {
     // TODO[pb]: Change to file creation later ...
@@ -127,8 +129,7 @@ TEST_F(FileOpsTest, TestFileMapping) {
         std::cout << "bytes = " << to_string(file_buf, 64) << std::endl;
         std::cout << "bytes = " << to_string(file_buf + 4, 64) << std::endl;
         std::cout << "bytes = " << to_string(file_buf + 4 + 4, 64) << std::endl;
-        std::cout << "bytes = " << to_string(file_buf + fsize - 64, 64)
-                  << std::endl;
+        std::cout << "bytes = " << to_string(file_buf + fsize - 64, 64) << std::endl;
     }
 
     EXPECT_TRUE(mmap_close(file_buf, fsize, memmap_handle));
@@ -143,8 +144,7 @@ TEST_F(FileOpsTest, TruncateFile) {
     std::string temp_file = path_concat(temp_dir, "test_file");
 
     std::fstream test_file_out;
-    test_file_out.open(temp_file, std::fstream::out | std::fstream::trunc |
-                                      std::fstream::binary);
+    test_file_out.open(temp_file, std::fstream::out | std::fstream::trunc | std::fstream::binary);
     for (int i = 0; i < fsize; i++) {
         test_file_out << (uint8_t)i;
     }
@@ -166,8 +166,7 @@ TEST_F(FileOpsTest, AppendBinaryFileBlank) {
     std::string temp_file2 = path_concat(temp_dir, "test_file2");
 
     std::fstream test_file;
-    test_file.open(temp_file2, std::fstream::out | std::fstream::trunc |
-                                   std::fstream::binary);
+    test_file.open(temp_file2, std::fstream::out | std::fstream::trunc | std::fstream::binary);
     for (int i = 0; i < fsize; i++) {
         test_file << (uint8_t)i;
     }
@@ -200,15 +199,13 @@ TEST_F(FileOpsTest, AppendBinaryFile) {
     std::string temp_file2 = path_concat(temp_dir, "test_file2");
 
     std::fstream test_file;
-    test_file.open(temp_file, std::fstream::out | std::fstream::trunc |
-                                  std::fstream::binary);
+    test_file.open(temp_file, std::fstream::out | std::fstream::trunc | std::fstream::binary);
     for (int i = 0; i < fsize1; i++) {
         test_file << (uint8_t)i;
     }
     test_file.close();
 
-    test_file.open(temp_file2, std::fstream::out | std::fstream::trunc |
-                                   std::fstream::binary);
+    test_file.open(temp_file2, std::fstream::out | std::fstream::trunc | std::fstream::binary);
     for (int i = 0; i < fsize2; i++) {
         test_file << (uint8_t)(i + fsize1);
     }
@@ -242,16 +239,14 @@ TEST_F(FileOpsTest, CopyTrailingBytes) {
     std::string temp_file2 = path_concat(temp_dir, "test_file2");
 
     std::fstream test_file;
-    test_file.open(temp_file, std::fstream::out | std::fstream::trunc |
-                                  std::fstream::binary);
+    test_file.open(temp_file, std::fstream::out | std::fstream::trunc | std::fstream::binary);
     for (int i = 0; i < fsize1; i++) {
         test_file << (uint8_t)i;
     }
     test_file.close();
 
     EXPECT_EQ(file_size(temp_file), fsize1);
-    EXPECT_EQ(copy_file_trailing_bytes(temp_file, temp_file2, offset),
-              (fsize1 - offset));
+    EXPECT_EQ(copy_file_trailing_bytes(temp_file, temp_file2, offset), (fsize1 - offset));
     EXPECT_EQ(file_size(temp_file2), (fsize1 - offset));
 
     std::fstream test_file2;

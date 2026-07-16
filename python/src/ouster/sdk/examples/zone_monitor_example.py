@@ -5,75 +5,77 @@ import numpy as np
 
 
 def create_stl_zone_set(data_dir, zip_path, sensor_info):
-    # [doc-stag-stl-zone-set]
-    from ouster.sdk.zone_monitor import Zone, ZoneSet, ZoneMode, Stl, \
-        CoordinateFrame, ZoneSetOutputFilter
+    # [doc-stag-stl-imports]
+    from ouster.sdk import core
+    # [doc-etag-stl-imports]
 
+    # [doc-stag-stl-zone-set]
     # Define a zone from STL file
-    stl_0 = Stl(os.path.join(data_dir, "0.stl"))
-    stl_0.coordinate_frame = CoordinateFrame.BODY
-    zone_0 = Zone()
+    stl_0 = core.Stl(os.path.join(data_dir, "0.stl"))
+    stl_0.coordinate_frame = core.CoordinateFrame.BODY
+    zone_0 = core.Zone()
     zone_0.stl = stl_0
     zone_0.point_count = 10
     zone_0.frame_count = 1
-    zone_0.mode = ZoneMode.OCCUPANCY
+    zone_0.mode = core.ZoneMode.OCCUPANCY
 
     # Define another zone from STL file
-    stl_1 = Stl(os.path.join(data_dir, "1.stl"))
-    stl_1.coordinate_frame = CoordinateFrame.BODY
-    zone_1 = Zone()
+    stl_1 = core.Stl(os.path.join(data_dir, "1.stl"))
+    stl_1.coordinate_frame = core.CoordinateFrame.BODY
+    zone_1 = core.Zone()
     zone_1.stl = stl_1
     zone_1.point_count = 20
     zone_1.frame_count = 2
-    zone_1.mode = ZoneMode.VACANCY
+    zone_1.mode = core.ZoneMode.VACANCY
 
     # Create a zone set and add the zones
-    zone_set = ZoneSet()
+    zone_set = core.ZoneSet()
     zone_set.sensor_to_body_transform = np.eye(4)
     zone_set.zones = {0: zone_0, 1: zone_1}
     zone_set.power_on_live_ids = [0, 1]
 
     # Print the JSON representation of the zone set
-    print(zone_set.to_json(ZoneSetOutputFilter.STL))
+    print(zone_set.to_json(core.ZoneSetOutputFilter.STL))
 
     # Write out the zone set to a zip file
-    zone_set.save(zip_path, ZoneSetOutputFilter.STL)
+    zone_set.save(zip_path, core.ZoneSetOutputFilter.STL)
     # [doc-etag-stl-zone-set]
 
 
 def create_zrb_zone_set(data_dir, zip_path, sensor_info):
-    # [doc-stag-zrb-zone-set]
-    from ouster.sdk.zone_monitor import Zone, ZoneSet, ZoneMode, Zrb, Stl, \
-        CoordinateFrame, ZoneSetOutputFilter
+    from ouster.sdk import core
 
+    # [doc-stag-zrb-zone-set]
     sensor_to_body_transform = np.eye(4)
 
     # Define a zone from a pair of images
-    zrb = Zrb()
-    zrb.near_range_mm = 10_000 * np.ones((sensor_info.h, sensor_info.w), np.uint32)
-    zrb.far_range_mm = 100_000 * np.ones((sensor_info.h, sensor_info.w), np.uint32)
+    zrb = core.Zrb()
+    zrb.near_range_mm = 10_000 * np.ones((sensor_info.h,
+                                          sensor_info.w), np.uint32)
+    zrb.far_range_mm = 100_000 * np.ones((sensor_info.h,
+                                          sensor_info.w), np.uint32)
     zrb.serial_number = sensor_info.sn
     zrb.beam_to_lidar_transform = sensor_info.beam_to_lidar_transform
     zrb.lidar_to_sensor_transform = sensor_info.lidar_to_sensor_transform
     zrb.sensor_to_body_transform = sensor_to_body_transform
 
-    zone_0 = Zone()
+    zone_0 = core.Zone()
     zone_0.point_count = 100
     zone_0.frame_count = 1
-    zone_0.mode = ZoneMode.OCCUPANCY
+    zone_0.mode = core.ZoneMode.OCCUPANCY
     zone_0.zrb = zrb
 
     # Create a second zone from an STL file
-    zone_1 = Zone()
-    stl_1 = Stl(os.path.join(data_dir, "1.stl"))
+    zone_1 = core.Zone()
+    stl_1 = core.Stl(os.path.join(data_dir, "1.stl"))
     zone_1.stl = stl_1
-    zone_1.stl.coordinate_frame = CoordinateFrame.BODY
+    zone_1.stl.coordinate_frame = core.CoordinateFrame.BODY
     zone_1.point_count = 10
     zone_1.frame_count = 1
-    zone_1.mode = ZoneMode.OCCUPANCY
+    zone_1.mode = core.ZoneMode.OCCUPANCY
 
     # Create a zone set and add the zones
-    zone_set = ZoneSet()
+    zone_set = core.ZoneSet()
     zone_set.sensor_to_body_transform = sensor_to_body_transform
     zone_set.power_on_live_ids = [0, 1]
     zone_set.zones = {0: zone_0, 1: zone_1}
@@ -82,19 +84,21 @@ def create_zrb_zone_set(data_dir, zip_path, sensor_info):
     zone_set.render(sensor_info)
 
     # Print the JSON representation of the zone set
-    print(zone_set.to_json(ZoneSetOutputFilter.ZRB))
+    print(zone_set.to_json(core.ZoneSetOutputFilter.ZRB))
 
     # Write out the zone set to a zip file
-    zone_set.save(zip_path, ZoneSetOutputFilter.ZRB)
+    zone_set.save(zip_path, core.ZoneSetOutputFilter.ZRB)
     # [doc-etag-zrb-zone-set]
 
 
 def upload(zone_set, output_filter, sensor_hostname):
+    # [doc-stag-upload-imports]
+    from ouster.sdk import sensor
+    # [doc-etag-upload-imports]
     # [doc-stag-upload-zone-set]
-    from ouster.sdk.core import SensorHttp
-    http = SensorHttp.create(args.sensor_hostname)
+    http = sensor.SensorHttp.create(sensor_hostname)
     print("Uploading zone monitor config...")
-    http.set_zone_monitor_config_zip(zone_set_from_zip.to_zip_blob(output_filter))
+    http.set_zone_monitor_config_zip(zone_set.to_zip_blob(output_filter))
     print("Applying staged config to active...")
     http.apply_zone_monitor_staged_config_to_active()
     print("Reinitializing sensor...")
@@ -122,7 +126,7 @@ if __name__ == '__main__':
     source = open_source(args.sensor_hostname, no_auto_udp_dest=args.no_auto_udp_dest)
     sensor_info = source.sensor_info[0]
 
-    from ouster.sdk.zone_monitor import ZoneSetOutputFilter, ZoneSet
+    from ouster.sdk.core import ZoneSetOutputFilter, ZoneSet
     output_filter = ZoneSetOutputFilter.STL if args.zone_set_type == "STL" else ZoneSetOutputFilter.ZRB
     zone_set_create_method = create_stl_zone_set if args.zone_set_type == "STL" else create_zrb_zone_set
     zone_set_create_method(args.data_dir, args.zip_path, sensor_info)

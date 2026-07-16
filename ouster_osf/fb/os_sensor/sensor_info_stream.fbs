@@ -13,6 +13,38 @@ table SensorInfoStream {
     // empty
 }
 
+
+table ClassMapEntry {
+    key: uint32;
+    value: string;
+}
+
+table ClassMap {
+    key: string;
+    items: [ClassMapEntry];
+}
+
+table ClassMapSet {
+    items: [ClassMap];
+}
+
+union ScanSourceMetadataValue {
+    ClassMapSet, Generic: string
+}
+
+table ScanSourceMetadataEntry {
+    key: string;
+    value: ScanSourceMetadataValue;
+}
+
+table ScanSourceMetadataSet {
+    entries: [ScanSourceMetadataEntry];
+}
+
+table ScanSourceMetadataStream {
+    // empty
+}
+
 // MetadataEntry.type: ouster/v1/os_sensor/SensorInfoStream
 root_type SensorInfoStream;
 file_identifier "oSIS";

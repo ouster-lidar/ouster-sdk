@@ -26,7 +26,9 @@ StreamOsfFile::StreamOsfFile(const std::string& filename) : OsfFile(filename) {
     initialize_header_and_metadata();
 }
 
-StreamOsfFile::~StreamOsfFile() { close(); }
+StreamOsfFile::~StreamOsfFile() {
+    close();
+}
 
 StreamOsfFile::StreamOsfFile(StreamOsfFile&& other)
     : OsfFile(std::move(other)), file_stream_(std::move(other.file_stream_)) {
@@ -61,8 +63,7 @@ void StreamOsfFile::check_stream_bits() {
         throw std::runtime_error("Read failure");
     }
     if (file_stream_.bad()) {
-        throw std::runtime_error("IO error while reading " + path_ + ": " +
-                                 get_last_error());
+        throw std::runtime_error("IO error while reading " + path_ + ": " + get_last_error());
     }
 }
 
@@ -70,7 +71,7 @@ StreamOsfFile& StreamOsfFile::seek(uint64_t pos) {
     if (!good()) {
         throw std::logic_error("bad osf file");
     }
-    file_stream_.seekg(pos, std::ios::beg);
+    file_stream_.seekg(static_cast<std::streamoff>(pos), std::ios::beg);
     check_stream_bits();
     return *this;
 }
@@ -88,7 +89,8 @@ OsfBuffer StreamOsfFile::read(OsfOffset base_offset, OsfOffset offset) {
     std::vector<uint8_t> data(offset.size());
     seek(base_offset.offset() + offset.offset());
 
-    file_stream_.read(reinterpret_cast<char*>(data.data()), offset.size());
+    file_stream_.read(reinterpret_cast<char*>(data.data()),
+                      static_cast<std::streamsize>(offset.size()));
     if (file_stream_.gcount() != static_cast<std::streamsize>(offset.size())) {
         check_stream_bits();
     }
@@ -98,7 +100,9 @@ OsfBuffer StreamOsfFile::read(OsfOffset base_offset, OsfOffset offset) {
     return buffer;
 }
 
-uint64_t StreamOsfFile::size() const { return size_; }
+uint64_t StreamOsfFile::size() const {
+    return size_;
+}
 
 }  // namespace osf
 }  // namespace sdk

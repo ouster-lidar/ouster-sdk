@@ -1,4 +1,4 @@
-#include "ouster/stl.h"
+#include "ouster/core/stl.h"
 
 #include <gtest/gtest.h>
 
@@ -45,9 +45,7 @@ TEST(Stl, construct_from_file) {
     Stl stl(stl_path);
     EXPECT_EQ(stl.blob().size(), 684);
     // Confirmed using sha256sum
-    EXPECT_EQ(
-        stl.hash().str(),
-        "adf5909e932a04512dc7e03d5733848e40662a0bf381e32799c762ced9b55ef3");
+    EXPECT_EQ(stl.hash().str(), "adf5909e932a04512dc7e03d5733848e40662a0bf381e32799c762ced9b55ef3");
     // It should not throw
     (void)stl.to_mesh();
 }
@@ -111,10 +109,7 @@ TEST(Stl, coordinate_frame_from_string) {
 TEST(Stl, coordinate_frame_to_string) {
     EXPECT_EQ(ouster::sdk::core::to_string(Stl::CoordinateFrame::NONE), "NONE");
     EXPECT_EQ(ouster::sdk::core::to_string(Stl::CoordinateFrame::BODY), "BODY");
-    EXPECT_EQ(ouster::sdk::core::to_string(Stl::CoordinateFrame::SENSOR),
-              "SENSOR");
+    EXPECT_EQ(ouster::sdk::core::to_string(Stl::CoordinateFrame::SENSOR), "SENSOR");
     // It should return "UNKNOWN" for invalid values
-    EXPECT_EQ(
-        ouster::sdk::core::to_string(static_cast<Stl::CoordinateFrame>(999)),
-        "UNKNOWN");
+    EXPECT_EQ(ouster::sdk::core::to_string(static_cast<Stl::CoordinateFrame>(999)), "UNKNOWN");
 }

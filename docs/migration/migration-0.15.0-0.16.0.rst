@@ -1,3 +1,5 @@
+:tocdepth: 2
+
 ================================
 Migration from 0.15.X to 0.16.0
 ================================
@@ -629,10 +631,10 @@ Use ``ouster::sdk::core::SensorInfo::get_version()`` instead.
 Previously deprecated removals
 +++++++++++++++++++++++++++++++
 
-- Removed ``ScanSource.metadata`` and ``PacketSource.metadata`` (`details <migration-0.14.0-0.15.0.html#updates-to-metadata-retrieval>`_)
-- Removed ``ouster.sdk.util.resolve_extrinsics`` (`details <migration-0.14.0-0.15.0.html#deprecated-resolve-extrinsics>`_)
-- Removed ``ouster.sdk.sensor.util.build_sensor_config`` (`details <migration-0.14.0-0.15.0.html#deprecated-build-sensor-config>`_)
-- Removed ``PointViz::push_frame_buffer_handler()`` and ``PointViz::pop_frame_buffer_handler()`` (`details <migration-0.14.0-0.15.0.html#deprecated-pointviz-frame-buffer-handlers>`_)
-- Removed ``ScanSource.sensors_count`` (`details <migration-0.14.0-0.15.0.html#deprecated-sensors-count>`_)
-- Removed ``ouster::sensor::parse_config()`` (`details <migration-0.14.0-0.15.0.html#deprecated-parse-config>`_)
-- Removed ``ScanBatcher`` constructor (`details <migration-0.14.0-0.15.0.html#deprecated-scanbatcher-constructor>`_)
+- Removed ``ScanSource.metadata`` and ``PacketSource.metadata`` (`0.14.0 migration: metadata retrieval <migration-0.14.0-0.15.0.html#updates-to-metadata-retrieval>`_)
+- Removed ``ouster.sdk.util.resolve_extrinsics`` (`0.14.0 migration: resolve extrinsics <migration-0.14.0-0.15.0.html#deprecated-resolve-extrinsics>`_)
+- Removed ``ouster.sdk.sensor.util.build_sensor_config`` (`0.14.0 migration: build sensor config <migration-0.14.0-0.15.0.html#deprecated-build-sensor-config>`_)
+- Removed ``PointViz::push_frame_buffer_handler()`` and ``PointViz::pop_frame_buffer_handler()`` (`0.14.0 migration: PointViz frame buffer handlers <migration-0.14.0-0.15.0.html#deprecated-pointviz-frame-buffer-handlers>`_)
+- Removed ``ScanSource.sensors_count`` (`0.14.0 migration: sensors count <migration-0.14.0-0.15.0.html#deprecated-sensors-count>`_)
+- Removed ``ouster::sensor::parse_config()`` (`0.14.0 migration: parse config <migration-0.14.0-0.15.0.html#deprecated-parse-config>`_)
+- Removed ``ScanBatcher`` constructor (`0.14.0 migration: ScanBatcher constructor <migration-0.14.0-0.15.0.html#deprecated-scanbatcher-constructor>`_)

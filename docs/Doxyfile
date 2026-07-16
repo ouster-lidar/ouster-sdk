@@ -857,13 +857,15 @@ WARN_LOGFILE           = "$warn_log_file"
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = ../ouster_client \
+INPUT                  = ../ouster_core \
+                         ../ouster_algorithm \
                          ../ouster_pcap \
                          ../ouster_viz \
                          ../ouster_osf \
                          ../ouster_mapping \
                          ../ouster_sensor \
                          ../ouster_library \
+                         ../ouster_perception
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -953,7 +955,7 @@ RECURSIVE              = YES
 # run.
 
 EXCLUDE                = ../ouster_viz/imgui \
-                         ../ouster_client/include/optional-lite \
+                         ../ouster_core/include/optional-lite \
                          ../ouster_pcap/src/ip_reassembler.h \
                          ../ouster_pcap/src/ip_reassembler.cpp
 
@@ -2209,7 +2211,7 @@ SEARCH_INCLUDES        = YES
 # preprocessor.
 # This tag requires that the tag SEARCH_INCLUDES is set to YES.
 
-INCLUDE_PATH           =
+INCLUDE_PATH           = ../ouster_core/include
 
 # You can use the INCLUDE_FILE_PATTERNS tag to specify one or more wildcard
 # patterns (like *.h and *.hpp) to filter out the header-files in the
@@ -2231,10 +2233,11 @@ PREDEFINED             = "OUSTER_API_FUNCTION= " \
                          "OUSTER_API_CLASS= " \
                          "OUSTER_API_IGNORE= " \
                          protected=private \
-                         "OUSTER_DEPRECATED_TYPE(old_symbol, new_symbol, deprecation_version)=typedef new_symbol old_symbol;" \
-                         "OUSTER_DEPRECATED_MSG(new_symbol, deprecation_version)= " \
-                         "OUSTER_DEPRECATED_CONSTEXP= " \
-                         OUSTER_DEPRECATED_LAST_SUPPORTED_0_16 = "
+                         "DOXYGEN_SHOULD_SKIP_THIS= " \
+                         "OUSTER_DEPRECATED_LAST_SUPPORTED_0_16=0.16.0" \
+                         "OUSTER_DEPRECATED_LAST_SUPPORTED_1_0=1.0.0" \
+                         "OUSTER_DEPRECATED_MSG(new_symbol,deprecation_version)=/** \deprecated Use new_symbol instead. The last supported version for this will be deprecation_version. */" \
+                         "OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(old_symbol,new_symbol,deprecation_version)=/** \deprecated Use new_symbol instead. The last supported version for this will be deprecation_version. */ old_symbol = new_symbol"
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The
@@ -2243,7 +2246,11 @@ PREDEFINED             = "OUSTER_API_FUNCTION= " \
 # definition found in the source code.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-EXPAND_AS_DEFINED      = PYBIND11_MODULE
+EXPAND_AS_DEFINED      = NB_MODULE \
+                         OUSTER_DEPRECATED_TYPE \
+                         OUSTER_DEPRECATED_CONSTEXP \
+                         OUSTER_DEPRECATED_ENUM_ENTRY \
+                         OUSTER_DEPRECATED_VALUE
 
 
 PYTHON_EXTENSION_HANDLING = YES
@@ -2258,7 +2265,7 @@ CLANG_ASSISTED_PARSING = NO
 # The default value is: YES.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-SKIP_FUNCTION_MACROS   = YES
+SKIP_FUNCTION_MACROS   = NO
 
 #---------------------------------------------------------------------------
 # Configuration options related to external references

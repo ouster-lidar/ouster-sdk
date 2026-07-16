@@ -28,6 +28,9 @@ class ValgrindScriptArguments:
         self.stack = False
         self.file_prefix = ""
         self.output = os.path.join(os.getcwd(), "check_valgrind_output")
+        self.suppression_file = None
+        # Valgrind memcheck/massif: pass --trace-children=no unless user opts in.
+        self.trace_children = False
         self.command = []
 
     def help(self):
@@ -41,17 +44,27 @@ class ValgrindScriptArguments:
         print(" --file-prefix: Prefix to filename")
         print(" --stack: Enable Stack Memory Usage")
         print("--output <output dir>: The output directory to write to")
+        print("--suppression-file <path>: Optional memcheck suppressions file "
+              "(passed to valgrind as --suppressions=)")
+        print("--trace-children[=yes|no]: Trace fork/exec children under valgrind "
+              "(default: no, passed as --trace-children=no; memcheck and massif)")
         print("<command>: The command to run under valgrind"
               "(will consume the rest of the args)")
 
     def parse_args(self):
         optional_parsing = True
         output_parsing = False
+        suppression_file_parsing = False
         assign_file_prefix = False
+        trace_children_parse_error = None
         for item in sys.argv[1:]:
             if assign_file_prefix:
                 self.file_prefix = item
                 assign_file_prefix = False
+                continue
+            if suppression_file_parsing:
+                self.suppression_file = item
+                suppression_file_parsing = False
                 continue
             if output_parsing:
                 self.output = item
@@ -70,11 +83,37 @@ class ValgrindScriptArguments:
                     assign_file_prefix = True
                 elif item == "--output":
                     output_parsing = True
+                elif item == "--suppression-file":
+                    suppression_file_parsing = True
+                elif item.startswith("--suppression-file="):
+                    self.suppression_file = item.split("=", 1)[1]
+                elif item == "--trace-children":
+                    self.trace_children = True
+                elif item.startswith("--trace-children="):
+                    val = item.split("=", 1)[1].lower()
+                    if val in ("yes", "true", "1"):
+                        self.trace_children = True
+                    elif val in ("no", "false", "0"):
+                        self.trace_children = False
+                    else:
+                        trace_children_parse_error = (
+                            "ERROR: --trace-children= must be yes or no"
+                        )
                 else:
                     optional_parsing = False
                     self.command.append(item)
             else:
                 self.command.append(item)
+
+        if trace_children_parse_error:
+            print(trace_children_parse_error, file=sys.stderr)
+            self.help()
+            return False
+
+        if suppression_file_parsing:
+            print("ERROR: --suppression-file requires a path", file=sys.stderr)
+            self.help()
+            return False
 
         if (not self.memory_check) and (not self.memory_profile):
             print("ERROR: Script needs 1 or more of the following specified:")
@@ -89,6 +128,18 @@ class ValgrindScriptArguments:
                     f"ERROR: specified --output path: \"{self.output}\" is not a directory")
                 self.help()
                 return False
+
+        if self.suppression_file:
+            supp = os.path.abspath(os.path.expanduser(self.suppression_file))
+            if not os.path.isfile(supp):
+                print(
+                    f"ERROR: --suppression-file not found: {self.suppression_file}",
+                    file=sys.stderr,
+                )
+                self.help()
+                return False
+            self.suppression_file = supp
+
         return True
 
 
@@ -110,17 +161,23 @@ if __name__ == '__main__':
     stack = args.stack
     file_prefix = args.file_prefix
     output = args.output
+    suppression_file = args.suppression_file
+    trace_children = args.trace_children
     command = args.command
     os.makedirs(output, exist_ok=True)
     memory_check_data_out = {}
     memory_profile_data_out = {}
     if memory_check:
-        full_command = ["valgrind",
+        full_command = ["valgrind"]
+        if suppression_file:
+            full_command.append(f"--suppressions={suppression_file}")
+        full_command.extend([
                         "--leak-check=full",
                         "--show-leak-kinds=all",
-                        "--trace-children=yes",
+                        "--gen-suppressions=all",
+                        f"--trace-children={'yes' if trace_children else 'no'}",
                         "--xml=yes",
-                        f"--xml-file={output}/memcheck.xml.%p"]
+                        f"--xml-file={output}/memcheck.xml.%p"])
         full_command.extend(command)
 
         valgrind_output = subprocess.run(full_command,
@@ -180,8 +237,9 @@ if __name__ == '__main__':
                         "--tool=massif"]
         if stack:
             full_command.append("--stacks=yes")
-        full_command.extend([f"--massif-out-file={output}/massif.out.%p",
-                            "--trace-children=yes"])
+        full_command.append(f"--massif-out-file={output}/massif.out.%p")
+        full_command.append(
+            f"--trace-children={'yes' if trace_children else 'no'}")
         full_command.extend(command)
 
         for item in glob.glob(f"{output}/massif.out.*"):

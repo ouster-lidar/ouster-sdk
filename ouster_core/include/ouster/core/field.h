@@ -1,0 +1,954 @@
+/**
+ * Copyright (c) 2024, Ouster, Inc.
+ * All rights reserved.
+ */
+
+#pragma once
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>  // for size_t since gcc-12
+#include <initializer_list>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+#include "ouster/core/array_view.h"
+#include "ouster/core/chanfield.h"
+#include "ouster/core/deprecation.h"
+#include "ouster/core/typedefs.h"
+#include "ouster/core/visibility.h"
+#include "ouster/core/zone_state.h"
+
+namespace ouster {
+namespace sdk {
+namespace core {
+
+// Forward declaration
+class SensorInfo;
+
+namespace impl {
+
+/**
+ * Calculates vector of stride offsets
+ *
+ * @param[in] shape vector of array dimensions
+ *
+ * @return vector of stride offsets
+ */
+OUSTER_API_FUNCTION
+std::vector<size_t> calculate_strides(const std::vector<size_t>& shape);
+
+// clang-format off
+
+template <typename T> int type_size() { return sizeof(T); }
+template <> OUSTER_API_FUNCTION int type_size<void>();
+
+template <typename T> size_t type_hash() { return typeid(T).hash_code(); }
+template <> OUSTER_API_FUNCTION size_t type_hash<void>();
+
+template <typename T>
+ChanFieldType type_cft() { return ouster::sdk::core::ChanFieldType::UNREGISTERED; }
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<void>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint8_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint16_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint32_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint64_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int8_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int16_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int32_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int64_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<float>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<double>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<char>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<ouster::sdk::core::ZoneState>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<float16_t>();
+
+// clang-format on
+
+/**
+ * Recursive helper to fill an ArrayView of any dimension.
+ * Uses std::fill_n for contiguous memory and recurses for sparse views.
+ *
+ * @tparam T element type
+ * @tparam Dim number of dimensions
+ * @param[in] view ArrayView to fill
+ * @param[in] value value to fill with
+ */
+template <typename T, size_t Dim>
+struct FieldViewFiller {
+    static void fill(ArrayView<T, Dim> view, const T& value) {
+        if (!view.sparse()) {
+            std::fill_n(view.data(), view.size(), value);
+        } else {
+            for (size_t i = 0; i < view.shape[0]; ++i) {
+                FieldViewFiller<T, Dim - 1>::fill(view.subview(i), value);
+            }
+        }
+    }
+};
+
+/**
+ * Base case for recursive FieldViewFiller.
+ * @tparam T element type
+ */
+template <typename T>
+struct FieldViewFiller<T, 1> {
+    static void fill(ArrayView<T, 1> view, const T& value) {
+        if (!view.sparse()) {
+            std::fill_n(view.data(), view.size(), value);
+        } else {
+            for (size_t i = 0; i < view.shape[0]; ++i) {
+                view(i) = value;
+            }
+        }
+    }
+};
+
+}  // namespace impl
+
+/**
+ * Helper struct used by FieldView and Field to describe field contents.
+ * Unlike FieldType this fully describes a Field's dimensions rather than
+ * abstract away the lidar width and height or packet count.
+ */
+struct OUSTER_API_CLASS FieldDescriptor {
+    /**
+     * type hash of the described field
+     */
+    size_t type;
+
+    /**
+     * Calculates the size in bytes of the described field
+     *
+     * @return type size in bytes
+     */
+    OUSTER_API_FUNCTION
+    size_t bytes() const;
+
+    // TODO: ideally we need something like llvm::SmallVector here -- Tim T.
+
+    /**
+     * vector of array dimensions of the described field, if present
+     */
+    std::vector<size_t> shape;
+
+    /**
+     * vector of stride offsets of the described field, if present
+     */
+    std::vector<size_t> strides;
+
+    /**
+     * size of the underlying type, in bytes
+     *
+     */
+    size_t element_size;
+
+    /**
+     * Get type hash
+     *
+     * warning: different platforms produce different values
+     *
+     * @return hash value
+     */
+    template <typename T>
+    static size_t type_hash() {
+        using Type = std::remove_cv_t<T>;
+        return impl::type_hash<Type>();
+    }
+
+    /**
+     * Get array size in elements, or 1 if shape is not present
+     *
+     * @return size in elements
+     */
+    OUSTER_API_FUNCTION
+    size_t size() const;
+
+    /**
+     * Get type tag, if can be translated to ChanFieldType, otherwise
+     * returns ChanFieldType::UNREGISTERED
+     *
+     * @return ChanFieldType
+     */
+    OUSTER_API_FUNCTION
+    ChanFieldType tag() const;
+
+    OUSTER_API_FUNCTION
+    bool operator==(const FieldDescriptor& other) const noexcept {
+        return type == other.type && shape == other.shape && strides == other.strides &&
+               element_size == other.element_size;
+    }
+
+    /**
+     * Swaps descriptors
+     *
+     * @param[in,out] other Handle to swapped FieldDescriptor.
+     */
+    OUSTER_API_FUNCTION
+    void swap(FieldDescriptor& other);
+
+    /**
+     * Check if the type is eligible for conversion
+     *
+     * @return true if eligible, otherwise false.
+     */
+    template <typename T>
+    bool eligible_type() const {
+        // TODO: reinstate upon c++17 -- Tim T.
+        if /*constexpr*/ (std::is_same<void, std::remove_cv_t<T>>::value) {
+            return true;
+        }
+        return !type || type_hash<T>() == type;
+    }
+
+    /**
+     * Check if descriptor types are compatible
+     *
+     * @param[in] other A constant of type FieldDescriptor.
+     * @return true if compatible, otherwise false.
+     */
+    OUSTER_API_FUNCTION
+    bool is_type_compatible(const FieldDescriptor& other) const noexcept;
+
+    /**
+     * Return number of dimensions of the described field
+     *
+     * @return number of dimensions.
+     */
+    OUSTER_API_FUNCTION
+    size_t ndim() const noexcept;
+
+    // Factory functions
+
+    /**
+     * Get a field descriptor for a chunk of typed memory
+     *
+     * useful when storing arbitrary sized structs.
+     *
+     * @tparam T Type of memory to be stored; this gets used by safety checks.
+     * @param[in] bytes Number of bytes in memory.
+     *
+     * @return FieldDescriptor
+     */
+    template <typename T = void>
+    static FieldDescriptor memory(size_t bytes) {
+        return {type_hash<T>(), {}, {}, bytes};
+    }
+
+    /**
+     * Get a field descriptor for an array
+     *
+     * @tparam T Array type
+     * @param[in] shape Shape vector of array dimensions.
+     *
+     * @return FieldDescriptor
+     */
+    template <typename T, class ContainerT = std::initializer_list<size_t>>
+    static FieldDescriptor array(const ContainerT& shape) {
+        static_assert(!std::is_same<T, void>::value,
+                      "FieldDescriptor::array<void> is disallowed, use "
+                      "FieldDescriptor::memory() instead");
+        return {type_hash<T>(), shape, impl::calculate_strides(shape), sizeof(T)};
+    }
+
+    /**
+     * Get a field descriptor for an array
+     *
+     * @param[in] tag Tag of array type.
+     * @param[in] shape Vector of array dimensions.
+     *
+     * @return FieldDescriptor
+     */
+    template <class ContainerT = std::initializer_list<size_t>>
+    static FieldDescriptor array(ChanFieldType tag, const ContainerT& shape) {
+        switch (tag) {
+            case ChanFieldType::UINT8:
+                return array<uint8_t>(shape);
+            case ChanFieldType::UINT16:
+                return array<uint16_t>(shape);
+            case ChanFieldType::UINT32:
+                return array<uint32_t>(shape);
+            case ChanFieldType::UINT64:
+                return array<uint64_t>(shape);
+            case ChanFieldType::INT8:
+                return array<int8_t>(shape);
+            case ChanFieldType::INT16:
+                return array<int16_t>(shape);
+            case ChanFieldType::INT32:
+                return array<int32_t>(shape);
+            case ChanFieldType::INT64:
+                return array<int64_t>(shape);
+            case ChanFieldType::FLOAT32:
+                return array<float>(shape);
+            case ChanFieldType::FLOAT64:
+                return array<double>(shape);
+            case ChanFieldType::CHAR:
+                return array<char>(shape);
+            case ChanFieldType::ZONE_STATE:
+                return array<ZoneState>(shape);
+            case ChanFieldType::FLOAT16:
+                return array<float16_t>(shape);
+            default:
+                throw std::invalid_argument("fd_array: unsupported ChanFieldType");
+        }
+    }
+};
+
+/**
+ * Parameter pack shorthand for FieldDescriptor::array
+ * @tparam T The element type of the array (e.g., `int`, `float`).
+ * @param[in] args Variadic arguments that are forwarded to the function.
+ * @return FieldDescriptor array
+ */
+template <typename T, typename... Args>
+auto fd_array(Args&&... args) -> FieldDescriptor {
+    return FieldDescriptor::array<T>({static_cast<size_t>(args)...});
+}
+
+/** @copydoc fd_array
+ * @param[in] tag The ChanFieldType representing the type of the array.
+ */
+template <typename... Args>
+auto fd_array(ChanFieldType tag, Args&&... args) -> FieldDescriptor {
+    return FieldDescriptor::array(tag, {static_cast<size_t>(args)...});
+}
+
+/**
+ * Non-owning wrapper over a memory pointer that allows for type safe
+ * conversion to typed pointer, eigen array or ArrayView
+ */
+class OUSTER_API_CLASS FieldView {
+   protected:
+    void* ptr_;
+    FieldDescriptor desc_;
+
+   public:
+    /** Default constructor for empty FieldView */
+    OUSTER_API_FUNCTION
+    FieldView() noexcept;
+
+    /**
+     * Initialize FieldView with a pointer and a descriptor
+     *
+     * @param[in] ptr Memory pointer.
+     * @param[in] desc Field descriptor.
+     */
+    OUSTER_API_FUNCTION
+    FieldView(void* ptr, FieldDescriptor desc);
+
+    /**
+     * Returns arbitrary pointer type
+     *
+     * @throw std::invalid_argument on type mismatch unless FieldView was
+     * constructed typeless (with type void) or dereference type is void*
+     *
+     * @tparam T pointer type
+     * @return typed pointer to the memory
+     */
+    template <typename T = void>
+    T* get() {
+        return const_cast<T*>(const_cast<const FieldView&>(*this).get<T>());
+    }
+
+    /// @copydoc get()
+    template <typename T = void>
+    const T* get() const {
+        if (!desc_.eligible_type<T>()) {
+            throw std::invalid_argument(
+                "FieldView: ineligible dereference type for field of element "
+                "type " +
+                ouster::sdk::core::to_string(desc_.tag()) +
+                ". Dereference type must match or be void.");
+        }
+        return reinterpret_cast<T*>(ptr_);
+    }
+
+    /**
+     * Arbitrary type ptr conversion
+
+     * @throw std::invalid_argument on type mismatch unless FieldView was
+     * constructed with void ptr or the requested ptr type is void*
+     */
+    template <typename T>
+    operator T*() {
+        return get<T>();
+    }
+
+    /**
+     * Arbitrary type const ptr conversion
+
+     * @throw std::invalid_argument on type mismatch unless FieldView was
+     * constructed with void ptr or the requested ptr type is void*
+     */
+    template <typename T>
+    operator const T*() const {
+        return get<T>();
+    }
+
+    /**
+     * Arbitrary type ArrayView conversion
+
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T, size_t Dim>
+    operator ArrayView<T, Dim>() {
+        if (desc_.ndim() != Dim) {
+            throw std::invalid_argument(
+                "FieldView: ArrayView conversion failed due to dimension "
+                "mismatch. Expected " +
+                std::to_string(desc_.ndim()) + " got " + std::to_string(Dim) + " dimensions.");
+        }
+
+        return ArrayView<T, Dim>(get<T>(), desc_.shape, desc_.strides);
+    }
+
+    /**
+     * Arbitrary type const ArrayView conversion
+
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T, size_t Dim>
+    operator ConstArrayView<T, Dim>() const {
+        if (desc_.ndim() != Dim) {
+            throw std::invalid_argument(
+                "FieldView: ArrayView conversion failed due to dimension "
+                "mismatch. Expected " +
+                std::to_string(desc_.ndim()) + " got " + std::to_string(Dim) + " dimensions.");
+        }
+
+        return ConstArrayView<T, Dim>(get<T>(), desc_.shape, desc_.strides);
+    }
+
+    /**
+     * Arbitrary type Eigen 2D array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<img_t<T>>() {
+        if (desc_.ndim() != 2) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) + " dimensions but must have 2 dimensions.");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument("Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index h = shape()[0];
+        Eigen::Index w = shape()[1];
+        return Eigen::Map<img_t<T>>{get<T>(), h, w};
+    }
+
+    /**
+     * Arbitrary type const Eigen 2D array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<const img_t<T>>() const {
+        if (desc_.ndim() != 2) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) + " dimensions but must have 2 dimensions.");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument("Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index h = shape()[0];
+        Eigen::Index w = shape()[1];
+        return Eigen::Map<const img_t<T>>{get<T>(), h, w};
+    }
+
+    /**
+     * Arbitrary type const Eigen 1D array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<Eigen::Array<T, Eigen::Dynamic, 1>>() {
+        if (desc_.ndim() != 1) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) + " dimensions but must have 1 dimensions.");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument("Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index w = shape()[0];
+        return Eigen::Map<Eigen::Array<T, Eigen::Dynamic, 1>>{get<T>(), w};
+    }
+
+    /**
+     * Arbitrary type const Eigen 1D array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<const Eigen::Array<T, Eigen::Dynamic, 1>>() const {
+        if (desc_.ndim() != 1) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) + " dimensions but must have 1 dimensions.");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument("Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index w = shape()[0];
+        return Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 1>>{get<T>(), w};
+    }
+
+    /**
+     * Arbitrary type const Eigen Nx3 array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>() {
+        if (desc_.ndim() != 2 || desc_.shape[1] != 3) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) + " dimensions but must have the shape (N, 3).");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument("Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index w = shape()[0];
+        return Eigen::Map<Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>{get<T>(), w, 3};
+    }
+
+    /**
+     * Arbitrary type const Eigen Nx3 array conversion
+     *
+     * @throw std::invalid_argument on type mismatch
+     * @throw std::invalid_argument on dimensional shape mismatch
+     */
+    template <typename T>
+    operator Eigen::Ref<const Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>() const {
+        if (desc_.ndim() != 2 || desc_.shape[1] != 3) {
+            throw std::invalid_argument(
+                "Field: Eigen array conversion failed due to dimension "
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) + " dimensions but must have the shape (N, 3).");
+        }
+
+        if (sparse()) {
+            throw std::invalid_argument("Field: Cannot convert sparse view to dense Eigen array");
+        }
+
+        Eigen::Index w = shape()[0];
+        return Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 3, Eigen::RowMajor>>{get<T>(), w,
+                                                                                     3};
+    }
+
+    /**
+     * Bool conversion
+     *
+     * @return true if FieldView is not empty
+     */
+    OUSTER_API_FUNCTION
+    explicit operator bool() const noexcept;
+
+    /**
+     * Get a subview
+     *
+     * Operates similarly to numpy ndarray bracket operator, returning a sliced,
+     * potentially sparse subview
+     *
+     * The following two snippets are functionally equivalent
+     * \code
+     * std::vector<int> data(100*100*100);
+     * FieldView view(data.data(), fd_array<int>(100, 100, 100));
+     * // get a slice of all elements in the first dimension with second
+     * // and third pinned to 10 and 20 respectively
+     * FieldView subview = view.subview(keep(), 10, 20);
+     * \endcode
+     *
+     * \code
+     * import numpy as np
+     * arr = np.ndarray(shape=(100,100,100), dtype=np.int32)
+     * subview = arr[:,10,20]
+     * \endcode
+     *
+     * @throws std::invalid_argument If FieldView ran out of dimensions to
+     *         subview or if FieldView cannot subview over the shape limits
+     * @param[in] idx parameter pack of int indices or idx_range (keep())
+     *
+     * @return FieldView subview
+     */
+    template <typename... Args>
+    FieldView subview(Args... idx) const {
+        auto dim = desc().ndim();
+        auto subview_dim = dim - sizeof...(Args) + impl::count_n_ranges<Args...>::VALUE;
+
+        if (subview_dim <= 0) {
+            throw std::invalid_argument("FieldView: ran out of dimensions to subview");
+        }
+
+        if (impl::subview_oob_check(shape(), idx...)) {
+            throw std::invalid_argument("FieldView cannot subview over the shape limits");
+        }
+
+        char* ptr =
+            reinterpret_cast<char*>(ptr_) +
+            (impl::strided_index(desc().strides, impl::range_or_idx(idx)...) * desc().element_size);
+
+        auto new_desc = FieldDescriptor{};
+        new_desc.type = desc().type;
+        new_desc.shape = impl::range_args_reshape(desc().shape, idx...);
+        new_desc.strides = impl::range_args_restride(desc().strides, idx...);
+        new_desc.element_size = desc().element_size;
+
+        return {reinterpret_cast<void*>(ptr), new_desc};
+    }
+
+    /**
+     * Reshape field view to a different set of dimensions
+     *
+     * @throw std::invalid_argument on trying to reshape a sparse FieldView
+     * @throw std::invalid_argument on flattened dimension size not matching
+     *        the original view size
+     *
+     * @param[in] dims new dimensions
+     *
+     * @return reshaped FieldView with new dimensions
+     */
+    template <typename... Args>
+    FieldView reshape(Args... dims) const {
+        if (sparse()) {
+            throw std::invalid_argument("FieldView: cannot reshape sparse views");
+        }
+
+        auto requested_size = impl::product<size_t>{}(dims...);
+        if (requested_size != size()) {
+            throw std::invalid_argument(
+                "ArrayView: cannot reshape due to size mismatch. Requested "
+                "dimensions had " +
+                std::to_string(requested_size) + " but we have " + std::to_string(size()) +
+                " elements.");
+        }
+
+        auto new_desc = FieldDescriptor{};
+        new_desc.type = desc().type;
+        new_desc.element_size = desc().element_size;
+        new_desc.shape = std::vector<size_t>{static_cast<size_t>(dims)...};
+        new_desc.strides = impl::calculate_strides(new_desc.shape);
+        return {const_cast<void*>(ptr_), new_desc};
+    }
+
+    /**
+     * Returns the number of allocated bytes in memory
+     *
+     * @return size in bytes
+     */
+    OUSTER_API_FUNCTION
+    size_t bytes() const noexcept;
+
+    /**
+     * Returns size in elements, or 1 if field is not an array
+     *
+     * @return size in elements
+     */
+    OUSTER_API_FUNCTION
+    size_t size() const;
+
+    /**
+     * returns true if FieldView matches descriptor
+     *
+     * @param[in] d descriptor to check
+     *
+     * @return true if matched, otherwise false
+     */
+    OUSTER_API_FUNCTION
+    bool matches(const FieldDescriptor& d) const noexcept;
+
+    /**
+     * Get descriptor of the underlying memory
+     *
+     * @return FieldDescriptor
+     */
+    OUSTER_API_FUNCTION
+    const FieldDescriptor& desc() const;
+
+    /**
+     * Get shape of the stored array, if present
+     *
+     * shorthand for `desc().shape`
+     *
+     * @return vector of dimensions
+     */
+    OUSTER_API_FUNCTION
+    const std::vector<size_t>& shape() const;
+
+    /**
+     * Get type tag, if applicable
+     *
+     * @return ChanFieldType
+     */
+    OUSTER_API_FUNCTION
+    ChanFieldType tag() const;
+
+    /**
+     * Check if the FieldView is not contiguous
+     *
+     * @return true if sparse
+     */
+    OUSTER_API_FUNCTION
+    bool sparse() const;
+
+    /**
+     * Set all values in the FieldView to the provided value
+     *
+     * @throw std::invalid_argument if type T does not match the field type
+     * @throw std::invalid_argument if the field has more than 4 dimensions
+     *
+     * @tparam T value type
+     * @param[in] value value to fill with
+     */
+    template <typename T>
+    void fill(const T& value) {
+        if (!desc_.eligible_type<T>()) {
+            throw std::invalid_argument(
+                "FieldView: ineligible fill type for field of element type " +
+                ouster::sdk::core::to_string(desc_.tag()));
+        }
+
+        auto ndim = desc_.ndim();
+        if (ndim == 0) {
+            *get<T>() = value;
+            return;
+        }
+
+        switch (ndim) {
+            case 1:
+                impl::FieldViewFiller<T, 1>::fill(static_cast<ArrayView1<T>>(*this), value);
+                break;
+            case 2:
+                impl::FieldViewFiller<T, 2>::fill(static_cast<ArrayView2<T>>(*this), value);
+                break;
+            case 3:
+                impl::FieldViewFiller<T, 3>::fill(static_cast<ArrayView3<T>>(*this), value);
+                break;
+            case 4:
+                impl::FieldViewFiller<T, 4>::fill(static_cast<ArrayView4<T>>(*this), value);
+                break;
+            default:
+                throw std::invalid_argument("FieldView::fill: unsupported dimensions: " +
+                                            std::to_string(ndim));
+        }
+    }
+
+    /**
+     * Set all values in the FieldView to zero
+     *
+     * @throw std::invalid_argument if the field has more than 4 dimensions
+     * @throw std::logic_error if the field type is both an unknown chan field
+     * type and not dense.
+     */
+    OUSTER_API_FUNCTION
+    void set_zero();
+};
+
+/**
+ * Classes of LidarFrame fields
+ */
+enum class FieldClass {
+    /**
+     * Corresponds to fields of (height, width, ...) dimensions
+     */
+    PIXEL_FIELD = 0,
+
+    /**
+     * Corresponds to fields that have first dimension equal to width
+     */
+    COLUMN_FIELD = 1,
+
+    /**
+     * Corresponds to fields that have first dimension equal to number
+     * of packets necessary to construct a complete LidarFrame
+     */
+    PACKET_FIELD = 2,
+
+    /**
+     * Corresponds to fields of any dimension associated with the frame
+     * as a whole rather than any pixel, column or packet
+     */
+    FRAME_FIELD = 3,
+
+    /** @deprecated Use FRAME_FIELD instead */
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SCAN_FIELD, FRAME_FIELD,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0),
+
+    /**
+     * Corresponds to fields of any dimension associated with collations of
+     * frames
+     */
+    COLLATION_FIELD = 4,
+};
+
+/**
+ * Get string representation of singular FieldClass flag
+ *
+ * @param[in] f flag to get the string representation for.
+ *
+ * @return string representation of the FieldClass, or "UNKNOWN".
+ */
+OUSTER_API_FUNCTION
+std::string to_string(FieldClass f);
+
+/**
+ * RAII memory-owning container for arbitrary typed and sized arrays and POD
+ * structs with optional type checking
+ *
+ * For usage examples, check unit tests
+ */
+class OUSTER_API_CLASS Field : public FieldView {
+   protected:
+    FieldClass class_;
+
+   public:
+    /** Default constructor, representing invalid Field */
+    OUSTER_API_FUNCTION
+    Field() noexcept;
+
+    /** Field destructor */
+    OUSTER_API_FUNCTION
+    ~Field();
+
+    /**
+     * Constructs Field from FieldDescriptor
+     *
+     * @param[in] desc FieldDescriptor
+     * @param[in] field_class FieldClass
+     */
+    OUSTER_API_FUNCTION
+    Field(const FieldDescriptor& desc, FieldClass field_class = FieldClass::PIXEL_FIELD);
+
+    /**
+     * Copy constructor
+     *
+     * @param[in] other Field to copy
+     */
+    OUSTER_API_FUNCTION
+    Field(const Field& other);
+
+    /**
+     * Copy assignment constructor
+     *
+     * @param[in] other Field to copy
+     */
+    OUSTER_API_FUNCTION
+    Field& operator=(const Field& other);
+
+    /**
+     * Move constructor
+     *
+     * @param[in] other Field to steal resource from
+     */
+    OUSTER_API_FUNCTION
+    Field(Field&& other) noexcept;
+
+    /**
+     * Move assignment constructor
+     *
+     * @param[in] other Field to steal resource from
+     */
+    OUSTER_API_FUNCTION
+    Field& operator=(Field&& other) noexcept;
+
+    /**
+     * Get field class
+     *
+     * @return FieldClass
+     */
+    OUSTER_API_FUNCTION
+    FieldClass field_class() const;
+
+    /**
+     * Swaps two Fields
+     *
+     * @param[in] other Field to swap resources with
+     */
+    OUSTER_API_FUNCTION
+    void swap(Field& other) noexcept;
+
+    /**
+     * Equality operator
+     *
+     * @return true if type, shape and memory contents are equal to other
+     */
+    OUSTER_API_FUNCTION
+    bool operator==(const Field& other) const;
+};
+
+/**
+ * Destagger or restagger a field according to the provided sensor info.
+ *
+ * @throw std::invalid_argument if the pixel_shift_by_row height does not match
+ * the field
+ *
+ * @param[in] info sensor info to use to stagger/destagger
+ * @param[in] field field to stagger/destagger
+ * @param[in] inverse if true, stagger the data rather than destagger
+ *
+ * @return the staggered/destaggered field
+ */
+OUSTER_API_FUNCTION
+Field destagger(const SensorInfo& info, const FieldView& field, bool inverse = false);
+
+/**
+ * Acquire a uintXX_t reinterpreted view of the matching type size.
+ * Useful for memory related operations like parsing and compression.
+ *
+ * WARNING: reinterprets the type skipping type safety checks, exercise caution
+ *
+ * @throw std::invalid_argument if `other` is not an array view
+ * @throw std::invalid_argument if `other` is an array view of custom POD types
+ *        that do not match any uintXX_t dimensions
+ *
+ * @param[in] other view to interpret
+ *
+ * @return reinterpreted view of uint8_t, uint16_t, uint32_t or uint64_t type
+ */
+OUSTER_API_FUNCTION
+FieldView uint_view(const FieldView& other);
+
+}  // namespace core
+}  // namespace sdk
+}  // namespace ouster
+
+namespace std {
+
+/**
+ * std::swap overload, used by some std algorithms
+ *
+ * @param[in] a Field to swap with b
+ * @param[in] b Field to swap with a
+ */
+OUSTER_API_FUNCTION
+void swap(ouster::sdk::core::Field& a, ouster::sdk::core::Field& b);
+
+}  // namespace std

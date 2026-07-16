@@ -1,0 +1,20 @@
+ouster.sdk._bindings.client.__prefix__:
+    from typing import Union, Iterable, List
+    BufferT = Union[bytes, bytearray, memoryview, numpy.ndarray]
+_member_map_:
+_member_names_:
+_value2member_map_:
+FrameSetSource.close:
+    def close(self) -> None: ...
+    def reduce(self, beams: List[int]) -> FrameSetSource:
+        """
+        Takes a regular FrameSetSource and reduces the beams count to the specified values.
+        """
+        ...
+    def clip(self, fields: List[str], lower: int, upper: int) -> FrameSetSource:
+        """
+        limits the values of the specified set of fields to within the range = [lower, upper], any value
+        that exceeds this range is replaced by zero.
+        """
+        ...
+    def mask(self, fields: List[str], masks: List[Optional[numpy.ndarray]]) -> FrameSetSource: ...

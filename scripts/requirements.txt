@@ -1,11 +1,16 @@
-flufl.lock
-click
-gitpython
-jinja2
-google-cloud-storage
-bs4
-python-gitlab
-tqdm
-packaging
-flake8
-mypy
+flufl.lock>=5.0.1
+click >=8.1.3, <8.1.8
+gitpython>=3.1.37
+jinja2>=3.1.2
+tqdm>=4.0.0
+packaging>=24.0
+flake8>=7.0.0
+flake8-formatter-junit-xml>=0.0.6
+mypy>=1.0.0
+psutil>=5.9.0
+nanobind==2.9.2
+numpy >= 1.19, !=1.19.4
+libclang
+pydemumble; python_version > "3.9"
+wheel>=0.40.0
+pytest-xdist>=3.0.0

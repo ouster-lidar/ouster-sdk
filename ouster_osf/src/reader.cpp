@@ -9,6 +9,8 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <list>
+#include <map>
 #include <memory>
 #include <nonstd/optional.hpp>
 #include <sstream>
@@ -17,28 +19,215 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/impl/logging.h"
+#include "ouster/core/impl/logging.h"
+#include "ouster/core/types.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/buffer.h"
+#include "ouster/osf/callback_osf_file.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/impl/fb_utils.h"
 #include "ouster/osf/memory_mapped_osf_file.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata.h"
-#include "ouster/types.h"
+
+// these includes must be last as it somehow pulls in weird
+// things that break stuff in windows
+#include <curl/curl.h>
+#include <curl/easy.h>
+
+#include "ouster/core/impl/curl_ca.h"
 
 using namespace ouster::sdk::core;
-
 namespace ouster {
 namespace sdk {
 namespace osf {
 
 namespace {
 
-inline const ouster::sdk::osf::v2::Chunk* get_chunk_from_buf(
-    const uint8_t* buf) {
+inline const ouster::sdk::osf::v2::Chunk* get_chunk_from_buf(const uint8_t* buf) {
     return ouster::sdk::osf::v2::GetSizePrefixedChunk(buf);
+}
+
+class Curl {
+   public:
+    Curl() {
+        curl_global_init(CURL_GLOBAL_ALL);
+        // NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
+        curl_handle_ = curl_easy_init();
+        curl_easy_setopt(curl_handle_, CURLOPT_WRITEFUNCTION, &Curl::write_memory_callback);
+        curl_easy_setopt(curl_handle_, CURLOPT_WRITEDATA, this);
+        ouster::sdk::core::impl::configure_ca_bundle(curl_handle_);
+    }
+
+    Curl(Curl&&) = delete;
+    Curl(Curl&) = delete;
+    Curl& operator=(const Curl&) = delete;
+    Curl& operator=(Curl&&) = delete;
+
+    ~Curl() {
+        curl_easy_cleanup(curl_handle_);
+        curl_global_cleanup();
+    }
+
+    std::vector<uint8_t>& request(const std::string& url, size_t start, size_t length) const {
+        curl_easy_setopt(curl_handle_, CURLOPT_URL, url.c_str());
+        int timeout_seconds = 10;
+        curl_easy_setopt(curl_handle_, CURLOPT_TIMEOUT, timeout_seconds);
+        curl_easy_setopt(curl_handle_, CURLOPT_HEADER, 0);
+        curl_easy_setopt(curl_handle_, CURLOPT_NOBODY, 0);
+        curl_easy_setopt(curl_handle_, CURLOPT_HTTPHEADER, 0);
+        curl_easy_setopt(curl_handle_, CURLOPT_FOLLOWLOCATION, 1L);
+
+        std::string range = std::to_string(start) + "-" + std::to_string(start + length - 1);
+        curl_easy_setopt(curl_handle_, CURLOPT_RANGE, range.c_str());
+
+        // NOLINTNEXTLINE(google-runtime-int)
+        long http_code = 0;
+        buffer_.clear();
+        buffer_.reserve(length);
+        auto res = curl_easy_perform(curl_handle_);
+        if (res == CURLE_SEND_ERROR) {
+            // Specific versions of curl does't play well with the sensor
+            // http server. When CURLE_SEND_ERROR happens for the first time
+            // silently re-attempting the http request resolves the problem.
+            res = curl_easy_perform(curl_handle_);
+        }
+        if (res != CURLE_OK) {
+            throw std::runtime_error("CurlClient::execute_request failed for the url: [" + url +
+                                     "] with the error message: " + curl_easy_strerror(res));
+        }
+        curl_easy_getinfo(curl_handle_, CURLINFO_RESPONSE_CODE, &http_code);
+        if (200 <= http_code && http_code < 300) {
+            // HTTP 2XX means a successful response
+            return buffer_;
+        }
+
+        throw std::runtime_error(std::string("CurlClient::execute_request failed for url: [" + url +
+                                             "] with the code: [" + std::to_string(http_code) +
+                                             std::string("] - and return: ")));
+    }
+
+    size_t get_size(const std::string& url) {
+        curl_easy_setopt(curl_handle_, CURLOPT_URL, url.c_str());
+        int timeout_seconds = 10;
+        curl_easy_setopt(curl_handle_, CURLOPT_TIMEOUT, timeout_seconds);
+        curl_easy_setopt(curl_handle_, CURLOPT_HEADER, 1);
+        curl_easy_setopt(curl_handle_, CURLOPT_NOBODY, 1);
+        curl_easy_setopt(curl_handle_, CURLOPT_FOLLOWLOCATION, 1L);
+
+        // NOLINTNEXTLINE(google-runtime-int)
+        long http_code = 0;
+        auto res = curl_easy_perform(curl_handle_);
+        if (res == CURLE_SEND_ERROR) {
+            // Specific versions of curl does't play well with the sensor
+            // http server. When CURLE_SEND_ERROR happens for the first time
+            // silently re-attempting the http request resolves the problem.
+            res = curl_easy_perform(curl_handle_);
+        }
+        if (res != CURLE_OK) {
+            throw std::runtime_error("CurlClient::execute_request failed for the url: [" + url +
+                                     "] with the error message: " + curl_easy_strerror(res));
+        }
+        curl_easy_getinfo(curl_handle_, CURLINFO_RESPONSE_CODE, &http_code);
+        if (200 <= http_code && http_code < 300) {
+            // HTTP 2XX means a successful response
+            curl_off_t result{};
+            curl_easy_getinfo(curl_handle_, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &result);
+            return result;
+        }
+
+        throw std::runtime_error(std::string("CurlClient::execute_request failed for url: [" + url +
+                                             "] with the code: [" + std::to_string(http_code) +
+                                             std::string("] - and return: ")));
+    }
+
+    static size_t write_memory_callback(void* contents, size_t element_size, size_t elements_count,
+                                        void* user_pointer) {
+        size_t size_increment = element_size * elements_count;
+        auto* client = static_cast<Curl*>(user_pointer);
+        auto size_current = client->buffer_.size();
+        client->buffer_.resize(size_current + size_increment);
+        memcpy(&client->buffer_[size_current], contents, size_increment);
+        return size_increment;
+    }
+
+   private:
+    mutable CURL* curl_handle_;
+    mutable std::vector<uint8_t> buffer_;
+};
+
+template <typename KeyT, typename ValueT>
+class LRUCache {
+   public:
+    using key_value_pair_t = typename std::pair<KeyT, ValueT>;
+    using list_iterator_t = typename std::list<key_value_pair_t>::iterator;
+
+    explicit LRUCache(size_t max_size) : max_size_(max_size) {}
+
+    void put(const KeyT& key, const ValueT& value) {
+        auto it = cache_items_map_.find(key);
+        cache_items_list_.push_front(key_value_pair_t(key, value));
+        if (it != cache_items_map_.end()) {
+            cache_items_list_.erase(it->second);
+            cache_items_map_.erase(it);
+        }
+        cache_items_map_[key] = cache_items_list_.begin();
+
+        if (cache_items_map_.size() > max_size_) {
+            auto last = cache_items_list_.end();
+            last--;
+            cache_items_map_.erase(last->first);
+            cache_items_list_.pop_back();
+        }
+    }
+
+    const ValueT& get(const KeyT& key) {
+        auto it = cache_items_map_.find(key);
+        if (it == cache_items_map_.end()) {
+            throw std::range_error("There is no such key in cache");
+        } else {
+            cache_items_list_.splice(cache_items_list_.begin(), cache_items_list_, it->second);
+            return it->second->second;
+        }
+    }
+
+    bool exists(const KeyT& key) const {
+        return cache_items_map_.find(key) != cache_items_map_.end();
+    }
+
+    size_t size() const {
+        return cache_items_map_.size();
+    }
+
+   private:
+    std::list<key_value_pair_t> cache_items_list_;
+    std::map<KeyT, list_iterator_t> cache_items_map_;
+    size_t max_size_;
+    size_t current_size_ = 0;
+};
+
+std::unique_ptr<OsfFile> make_file(const std::string& file) {
+    if (file.find("://") != std::string::npos) {
+        auto curl = std::make_shared<Curl>();
+        LRUCache<std::pair<uint64_t, uint64_t>, OsfBuffer> cache(100);
+        auto callback = [curl, file, cache](OsfOffset offset) mutable {
+            try {
+                return cache.get({offset.offset(), offset.size()});
+            } catch (std::range_error& err) {
+                auto buf = OsfBuffer();
+                auto& data = curl->request(file, offset.offset(), offset.size());
+                std::vector<uint8_t> moved;
+                std::swap(moved, data);
+                buf.load_data(std::move(moved));
+
+                cache.put({offset.offset(), offset.size()}, buf);
+                return buf;
+            }
+        };
+        return std::make_unique<CallbackOsfFile>(callback, curl->get_size(file));
+    }
+    return std::make_unique<MemoryMappedOsfFile>(file);
 }
 
 }  // namespace
@@ -51,22 +240,21 @@ ChunksIter::ChunksIter(const ChunksIter& other)
 
     = default;
 
-ChunksIter::ChunksIter(const uint64_t begin_addr, const uint64_t end_addr,
-                       Reader* reader)
+ChunksIter::ChunksIter(const uint64_t begin_addr, const uint64_t end_addr, Reader* reader)
     : current_addr_(begin_addr), end_addr_(end_addr), reader_(reader) {
     if (current_addr_ != end_addr_ && !is_cleared()) {
         next();
     }
 }
 
-const ChunkRef ChunksIter::operator*() const {
+ChunkRef ChunksIter::operator*() const {
     if (current_addr_ == end_addr_) {
         throw std::logic_error("ERROR: Can't dereference end iterator.");
     }
     return ChunkRef(current_addr_, reader_);
 }
 
-const std::unique_ptr<ChunkRef> ChunksIter::operator->() const {
+std::unique_ptr<ChunkRef> ChunksIter::operator->() const {
     return std::make_unique<ChunkRef>(current_addr_, reader_);
 }
 
@@ -111,8 +299,8 @@ bool ChunksIter::is_cleared() {
 }
 
 bool ChunksIter::operator==(const ChunksIter& other) const {
-    return (current_addr_ == other.current_addr_ &&
-            end_addr_ == other.end_addr_ && reader_ == other.reader_);
+    return (current_addr_ == other.current_addr_ && end_addr_ == other.end_addr_ &&
+            reader_ == other.reader_);
 }
 
 bool ChunksIter::operator!=(const ChunksIter& other) const {
@@ -121,19 +309,19 @@ bool ChunksIter::operator!=(const ChunksIter& other) const {
 
 std::string ChunksIter::to_string() const {
     std::stringstream string_stream;
-    string_stream << "ChunksIter: [ca = " << current_addr_
-                  << ", ea = " << end_addr_ << "]";
+    string_stream << "ChunksIter: [ca = " << current_addr_ << ", ea = " << end_addr_ << "]";
     return string_stream.str();
 }
 
-bool ChunksIter::done() const { return current_addr_ == end_addr_; }
+bool ChunksIter::done() const {
+    return current_addr_ == end_addr_;
+}
 
 // =======================================================
 // ========= Reader::ChunksRange =========================
 // =======================================================
 
-ChunksRange::ChunksRange(const uint64_t begin_addr, const uint64_t end_addr,
-                         Reader* reader)
+ChunksRange::ChunksRange(const uint64_t begin_addr, const uint64_t end_addr, Reader* reader)
     : begin_addr_(begin_addr), end_addr_(end_addr), reader_(reader) {}
 
 ChunksIter ChunksRange::begin() const {
@@ -146,8 +334,7 @@ ChunksIter ChunksRange::end() const {
 
 std::string ChunksRange::to_string() const {
     std::stringstream string_stream;
-    string_stream << "ChunksRange: [ba = " << begin_addr_
-                  << ", ea = " << end_addr_ << "]";
+    string_stream << "ChunksRange: [ba = " << begin_addr_ << ", ea = " << end_addr_ << "]";
     return string_stream.str();
 }
 
@@ -164,8 +351,7 @@ MessagesStreamingRange Reader::messages() {
     return MessagesStreamingRange(start_ts(), end_ts(), {}, this);
 }
 
-MessagesStreamingRange Reader::messages(const ts_t start_ts,
-                                        const ts_t end_ts) {
+MessagesStreamingRange Reader::messages(const ts_t start_ts, const ts_t end_ts) {
     if (!has_stream_info()) {
         throw std::logic_error(
             "ERROR: Can't iterate by streams without StreamingInfo "
@@ -174,8 +360,7 @@ MessagesStreamingRange Reader::messages(const ts_t start_ts,
     return MessagesStreamingRange(start_ts, end_ts, {}, this);
 }
 
-MessagesStreamingRange Reader::messages(
-    const std::vector<uint32_t>& stream_ids) {
+MessagesStreamingRange Reader::messages(const std::vector<uint32_t>& stream_ids) {
     if (!has_stream_info()) {
         throw std::logic_error(
             "ERROR: Can't iterate by streams without StreamingInfo "
@@ -185,8 +370,7 @@ MessagesStreamingRange Reader::messages(
 }
 
 MessagesStreamingRange Reader::messages(const std::vector<uint32_t>& stream_ids,
-                                        const ts_t start_ts,
-                                        const ts_t end_ts) {
+                                        const ts_t start_ts, const ts_t end_ts) {
     if (!has_stream_info()) {
         throw std::logic_error(
             "ERROR: Can't iterate by streams without StreamingInfo "
@@ -195,8 +379,7 @@ MessagesStreamingRange Reader::messages(const std::vector<uint32_t>& stream_ids,
     return MessagesStreamingRange(start_ts, end_ts, stream_ids, this);
 }
 
-nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id,
-                                                 uint32_t message_idx) {
+nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id, uint32_t message_idx) {
     if (!has_stream_info()) {
         throw std::logic_error(
             "ERROR: Can't iterate by streams without StreamingInfo "
@@ -206,8 +389,7 @@ nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id,
         return nonstd::nullopt;
     }
     // TODO: Check for message_count existence
-    ChunkInfoNode* cin =
-        chunks_.get_info_by_message_idx(stream_id, message_idx);
+    ChunkInfoNode* cin = chunks_.get_info_by_message_idx(stream_id, message_idx);
     if (cin == nullptr) {
         return nonstd::nullopt;
     }
@@ -241,10 +423,9 @@ ChunksRange Reader::chunks() {
 }
 
 Reader::Reader(const std::string& file, const error_handler_t& error_handler)
-    : ReaderBase(std::make_unique<MemoryMappedOsfFile>(file), error_handler) {}
+    : ReaderBase(make_file(file), error_handler) {}
 
-Reader::Reader(std::unique_ptr<OsfFile> osf_file,
-               const error_handler_t& error_handler)
+Reader::Reader(std::unique_ptr<OsfFile> osf_file, const error_handler_t& error_handler)
     : ReaderBase(std::move(osf_file), error_handler) {}
 
 OsfBuffer Reader::get_chunk(OsfOffset offset) {
@@ -254,25 +435,25 @@ OsfBuffer Reader::get_chunk(OsfOffset offset) {
 // =========================================================
 // ========= MessageRef ====================================
 // =========================================================
-MessageRef::MessageRef(const OsfBuffer buf, const MetadataStore& meta_provider,
-                       const error_handler_t& error_handler)
-    : buf_(buf), meta_provider_(meta_provider), error_handler_{error_handler} {}
+MessageRef::MessageRef(const OsfBuffer& buf, const MetadataStore& meta_provider,
+                       error_handler_t error_handler)
+    : buf_(buf), meta_provider_(meta_provider), error_handler_{std::move(error_handler)} {}
 
 uint32_t MessageRef::id() const {
     const ouster::sdk::osf::v2::StampedMessage* stamped_message =
-        reinterpret_cast<const ouster::sdk::osf::v2::StampedMessage*>(
-            buf_.data());
+        reinterpret_cast<const ouster::sdk::osf::v2::StampedMessage*>(buf_.data());
     return stamped_message->id();
 }
 
 MessageRef::ts_t MessageRef::ts() const {
     const ouster::sdk::osf::v2::StampedMessage* stamped_message =
-        reinterpret_cast<const ouster::sdk::osf::v2::StampedMessage*>(
-            buf_.data());
+        reinterpret_cast<const ouster::sdk::osf::v2::StampedMessage*>(buf_.data());
     return ts_t(stamped_message->ts());
 }
 
-const OsfBuffer MessageRef::buf() const { return buf_; }
+OsfBuffer MessageRef::buf() const {
+    return buf_;
+}
 
 bool MessageRef::is(const std::string& type_str) const {
     auto meta = meta_provider_.get(id());
@@ -290,10 +471,8 @@ bool MessageRef::operator!=(const MessageRef& other) const {
 std::string MessageRef::to_string() const {
     std::stringstream string_stream;
     const ouster::sdk::osf::v2::StampedMessage* stamped_message =
-        reinterpret_cast<const ouster::sdk::osf::v2::StampedMessage*>(
-            buf_.data());
-    string_stream << "MessageRef: [id = " << id() << ", ts = " << ts().count()
-                  << ", buffer = "
+        reinterpret_cast<const ouster::sdk::osf::v2::StampedMessage*>(buf_.data());
+    string_stream << "MessageRef: [id = " << id() << ", ts = " << ts().count() << ", buffer = "
                   << osf::to_string(stamped_message->buffer()->Data(),
                                     stamped_message->buffer()->size(), 100)
                   << "]";
@@ -302,17 +481,15 @@ std::string MessageRef::to_string() const {
 
 std::vector<uint8_t> MessageRef::buffer() const {
     const ouster::sdk::osf::impl::gen::StampedMessage* stamped_message =
-        reinterpret_cast<const ouster::sdk::osf::impl::gen::StampedMessage*>(
-            buf_.data());
+        reinterpret_cast<const ouster::sdk::osf::impl::gen::StampedMessage*>(buf_.data());
 
     if (stamped_message->buffer() == nullptr) {
         return {};
     }
 
     // FIXME[tws] a copy
-    return {
-        stamped_message->buffer()->data(),
-        stamped_message->buffer()->data() + stamped_message->buffer()->size()};
+    return {stamped_message->buffer()->data(),
+            stamped_message->buffer()->data() + stamped_message->buffer()->size()};
 }
 
 const error_handler_t& MessageRef::error_handler() const {
@@ -323,24 +500,22 @@ const error_handler_t& MessageRef::error_handler() const {
 // =========== ChunkRef ==================================
 // =======================================================
 
-ChunkRef::ChunkRef(const uint64_t offset, Reader* reader)
-    : chunk_offset_(offset), reader_(reader) {
+ChunkRef::ChunkRef(const uint64_t offset, Reader* reader) : chunk_offset_(offset), reader_(reader) {
     OsfOffset temp_offset = {offset, reader_->chunks_.get(chunk_offset_)->size};
-    chunk_buf_ =
-        reader->file_->read(reader_->file_->chunks_offset(), temp_offset);
+    chunk_buf_ = reader->file_->read(reader_->file_->chunks_offset(), temp_offset);
     // Always expects "verified" chunk offset. See Reader::verify_chunk()
-    assert(reader_->chunks_.get(chunk_offset_)->status !=
-           ChunkValidity::UNKNOWN);
+    assert(reader_->chunks_.get(chunk_offset_)->status != ChunkValidity::UNKNOWN);
 }
 
 ChunkRef::ChunkRef(const uint64_t offset, const OsfBuffer& buf, Reader* reader)
     : chunk_offset_(offset), reader_(reader), chunk_buf_(buf) {
     // Always expects "verified" chunk offset. See Reader::verify_chunk()
-    assert(reader_->chunks_.get(chunk_offset_)->status !=
-           ChunkValidity::UNKNOWN);
+    assert(reader_->chunks_.get(chunk_offset_)->status != ChunkValidity::UNKNOWN);
 }
 
-ChunkState* ChunkRef::state() { return reader_->chunks_.get(chunk_offset_); }
+ChunkState* ChunkRef::state() {
+    return reader_->chunks_.get(chunk_offset_);
+}
 
 const ChunkState* ChunkRef::state() const {
     return reader_->chunks_.get(chunk_offset_);
@@ -358,8 +533,7 @@ size_t ChunkRef::size() const {
     if (!valid()) {
         return 0;
     }
-    const ouster::sdk::osf::v2::Chunk* chunk =
-        get_chunk_from_buf(chunk_buf_.data());
+    const ouster::sdk::osf::v2::Chunk* chunk = get_chunk_from_buf(chunk_buf_.data());
     if (chunk->messages() != nullptr) {
         return chunk->messages()->size();
     }
@@ -375,34 +549,29 @@ std::unique_ptr<const MessageRef> ChunkRef::messages(size_t msg_idx) const {
         if (!valid()) {
             return nullptr;
         }
-        const ouster::sdk::osf::v2::Chunk* chunk =
-            get_chunk_from_buf(chunk_buf_.data());
-        if ((chunk->messages() == nullptr) ||
-            msg_idx >= chunk->messages()->size()) {
+        const ouster::sdk::osf::v2::Chunk* chunk = get_chunk_from_buf(chunk_buf_.data());
+        if ((chunk->messages() == nullptr) || msg_idx >= chunk->messages()->size()) {
             return nullptr;
         }
-        const ouster::sdk::osf::v2::StampedMessage* message =
-            chunk->messages()->Get(msg_idx);
+        const ouster::sdk::osf::v2::StampedMessage* message = chunk->messages()->Get(msg_idx);
         OsfBuffer message_buf;
-        uint64_t offset =
-            reinterpret_cast<const uint8_t*>(message) - chunk_buf_.data();
+        uint64_t offset = reinterpret_cast<const uint8_t*>(message) - chunk_buf_.data();
         message_buf.load_data(chunk_buf_, offset, message->buffer()->size());
-        return std::make_unique<const MessageRef>(
-            message_buf, reader_->meta_store_, reader_->error_handler_);
+        return std::make_unique<const MessageRef>(message_buf, reader_->meta_store_,
+                                                  reader_->error_handler_);
     } catch (const std::runtime_error& e) {
         reader_->error_handler_(Severity::OUSTER_WARNING, e.what());
         return nullptr;
     }
 }
 
-const MessageRef ChunkRef::operator[](size_t msg_idx) const {
+MessageRef ChunkRef::operator[](size_t msg_idx) const {
     auto temp_result = messages(msg_idx);  // for bounds checking
     if (temp_result == nullptr) {
-        throw std::out_of_range(
-            "ERROR: Message index out of range in ChunkRef.");
+        throw std::out_of_range("ERROR: Message index out of range in ChunkRef.");
     }
 
-    return MessageRef(std::move(*temp_result));
+    return *temp_result;
 }
 
 MessagesChunkIter ChunkRef::begin() const {
@@ -426,22 +595,25 @@ std::string ChunkRef::to_string() const {
     auto chunk_state = state();
     string_stream << "ChunkRef: ["
                   << "msgs_size = " << size() << ", state = ("
-                  << ((chunk_state != nullptr) ? osf::to_string(*chunk_state)
-                                               : "no state")
-                  << ")"
+                  << ((chunk_state != nullptr) ? osf::to_string(*chunk_state) : "no state") << ")"
                   << ", chunk_buf_ = "
-                  << (chunk_buf_.has_value()
-                          ? "size=" + std::to_string(chunk_buf_.size())
-                          : "nullptr")
+                  << (chunk_buf_.has_value() ? "size=" + std::to_string(chunk_buf_.size())
+                                             : "nullptr")
                   << "]";
     return string_stream.str();
 }
 
-uint64_t ChunkRef::offset() const { return chunk_offset_; }
+uint64_t ChunkRef::offset() const {
+    return chunk_offset_;
+}
 
-ts_t ChunkRef::start_ts() const { return state()->start_ts; }
+ts_t ChunkRef::start_ts() const {
+    return state()->start_ts;
+}
 
-ts_t ChunkRef::end_ts() const { return state()->end_ts; }
+ts_t ChunkRef::end_ts() const {
+    return state()->end_ts;
+}
 
 // ==========================================================
 // ========= MessagesChunkIter ==============================
@@ -449,9 +621,8 @@ ts_t ChunkRef::end_ts() const { return state()->end_ts; }
 
 MessagesChunkIter::MessagesChunkIter(const MessagesChunkIter& other) = default;
 
-MessagesChunkIter::MessagesChunkIter(const ChunkRef chunk_ref,
-                                     const size_t msg_idx)
-    : chunk_ref_(chunk_ref), msg_idx_(msg_idx) {}
+MessagesChunkIter::MessagesChunkIter(ChunkRef chunk_ref, const size_t msg_idx)
+    : chunk_ref_(std::move(chunk_ref)), msg_idx_(msg_idx) {}
 
 bool MessagesChunkIter::operator==(const MessagesChunkIter& other) const {
     return (chunk_ref_ == other.chunk_ref_ && msg_idx_ == other.msg_idx_);
@@ -463,13 +634,12 @@ bool MessagesChunkIter::operator!=(const MessagesChunkIter& other) const {
 
 std::string MessagesChunkIter::to_string() const {
     std::stringstream string_stream;
-    string_stream << "MessagesChunkIter: [chunk_ref = "
-                  << chunk_ref_.to_string() << ", msg_idx = " << msg_idx_
-                  << "]";
+    string_stream << "MessagesChunkIter: [chunk_ref = " << chunk_ref_.to_string()
+                  << ", msg_idx = " << msg_idx_ << "]";
     return string_stream.str();
 }
 
-const MessageRef MessagesChunkIter::operator*() const {
+MessageRef MessagesChunkIter::operator*() const {
     return chunk_ref_[msg_idx_];
 }
 
@@ -511,7 +681,9 @@ void MessagesChunkIter::prev() {
     }
 }
 
-bool MessagesChunkIter::done() const { return (msg_idx_ >= chunk_ref_.size()); }
+bool MessagesChunkIter::done() const {
+    return (msg_idx_ >= chunk_ref_.size());
+}
 
 // ==========================================================
 // ========= SreeamingReader::MessagesStreamingIter =========
@@ -524,33 +696,28 @@ uint32_t calc_stream_ids_hash(const std::vector<uint32_t>& stream_ids) {
     uint32_t hash = 0;
     std::vector<uint32_t> tmp_stream_ids{stream_ids};
     std::sort(tmp_stream_ids.begin(), tmp_stream_ids.end());
-    for (std::size_t i = 0; i < tmp_stream_ids.size(); ++i) {
-        hash = hash * hash_a + tmp_stream_ids[i];
+    for (const uint32_t stream_id : tmp_stream_ids) {
+        hash = hash * hash_a + stream_id;
         hash_a *= hash_b;
     }
     return hash;
 }
 
-bool MessagesStreamingIter::greater_chunk_type::operator()(
-    const opened_chunk_type& a, const opened_chunk_type& b) {
+bool MessagesStreamingIter::GreaterChunkType::operator()(const opened_chunk_type& a,
+                                                         const opened_chunk_type& b) {
     return a.first[a.second].ts() > b.first[b.second].ts();
 }
 
 MessagesStreamingIter::MessagesStreamingIter()
-    : curr_ts_{},
-      end_ts_{},
-      stream_ids_{},
-      stream_ids_hash_{},
-      reader_{nullptr},
-      curr_chunks_{} {}
+    : curr_ts_{}, end_ts_{}, stream_ids_{}, stream_ids_hash_{}, reader_{nullptr}, curr_chunks_{} {}
 
 MessagesStreamingIter::MessagesStreamingIter(const MessagesStreamingIter& other)
 
     = default;
 
-MessagesStreamingIter::MessagesStreamingIter(
-    const ts_t start_ts, const ts_t end_ts,
-    const std::vector<uint32_t>& stream_ids, Reader* reader)
+MessagesStreamingIter::MessagesStreamingIter(const ts_t start_ts, const ts_t end_ts,
+                                             const std::vector<uint32_t>& stream_ids,
+                                             Reader* reader)
     : curr_ts_{start_ts},
       end_ts_{end_ts},
       stream_ids_{stream_ids},
@@ -576,14 +743,11 @@ MessagesStreamingIter::MessagesStreamingIter(
     //  5. move to the next chunk within stream, and continue from Step 2.
     for (const auto stream_id : stream_ids_) {
         // 1. find first chunk by start_ts (lower bound)
-        auto* chunk_state =
-            reader_->chunks_.get_by_lower_bound_ts(stream_id, start_ts);
+        auto* chunk_state = reader_->chunks_.get_by_lower_bound_ts(stream_id, start_ts);
         bool filled = false;
-        while (chunk_state != nullptr && chunk_state->start_ts < end_ts &&
-               !filled) {
+        while (chunk_state != nullptr && chunk_state->start_ts < end_ts && !filled) {
             auto curr_offset = chunk_state->offset;
-            OsfOffset temp_offset = {curr_offset,
-                                     reader_->chunks_.get(curr_offset)->size};
+            OsfOffset temp_offset = {curr_offset, reader_->chunks_.get(curr_offset)->size};
             OsfBuffer buf = reader_->get_chunk(temp_offset);
             if (reader_->verify_chunk(temp_offset, buf)) {
                 // 2. if chunk is valid open it, otherwise step 5
@@ -591,8 +755,7 @@ MessagesStreamingIter::MessagesStreamingIter(
                 for (size_t msg_idx = 0; msg_idx < cref.size(); ++msg_idx) {
                     // 3. find first message within chunk in [start_ts, end_ts)
                     //    range
-                    if (cref[msg_idx].ts() >= start_ts &&
-                        cref[msg_idx].ts() < end_ts) {
+                    if (cref[msg_idx].ts() >= start_ts && cref[msg_idx].ts() < end_ts) {
                         // 4. addd opened chunk (offset, msg_idx) to the queue
                         //    of streams we are reading
                         curr_chunks_.emplace(cref, msg_idx);
@@ -615,7 +778,7 @@ MessagesStreamingIter::MessagesStreamingIter(
     }
 }
 
-const MessageRef MessagesStreamingIter::operator*() const {
+MessageRef MessagesStreamingIter::operator*() const {
     const auto& curr_item = curr_chunks_.top();
     return curr_item.first[curr_item.second];
 }
@@ -633,18 +796,14 @@ std::unique_ptr<const MessageRef> MessagesStreamingIter::operator->() const {
 // TODO[pb]: This should be revisited later with priority_queue
 // re-implementation that will be easier to work with for our multi-streams
 // case.
-bool MessagesStreamingIter::operator==(
-    const MessagesStreamingIter& other) const {
-    return (curr_ts_ == other.curr_ts_ && end_ts_ == other.end_ts_ &&
-            reader_ == other.reader_ &&
+bool MessagesStreamingIter::operator==(const MessagesStreamingIter& other) const {
+    return (curr_ts_ == other.curr_ts_ && end_ts_ == other.end_ts_ && reader_ == other.reader_ &&
             stream_ids_hash_ == other.stream_ids_hash_ &&
             curr_chunks_.size() == other.curr_chunks_.size() &&
-            (curr_chunks_.empty() ||
-             curr_chunks_.top() == other.curr_chunks_.top()));
+            (curr_chunks_.empty() || curr_chunks_.top() == other.curr_chunks_.top()));
 }
 
-bool MessagesStreamingIter::operator!=(
-    const MessagesStreamingIter& other) const {
+bool MessagesStreamingIter::operator!=(const MessagesStreamingIter& other) const {
     return !this->operator==(other);
 }
 
@@ -676,22 +835,18 @@ void MessagesStreamingIter::next() {
     } else {
         // Looking for the next chunk of the current stream_id
         // const auto curr_stream_id = cref[msg_idx].id();
-        auto next_chunk_state =
-            reader_->chunks_.next_by_stream(curr_item.first.offset());
+        auto next_chunk_state = reader_->chunks_.next_by_stream(curr_item.first.offset());
         if (next_chunk_state != nullptr) {
-            auto next_chunk_info =
-                reader_->chunks_.get_info(next_chunk_state->offset);
+            auto next_chunk_info = reader_->chunks_.get_info(next_chunk_state->offset);
             if (next_chunk_info == nullptr) {
                 throw std::logic_error(
                     "ERROR: Can't iterate by streams without StreamingInfo "
                     "available.");
             }
             if (next_chunk_state->start_ts < end_ts_) {
-                OsfOffset temp_offset = {
-                    next_chunk_state->offset,
-                    reader_->chunks_.get(next_chunk_state->offset)->size};
-                OsfBuffer buf = reader_->file_->read(
-                    reader_->file_->chunks_offset(), temp_offset);
+                OsfOffset temp_offset = {next_chunk_state->offset,
+                                         reader_->chunks_.get(next_chunk_state->offset)->size};
+                OsfBuffer buf = reader_->file_->read(reader_->file_->chunks_offset(), temp_offset);
                 if (reader_->verify_chunk(temp_offset, buf)) {
                     ChunkRef cref{next_chunk_state->offset, buf, reader_};
                     for (size_t msg_idx = 0; msg_idx < cref.size(); ++msg_idx) {
@@ -731,10 +886,8 @@ std::string MessagesStreamingIter::to_string() const {
                   << ", stream_ids_hash_ = " << stream_ids_hash_;
     if (!curr_chunks_.empty()) {
         const auto& curr_item = curr_chunks_.top();
-        string_stream << ", top = (ts = "
-                      << curr_item.first[curr_item.second].ts().count()
-                      << ", id = " << curr_item.first[curr_item.second].id()
-                      << ")";
+        string_stream << ", top = (ts = " << curr_item.first[curr_item.second].ts().count()
+                      << ", id = " << curr_item.first[curr_item.second].id() << ")";
     }
     string_stream << "]";
     return string_stream.str();
@@ -744,22 +897,17 @@ std::string MessagesStreamingIter::to_string() const {
 // ========= StreamingReader::MessagesStreamingRange =======
 // =========================================================
 
-MessagesStreamingRange::MessagesStreamingRange(
-    const ts_t start_ts, const ts_t end_ts,
-    const std::vector<uint32_t>& stream_ids, Reader* reader)
-    : start_ts_(start_ts),
-      end_ts_(end_ts),
-      stream_ids_{stream_ids},
-      reader_{reader} {}
+MessagesStreamingRange::MessagesStreamingRange(const ts_t start_ts, const ts_t end_ts,
+                                               const std::vector<uint32_t>& stream_ids,
+                                               Reader* reader)
+    : start_ts_(start_ts), end_ts_(end_ts), stream_ids_{stream_ids}, reader_{reader} {}
 
 MessagesStreamingIter MessagesStreamingRange::begin() const {
-    return MessagesStreamingIter(start_ts_, end_ts_ + ts_t{1}, stream_ids_,
-                                 reader_);
+    return MessagesStreamingIter(start_ts_, end_ts_ + ts_t{1}, stream_ids_, reader_);
 }
 
 MessagesStreamingIter MessagesStreamingRange::end() const {
-    return MessagesStreamingIter(end_ts_ + ts_t{1}, end_ts_ + ts_t{1},
-                                 stream_ids_, reader_);
+    return MessagesStreamingIter(end_ts_ + ts_t{1}, end_ts_ + ts_t{1}, stream_ids_, reader_);
 }
 
 std::string MessagesStreamingRange::to_string() const {

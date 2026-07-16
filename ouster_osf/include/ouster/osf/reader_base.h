@@ -12,12 +12,12 @@
 #include <memory>
 #include <string>
 
-#include "ouster/error_handler.h"
+#include "ouster/core/error_handler.h"
+#include "ouster/core/types.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/chunk.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/metadata.h"
-#include "ouster/types.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -43,7 +43,7 @@ class OUSTER_API_CLASS ReaderBase {
      */
     OUSTER_API_FUNCTION
     ReaderBase(std::unique_ptr<OsfFile> osf_file,
-               const error_handler_t& error_handler = default_error_handler);
+               error_handler_t error_handler = default_error_handler);
 
     /**
      * Whether OSF contains the message counts that are needed for
@@ -115,6 +115,22 @@ class OUSTER_API_CLASS ReaderBase {
      */
     OUSTER_API_FUNCTION
     ouster::sdk::core::Version version() const;
+
+    /**
+     * Get the size of the OSF file.
+     *
+     * @return The size of the OSF file in bytes.
+     */
+    OUSTER_API_FUNCTION
+    uint64_t size() const;
+
+    /**
+     * Get the underlying file object.
+     *
+     * @return The underlying file.
+     */
+    OUSTER_API_FUNCTION
+    OsfFile& file() const;
 
     /**
      * Checks the flatbuffers validity of a chunk by chunk offset.

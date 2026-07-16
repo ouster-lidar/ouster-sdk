@@ -3,7 +3,7 @@
  * All rights reserved.
  */
 
-#include "ouster/field.h"
+#include "ouster/core/field.h"
 
 #include <algorithm>
 #include <limits>
@@ -214,19 +214,15 @@ TEST(Field_tests, type_safety_test) {
 
     EXPECT_NO_THROW(convert_const_void(type_checking_ptr));
     EXPECT_NO_THROW(convert_const_uint8(type_checking_ptr));
-    EXPECT_THROW(convert_const_uint16(type_checking_ptr),
-                 std::invalid_argument);
-    EXPECT_THROW(convert_const_uint32(type_checking_ptr),
-                 std::invalid_argument);
-    EXPECT_THROW(convert_const_uint64(type_checking_ptr),
-                 std::invalid_argument);
+    EXPECT_THROW(convert_const_uint16(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_const_uint32(type_checking_ptr), std::invalid_argument);
+    EXPECT_THROW(convert_const_uint64(type_checking_ptr), std::invalid_argument);
     EXPECT_THROW(convert_const_int8(type_checking_ptr), std::invalid_argument);
     EXPECT_THROW(convert_const_int16(type_checking_ptr), std::invalid_argument);
     EXPECT_THROW(convert_const_int32(type_checking_ptr), std::invalid_argument);
     EXPECT_THROW(convert_const_int64(type_checking_ptr), std::invalid_argument);
     EXPECT_THROW(convert_const_float(type_checking_ptr), std::invalid_argument);
-    EXPECT_THROW(convert_const_double(type_checking_ptr),
-                 std::invalid_argument);
+    EXPECT_THROW(convert_const_double(type_checking_ptr), std::invalid_argument);
 }
 
 TEST(Field_tests, array_view_test) {
@@ -527,8 +523,7 @@ TEST(Field_tests, container_test) {
         }
 
         EXPECT_NO_THROW({
-            std::sort(v.begin(), v.end(),
-                      [](auto&& a, auto&& b) { return a.bytes() < b.bytes(); });
+            std::sort(v.begin(), v.end(), [](auto&& a, auto&& b) { return a.bytes() < b.bytes(); });
         });
 
         for (auto&& p : v) {
@@ -554,8 +549,7 @@ TEST(Field_tests, container_test) {
             ++i;
         }
 
-        EXPECT_NO_THROW(
-            l.sort([](auto&& a, auto&& b) { return a.bytes() < b.bytes(); }));
+        EXPECT_NO_THROW(l.sort([](auto&& a, auto&& b) { return a.bytes() < b.bytes(); }));
 
         for (auto&& p : l) {
             --i;
@@ -584,8 +578,7 @@ TEST(Field_tests, matches_test) {
     EXPECT_TRUE(ptr.matches(fd_array<float>(32)));
 
     EXPECT_FALSE(ptr.matches(fd_array<float>(8, 4)));
-    EXPECT_FALSE(
-        ptr.matches(FieldDescriptor::memory<float>(32 * sizeof(float))));
+    EXPECT_FALSE(ptr.matches(FieldDescriptor::memory<float>(32 * sizeof(float))));
     EXPECT_FALSE(ptr.matches(fd_array<float>(64)));
     EXPECT_FALSE(ptr.matches(fd_array<int>(32)));
     EXPECT_FALSE(ptr.matches(FieldDescriptor::memory<int>(32 * sizeof(int))));
@@ -628,7 +621,7 @@ TEST(Field_tests, view_sparse_test) {
     EXPECT_EQ(ptr.subview(keep(), 10, 5, 3).sparse(), true);
 }
 
-// TODO: would be good to move LidarScan::Header to types.h
+// TODO: would be good to move LidarFrame::Header to types.h
 template <typename T>
 using Header = Eigen::Array<T, Eigen::Dynamic, 1>;
 
@@ -805,8 +798,7 @@ TEST(Field_tests, reshape_test) {
     auto view = FieldView{vec.data(), fd_array<int>(100, 200, 300)};
     EXPECT_THROW(view.reshape(3, 9, 12, 10), std::invalid_argument);
     EXPECT_THROW(view.reshape(3, 10), std::invalid_argument);
-    EXPECT_THROW(view.subview(keep(), 2).reshape(50, 2, 300),
-                 std::invalid_argument);
+    EXPECT_THROW(view.subview(keep(), 2).reshape(50, 2, 300), std::invalid_argument);
     EXPECT_NO_THROW(view.subview(2).reshape(100, 2, 300));
 
     /**
@@ -967,4 +959,102 @@ TEST(Field_tests, uint_view_tests) {
     std::vector<my_struct> vec(100);
     FieldView view{vec.data(), fd_array<my_struct>(100)};
     EXPECT_THROW(uint_view(view), std::invalid_argument);
+}
+
+TEST(Field_tests, fill_test) {
+    // Test dense 1D fill
+    {
+        Field f(fd_array<int>(100));
+        f.fill(42);
+        int* data = f;
+        for (int i = 0; i < 100; ++i) {
+            EXPECT_EQ(data[i], 42);
+        }
+    }
+
+    // Test dense 2D fill
+    {
+        Field f(fd_array<float>(10, 20));
+        f.fill(3.14f);
+        ArrayView2<float> view = f;
+        for (int y = 0; y < 10; ++y) {
+            for (int x = 0; x < 20; ++x) {
+                EXPECT_EQ(view(y, x), 3.14f);
+            }
+        }
+    }
+
+    // Test sparse subview fill
+    {
+        Field f(fd_array<int>(10, 10));
+        f.set_zero();
+        FieldView sub = f.subview(keep(), 5);  // Column 5
+        sub.fill(7);
+
+        ArrayView2<int> view = f;
+        for (int y = 0; y < 10; ++y) {
+            for (int x = 0; x < 10; ++x) {
+                if (x == 5) {
+                    EXPECT_EQ(view(y, x), 7);
+                } else {
+                    EXPECT_EQ(view(y, x), 0);
+                }
+            }
+        }
+    }
+
+    // Test sparse 3D subview fill
+    {
+        Field f(fd_array<int>(5, 5, 5));
+        f.set_zero();
+        // Slice at [:, 2, :]
+        FieldView sub = f.subview(keep(), 2, keep());
+        sub.fill(9);
+
+        ArrayView3<int> view = f;
+        for (int z = 0; z < 5; ++z) {
+            for (int y = 0; y < 5; ++y) {
+                for (int x = 0; x < 5; ++x) {
+                    if (y == 2) {
+                        EXPECT_EQ(view(z, y, x), 9);
+                    } else {
+                        EXPECT_EQ(view(z, y, x), 0);
+                    }
+                }
+            }
+        }
+    }
+
+    // Test scalar fill (ndim == 0)
+    {
+        Field f(FieldDescriptor::memory<int>(sizeof(int)));
+        f.fill(123);
+        EXPECT_EQ(*f.get<int>(), 123);
+    }
+
+    // Test type mismatch
+    {
+        Field f(fd_array<int>(10));
+        EXPECT_THROW(f.fill(1.0f), std::invalid_argument);
+    }
+}
+
+TEST(Field_tests, set_zero_sparse_test) {
+    Field f(fd_array<int>(10, 10));
+    // Fill with non-zero
+    f.fill(42);
+
+    FieldView sub = f.subview(keep(), 5);  // Column 5
+    sub.set_zero();
+
+    ArrayView2<int> view = f;
+    for (int y = 0; y < 10; ++y) {
+        for (int x = 0; x < 10; ++x) {
+            if (x == 5) {
+                EXPECT_EQ(view(y, x), 0);
+            } else {
+                EXPECT_EQ(view(y, x), 42);
+            }
+        }
+    }
 }

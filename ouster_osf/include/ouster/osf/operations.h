@@ -12,10 +12,10 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/types.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/metadata.h"
-#include "ouster/types.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -73,9 +73,8 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
  * @return The number of the bytes written to the OSF file.
  */
 OUSTER_API_FUNCTION
-int64_t osf_file_modify_metadata(
-    const std::string& file_name,
-    const std::vector<ouster::sdk::core::SensorInfo>& new_metadata);
+int64_t osf_file_modify_metadata(const std::string& file_name,
+                                 const std::vector<ouster::sdk::core::SensorInfo>& new_metadata);
 
 }  // namespace osf
 }  // namespace sdk

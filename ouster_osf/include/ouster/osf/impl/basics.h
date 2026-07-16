@@ -10,15 +10,15 @@
 #include "os_sensor/collation_stream_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
 #include "os_sensor/lidar_sensor_generated.h"
-#include "ouster/lidar_scan.h"
-#include "ouster/types.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/types.h"
 // clang-format on
 
 namespace ouster {
 namespace sdk {
 
 /**
- * %OSF v2 space
+ * %OSF (Ouster Sensor Format) file I/O, metadata, encoding, and streaming.
  */
 namespace osf {
 namespace impl {

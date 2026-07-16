@@ -1,4 +1,5 @@
 import logging
+import os
 
 
 def configure_logger(name: str) -> logging.Logger:
@@ -8,5 +9,6 @@ def configure_logger(name: str) -> logging.Logger:
         fmt = "%(levelname)s | %(name)s | %(message)s"
         handler.setFormatter(logging.Formatter(fmt))
         logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    level_name = os.environ.get("OUSTER_DOCS_LOG_LEVEL", "INFO").upper()
+    logger.setLevel(getattr(logging, level_name, logging.INFO))
     return logger

@@ -55,12 +55,15 @@ class IPv4Fragment2 {
     IPv4Fragment2() : offset_() {}
 
     template <typename T>
-    IPv4Fragment2(T* pdu, uint16_t offset)
-        : payload_(pdu->serialize()), offset_(offset) {}
+    IPv4Fragment2(T* pdu, uint16_t offset) : payload_(pdu->serialize()), offset_(offset) {}
 
-    const payload_type& payload() const { return payload_; }
+    const payload_type& payload() const {
+        return payload_;
+    }
 
-    uint16_t offset() const { return offset_; }
+    uint16_t offset() const {
+        return offset_;
+    }
 
    private:
     payload_type payload_;
@@ -131,7 +134,7 @@ class IPv4Reassembler2 {
         NOT_FRAGMENTED,  ///< The given packet is not fragmented
         FRAGMENTED,      ///< The given packet is fragmented and can't be
                          ///< reassembled yet
-        REASSEMBLED  ///< The given packet was fragmented but is now reassembled
+        REASSEMBLED      ///< The given packet was fragmented but is now reassembled
     };
 
     TINS_DEPRECATED(typedef PacketStatus packet_status);

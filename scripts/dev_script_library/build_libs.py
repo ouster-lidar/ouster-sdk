@@ -15,10 +15,7 @@ import signal
 
 
 def os_independent_shlex_split(path):
-    if sys.platform == 'win32':
-        return shlex.split(path, posix=0)
-    else:
-        return shlex.split(path)
+    return shlex.split(path, posix=(sys.platform != 'win32'))
 
 
 def venv_folder_template(python_bin, venv_base):
@@ -28,8 +25,14 @@ def venv_folder_template(python_bin, venv_base):
 
 
 class Defaults:
-    default_artifact_dir = os.path.join(os.getcwd(), 'artifacts')
-    default_build_dir = os.path.join(os.getcwd(), 'build')
+    @staticmethod
+    def default_artifact_dir():
+        return os.path.join(os.getcwd(), 'artifacts')
+
+    @staticmethod
+    def default_build_dir():
+        return os.path.join(os.getcwd(), 'build')
+
     default_root_dir = os.path.join(os.path.dirname(__file__), "..", "..")
     default_build_type = "Release"
     default_build_generator = "Ninja"
@@ -55,21 +58,25 @@ class IndividualTimer:
 
     def __str__(self):
         total = self.get_duration()
-        min = int(total / 60)
+        minutes = int(total / 60)
         sec = int(total % 60)
-        return f"{self._label}: {min} minutes {sec} seconds"
+        return f"{self._label}: {minutes} minutes {sec} seconds"
 
 
 class BuildTimer:
     def __init__(self):
         self._timers = {}
+        self._label_counts = {}
 
     def make_timer(self, label):
         if label not in self._timers:
             self._timers[label] = IndividualTimer(label)
             return self._timers[label]
-        else:
-            return self.make_timer(f"{label}{time.time()}")
+        count = self._label_counts.get(label, 1) + 1
+        self._label_counts[label] = count
+        unique_label = f"{label}#{count}"
+        self._timers[unique_label] = IndividualTimer(unique_label)
+        return self._timers[unique_label]
 
     def __str__(self):
         return "\n".join([str(self._timers[x]) for x in self._timers])
@@ -80,8 +87,10 @@ class RunCommand:
         self._timers = BuildTimer()
         self._tty = tty
 
-    def run_command(self, *args, cwd=os.getcwd(), env=None, throw_on_error=True,
+    def run_command(self, *args, cwd=None, env=None, throw_on_error=True,
                     tty=None, quiet=False):
+        if cwd is None:
+            cwd = os.getcwd()
         output = ""
         timer = self._timers.make_timer(f"{args}")
         timer.start()
@@ -108,11 +117,11 @@ class RunCommand:
             if not use_tty:
                 if stdout:
                     print(stdout)
+                if stderr:
+                    print("STDERR:", stderr)
                 output = stdout or ""
 
             if process.returncode != 0:
-                if not use_tty and stderr:
-                    print("STDERR:", stderr)
                 if throw_on_error:
                     raise Exception(f"Error Running Process {args}, "
                                     f"Return Code: {process.returncode}")
@@ -221,8 +230,8 @@ class Python(RunCommand):
     def lock(self):
         if self._pip_folder_lock is not None and not self.have_lock():
             print("Locking pip")
+            self._pip_folder_lock.lifetime = timedelta(minutes=5)
             self._pip_folder_lock.lock()
-            self._pip_folder_lock.lifetime = timedelta(seconds=(5 * 50))
 
     def unlock(self):
         if self._pip_folder_lock is not None:
@@ -238,7 +247,7 @@ class Python(RunCommand):
 
 
 class CMake(RunCommand):
-    def __init__(self, source_dir, build_dir, artifact_dir, cmake_args=[],
+    def __init__(self, source_dir, build_dir, artifact_dir, cmake_args=None,
                  build_type=Defaults.default_build_type,
                  cmake_path="cmake",
                  cmake_generate_prepend=None,
@@ -248,7 +257,7 @@ class CMake(RunCommand):
         RunCommand.__init__(self, tty)
         self._source_dir = source_dir
         self._build_dir = build_dir
-        self._cmake_args = cmake_args
+        self._cmake_args = list(cmake_args) if cmake_args is not None else []
         self._build_type = build_type
         self._cmake_path = cmake_path
         self._build_generator = build_generator
@@ -279,7 +288,9 @@ class CMake(RunCommand):
                                      env=self._env,
                                      generate=True))
 
-    def build(self, targets=None, threads=os.cpu_count()):
+    def build(self, targets=None, threads=None):
+        if threads is None:
+            threads = os.cpu_count() or 1
         args = ["--build", self._build_dir,
                 "--config", f"{self._build_type}",
                 f"-j{threads}"]
@@ -324,7 +335,9 @@ class CMake(RunCommand):
         return self.run_cmake_command("--version", tty=self._tty,
                                      env=self._env)
 
-    def run_cmake_command(self, *args, cwd=os.getcwd(), env=None, tty=None, generate=False):
+    def run_cmake_command(self, *args, cwd=None, env=None, tty=None, generate=False):
+        if cwd is None:
+            cwd = os.getcwd()
         run_args = []
         if generate and self._cmake_generate_prepend is not None:
             run_args.append(self._cmake_generate_prepend)
@@ -374,26 +387,21 @@ class Doxygen(RunCommand):
         args = [self._doxygen_bin, self._doxy_file_out]
         self.run_command(*args, cwd=self._doxy_working_dir)
 
+    _OPERATOR_NOISE = frozenset([
+        "operator=", "operator<=", "operator>=", "operator==", "operator!=",
+        "operator<", "operator>", "operator[]", "operator++", "operator--",
+        "operator()", "operator->", "operator+",
+    ])
+
     def get_warnings(self):
-        warnings = []
-        if os.path.exists(self._log_file_out):
-            with open(self._log_file_out, 'r') as log_file:
-                for item in log_file.read().split('\n'):
-                    if len(item) > 0:
-                        found = False
-                        for check in ["operator=", "operator<=", "operator>=",
-                                      "operator==", "operator!=", "operator<",
-                                      "operator>", "operator[]", "operator++",
-                                      "operator--", "operator()", "operator->",
-                                      "operator!=", "operator+"]:
-                            if check in item:
-                                found = True
-                        if not found:
-                            warnings.append(item)
-            return warnings
-        else:
+        if not os.path.exists(self._log_file_out):
             print("ERROR: Doxygen log file not found, please generate doxygen first")
             return None
+        with open(self._log_file_out, 'r') as log_file:
+            return [
+                item for item in log_file.read().split('\n')
+                if item and not any(op in item for op in self._OPERATOR_NOISE)
+            ]
 
 
 class Clang:
@@ -491,8 +499,10 @@ class ClangThrowMap(Clang):
             self._generate_throw_map_for_file(item)
 
     def _process_throw(self, node):
-        # Process the throw expression to extract relevant information
-        function_node = self._get_full_name(self._find_containing_function(node))
+        containing = self._find_containing_function(node)
+        if containing is None:
+            return
+        function_node = self._get_full_name(containing)
         throw_type = self._find_throw_type(node)
         self._throw_map[function_node] = throw_type
 
@@ -517,11 +527,27 @@ def check_for_python_lib(python_lib, fail_on_missing=True, display_name=None):
     except ImportError:
         if display_name is not None:
             python_lib = display_name
-        print(f"ERROR: {python_lib} (via pip) to be installed to run this tool")
-        print(f"ERROR: run python3 -m uv pip install {python_lib}")
+        print(f"ERROR: {python_lib} needs to be installed (via pip) to run this tool")
+        print(f"ERROR: run: python3 -m uv pip install {python_lib}")
         if fail_on_missing:
             sys.exit(1)
         return False
+
+
+def check_for_python_libs(python_libs, fail_on_missing=True):
+    """ Check if the python libraries are installed """
+    missing = []
+    for item in python_libs:
+        display_name = item
+        if isinstance(item, tuple):
+            item, display_name = item
+        if not check_for_python_lib(item, fail_on_missing=False, display_name=display_name):
+            missing.append(display_name)
+    if missing and fail_on_missing:
+        print(f"ERROR: The following python libraries need to be installed to run this tool: {', '.join(missing)}")
+        print(f"ERROR: run python3 -m uv pip install {' '.join(missing)}")
+        sys.exit(1)
+    return not missing
 
 
 def check_for_tool(tool, fail_on_missing=True, tool_path=None):
@@ -538,6 +564,21 @@ def check_for_tool(tool, fail_on_missing=True, tool_path=None):
     return None
 
 
+def check_native_build_tools():
+    """Check that a C/C++ compiler and autotools are available.
+
+    vcpkg builds some dependencies (e.g. gmp) from source using autotools.
+    The gmp portfile uses AUTOCONFIG, so vcpkg runs autoreconf before
+    configure, requiring m4 and autoconf in addition to cc, c++, and make.
+    Fail early with a clear message rather than deep inside a vcpkg build.
+    """
+    import sys
+    if sys.platform == 'win32':
+        return
+    for tool in ("cc", "c++", "make", "m4", "autoconf"):
+        check_for_tool(tool)
+
+
 def confirm_auto_fix():
     user_input = ""
     while user_input not in ["y", "n"]:
@@ -550,14 +591,43 @@ def parse_version(sdk_path):
     with open(os.path.join(sdk_path, 'CMakeLists.txt')) as listfile:
         content = listfile.read()
         groups = re.search(r"set\(OusterSDK_VERSION_STRING ([^-\)]+)(-(.*))?\)", content)
+        if groups is None:
+            raise RuntimeError("Could not parse SDK version from CMakeLists.txt")
         return groups.group(1) + (groups.group(3) or "")
 
 
-def initialize_vcpkg(vcpkg_dir, reinit=False):
-    if reinit:
-        shutil.rmtree(vcpkg_dir, ignore_errors=True)
+def rmtree_readonly(path):
+    """Remove a directory tree if it exists, handling read-only files on Windows.
 
-    if not os.path.exists(vcpkg_dir) or reinit:
+    On Windows, vcpkg and git objects are often marked read-only.  This helper
+    retries each failed removal after stripping the read-only bit.  All errors
+    other than a missing-path are propagated to the caller.
+    """
+    import stat
+
+    if not os.path.exists(path):
+        return
+
+    def _on_error(func, fpath, exc_info):
+        try:
+            os.chmod(fpath, stat.S_IWRITE)
+            func(fpath)
+        except PermissionError:
+            raise
+        except OSError:
+            raise
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_on_error)
+    else:
+        shutil.rmtree(path, onerror=_on_error)
+
+
+def initialize_vcpkg(vcpkg_dir, reinit=False):
+    if reinit and os.path.exists(vcpkg_dir):
+        rmtree_readonly(vcpkg_dir)
+
+    if not os.path.exists(vcpkg_dir):
         import git
         print("Initializing build toolchains")
         git.Repo.clone_from('https://github.com/microsoft/vcpkg.git', vcpkg_dir)
@@ -572,9 +642,11 @@ def initialize_vcpkg(vcpkg_dir, reinit=False):
         print("Updating git repository for build toolchains")
         # Initialize the repo object pointing to existing dir
         repo = git.Repo(vcpkg_dir)
-        # Pull the latest changes from the origin remote
+        # Fetch and hard-reset to origin so any local modifications left by a
+        # previous build (e.g. generated files) don't block the update.
         repo.remotes.origin.fetch()
-        repo.remotes.origin.pull()
+        branch = repo.active_branch.name
+        repo.git.reset("--hard", f"origin/{branch}")
 
 
 def perf_json_combine(perf_jsons, output_path):
@@ -612,14 +684,15 @@ def get_env_from_sourced_shell(shell_script):
 
 def generate_compile_commands(output, sdk_dir, artifact_dir, build_dir,
                               toolchain=None, triplet=None,
-                              manifest_mode=True, cmake_path="cmake", env=None):
+                              manifest_mode=True, cmake_path="cmake",
+                              env=None, cmake_args=[]):
     manifest_mode_text = "ON" if manifest_mode else "OFF"
-    cmake_args = ["-DBUILD_TESTING=ON",
-                  "-DBUILD_PYTHON_MODULE=ON",
-                  "-DSKIP_SDK_FIND=ON",
-                  "-DUSE_OPENMP=OFF",
-                  f"-DPYTHON_EXECUTABLE={sys.executable}",
-                  "-DBUILD_EXAMPLES=ON"]
+    cmake_args.extend(["-DBUILD_TESTING=ON",
+                       "-DBUILD_PYTHON_MODULE=ON",
+                       "-DSKIP_SDK_FIND=ON",
+                       "-DUSE_OPENMP=OFF",
+                       f"-DPYTHON_EXECUTABLE={sys.executable}",
+                       "-DBUILD_EXAMPLES=ON"])
 
     if toolchain is not None:
         cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={toolchain}")
@@ -639,9 +712,12 @@ def generate_compile_commands(output, sdk_dir, artifact_dir, build_dir,
                   env=env,
                   tty=True)
     cmake.generate()
-    cmake.build(targets=["ouster_generate_header", "cpp_gen"])
+    cmake.build(targets=["cpp_gen"])
     compile_commands_json = os.path.join(compile_commands_dir, "**",
                                          "compile_commands.json")
-    compile_commands_json = glob.glob(compile_commands_json,
-                                      recursive=True)[0]
+    results = glob.glob(compile_commands_json, recursive=True)
+    if not results:
+        raise FileNotFoundError(
+            f"compile_commands.json not found under {compile_commands_dir}")
+    compile_commands_json = results[0]
     shutil.copy(compile_commands_json, output)

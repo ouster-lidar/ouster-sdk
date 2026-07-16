@@ -4,16 +4,14 @@ All rights reserved.
 """
 
 from enum import Enum
-from typing import Callable, Union
+from typing import Union
 import logging
 
 import numpy as np
 
-from ouster.sdk._bindings.client import (LidarScan, SensorInfo, Packet)
-from ouster.sdk._bindings.client import destagger as _destagger
+from ouster.sdk._bindings.client import (SensorInfo, Packet)
 
-from ouster.sdk._bindings.client import XYZLut as client_XYZLut
-from ouster.sdk._bindings.client import XYZLutFloat as client_XYZLutFloat
+from ouster.sdk._bindings.client import destagger
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -49,6 +47,8 @@ class ChanField:
     RAW32_WORD9 = "RAW32_WORD9"
     NORMALS = "NORMALS"
     NORMALS2 = "NORMALS2"
+    GROUND = "GROUND"
+    GROUND2 = "GROUND2"
     IMU_ACC = "IMU_ACC"
     IMU_GYRO = "IMU_GYRO"
     IMU_TIMESTAMP = "IMU_TIMESTAMP"
@@ -98,98 +98,6 @@ def stagger(info: SensorInfo,
         A staggered numpy array of the same shape
     """
     return destagger(info, fields, inverse=True)
-
-
-def destagger(info: SensorInfo,
-              fields: np.ndarray,
-              inverse=False) -> np.ndarray:
-    """Return a destaggered copy of the provided fields.
-
-    In the default staggered representation, each column corresponds to a
-    single timestamp. A destaggered representation compensates for the
-    azimuth offset of each beam, returning columns that correspond to a
-    single azimuth angle.
-
-    Args:
-        info: Sensor metadata associated with the provided data
-        fields: A numpy array of shape H X W or H X W X N
-        inverse: perform inverse "staggering" operation
-
-    Returns:
-        A destaggered numpy array of the same shape
-    """
-    shifts = info.format.pixel_shift_by_row
-
-    if fields.shape[0] != info.h or fields.shape[1] != info.w:
-        raise ValueError("Array must match SensorInfo dimension.")
-
-    return _destagger(fields, shifts, inverse)
-
-
-def XYZLut(
-        info: SensorInfo,
-        use_extrinsics: bool = False
-) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
-    """Return a function that can project scans into Cartesian coordinates.
-
-    If called with a numpy array representing a range image, the range image
-    must be in "staggered" form, where each column corresponds to a single
-    measurement block. LidarScan fields are always staggered.
-
-    Internally, this will pre-compute a lookup table using the supplied
-    intrinsic parameters. XYZ points are returned as a H x W x 3 array of
-    doubles, where H is the number of beams and W is the horizontal resolution
-    of the scan.
-
-    The coordinates are reported in meters in the *sensor frame* (when
-    ``use_extrinsics`` is False, default) as defined in the sensor documentation.
-
-    However, the result is returned in the "extrinsics frame" if
-    ``use_extrinsics`` is True, which makes additional transform from
-    "sensor frame" to "extrinsics frame" using the homogeneous 4x4 transform
-    matrix from ``info.extrinsic`` property.
-
-    Args:
-        info: sensor metadata
-        use_extrinsics: if True, applies the ``info.extrinsic`` transform to the
-                        resulting "sensor frame" coordinates and returns the
-                        result in "extrinsics frame".
-
-    Returns:
-        A function that computes a point cloud given a range image
-    """
-    lut = client_XYZLut(info, use_extrinsics)
-
-    def res(ls: Union[LidarScan, np.ndarray]) -> np.ndarray:
-        if isinstance(ls, LidarScan):
-            xyz = lut(ls)
-        else:
-            # will create a temporary to cast if dtype != uint32
-            xyz = lut(ls.astype(np.uint32, copy=False))
-
-        return xyz.reshape(info.format.pixels_per_column,
-                           info.format.columns_per_frame, 3)
-
-    return res
-
-
-def XYZLutFloat(
-        info: SensorInfo,
-        use_extrinsics: bool = False
-) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
-    lut = client_XYZLutFloat(info, use_extrinsics)
-
-    def res(ls: Union[LidarScan, np.ndarray]) -> np.ndarray:
-        if isinstance(ls, LidarScan):
-            xyz = lut(ls)
-        else:
-            # will create a temporary to cast if dtype != uint32
-            xyz = lut(ls.astype(np.uint32, copy=False))
-
-        return xyz.reshape(info.format.pixels_per_column,
-                           info.format.columns_per_frame, 3)
-
-    return res
 
 
 def packet_ts(packet: Packet) -> int:

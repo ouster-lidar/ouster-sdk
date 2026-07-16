@@ -1,6 +1,6 @@
-#include <ouster/client.h>
-#include <ouster/lidar_scan.h>
-#include <ouster/os_pcap.h>
+#include <ouster/core/lidar_frame.h>
+#include <ouster/pcap/os_pcap.h>
+#include <ouster/sensor/client.h>
 
 #include <cstdlib>
 #include <iostream>

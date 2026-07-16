@@ -2,7 +2,7 @@ import click
 import os
 import glob
 import re
-from packaging.version import Version
+import sys
 import subprocess
 
 
@@ -30,6 +30,8 @@ def extended_doc_check(file_path):
         function_def = f"{func_type} {func_name}{func_args}".strip()
 
         loc = member.find('location')
+        if loc is None:
+            continue
         function = {
             'function_def': function_def,
             'file': loc.attrib['file'],
@@ -53,7 +55,7 @@ def extended_doc_check(file_path):
     return inline_param_issues, block_param_issues
 
 
-@click.command()
+@click.command(name="doxygen")
 @click.pass_context
 @click.option('--doxygen-bin',
               default="doxygen",
@@ -79,20 +81,27 @@ def build_doxygen_docs(ctx, doxygen_bin, output_dir,
                        no_werror, warning_log,
                        no_inline_param_check, param_log):
     """Check the status of doxygen commenting in the cpp code."""
+    if sys.platform == "win32":
+        raise click.ClickException("not supported on windows yet")
     ctx.obj.build_libs.check_for_tool(doxygen_bin)
-    ctx.obj.build_libs.check_for_python_lib("xml.etree.ElementTree")
+    ctx.obj.build_libs.check_for_python_libs(["xml.etree.ElementTree"])
+    from packaging.version import Version
     doxygen_version = subprocess.run([doxygen_bin, "-v"],
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT).stdout
-    doxygen_version = doxygen_version.decode('utf-8')
-    doxygen_version = doxygen_version.split(" ")[0]
+    doxygen_version = doxygen_version.decode('utf-8').split(" ")[0].strip()
     ci_version = "1.11.0"
     fail = False
-    if Version(doxygen_version) < Version(ci_version):
+    try:
+        parsed_version = Version(doxygen_version)
+    except Exception:
+        raise RuntimeError(
+            f"Could not parse doxygen version from output: {doxygen_version!r}")
+    if parsed_version < Version(ci_version):
         raise RuntimeError(f"ERROR: doxygen needs to be updated, CI version is {ci_version}" +
                            f"       current doxygen version is {doxygen_version}")
 
-    if Version(doxygen_version) > Version(ci_version):
+    if parsed_version > Version(ci_version):
         print(f"WARNING: doxygen version is greater than {ci_version}, results might differ from CI output")
         print(f"         current doxygen version is {doxygen_version}")
 
@@ -165,7 +174,7 @@ def build_doxygen_docs(ctx, doxygen_bin, output_dir,
 
 
 def import_module(click_context):
-    click_context.docs_group.add_command(build_doxygen_docs)
+    click_context.build_group.add_command(build_doxygen_docs)
 
 
 def finalize(click_context):

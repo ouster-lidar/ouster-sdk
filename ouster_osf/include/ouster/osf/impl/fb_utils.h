@@ -13,11 +13,11 @@
 #include "flatbuffers/flatbuffers.h"
 #include "header_generated.h"
 #include "metadata_generated.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/impl/basics.h"
-#include "ouster/visibility.h"
 
-// OSF v2 basic types for LidarSensor and LidarScan/Imu Streams
+// OSF v2 basic types for LidarSensor and LidarFrame/Imu Streams
 #include "os_sensor/lidar_scan_stream_generated.h"
 #include "os_sensor/lidar_sensor_generated.h"
 #include "ouster/osf/buffer.h"
@@ -36,8 +36,8 @@ namespace impl {
  * @param[in] fbb The flatbuffer builder to use to make the entry.
  * @return An offset into a flatbuffer for the new entry.
  */
-flatbuffers::Offset<gen::MetadataEntry> make_entry(
-    const MetadataEntry& entry, flatbuffers::FlatBufferBuilder& fbb);
+flatbuffers::Offset<gen::MetadataEntry> make_entry(const MetadataEntry& entry,
+                                                   flatbuffers::FlatBufferBuilder& fbb);
 
 /**
  * Serialize the MetadataStore to the specified flatbuffer builder
@@ -125,8 +125,7 @@ bool check_osf_chunk_buf(const ouster::sdk::osf::OsfBuffer& buf);
  * @return The transformed vector.
  **/
 template <typename T>
-OUSTER_API_FUNCTION std::vector<T> vector_from_fb_vector(
-    const flatbuffers::Vector<T>* fb_vec);
+OUSTER_API_FUNCTION std::vector<T> vector_from_fb_vector(const flatbuffers::Vector<T>* fb_vec);
 
 // ============ File operations ==========================
 
@@ -146,8 +145,8 @@ OUSTER_API_FUNCTION std::vector<T> vector_from_fb_vector(
  *         size + 4 bytes (4 bytes for CRC field)
  */
 OUSTER_API_FUNCTION
-uint64_t buffer_to_file(const uint8_t* buf, uint64_t size,
-                        const std::string& filename, bool append = false);
+uint64_t buffer_to_file(const uint8_t* buf, uint64_t size, const std::string& filename,
+                        bool append = false);
 
 /**
  * Saves the content of Flatbuffer builder to the file with CRC32 field
@@ -163,8 +162,8 @@ uint64_t buffer_to_file(const uint8_t* buf, uint64_t size,
  *         size + 4 bytes (4 bytes for CRC field)
  */
 OUSTER_API_FUNCTION
-uint64_t builder_to_file(flatbuffers::FlatBufferBuilder& builder,
-                         const std::string& filename, bool append = false);
+uint64_t builder_to_file(flatbuffers::FlatBufferBuilder& builder, const std::string& filename,
+                         bool append = false);
 
 /**
  * Starts the OSF v2 file with a header (in INVALID state).
@@ -188,10 +187,9 @@ uint64_t start_osf_file(const std::string& filename);
  * @return Number of bytes actually written to the file.
  */
 OUSTER_API_FUNCTION
-uint64_t finish_osf_file(const std::string& filename, uint64_t metadata_offset,
-                         uint32_t metadata_size,
-                         ouster::sdk::core::Version version =
-                             ouster::sdk::osf::OsfFile::CURRENT_VERSION);
+uint64_t finish_osf_file(
+    const std::string& filename, uint64_t metadata_offset, uint32_t metadata_size,
+    const ouster::sdk::core::Version& version = ouster::sdk::osf::OsfFile::CURRENT_VERSION);
 
 }  // namespace impl
 }  // namespace osf

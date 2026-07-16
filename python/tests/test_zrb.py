@@ -1,8 +1,7 @@
 import pytest
 import tempfile
 import numpy as np
-from ouster.sdk.core import SensorInfo
-from ouster.sdk.zone_monitor import Zrb
+from ouster.sdk.core import SensorInfo, Zrb
 
 
 def test_client_rendered_zone_write_checks():

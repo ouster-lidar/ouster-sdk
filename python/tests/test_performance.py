@@ -1,6 +1,7 @@
-from ouster.sdk.core import dewarp, transform
-from ouster.sdk.util.parsing import scan_to_packets  # type: ignore
+from ouster.sdk.core import dewarp, transform, interp_pose
+from ouster.sdk.util.parsing import frame_to_packets  # type: ignore
 from ouster.sdk import core, open_source
+from ouster.sdk.algorithm import normals
 import pytest
 import time
 import numpy as np
@@ -59,66 +60,66 @@ def profile(request, record_property):
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_destagger(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
+def test_perf_destagger(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
-    rng = scan.field(core.ChanField.RANGE)
+    rng = frame.field(core.ChanField.RANGE)
     rngs = []
-    for i in range(num_iters):
+    for i in range(min(num_iters, 8000)):  # limit memory usage
         cpy = np.copy(rng)
         rngs.append(cpy)
 
     # perform the actual test
     profile.start()
     for i in range(num_iters):
-        core.destagger(meta, rngs[i])
+        core.destagger(meta, rngs[i % len(rngs)])
     profile.end(num_iters)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_xyz(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
+def test_perf_xyz(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
     xyzlut = core.XYZLut(meta)
-    rng = scan.field(core.ChanField.RANGE)
+    rng = frame.field(core.ChanField.RANGE)
     rngs = []
-    for i in range(num_iters):
+    for i in range(min(num_iters, 8000)):  # limit memory usage
         cpy = np.copy(rng)
         rngs.append(cpy)
 
     # perform the actual test
     profile.start()
     for i in range(num_iters):
-        xyzlut(rngs[i])
+        xyzlut(rngs[i % len(rngs)])
     profile.end(num_iters)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_dwarp(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
+def test_perf_dwarp(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
     xyzlut = core.XYZLut(meta)
-    rng = scan.field(core.ChanField.RANGE)
+    rng = frame.field(core.ChanField.RANGE)
     xyz = xyzlut(rng)
 
     # perform the actual test
     profile.start()
     for i in range(num_iters):
-        dewarp(xyz, scan.pose)
+        dewarp(xyz, frame.body_to_world)
     profile.end(num_iters)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_transform(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
+def test_perf_transform(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
     xyzlut = core.XYZLut(meta)
-    rng = scan.field(core.ChanField.RANGE)
+    rng = frame.field(core.ChanField.RANGE)
     xyz = xyzlut(rng)
-    pose = scan.pose[0]
+    pose = frame.body_to_world[0]
 
     # perform the actual test
     profile.start()
@@ -130,26 +131,26 @@ def test_perf_transform(scan: core.LidarScan, meta: core.SensorInfo, profile) ->
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize('happy_packet', [True, False])
 @pytest.mark.performance
-def test_perf_batching(scan: core.LidarScan, meta: core.SensorInfo, profile, happy_packet) -> None:
-    # do setup for batching num_iters scans worth of packets
+def test_perf_batching(frame: core.LidarFrame, meta: core.SensorInfo, profile, happy_packet) -> None:
+    # do setup for batching num_iters frames worth of packets
     num_iters = profile.iterations(400)
     packets = []
     for i in range(num_iters):
-        scan.frame_id = scan.frame_id + 1
-        scan.status[:] = 1
+        frame.frame_id = frame.frame_id + 1
+        frame.status[:] = 1
         if not happy_packet:
             for i in range(64):
-                scan.status[16 * i] = 0
-        for packet in scan_to_packets(scan, meta):
+                frame.status[16 * i] = 0
+        for packet in frame_to_packets(frame, meta):
             packets.append(packet)
-    batcher = core.ScanBatcher(meta)
-    new_scans = [core.LidarScan(meta)] * num_iters
+    batcher = core.FrameBatcher(meta)
+    new_frames = [core.LidarFrame(meta)] * num_iters
 
     # perform the actual test
     num_batched = 0
     profile.start()
     for p in packets:
-        if batcher(p, new_scans[num_batched]):
+        if batcher.batch(p, new_frames[num_batched]):
             num_batched = num_batched + 1
     profile.end(num_iters)
     assert num_batched == num_iters
@@ -158,16 +159,16 @@ def test_perf_batching(scan: core.LidarScan, meta: core.SensorInfo, profile, hap
 def _prepare_destaggered_returns():
     """Return destaggered XYZ/range arrays and sensor origins for first/second returns."""
     src = open_source(OSFS_DATA_DIR + "/single_scan_016.osf")
-    scans = next(iter(src))
-    scan = scans[0]
+    frames = next(iter(src))
+    frame = frames[0]
     info = src.sensor_info[0]
     xyzlut = core.XYZLut(info)
     h, w = info.h, info.w
 
     def destagger_return(field_name):
-        if not scan.has_field(field_name):
+        if not frame.has_field(field_name):
             return None, None
-        field = scan.field(field_name)
+        field = frame.field(field_name)
         xyz = xyzlut(field).reshape(h, w, 3)
         xyz_destaggered = core.destagger(info, xyz)
         range_destaggered = core.destagger(info, field)
@@ -186,7 +187,9 @@ def test_perf_normals_single_return(profile) -> None:
 
     profile.start()
     for _ in range(num_iters):
-        _ = core.normals(first_xyz, first_range, sensor_origins_xyz=sensor_origins_xyz)
+        _ = normals(
+            first_xyz, first_range,
+            sensor_origins_xyz=sensor_origins_xyz)
     profile.end(num_iters)
 
 
@@ -198,7 +201,7 @@ def test_perf_normals_dual_return(profile) -> None:
     num_iters = profile.iterations(800)
     profile.start()
     for _ in range(num_iters):
-        _ = core.normals(
+        _ = normals(
             first_xyz,
             first_range,
             second_xyz,
@@ -208,24 +211,24 @@ def test_perf_normals_dual_return(profile) -> None:
     profile.end(num_iters)
 
 
-# now for each scan source type
+# now for each frame source type
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_osf_save(scan: core.LidarScan, meta: core.SensorInfo, profile, tmp_path) -> None:
+def test_perf_osf_save(frame: core.LidarFrame, meta: core.SensorInfo, profile, tmp_path) -> None:
     # setup the test
-    # save N scans to OSF and close
+    # save N frames to OSF and close
     from ouster.sdk.osf import Writer
     file_name = str(tmp_path / "test.osf")
     num_iters = profile.iterations(40)
-    scans = []
+    frames = []
     for i in range(num_iters):
-        scans.append(copy.copy(scan))
+        frames.append(copy.copy(frame))
 
     # perform the actual test
     profile.start()
     writer = Writer(file_name, meta)
-    for scan in scans:
-        writer.save(0, scan)
+    for frame in frames:
+        writer.save(0, frame)
     writer.close()
     profile.end(num_iters)
 
@@ -238,16 +241,16 @@ def tmp_osf(tmp_path_factory, request):
     fn = str(tmp_path_factory.mktemp("data") / "test.osf")
     src = open_source(OSFS_DATA_DIR + "/OS-1-128_v2.3.0_1024x10_lb_n3.osf")
     meta = src.sensor_info
-    scan = next(iter(src))[0]
+    frame = next(iter(src))[0]
     writer = Writer(fn, meta)
     count = 100 if request.config.getoption("--performance") else 2
     if request.config.getoption("--num-iterations"):
         count = int(request.config.getoption("--num-iterations"))
     for i in range(count):
-        writer.save(0, scan)
-        scan.frame_id = scan.frame_id + 1
-        scan.packet_timestamp[:] = scan.packet_timestamp + 100000000
-        scan.timestamp[:] = scan.timestamp + 100000000
+        frame.frame_id = frame.frame_id + 1
+        frame.packet_timestamp[:] = frame.packet_timestamp + 100000000
+        frame.timestamp[:] = frame.timestamp + 100000000
+        writer.save(0, frame)
     writer.close()
     return fn
 
@@ -262,7 +265,7 @@ def tmp_pcap(tmp_path_factory, request):
     fn_json = str(directory / "test.json")
     src = open_source(OSFS_DATA_DIR + "/OS-1-128_v2.3.0_1024x10_lb_n3.osf")
     meta = src.sensor_info[0]
-    scan = next(iter(src))[0]
+    frame = next(iter(src))[0]
     count = 100 if request.config.getoption("--performance") else 2
     if request.config.getoption("--num-iterations"):
         count = int(request.config.getoption("--num-iterations"))
@@ -272,13 +275,13 @@ def tmp_pcap(tmp_path_factory, request):
     handle = _pcap.record_initialize(fn, 2**16)
     for i in range(count):
         # convert to packets and save
-        for packet in scan_to_packets(scan, meta):
+        for packet in frame_to_packets(frame, meta):
             _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", meta.config.udp_port_lidar,
                                 meta.config.udp_port_lidar, packet.buf, packet.host_timestamp / 1e9)
 
-        scan.frame_id = scan.frame_id + 1
-        scan.packet_timestamp[:] = scan.packet_timestamp + 100000000
-        scan.timestamp[:] = scan.timestamp + 100000000
+        frame.frame_id = frame.frame_id + 1
+        frame.packet_timestamp[:] = frame.packet_timestamp + 100000000
+        frame.timestamp[:] = frame.timestamp + 100000000
 
     _pcap.record_uninitialize(handle)
     return fn
@@ -286,8 +289,8 @@ def tmp_pcap(tmp_path_factory, request):
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_osf_read(scan: core.LidarScan, meta: core.SensorInfo, profile, tmp_osf) -> None:
-    # Read all scans in the OSF
+def test_perf_osf_read(frame: core.LidarFrame, meta: core.SensorInfo, profile, tmp_osf) -> None:
+    # Read all frames in the OSF
     from ouster.sdk import open_source
     num_iters = 0
 
@@ -299,20 +302,20 @@ def test_perf_osf_read(scan: core.LidarScan, meta: core.SensorInfo, profile, tmp
 
 @pytest.mark.performance
 def test_perf_osf_open(profile, tmp_osf) -> None:
-    # open the osf and read one scan N times
+    # open the osf and read one frame N times
     from ouster.sdk import open_source
     num_iters = profile.iterations(40)
 
     profile.start()
     for i in range(num_iters):
-        for scan in open_source(tmp_osf):
+        for frame in open_source(tmp_osf):
             break
     profile.end(num_iters)
 
 
 @pytest.mark.performance
 def test_perf_pcap_read(profile, tmp_pcap) -> None:
-    # Read all scans in the PCAP
+    # Read all frames in the PCAP
     from ouster.sdk import open_source
     num_iters = 0
 
@@ -324,36 +327,36 @@ def test_perf_pcap_read(profile, tmp_pcap) -> None:
 
 @pytest.mark.performance
 def test_perf_pcap_open(profile, tmp_pcap) -> None:
-    # open the osf and read one scan N times
+    # open the osf and read one frame N times
     from ouster.sdk import open_source
     num_iters = profile.iterations(40)
 
     profile.start()
     for i in range(num_iters):
-        for scan in open_source(tmp_pcap):
+        for frame in open_source(tmp_pcap):
             break
     profile.end(num_iters)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_pcap_save(scan: core.LidarScan, meta: core.SensorInfo, profile, tmp_path) -> None:
+def test_perf_pcap_save(frame: core.LidarFrame, meta: core.SensorInfo, profile, tmp_path) -> None:
     # setup the test
-    # save N scans to PCAP and close
+    # save N frames to PCAP and close
     num_iters = profile.iterations(40)
 
     import ouster.sdk._bindings.pcap as _pcap
     fn = str(tmp_path / "test.pcap")
     fn_json = str(tmp_path / "test.json")
 
-    # make the scans
-    scans = []
+    # make the frames
+    frames = []
     for i in range(num_iters):
-        scan2 = copy.copy(scan)
-        scans.append(scan2)
-        scan.frame_id = scan.frame_id + 1
-        scan.packet_timestamp[:] = scan.packet_timestamp + 100000000
-        scan.timestamp[:] = scan.timestamp + 100000000
+        frame2 = copy.copy(frame)
+        frames.append(frame2)
+        frame.frame_id = frame.frame_id + 1
+        frame.packet_timestamp[:] = frame.packet_timestamp + 100000000
+        frame.timestamp[:] = frame.timestamp + 100000000
 
     # perform the actual test
     profile.start()
@@ -361,9 +364,9 @@ def test_perf_pcap_save(scan: core.LidarScan, meta: core.SensorInfo, profile, tm
         f.write(meta.to_json_string())
 
     handle = _pcap.record_initialize(fn, 2**16)
-    for scan in scans:
+    for frame in frames:
         # convert to packets and save
-        for packet in scan_to_packets(scan, meta):
+        for packet in frame_to_packets(frame, meta):
             _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", meta.config.udp_port_lidar or 0,
                                 meta.config.udp_port_lidar or 0, packet.buf, packet.host_timestamp / 1e9)
     _pcap.record_uninitialize(handle)
@@ -396,7 +399,7 @@ def test_perf_osf_cli_read(profile, tmp_osf, runner) -> None:
 
 @pytest.mark.performance
 def test_perf_osf_cli_slice(profile, tmp_osf, runner) -> None:
-    # slice the file to the last scan and run stats on it
+    # slice the file to the last frame and run stats on it
     from ouster.sdk import open_source
     l = len(open_source(tmp_osf))
 
@@ -407,3 +410,29 @@ def test_perf_osf_cli_slice(profile, tmp_osf, runner) -> None:
     profile.end(num_iters)
     print(result.output)
     assert result.exit_code == 0
+
+
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+@pytest.mark.performance
+def test_perf_interp_pose(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
+    # do setup
+    num_iters = profile.iterations(10)
+    num_interp = 4096
+    x_interp = np.linspace(0, 1, num_interp)
+
+    num_known = 64
+    x_known = np.linspace(0, 1, num_known)
+    x_poses_list = []
+
+    for i in range(num_known):
+        tr = np.eye(4)
+        # vary the position a bit
+        tr[3, 0:3] = np.array([i * 0.1, i * 0.05, i * 0.02])
+        x_poses_list.append(tr)
+    x_poses = np.array(x_poses_list)
+
+    # perform the actual test
+    profile.start()
+    for i in range(num_iters):
+        interp_pose(x_interp, x_known, x_poses)
+    profile.end(num_iters)

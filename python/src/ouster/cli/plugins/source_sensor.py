@@ -2,6 +2,7 @@ import json
 import click
 import requests
 import time
+import sys
 
 import ouster.sdk.core as core
 
@@ -99,7 +100,21 @@ def sensor_diagnostics(ctx: SourceCommandContext, click_ctx: click.core.Context,
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
-    """Display sensor metadata about the SOURCE."""  # Implements ouster-cli source <hostname> metadata
+    """DEPRECATED: Use sensor_info instead. Display sensor info about the SOURCE."""
+    sys.stderr.write("WARNING: This command is deprecated and will be removed in the future."
+                     " Use sensor_info instead.\n")
+    try:
+        click.echo(_Sensor(ctx.source_uri or "").fetch_metadata().to_json_string())
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+
+@click.command
+@click.pass_context
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
+                     retrieve_click_context=True)
+def sensor_sensor_info(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
+    """Display sensor info about the SOURCE."""
     try:
         click.echo(_Sensor(ctx.source_uri or "").fetch_metadata().to_json_string())
     except RuntimeError as e:
@@ -151,7 +166,8 @@ def update_fw(sensor, fw, expected_version = None, timeout = 120):
 
 
 @click.command
-@click.option('--update', metavar='FILENAME', default=None, type=str, help="Update the firmware to the provided file.")
+@click.option('--update', "--upgrade", metavar='FILENAME', default=None, type=str,
+              help="Update the firmware to the provided file.")
 @click.option('-t', '--timeout', default=120, type=int, help='Timeout for the update in seconds.')
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
@@ -306,6 +322,7 @@ def sensor_live_zones(ctx: SourceCommandContext, click_ctx: click.core.Context, 
 source.commands[OusterIoType.SENSOR]['config'] = sensor_config
 source.commands[OusterIoType.SENSOR]['userdata'] = sensor_userdata
 source.commands[OusterIoType.SENSOR]['metadata'] = sensor_metadata
+source.commands[OusterIoType.SENSOR]['sensor_info'] = sensor_sensor_info
 source.commands[OusterIoType.SENSOR]['network'] = sensor_network
 source.commands[OusterIoType.SENSOR]['diagnostics'] = sensor_diagnostics
 source.commands[OusterIoType.SENSOR]['restart'] = sensor_restart

@@ -12,13 +12,13 @@
 #include <map>
 
 #include "nonstd/optional.hpp"
-#include "ouster/metadata.h"
-#include "ouster/types.h"
+#include "ouster/core/metadata.h"
+#include "ouster/core/types.h"
 
 using namespace ouster::sdk::core;
 
 inline mat4d mkmat4d(const std::array<double, 16>& v) {
-    return Eigen::Map<const mat4d>(v.data()).transpose();
+    return Eigen::Map<const mat4d>(v.data());
 }
 
 inline std::string getenvs(const std::string& var) {
@@ -27,21 +27,17 @@ inline std::string getenvs(const std::string& var) {
 }
 
 void sinfo_populator(SensorInfo& info, const std::string& /*name*/, uint64_t sn,
-                     const std::string& fw_rev, const LidarMode mode,
-                     const std::string& prod_line, const DataFormat& format,
-                     const std::vector<double>& beam_azimuth_angles,
+                     const std::string& fw_rev, const LidarMode mode, const std::string& prod_line,
+                     const DataFormat& format, const std::vector<double>& beam_azimuth_angles,
                      const std::vector<double> beam_altitude_angles,
                      const double lidar_origin_to_beam_origin_mm,
-                     const mat4d& beam_to_lidar_transform,
-                     const mat4d& imu_to_sensor_transform,
-                     const mat4d& lidar_to_sensor_transform,
-                     const mat4d& extrinsic, const int init_id,
-                     const nonstd::optional<int> udp_port_lidar,
-                     const nonstd::optional<int> udp_port_imu,
-                     const std::string& build_date,
+                     const mat4d& beam_to_lidar_transform, const mat4d& imu_to_sensor_transform,
+                     const mat4d& lidar_to_sensor_transform, const mat4d& extrinsic,
+                     const int init_id, const nonstd::optional<int> udp_port_lidar,
+                     const nonstd::optional<int> udp_port_imu, const std::string& build_date,
                      const std::string& image_rev, const std::string& prod_pn,
                      const std::string& status, const CalibrationStatus& cal,
-                     const SensorConfig& config) {
+                     const SensorConfig& config, std::string client_version) {
     info.sn = sn;
     info.fw_rev = fw_rev;
     info.prod_line = prod_line;
@@ -52,7 +48,7 @@ void sinfo_populator(SensorInfo& info, const std::string& /*name*/, uint64_t sn,
     info.beam_to_lidar_transform = beam_to_lidar_transform;
     info.imu_to_sensor_transform = imu_to_sensor_transform;
     info.lidar_to_sensor_transform = lidar_to_sensor_transform;
-    info.extrinsic = extrinsic;
+    info.sensor_to_body = extrinsic;
     info.init_id = init_id;
     info.build_date = build_date;
     info.image_rev = image_rev;
@@ -63,6 +59,7 @@ void sinfo_populator(SensorInfo& info, const std::string& /*name*/, uint64_t sn,
     info.config.lidar_mode = mode;
     info.config.udp_port_lidar = udp_port_lidar;
     info.config.udp_port_imu = udp_port_imu;
+    info.client_version = client_version;
 }
 
 static SensorInfo si_1_12_os1_991913000010_64;
@@ -96,27 +93,18 @@ static SensorInfo si_3_0_1_os_122246000293_128;
 // for lookup by name
 const std::map<std::string, SensorInfo*> expected_sensor_infos{
     {"1_12_os1-991913000010-64", &si_1_12_os1_991913000010_64},
-    {"1_12_os1-991937000062-16A0_legacy",
-     &si_1_12_os1_991937000062_16A0_legacy},
+    {"1_12_os1-991937000062-16A0_legacy", &si_1_12_os1_991937000062_16A0_legacy},
     {"1_12_os1-991937000062-64_legacy", &si_1_12_os1_991937000062_64_legacy},
     {"1_13_os1-991913000010-64", &si_1_13_os1_991913000010_64},
-    {"1_13_os1-991937000062-16A0_legacy",
-     &si_1_13_os1_991937000062_16A0_legacy},
-    {"1_13_os1-991937000062-32A02_legacy",
-     &si_1_13_os1_991937000062_32A02_legacy},
-    {"1_14_6cccd_os-882002000138-128_legacy",
-     &si_1_14_6cccd_os_882002000138_128_legacy},
-    {"1_14_6cccd_os-882002000138-32U0_legacy",
-     &si_1_14_6cccd_os_882002000138_32U0_legacy},
-    {"1_14_beta_os1-991937000062-16A0_legacy",
-     &si_1_14_beta_os1_991937000062_16A0_legacy},
-    {"1_14_beta_os1-991937000062-64_legacy",
-     &si_1_14_beta_os1_991937000062_64_legacy},
+    {"1_13_os1-991937000062-16A0_legacy", &si_1_13_os1_991937000062_16A0_legacy},
+    {"1_13_os1-991937000062-32A02_legacy", &si_1_13_os1_991937000062_32A02_legacy},
+    {"1_14_6cccd_os-882002000138-128_legacy", &si_1_14_6cccd_os_882002000138_128_legacy},
+    {"1_14_6cccd_os-882002000138-32U0_legacy", &si_1_14_6cccd_os_882002000138_32U0_legacy},
+    {"1_14_beta_os1-991937000062-16A0_legacy", &si_1_14_beta_os1_991937000062_16A0_legacy},
+    {"1_14_beta_os1-991937000062-64_legacy", &si_1_14_beta_os1_991937000062_64_legacy},
     {"ouster-studio-reduced-config-v1", &si_ouster_studio_reduced_config_v1},
-    {"2_0_rc2_os-992011000121-32U0_legacy",
-     &si_2_0_rc2_os_992011000121_32U0_legacy},
-    {"2_0_0_os1-992008000494-128_col_win_legacy",
-     &si_2_0_0_os1_992008000494_128_col_win_legacy},
+    {"2_0_rc2_os-992011000121-32U0_legacy", &si_2_0_rc2_os_992011000121_32U0_legacy},
+    {"2_0_0_os1-992008000494-128_col_win_legacy", &si_2_0_0_os1_992008000494_128_col_win_legacy},
     {"2_0_0_os1-991913000010-64", &si_2_0_0_os1_991913000010_64},
     {"2_1_2_os1-991913000010-64_legacy", &si_2_1_2_os1_991913000010_64_legacy},
     {"2_1_2_os1-991913000010-64", &si_2_1_2_os1_991913000010_64},
@@ -156,7 +144,8 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.beam_intrinsics.beam_to_lidar_transform.*",
       "$.'ouster-sdk'.extrinsic.*",
       "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"1_12_os1-991937000062-64_legacy",
      {"$.sensor_info.initialization_id",
       "$.lidar_data_format.columns_per_frame",
@@ -181,7 +170,8 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.beam_intrinsics.beam_to_lidar_transform.*",
       "$.'ouster-sdk'.extrinsic.*",
       "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"1_13_os1-991913000010-64",
      {"$.sensor_info.initialization_id",
       "$.lidar_data_format.columns_per_frame",
@@ -206,67 +196,52 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.beam_intrinsics.beam_to_lidar_transform.*",
       "$.'ouster-sdk'.extrinsic.*",
       "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"1_14_6cccd_os-882002000138-128_legacy",
      {"$.sensor_info.initialization_id", "$.lidar_data_format.column_window.*",
-      "$.lidar_data_format.udp_profile_lidar",
-      "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
+      "$.lidar_data_format.udp_profile_lidar", "$.lidar_data_format.udp_profile_imu",
+      "$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
+      "$.calibration_status.reflectivity.valid", "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
       "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"1_14_6cccd_os-882002000138-32U0_legacy",
      {"$.sensor_info.initialization_id", "$.lidar_data_format.column_window.*",
-      "$.lidar_data_format.udp_profile_lidar",
-      "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
+      "$.lidar_data_format.udp_profile_lidar", "$.lidar_data_format.udp_profile_imu",
+      "$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
+      "$.calibration_status.reflectivity.valid", "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
       "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"1_14_beta_os1-991937000062-16A0_legacy",
      {"$.sensor_info.initialization_id", "$.lidar_data_format.column_window.*",
-      "$.lidar_data_format.udp_profile_lidar",
-      "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
+      "$.lidar_data_format.udp_profile_lidar", "$.lidar_data_format.udp_profile_imu",
+      "$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
+      "$.calibration_status.reflectivity.valid", "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
       "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"1_14_beta_os1-991937000062-64_legacy",
      {"$.sensor_info.initialization_id", "$.lidar_data_format.column_window.*",
-      "$.lidar_data_format.udp_profile_lidar",
-      "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
+      "$.lidar_data_format.udp_profile_lidar", "$.lidar_data_format.udp_profile_imu",
+      "$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
+      "$.calibration_status.reflectivity.valid", "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
       "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.lidar_origin_to_beam_origin_mm",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"ouster-studio-reduced-config-v1",
      {"$.sensor_info.build_date",
       "$.sensor_info.build_rev",
@@ -301,161 +276,124 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.beam_intrinsics.beam_to_lidar_transform.*",
       "$.'ouster-sdk'.extrinsic.*",
       "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"2_0_rc2_os-992011000121-32U0_legacy",
-     {"$.sensor_info.initialization_id",
-      "$.lidar_data_format.udp_profile_lidar",
+     {"$.sensor_info.initialization_id", "$.lidar_data_format.udp_profile_lidar",
       "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
+      "$.imu_data_format.imu_packets_per_frame", "$.imu_data_format.imu_measurements_per_packet",
       "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.calibration_status.reflectivity.timestamp", "$.calibration_status.reflectivity.valid",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"2_0_0_os1-992008000494-128_col_win_legacy",
-     {"$.sensor_info.initialization_id",
-      "$.lidar_data_format.udp_profile_lidar",
+     {"$.sensor_info.initialization_id", "$.lidar_data_format.udp_profile_lidar",
       "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
+      "$.imu_data_format.imu_packets_per_frame", "$.imu_data_format.imu_measurements_per_packet",
       "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.calibration_status.reflectivity.timestamp", "$.calibration_status.reflectivity.valid",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"2_0_0_os1-991913000010-64",
-     {"$.sensor_info.initialization_id",
-      "$.lidar_data_format.udp_profile_lidar",
+     {"$.sensor_info.initialization_id", "$.lidar_data_format.udp_profile_lidar",
       "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
+      "$.imu_data_format.imu_packets_per_frame", "$.imu_data_format.imu_measurements_per_packet",
       "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.calibration_status.reflectivity.timestamp", "$.calibration_status.reflectivity.valid",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data",
+      "$.'ouster-sdk'.client_version"}},
     {"2_1_2_os1-991913000010-64_legacy",
-     {"$.sensor_info.initialization_id",
-      "$.lidar_data_format.udp_profile_lidar",
+     {"$.sensor_info.initialization_id", "$.lidar_data_format.udp_profile_lidar",
       "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
+      "$.imu_data_format.imu_packets_per_frame", "$.imu_data_format.imu_measurements_per_packet",
       "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.calibration_status.reflectivity.timestamp", "$.calibration_status.reflectivity.valid",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"2_1_2_os1-991913000010-64",
-     {"$.sensor_info.initialization_id",
-      "$.lidar_data_format.udp_profile_lidar",
+     {"$.sensor_info.initialization_id", "$.lidar_data_format.udp_profile_lidar",
       "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
+      "$.imu_data_format.imu_packets_per_frame", "$.imu_data_format.imu_measurements_per_packet",
       "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+      "$.calibration_status.reflectivity.timestamp", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.user_data", "$.'ouster-sdk'.client_version"}},
     {"2_2_os-992119000444-128_legacy",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
+      "$.calibration_status.reflectivity.valid", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"2_2_os-992119000444-128",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.user_data", "$.'ouster-sdk'.client_version"}},
     {"2_3_1_os-992146000760-128_legacy",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
+      "$.calibration_status.reflectivity.valid", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"2_3_1_os-992146000760-128",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.user_data", "$.'ouster-sdk'.client_version"}},
     {"2_4_0_os-992146000760-128_legacy",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
-      "$.calibration_status.reflectivity.valid",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
+      "$.calibration_status.reflectivity.valid", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"2_4_0_os-992146000760-128",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.beam_intrinsics.beam_to_lidar_transform.*",
+      "$.beam_intrinsics.beam_to_lidar_transform.*", "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.user_data", "$.'ouster-sdk'.client_version"}},
     {"2_5_0_os-992146000760-128_legacy",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
       "$.calibration_status.reflectivity.valid", "$.'ouster-sdk'.extrinsic.*",
       "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"2_5_0_os-992146000760-128",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}},
+     {
+         "$.lidar_data_format.header_type",
+         "$.imu_data_format.imu_packets_per_frame",
+         "$.imu_data_format.imu_measurements_per_packet",
+         "$.lidar_data_format.fps",
+         "$.lidar_data_format.fps",
+         "$.'ouster-sdk'.extrinsic.*",
+         "$.'ouster-sdk'.extrinsic.*",
+         "$.user_data",
+         "$.'ouster-sdk'.client_version",
+     }},
     {"3_0_1_os-122246000293-128_legacy",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
+     {"$.lidar_data_format.header_type", "$.imu_data_format.imu_packets_per_frame",
+      "$.imu_data_format.imu_measurements_per_packet", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
       "$.calibration_status.reflectivity.valid", "$.'ouster-sdk'.extrinsic.*",
       "$.'ouster-sdk'.extrinsic.*", "$.user_data"}},
     {"3_0_1_os-122246000293-128",
-     {"$.lidar_data_format.header_type",
-      "$.imu_data_format.imu_packets_per_frame",
-      "$.imu_data_format.imu_measurements_per_packet",
-      "$.lidar_data_format.fps", "$.lidar_data_format.fps",
-      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
-      "$.user_data"}}
+     {
+         "$.lidar_data_format.header_type",
+         "$.imu_data_format.imu_packets_per_frame",
+         "$.imu_data_format.imu_measurements_per_packet",
+         "$.lidar_data_format.fps",
+         "$.lidar_data_format.fps",
+         "$.'ouster-sdk'.extrinsic.*",
+         "$.'ouster-sdk'.extrinsic.*",
+         "$.user_data",
+         "$.'ouster-sdk'.client_version",
+     }}
 
 };
 // Add test data here: these are the base names for input .json files
@@ -486,7 +424,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.nmea_ignore_valid_char = false;
         config.sync_pulse_out_angle = 360;
         config.sync_pulse_out_frequency = 1;
-        config.operating_mode = OperatingMode::OPERATING_NORMAL;
+        config.operating_mode = OperatingMode::NORMAL;
         config.sync_pulse_out_pulse_width = 10;
         config.extra_options["window_rejection_enable"] = "1";
         sinfo_populator(si_1_12_os1_991913000010_64,
@@ -511,7 +449,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101396-03",
             "RUNNING",
             CalibrationStatus{},
-            config
+            config, ""
             );
         config.extra_options.clear();
         sinfo_populator(si_1_12_os1_991937000062_16A0_legacy,
@@ -536,7 +474,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         sinfo_populator(si_1_12_os1_991937000062_64_legacy,
@@ -561,7 +499,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         config = SensorConfig{};
@@ -581,7 +519,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_dest="169.254.91.92";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502;
-        config.operating_mode = OperatingMode::OPERATING_NORMAL;
+        config.operating_mode = OperatingMode::NORMAL;
         sinfo_populator(si_1_13_os1_991913000010_64,
             "",
             991913000010,
@@ -604,7 +542,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101396-03",
             "RUNNING",
             CalibrationStatus{},
-            config
+            config, ""
         );
 
         sinfo_populator(si_1_13_os1_991937000062_32A02_legacy,
@@ -629,7 +567,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "INITIALIZING",
             CalibrationStatus{},
-            {}
+            {}, ""
         );
 
         sinfo_populator(si_1_13_os1_991937000062_16A0_legacy,
@@ -654,7 +592,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         sinfo_populator(si_1_14_6cccd_os_882002000138_128_legacy,
@@ -679,7 +617,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102144-A",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         sinfo_populator(si_1_14_6cccd_os_882002000138_32U0_legacy,
@@ -704,7 +642,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102144-A",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         sinfo_populator( si_1_14_beta_os1_991937000062_16A0_legacy,
@@ -729,7 +667,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         sinfo_populator(si_1_14_beta_os1_991937000062_64_legacy,
@@ -754,7 +692,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "INITIALIZING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         sinfo_populator(si_ouster_studio_reduced_config_v1,
@@ -779,7 +717,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "",
             "",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, ""
         );
 
         sinfo_populator(si_2_0_rc2_os_992011000121_32U0_legacy,
@@ -804,7 +742,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102145-B",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, "0.1.0-dev0"
         );
 
         sinfo_populator(si_2_0_0_os1_992008000494_128_col_win_legacy,
@@ -829,11 +767,11 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102145-A",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, "0.2.0-dev0"
         );
 
         config = SensorConfig{};
-        config.operating_mode = OperatingMode::OPERATING_NORMAL;
+        config.operating_mode = OperatingMode::NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.lidar_mode = LidarMode::_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::OFF;
@@ -874,7 +812,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101396-03",
             "RUNNING",
             CalibrationStatus(),
-            config
+            config, ""
         );
 
         sinfo_populator(si_2_1_2_os1_991913000010_64_legacy,
@@ -899,11 +837,11 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101396-03",
             "RUNNING",
             CalibrationStatus(),
-            SensorConfig{}
+            SensorConfig{}, "ouster_client 0.2.2dev0"
         );
 
         config = SensorConfig{};
-        config.operating_mode = OperatingMode::OPERATING_NORMAL;
+        config.operating_mode = OperatingMode::NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.lidar_mode = LidarMode::_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::OFF;
@@ -945,7 +883,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101396-03",
             "RUNNING",
             CalibrationStatus{false, nonstd::nullopt},
-            config
+            config, ""
         );
 
         sinfo_populator(si_2_2_os_992119000444_128_legacy,
@@ -970,11 +908,11 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102145-05",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, "ouster_client 0.3.0"
         );
 
         config = SensorConfig{};
-        config.operating_mode = OperatingMode::OPERATING_NORMAL;
+        config.operating_mode = OperatingMode::NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
         config.lidar_mode = LidarMode::_1024x10;
@@ -1019,7 +957,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102145-05",
             "RUNNING",
             CalibrationStatus{true, "2021-05-14T20:45:35"},
-            config
+            config, ""
         );
 
         sinfo_populator(si_2_3_1_os_992146000760_128_legacy,
@@ -1044,7 +982,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, "ouster_client 0.4.1"
         );
 
         config = SensorConfig{};
@@ -1093,7 +1031,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus{true, "2021-11-23T05:37:45"},
-            config
+            config, ""
         );
 
         config = SensorConfig{};
@@ -1142,7 +1080,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus{true, "2021-11-23T05:37:45"},
-            config
+            config, ""
         );
 
         sinfo_populator(si_2_4_0_os_992146000760_128_legacy,
@@ -1167,7 +1105,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, "ouster_client 0.5.3dev3"
         );
 
         sinfo_populator( si_3_0_1_os_122246000293_128_legacy,
@@ -1192,26 +1130,26 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-104682-C",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}
+            SensorConfig{}, "ouster_client 0.7.1"
         );
 
         config = SensorConfig{};
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
         config.lidar_mode = LidarMode::_1024x10;
-        config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
+        config.multipurpose_io_mode = MultipurposeIOMode::OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
-        config.nmea_in_polarity = Polarity::POLARITY_ACTIVE_HIGH;
+        config.nmea_in_polarity = Polarity::ACTIVE_HIGH;
         config.nmea_leap_seconds = 0;
-        config.operating_mode = OperatingMode::OPERATING_NORMAL;
+        config.operating_mode = OperatingMode::NORMAL;
         config.phase_lock_enable = false;
         config.phase_lock_offset = 0;
         config.signal_multiplier = 1;
-        config.sync_pulse_in_polarity = Polarity::POLARITY_ACTIVE_HIGH;
+        config.sync_pulse_in_polarity = Polarity::ACTIVE_HIGH;
         config.sync_pulse_out_angle = 360;
         config.sync_pulse_out_frequency = 1;
-        config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
+        config.sync_pulse_out_polarity = Polarity::ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
         config.timestamp_mode = TimestampMode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="10.0.0.167";
@@ -1241,7 +1179,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-104682-C",
             "RUNNING",
             CalibrationStatus{true, "2022-11-29T02:00:08"},
-            config
+            config, ""
         );
 
         sinfo_populator( si_2_5_0_os_992146000760_128_legacy,
@@ -1266,7 +1204,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus(),
-            SensorConfig{}
+            SensorConfig{}, "ouster_client 0.8.0dev0"
         );
 
         config = SensorConfig{};
@@ -1315,7 +1253,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus{true, "2021-11-23T05:37:45"},
-            config
+            config, ""
         );
     }
 };
@@ -1369,26 +1307,20 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     EXPECT_EQ(si.config.lidar_mode, si_expected.config.lidar_mode);
     EXPECT_EQ(si.prod_line, si_expected.prod_line);
 
-    EXPECT_EQ(si.format.pixels_per_column,
-              si_expected.format.pixels_per_column);
-    EXPECT_EQ(si.format.columns_per_packet,
-              si_expected.format.columns_per_packet);
-    EXPECT_EQ(si.format.columns_per_frame,
-              si_expected.format.columns_per_frame);
-    EXPECT_EQ(si.format.pixel_shift_by_row,
-              si_expected.format.pixel_shift_by_row);
+    EXPECT_EQ(si.format.pixels_per_column, si_expected.format.pixels_per_column);
+    EXPECT_EQ(si.format.columns_per_packet, si_expected.format.columns_per_packet);
+    EXPECT_EQ(si.format.columns_per_frame, si_expected.format.columns_per_frame);
+    EXPECT_EQ(si.format.pixel_shift_by_row, si_expected.format.pixel_shift_by_row);
     EXPECT_EQ(si.format.column_window, si_expected.format.column_window);
 
     EXPECT_EQ(si.beam_azimuth_angles, si_expected.beam_azimuth_angles);
     EXPECT_EQ(si.beam_altitude_angles, si_expected.beam_altitude_angles);
-    EXPECT_EQ(si.lidar_origin_to_beam_origin_mm,
-              si_expected.lidar_origin_to_beam_origin_mm);
+    EXPECT_EQ(si.lidar_origin_to_beam_origin_mm, si_expected.lidar_origin_to_beam_origin_mm);
     EXPECT_EQ(si.beam_to_lidar_transform, si_expected.beam_to_lidar_transform);
 
     EXPECT_EQ(si.imu_to_sensor_transform, si_expected.imu_to_sensor_transform);
-    EXPECT_EQ(si.lidar_to_sensor_transform,
-              si_expected.lidar_to_sensor_transform);
-    EXPECT_EQ(si.extrinsic, si_expected.extrinsic);
+    EXPECT_EQ(si.lidar_to_sensor_transform, si_expected.lidar_to_sensor_transform);
+    EXPECT_EQ(si.sensor_to_body, si_expected.sensor_to_body);
     EXPECT_EQ(si.init_id, si_expected.init_id);
     EXPECT_EQ(si.config.udp_port_lidar, si_expected.config.udp_port_lidar);
     EXPECT_EQ(si.config.udp_port_imu, si_expected.config.udp_port_imu);
@@ -1408,6 +1340,7 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
         std::cout << "Actual: " << to_string(si.config) << std::endl;
     }
     EXPECT_EQ(si.config, si_expected.config);
+    EXPECT_EQ(si.client_version, si_expected.client_version);
 
     EXPECT_TRUE(si == si_expected);
     EXPECT_TRUE(si.has_fields_equal(si_expected));  // but the rest is the same
@@ -1416,8 +1349,7 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
 std::string my_replace(std::string source, const std::string& target,
                        const std::string& replacement) {
     size_t start_position = 0;
-    while ((start_position = source.find(target, start_position)) !=
-           std::string::npos) {
+    while ((start_position = source.find(target, start_position)) != std::string::npos) {
         source.replace(start_position, target.length(), replacement);
         start_position += replacement.length();
     }
@@ -1426,8 +1358,7 @@ std::string my_replace(std::string source, const std::string& target,
 
 // Use this to make a text file that you copy and paste into the
 // expected_issues map at the top
-void make_expected(const std::string& path,
-                   const std::vector<std::string>& actual_issues,
+void make_expected(const std::string& path, const std::vector<std::string>& actual_issues,
                    const std::string& param) {
     std::ofstream outfile;
 

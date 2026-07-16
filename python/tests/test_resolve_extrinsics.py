@@ -21,23 +21,23 @@ sensor_names = ["122150000150", "992313000353", "992225001114"]
 
 def test_open_source_with_file_that_has_no_valid_extrinsics():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT)
-    np.testing.assert_array_equal(ss.sensor_info[0].extrinsic, np.eye(4))
+    np.testing.assert_array_equal(ss.sensor_info[0].sensor_to_body, np.eye(4))
 
 
 def test_open_source_with_file_that_has_no_valid_extrinsics_but_supply_array():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT,
                      extrinsics=[np.ones((4, 4))])
-    np.testing.assert_array_equal(ss.sensor_info[0].extrinsic, np.ones((4, 4)))
+    np.testing.assert_array_equal(ss.sensor_info[0].sensor_to_body, np.ones((4, 4)))
 
 
 def test_open_source_with_file_that_has_no_valid_extrinsics_but_supply_extrinsics_path():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT,
                      extrinsics_file=EXT_PATH)
-    array_cmp = ss.sensor_info[0].extrinsic != np.eye(4)
+    array_cmp = ss.sensor_info[0].sensor_to_body != np.eye(4)
     assert array_cmp.any()
 
 
 def test_open_source_with_file_that_has_valid_extrinsics_no_automatic():
     ss = open_source(source_url=PCAP_PATH_WITH_EXT)
-    array_cmp = ss.sensor_info[0].extrinsic == np.eye(4)
+    array_cmp = ss.sensor_info[0].sensor_to_body == np.eye(4)
     assert array_cmp.any()

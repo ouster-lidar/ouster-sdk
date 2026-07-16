@@ -1,0 +1,10 @@
+{# Tooltip = "Section: <name>" only (link text already shows page title). prev_section/next_section from conf.py. #}
+<!-- page_nav sections: prev_section={{ prev_section|default('')|e }} next_section={{ next_section|default('')|e }} -->
+<ul class="page-nav">
+  {%- if prev %}
+  <li class="prev"><a href="{{ prev.link|e }}" title="{{ ('Section: ' + prev_section)|e if prev_section else 'Previous'|e }}">← {{ prev.title }}</a></li>
+  {%- endif %}
+  {%- if next %}
+  <li class="next"><a href="{{ next.link|e }}" title="{{ ('Section: ' + next_section)|e if next_section else 'Next'|e }}">{{ next.title }} →</a></li>
+  {%- endif %}
+</ul>

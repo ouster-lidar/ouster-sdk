@@ -10,7 +10,7 @@
 
 #include <cstdint>
 
-#include "ouster/visibility.h"
+#include "ouster/core/visibility.h"
 
 namespace ouster {
 namespace sdk {

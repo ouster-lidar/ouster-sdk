@@ -15,7 +15,9 @@
 #include <string>
 #include <vector>
 
-#include "ouster/zone.h"
+#include "nonstd/optional.hpp"
+#include "ouster/core/types.h"
+#include "ouster/core/zone.h"
 #include "test_utils.h"
 #include "util.h"
 #include "zone_header.h"
@@ -36,28 +38,23 @@ static BeamConfig test_beam_config(std::string data_dir) {
     std::vector<double> beam_azimuth_angles =
         beam_intrinsics["beam_azimuth_angles"].as<std::vector<double>>();
     uint32_t columns_per_frame =
-        sensor_info_json["lidar_data_format"]["columns_per_frame"]
-            .as<uint32_t>();
+        sensor_info_json["lidar_data_format"]["columns_per_frame"].as<uint32_t>();
     mat4d beam_to_lidar_transform = mat4d_from_array(
         beam_intrinsics["beam_to_lidar_transform"]
-            .as<std::array<double, mat4d::RowsAtCompileTime *
-                                       mat4d::ColsAtCompileTime>>());
+            .as<std::array<double, mat4d::RowsAtCompileTime * mat4d::ColsAtCompileTime>>());
     mat4d lidar_to_sensor_transform = mat4d_from_array(
         lidar_intrinsics["lidar_to_sensor_transform"]
-            .as<std::array<double, mat4d::RowsAtCompileTime *
-                                       mat4d::ColsAtCompileTime>>());
-    uint64_t serial_number =
-        sensor_info_json["sensor_info"]["prod_sn"].as<uint64_t>();
+            .as<std::array<double, mat4d::RowsAtCompileTime * mat4d::ColsAtCompileTime>>());
+    uint64_t serial_number = sensor_info_json["sensor_info"]["prod_sn"].as<uint64_t>();
 
     mat4d sensor_to_body_transform = mat4d::Identity();
 
     // Add a translation to simulate a nontrivial zm metadata.json extrinsics
     sensor_to_body_transform(2, 3) = 1.0;
 
-    BeamConfig beam_config(columns_per_frame, beam_altitude_angles,
-                           beam_azimuth_angles, beam_to_lidar_transform,
-                           lidar_to_sensor_transform, sensor_to_body_transform,
-                           DEFAULT_M_PER_ZMBIN, serial_number);
+    BeamConfig beam_config(columns_per_frame, beam_altitude_angles, beam_azimuth_angles,
+                           beam_to_lidar_transform, lidar_to_sensor_transform,
+                           sensor_to_body_transform, DEFAULT_M_PER_ZMBIN, serial_number);
     return beam_config;
 }
 
@@ -89,14 +86,10 @@ TEST(Zone, render) {
 
         // But these did
         constexpr int max_error = 4;  // mm
-        EXPECT_LE(std::abs(static_cast<int>(zrb.near_range_mm(59, 180)) - 2253),
-                  max_error);
-        EXPECT_LE(std::abs(static_cast<int>(zrb.far_range_mm(59, 180)) - 3027),
-                  max_error);
-        EXPECT_LE(std::abs(static_cast<int>(zrb.near_range_mm(71, 274)) - 2285),
-                  max_error);
-        EXPECT_LE(std::abs(static_cast<int>(zrb.far_range_mm(71, 274)) - 2375),
-                  max_error);
+        EXPECT_LE(std::abs(static_cast<int>(zrb.near_range_mm(59, 180)) - 2253), max_error);
+        EXPECT_LE(std::abs(static_cast<int>(zrb.far_range_mm(59, 180)) - 3027), max_error);
+        EXPECT_LE(std::abs(static_cast<int>(zrb.near_range_mm(71, 274)) - 2285), max_error);
+        EXPECT_LE(std::abs(static_cast<int>(zrb.far_range_mm(71, 274)) - 2375), max_error);
 
         // IMPORTANT: encoding a zrb from mm is lossy
     };
@@ -150,8 +143,7 @@ TEST(Zone, point_count_not_set) {
             try {
                 zone.render(beam_config);
             } catch (const std::runtime_error& e) {
-                EXPECT_STREQ(e.what(),
-                             "Zone: point_count must be in [1, 262143]");
+                EXPECT_STREQ(e.what(), "Zone: point_count must be in [1, 262143]");
                 throw;
             }
         },
@@ -171,8 +163,7 @@ TEST(Zone, frame_count_not_set) {
             try {
                 zone.render(beam_config);
             } catch (const std::runtime_error& e) {
-                EXPECT_STREQ(e.what(),
-                             "Zone: frame_count must be in [1, 65535]");
+                EXPECT_STREQ(e.what(), "Zone: frame_count must be in [1, 65535]");
                 throw;
             }
         },
@@ -192,8 +183,7 @@ TEST(Zone, mode_not_set) {
             try {
                 zone.render(beam_config);
             } catch (const std::runtime_error& e) {
-                EXPECT_STREQ(e.what(),
-                             "Zone: mode must be OCCUPANCY or VACANCY");
+                EXPECT_STREQ(e.what(), "Zone: mode must be OCCUPANCY or VACANCY");
                 throw;
             }
         },
@@ -235,9 +225,7 @@ TEST(Zone, coordinate_frame_not_set) {
             try {
                 zone.render(beam_config);
             } catch (const std::runtime_error& e) {
-                EXPECT_STREQ(
-                    e.what(),
-                    "Zone: STL coordinate frame must be BODY or SENSOR");
+                EXPECT_STREQ(e.what(), "Zone: STL coordinate frame must be BODY or SENSOR");
                 throw;
             }
         },
@@ -389,12 +377,47 @@ TEST(Zone, zonemode_to_string) {
     // It should return the correct string for valid ZoneModes, and "UNKNOWN"
     // otherwise
     EXPECT_EQ(ouster::sdk::core::to_string(Zone::ZoneMode::NONE), "NONE");
-    EXPECT_EQ(ouster::sdk::core::to_string(Zone::ZoneMode::OCCUPANCY),
-              "OCCUPANCY");
+    EXPECT_EQ(ouster::sdk::core::to_string(Zone::ZoneMode::OCCUPANCY), "OCCUPANCY");
     EXPECT_EQ(ouster::sdk::core::to_string(Zone::ZoneMode::VACANCY), "VACANCY");
     // It should return "UNKNOWN" for invalid values
-    EXPECT_EQ(ouster::sdk::core::to_string(static_cast<Zone::ZoneMode>(-1)),
-              "UNKNOWN");
+    EXPECT_EQ(ouster::sdk::core::to_string(static_cast<Zone::ZoneMode>(-1)), "UNKNOWN");
+}
+
+TEST(Zone, render_fails_for_body_frame_without_sensor_to_body_transform) {
+    std::string data_dir = getenvs("DATA_DIR");
+    BeamConfig beam_config = test_beam_config(data_dir);
+    beam_config.sensor_to_body_transform = nonstd::nullopt;
+
+    Zone zone{};
+    zone.point_count = 1000;
+    zone.frame_count = 10;
+    zone.mode = Zone::ZoneMode::OCCUPANCY;
+    auto stl = Stl(data_dir + "/0.stl");
+    stl.coordinate_frame = Stl::CoordinateFrame::BODY;
+    zone.stl = stl;
+
+    EXPECT_FALSE(zone.render(beam_config));
+    EXPECT_FALSE(zone.zrb.has_value());
+}
+
+TEST(Zone, render_succeeds_for_sensor_frame_without_sensor_to_body_transform) {
+    std::string data_dir = getenvs("DATA_DIR");
+    auto sensor_info = ouster::sdk::core::metadata_from_json(data_dir + "/785.json");
+    BeamConfig beam_config(sensor_info.w(), sensor_info.beam_altitude_angles,
+                           sensor_info.beam_azimuth_angles, sensor_info.beam_to_lidar_transform,
+                           sensor_info.lidar_to_sensor_transform, nonstd::nullopt,
+                           DEFAULT_M_PER_ZMBIN, sensor_info.sn);
+
+    Zone zone{};
+    zone.point_count = 1000;
+    zone.frame_count = 10;
+    zone.mode = Zone::ZoneMode::OCCUPANCY;
+    auto stl = Stl(data_dir + "/0.stl");
+    stl.coordinate_frame = Stl::CoordinateFrame::SENSOR;
+    zone.stl = stl;
+
+    EXPECT_TRUE(zone.render(beam_config));
+    EXPECT_TRUE(zone.zrb.has_value());
 }
 
 TEST(Zone, render_plane) {
@@ -404,14 +427,12 @@ TEST(Zone, render_plane) {
     Stl stl(data_dir + "/plane.stl");
     stl.coordinate_frame = Stl::CoordinateFrame::BODY;
     auto sensor_to_body_transform = mat4d::Identity();
-    auto sensor_info =
-        ouster::sdk::core::metadata_from_json(data_dir + "/785.json");
+    auto sensor_info = ouster::sdk::core::metadata_from_json(data_dir + "/785.json");
     float m_per_zmbin = ouster::sdk::core::DEFAULT_M_PER_ZMBIN;
-    BeamConfig beam_config(
-        sensor_info.w(), sensor_info.beam_altitude_angles,
-        sensor_info.beam_azimuth_angles, sensor_info.beam_to_lidar_transform,
-        sensor_info.lidar_to_sensor_transform, sensor_to_body_transform,
-        m_per_zmbin, sensor_info.sn);
+    BeamConfig beam_config(sensor_info.w(), sensor_info.beam_altitude_angles,
+                           sensor_info.beam_azimuth_angles, sensor_info.beam_to_lidar_transform,
+                           sensor_info.lidar_to_sensor_transform, sensor_to_body_transform,
+                           m_per_zmbin, sensor_info.sn);
     Zone zone{};
     zone.point_count = 10;
     zone.frame_count = 10;
@@ -424,4 +445,26 @@ TEST(Zone, render_plane) {
     int h = beam_config.n_rows;
     // determined experimentally
     EXPECT_EQ(zrb.far_range_mm(h / 2, w / 2), 1011);
+}
+
+TEST(Zone, max_triangles_binary) {
+    std::string data_dir = getenvs("DATA_DIR");
+    std::vector<Triangle> triangles(Zone::MAX_TRIANGLES + 1,
+                                    {{0.f, 0.f, 0.f}, {0.f, 0.f, 0.f}, {0.f, 0.f, 0.f}});
+    std::stringstream stream;
+    Mesh mesh(triangles);
+    mesh.save_stl_binary(stream);
+    Stl stl(stream);
+    stl.coordinate_frame = Stl::CoordinateFrame::BODY;
+    Zone zone{};
+    zone.point_count = 10;
+    zone.frame_count = 10;
+    zone.mode = Zone::ZoneMode::OCCUPANCY;
+    zone.stl = stl;
+    testing::internal::CaptureStderr();
+    EXPECT_FALSE(zone.render(test_beam_config(data_dir)));
+    std::string error_output = testing::internal::GetCapturedStderr();
+    EXPECT_NE(error_output.find("Zone: Error rendering zone, STL has too many "
+                                "triangles."),
+              std::string::npos);
 }

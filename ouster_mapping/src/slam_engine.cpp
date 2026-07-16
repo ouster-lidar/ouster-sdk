@@ -1,28 +1,16 @@
-#include <ouster/slam_engine.h>
+#include <ouster/mapping/slam_engine.h>
 
 #include <stdexcept>
 
-#include "kiss_slam.h"
+#include "lio_slam.h"
 
 namespace ouster {
 namespace sdk {
 namespace mapping {
 
-SlamEngine::SlamEngine(
-    const std::vector<std::shared_ptr<core::SensorInfo>>& infos,
-    const SlamConfig& config) {
-    if (config.backend != "kiss") {
-        throw std::runtime_error(std::string{"Unsupported backend: "} +
-                                 config.backend);
-    }
-
-    backend_ = std::make_unique<KissSlam>(infos, config);
-}
-
-void SlamEngine::update(core::LidarScanSet& scans) { backend_->update(scans); }
-
-core::PointCloudXYZf SlamEngine::get_point_cloud() const {
-    return backend_->get_point_cloud();
+std::unique_ptr<SlamEngine> SlamEngine::create(
+    const std::vector<std::shared_ptr<core::SensorInfo>>& infos, const LIOSlamConfig& config) {
+    return std::make_unique<LIOSlam>(infos, config);
 }
 
 }  // namespace mapping

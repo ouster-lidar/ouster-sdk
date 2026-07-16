@@ -231,8 +231,7 @@ TEST_F(OsfBufferTest, LoadFromBaseBuffer_InvalidBase) {
 
 TEST_F(OsfBufferTest, EqualityCheckSpecifics) {
     std::vector<uint8_t> vec1 = {1, 2, 3};
-    std::vector<uint8_t> vec2 = {1, 2,
-                                 3};  // Identical content, different memory
+    std::vector<uint8_t> vec2 = {1, 2, 3};  // Identical content, different memory
 
     OsfBuffer b1, b2, b3;
     b1.load_data(vec1);

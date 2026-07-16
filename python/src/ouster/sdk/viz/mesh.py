@@ -2,7 +2,7 @@ import numpy as np
 from ouster.sdk import core
 from ouster.sdk.viz import Mesh, Cloud
 from ouster.sdk.viz.widgets import ToggleCloud
-from ouster.sdk.zone_monitor import Zrb
+from ouster.sdk.core import Zrb
 from ouster.sdk._bindings.viz import voxel_style_mesh_from_zone_image_pair
 
 
@@ -24,10 +24,10 @@ def clouds_from_zrb(viz, zrb: Zrb, xyzlut):
     near_n_points = near_xyz.shape[0]
     far_n_points = far_xyz.shape[0]
     near_cloud, far_cloud = (Cloud(near_n_points), Cloud(far_n_points))
-    near_cloud.set_xyz(near_xyz)
-    near_cloud.set_key(np.ones(near_n_points) * 0.25)
-    far_cloud.set_xyz(far_xyz)
-    far_cloud.set_key(np.ones(far_n_points) * 0.75)
+    near_cloud.set_xyz(np.ascontiguousarray(near_xyz, np.float32))
+    near_cloud.set_key(np.full(near_n_points, 0.25, dtype=np.float32))
+    far_cloud.set_xyz(np.ascontiguousarray(far_xyz, np.float32))
+    far_cloud.set_key(np.full(far_n_points, 0.75, dtype=np.float32))
     near_cloud.set_point_size(4)
     far_cloud.set_point_size(4)
     return ToggleCloud(viz, near_cloud), ToggleCloud(viz, far_cloud)

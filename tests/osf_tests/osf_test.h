@@ -27,7 +27,9 @@ class OsfTestWithData : public OsfTest {
         }
     }
 
-    std::string test_data_dir() { return test_data_dir_; }
+    std::string test_data_dir() {
+        return test_data_dir_;
+    }
 
    private:
     std::string test_data_dir_;

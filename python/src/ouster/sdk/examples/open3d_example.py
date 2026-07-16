@@ -17,7 +17,6 @@ except ModuleNotFoundError:
     exit(1)
 
 from ouster.sdk import core
-from ouster.sdk.core import _utils
 from ouster.sdk.examples.colormaps import colorize
 
 Z_NEAR = 1.0
@@ -144,29 +143,31 @@ def range_for_field(f: str) -> str:
         return core.ChanField.RANGE
 
 
-def viewer_3d(scans: core.ScanSource, paused: bool = False) -> None:
-    """Render one scan in Open3D viewer from pcap file with 2d image.
+def viewer_3d(frames: core.FrameSetSource, paused: bool = False) -> None:
+    """Render one frame in Open3D viewer from pcap file with 2d image.
 
     Args:
         pcap_path: path to the pcap file
         metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
-        num: scan number in a given pcap file (satrs from *0*)
+        num: frame number in a given pcap file (satrs from *0*)
     """
 
     # visualizer state
-    scans_iter = iter(scans)
-    scan = next(scans_iter)[0]
-    assert scan is not None
-    metadata = scans.sensor_info[0]
+    frames_iter = iter(frames)
+    frame = next(frames_iter)[0]
+    assert frame is not None
+    metadata = frames.sensor_info[0]
     xyzlut = core.XYZLut(metadata)
 
-    fields = list(scan.fields)
+    # get pixel fields only (e.g. range, signal, reflectivity) to visualize in 2d image and colormap
+    fields = [field_type.name for field_type in frame.field_types
+        if field_type.field_class == core.FieldClass.PIXEL_FIELD]
     aes = {}
     for field_ind, field in enumerate(fields):
         if field in (core.ChanField.SIGNAL, core.ChanField.SIGNAL2):
-            aes[field_ind] = _utils.AutoExposure(0.02, 0.1, 3)
+            aes[field_ind] = core.AutoExposure(0.02, 0.1, 3)
         else:
-            aes[field_ind] = _utils.AutoExposure()
+            aes[field_ind] = core.AutoExposure()
 
     field_ind = 2
 
@@ -174,7 +175,7 @@ def viewer_3d(scans: core.ScanSource, paused: bool = False) -> None:
         nonlocal field_ind
         field_ind = (field_ind + 1) % len(fields)
         update_data(vis)
-        print(f"Visualizing: {fields[field_ind].name}")
+        print(f"Visualizing: {fields[field_ind]}")
 
     def toggle_pause(vis):
         nonlocal paused
@@ -182,13 +183,13 @@ def viewer_3d(scans: core.ScanSource, paused: bool = False) -> None:
         print(f"Paused: {paused}")
 
     def right_arrow(vis, action, mods):
-        nonlocal scan
+        nonlocal frame
         if action == 1:
             print("Skipping forward 10 frames")
-            new_scan = nth(scans_iter, 10)
-            if new_scan is None:
+            new_frame_set = nth(frames_iter, 10)
+            if new_frame_set is None:
                 raise StopIteration
-            scan = new_scan
+            frame = new_frame_set
             update_data(vis)
 
     # create geometries
@@ -198,9 +199,9 @@ def viewer_3d(scans: core.ScanSource, paused: bool = False) -> None:
                           metadata.format.pixels_per_column)
 
     def update_data(vis: o3d.visualization.Visualizer):
-        assert scan is not None
-        xyz = xyzlut(scan.field(range_for_field(fields[field_ind])))
-        key = scan.field(fields[field_ind]).astype(float)
+        assert frame is not None
+        xyz = xyzlut(frame.field(range_for_field(fields[field_ind])))
+        key = frame.field(fields[field_ind]).astype(float)
 
         # apply colormap to field values
         aes[field_ind].update(key)
@@ -250,10 +251,10 @@ def viewer_3d(scans: core.ScanSource, paused: bool = False) -> None:
         while vis.poll_events():
             ts = time.monotonic()
 
-            # update data at scan frequency to avoid blocking the rendering thread
+            # update data at frame frequency to avoid blocking the rendering thread
             if not paused and ts - last_ts >= 1 / metadata.format.fps:
-                scan = next(scans_iter)[0]
-                assert scan is not None
+                frame = next(frames_iter)[0]
+                assert frame is not None
                 update_data(vis)
                 last_ts = ts
 
@@ -296,20 +297,20 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    scans: core.ScanSource
+    frames: core.FrameSetSource
     if args.sensor:
-        scans = sensor.SensorScanSource(args.sensor)
+        frames = sensor.SensorFrameSetSource(args.sensor)
     elif args.pcap:
         pcap_path = args.pcap
-        scans = pcap.PcapScanSource(pcap_path)
-        consume(scans, args.start or 0)
+        frames = pcap.PcapFrameSetSource(pcap_path)
+        consume(frames, args.start or 0)
 
     try:
-        viewer_3d(scans, paused=args.pause)
+        viewer_3d(frames, paused=args.pause)
     except (KeyboardInterrupt, StopIteration):
         pass
     finally:
-        scans.close()
+        frames.close()
 
 
 if __name__ == "__main__":

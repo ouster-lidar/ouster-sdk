@@ -3,7 +3,7 @@
  * All rights reserved.
  */
 
-#include "ouster/pcap.h"
+#include "ouster/pcap/pcap.h"
 
 #include <gtest/gtest.h>
 
@@ -11,8 +11,8 @@
 #include <regex>
 #include <stdexcept>
 
-#include "ouster/indexed_pcap_reader.h"
-#include "ouster/os_pcap.h"
+#include "ouster/pcap/indexed_pcap_reader.h"
+#include "ouster/pcap/os_pcap.h"
 
 using namespace ouster::sdk::pcap;
 
@@ -31,7 +31,7 @@ TEST(PcapReader, file_offset) {
     // since we haven't read any packets yet, call next_packet to read the first
     // one then read the cached info
     pcap.next_packet();
-    packet_info current_info = pcap.current_info();
+    auto current_info = pcap.current_info();
     EXPECT_EQ(current_info.file_offset,
               24);  // the length of a pcap file header
 
@@ -50,7 +50,7 @@ TEST(PcapReader, seek) {
     // since we haven't read any packets yet, call next_packet to read the first
     // one then read the cached info
     pcap.next_packet();
-    packet_info current_info = pcap.current_info();
+    auto current_info = pcap.current_info();
 
     // file_offset is supposed to be the position of the packet in the file
     auto offset = current_info.file_offset;
@@ -79,8 +79,7 @@ TEST(PcapReader, seek_to_0) {
     // it should be able to read packets after an attempt to seek before the
     // pcap header this file has one packet in it and is 8530 bytes long
     auto data_dir = getenvs("DATA_DIR");
-    std::string filename =
-        data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
+    std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
     PcapReader pcap(filename);
 
     EXPECT_EQ(pcap.next_packet(), 8448);
@@ -106,8 +105,7 @@ TEST(PcapReader, seek_past_end_of_file) {
     // it does not raise an exception if the caller seeks past the end of file
     // this file has one packet in it and is 8530 bytes long
     auto data_dir = getenvs("DATA_DIR");
-    std::string filename =
-        data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
+    std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
     PcapReader pcap(filename);
     pcap.seek(file_size(filename) + 1);
 
@@ -120,12 +118,13 @@ class TestIndexedPcapReader : public IndexedPcapReader {
     TestIndexedPcapReader(const std::string& pcap_filename,
                           const std::vector<std::string>& metadata_filenames)
         : IndexedPcapReader(pcap_filename, metadata_filenames) {}
-    TestIndexedPcapReader(
-        const std::string& pcap_filename,
-        const std::vector<ouster::sdk::core::SensorInfo>& sensor_infos)
+    TestIndexedPcapReader(const std::string& pcap_filename,
+                          const std::vector<ouster::sdk::core::SensorInfo>& sensor_infos)
         : IndexedPcapReader(pcap_filename, sensor_infos) {}
-    PcapIndex& get_index_non_const() { return this->index_; }
-    std::vector<nonstd::optional<uint16_t>> get_previous_frame_ids() {
+    PcapIndex& get_index_non_const() {
+        return this->index_;
+    }
+    std::vector<nonstd::optional<uint32_t>> get_previous_frame_ids() {
         return previous_frame_ids_;
     }
 };
@@ -138,9 +137,8 @@ TEST(IndexedPcapReader, constructor) {
 
     TestIndexedPcapReader pcap(
         filename,
-        std::vector<std::string>{
-            data_dir + "/same_ports_nonlegacy.1.json",
-            data_dir + "/same_ports_nonlegacy.2.non_colliding_imu.json"});
+        std::vector<std::string>{data_dir + "/same_ports_nonlegacy.1.json",
+                                 data_dir + "/same_ports_nonlegacy.2.non_colliding_imu.json"});
     EXPECT_EQ(pcap.get_index().frame_indices.size(), 2);
     EXPECT_EQ(pcap.get_previous_frame_ids().size(), 2);
 }
@@ -148,11 +146,9 @@ TEST(IndexedPcapReader, constructor) {
 TEST(IndexedPcapReader, frame_count) {
     // it should raise std::out_of_range if there is no sensor at that position
     auto data_dir = getenvs("DATA_DIR");
-    std::string filename =
-        data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
+    std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
     TestIndexedPcapReader pcap(filename, std::vector<std::string>{});
-    pcap.get_index_non_const().frame_indices.push_back(
-        PcapIndex::frame_index());
+    pcap.get_index_non_const().frame_indices.push_back(PcapIndex::frame_index());
     pcap.get_index_non_const().frame_indices.at(0).push_back(0);
 
     EXPECT_EQ(pcap.get_index().frame_count(0), 1);
@@ -165,8 +161,7 @@ TEST(IndexedPcapReader, seek_to_frame) {
     auto data_dir = getenvs("DATA_DIR");
     std::string filename = data_dir + "/OS-2-128-U1_v2.3.0_1024x10.pcap";
     std::string meta_filename = data_dir + "/OS-2-128-U1_v2.3.0_1024x10.json";
-    TestIndexedPcapReader pcap(filename,
-                               std::vector<std::string>{meta_filename});
+    TestIndexedPcapReader pcap(filename, std::vector<std::string>{meta_filename});
 
     std::vector<int> progress;
     while (pcap.next_packet()) {
@@ -183,23 +178,12 @@ TEST(IndexedPcapReader, seek_to_frame) {
     }
     EXPECT_EQ(progress[progress.size() - 1],
               100);  // last progress value is 100
-    pcap.get_index_non_const().frame_indices.push_back(
-        PcapIndex::frame_index());
+    pcap.get_index_non_const().frame_indices.push_back(PcapIndex::frame_index());
 
     EXPECT_EQ(pcap.get_index().frame_count(0), 1);
     EXPECT_NO_THROW(pcap.get_index_non_const().seek_to_frame(pcap, 0, 0));
-    EXPECT_THROW(pcap.get_index_non_const().seek_to_frame(pcap, 0, 1),
-                 std::out_of_range);
-    EXPECT_THROW(pcap.get_index_non_const().seek_to_frame(pcap, 1, 1),
-                 std::out_of_range);
-}
-
-TEST(IndexedPcapReader, frame_id_rolled_over) {
-    EXPECT_TRUE(IndexedPcapReader::frame_id_rolled_over(65535, 0));
-    EXPECT_TRUE(IndexedPcapReader::frame_id_rolled_over(65290, 100));
-    EXPECT_FALSE(IndexedPcapReader::frame_id_rolled_over(65000, 65535));
-    EXPECT_FALSE(IndexedPcapReader::frame_id_rolled_over(1, 0));
-    EXPECT_FALSE(IndexedPcapReader::frame_id_rolled_over(12, 12));
+    EXPECT_THROW(pcap.get_index_non_const().seek_to_frame(pcap, 0, 1), std::out_of_range);
+    EXPECT_THROW(pcap.get_index_non_const().seek_to_frame(pcap, 1, 1), std::out_of_range);
 }
 
 void IndexedPcapReader_imu_collision_impl(std::string path) {
@@ -234,26 +218,23 @@ TEST(IndexedPcapReader, indexing_multiple_lidar_same_port_non_legacy) {
 
     TestIndexedPcapReader pcap(
         filename,
-        std::vector<std::string>{
-            data_dir + "/same_ports_nonlegacy.1.json",
-            data_dir + "/same_ports_nonlegacy.2.non_colliding_imu.json"});
+        std::vector<std::string>{data_dir + "/same_ports_nonlegacy.1.json",
+                                 data_dir + "/same_ports_nonlegacy.2.non_colliding_imu.json"});
     pcap.build_index();
     EXPECT_EQ(pcap.get_index().frame_count(0), 1);
     EXPECT_EQ(pcap.get_index().frame_count(1), 1);
     EXPECT_THROW(pcap.get_index().frame_count(2), std::out_of_range);
 }
 
-TEST(IndexedPcapReader,
-     indexing_multiple_lidar_same_port_mixed_legacy_non_legacy) {
+TEST(IndexedPcapReader, indexing_multiple_lidar_same_port_mixed_legacy_non_legacy) {
     // it should be constructed with the correct number of indices
     // and previous frame counts (one for each metadata file)
     auto data_dir = getenvs("DATA_DIR");
     std::string filename = data_dir + "/same_ports.pcap";
 
     TestIndexedPcapReader pcap(
-        filename, std::vector<std::string>{
-                      data_dir + "/same_ports.1.json",
-                      data_dir + "/same_ports.2.non_colliding_imu.json"});
+        filename, std::vector<std::string>{data_dir + "/same_ports.1.json",
+                                           data_dir + "/same_ports.2.non_colliding_imu.json"});
     pcap.build_index();
     EXPECT_EQ(pcap.get_index().frame_count(0), 1);
     EXPECT_EQ(pcap.get_index().frame_count(1), 1);

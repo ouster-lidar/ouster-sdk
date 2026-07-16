@@ -68,9 +68,11 @@ def process_file(file_path, results):
                     "type": [UNCONDITIONAL_TYPE]
                 })
 
-            # PER LINE CHECKS
-            i = 1
-            for line in lines:
+            # PER LINE CHECKS — start at index 1 (line 2) to avoid
+            # double-counting line 1 which was already handled by the
+            # whole-file checks above.
+            i = 2
+            for line in lines[1:]:
                 # MYPY PER LINE CHECK
                 mypy_entries = process_line_regex(
                     re.search(r"#[ ]*type:[ ]*ignore(\[(.*)\])*", line),

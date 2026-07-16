@@ -32,12 +32,10 @@ def test_operating_mode(mode, string) -> None:
 
 def test_operating_mode_misc() -> None:
     """Check some misc properties of operating modes."""
-    # the number of OperatingMode members is set to 4 because we are keeping
-    # the deprecated constants for the time being.
     assert len(
-        core.OperatingMode.__members__) == 6, "Don't forget to update tests!"
+        core.OperatingMode.__members__) == 2, "Don't forget to update tests!"
     assert core.OperatingMode.from_string("foo") is None
-    assert core.OperatingMode(1) == core.OperatingMode.NORMAL
+    assert core.OperatingMode(0) == core.OperatingMode.NORMAL
 
 
 @pytest.mark.parametrize("mode, string", [
@@ -62,13 +60,10 @@ def test_multipurpose_io_mode(mode, string) -> None:
 
 def test_multipurpose_io_mode_misc() -> None:
     """Check some misc properties of multipurpose mode."""
-    # the number of MultipurposeIOMode members is set to 12 because we are keeping
-    # the deprecated constants for the time being.
     assert len(core.MultipurposeIOMode.__members__
-               ) == 12, "Don't forget to update tests!"
+               ) == 6, "Don't forget to update tests!"
     assert core.MultipurposeIOMode.from_string("foo") is None
-    assert core.MultipurposeIOMode(
-        1) == core.MultipurposeIOMode.OFF
+    assert core.MultipurposeIOMode(0) == core.MultipurposeIOMode.OFF
 
 
 @pytest.mark.parametrize("polarity, string", [
@@ -84,13 +79,10 @@ def test_polarity(polarity, string) -> None:
 
 def test_polarity_misc() -> None:
     """Check some misc properties of polarity."""
-    # the number of Polairty members is set to 4 because we are keeping
-    # the deprecated POLARITY_ACTIVE_HIGH and POLARITY_ACTIVE_LOW constants
-    # for the time being.
     assert len(
-        core.Polarity.__members__) == 4, "Don't forget to update tests!"
+        core.Polarity.__members__) == 2, "Don't forget to update tests!"
     assert core.Polarity.from_string("foo") is None
-    assert core.Polarity(1) == core.Polarity.ACTIVE_LOW
+    assert core.Polarity(0) == core.Polarity.ACTIVE_LOW
 
 
 @pytest.mark.parametrize("nmea_baud_rate, string", [
@@ -109,7 +101,7 @@ def test_nmea_baud_rate_misc() -> None:
     assert len(
         core.NMEABaudRate.__members__) == 2, "Don't forget to update tests!"
     assert core.NMEABaudRate.from_string("foo") is None
-    assert core.NMEABaudRate(1) == core.NMEABaudRate.BAUD_9600
+    assert core.NMEABaudRate(0) == core.NMEABaudRate.BAUD_9600
 
 
 def test_optional_config() -> None:

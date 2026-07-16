@@ -12,6 +12,9 @@ from .pcap import _replay
 from .packet_iter import RecordingPacketSource
 
 from ouster.sdk._bindings.pcap import PcapPacketSource
-from ouster.sdk._bindings.pcap import PcapScanSource
+from ouster.sdk._bindings.pcap import PcapFrameSetSource
 from ouster.sdk._bindings.pcap import PcapDuplicatePortException
 from ouster.sdk._bindings.pcap import PacketInfo
+
+from ouster.sdk._deprecation import deprecated_alias
+deprecated_alias("PcapScanSource", "PcapFrameSetSource", PcapFrameSetSource, globals(), "1.0")

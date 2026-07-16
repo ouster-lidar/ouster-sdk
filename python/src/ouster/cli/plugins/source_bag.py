@@ -3,17 +3,17 @@ import os
 import shutil
 from pathlib import Path
 from typing import (cast, Union, List, Iterable, Optional)
-from ouster.sdk.core import (LidarScan,
+from ouster.sdk.core import (FrameSet,
                              SensorInfo,
                              LidarPacket, ImuPacket, ZonePacket,
                              PacketSource, UDPProfileIMU)
-from ouster.sdk.util import scan_to_packets  # type: ignore
+from ouster.sdk.util import frame_to_packets  # type: ignore
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
                           source_multicommand,
                           _nanos_to_string)
 
-from ouster.sdk.bag.bag_packet_source import bag2_monkey, anybag_monkey  # type: ignore
+from ouster.sdk.bag.bag_packet_source import _anybag_monkey, _bag2_monkey  # type: ignore
 
 
 @click.command
@@ -30,13 +30,13 @@ def bag_info(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
     file = ctx.source_uri or ""
 
     # monkeypatch AnyReader and Reader2 to support mcap directly
-    if AnyReader.__init__ != anybag_monkey:
+    if AnyReader.__init__ != _anybag_monkey:
         AnyReader.old_init = AnyReader.__init__  # type: ignore
-        AnyReader.__init__ = anybag_monkey  # type: ignore
+        AnyReader.__init__ = _anybag_monkey  # type: ignore
 
-    if Reader2.__init__ != bag2_monkey:
+    if Reader2.__init__ != _bag2_monkey:
         Reader2.old_init = Reader2.__init__  # type: ignore
-        Reader2.__init__ = bag2_monkey  # type: ignore
+        Reader2.__init__ = _bag2_monkey  # type: ignore
 
     with AnyReader([Path(file)]) as reader:
         print(f"Filename: {file}")
@@ -49,15 +49,15 @@ def bag_info(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
             print(f"  {c.topic} ({c.msgtype}): {c.msgcount}")
 
 
-def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], PacketSource],
+def _source_to_bag_iter(source: Union[Iterable[FrameSet], PacketSource],
                        prefix: str = "", raw: bool = False,
                        dir: str = "", filename: str = "", overwrite: bool = False,
                        metadata: List[SensorInfo] = [],
                        duration = None, ros2 = False,
-                       split: Optional[int] = None) -> Iterable[List[Optional[LidarScan]]]:
-    """Create a ROSBAG saving iterator from a LidarScan iterator
+                       split: Optional[int] = None) -> Iterable[FrameSet]:
+    """Create a ROSBAG saving iterator from a LidarFrame iterator
 
-    Requires a packet source otherwise, each LidarScan in scans is deparsed into UDP packets and saved.
+    Requires a packet source otherwise, each LidarFrame in frame sets is deparsed into UDP packets and saved.
     """
 
     from .source_save import create_directories_if_missing, determine_filename, _file_exists_error
@@ -141,7 +141,6 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
             writer.write(conns[2], packet.host_timestamp, data)
 
     def check_split():
-        nonlocal filename
         if split is not None:
             if os.path.getsize(filename) / 1000000 > split:
                 return True
@@ -180,8 +179,8 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
             nonlocal first_save
             # only save the first loop
             if not first_save:
-                for scan in source():
-                    yield scan
+                for frame in source():
+                    yield frame
                 return
             first_save = False
 
@@ -192,9 +191,9 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
                 conns = create_connections(writer, metadata)
                 should_split = False
                 for l in source():
-                    for idx, scan in enumerate(l):
-                        if scan:
-                            packets = scan_to_packets(scan, metadata[idx])
+                    for idx, frame in enumerate(l):
+                        if frame:
+                            packets = frame_to_packets(frame, metadata[idx])
                             for packet in packets:
                                 if should_split:
                                     should_split = False
@@ -207,8 +206,8 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
                                     first = False
                                     bag_save_metadata(writer, metadata, packet.host_timestamp)
 
-                            # check for splits after a whole scan is saved to make sure
-                            # scans dont get split between files
+                            # check for splits after a whole frame is saved to make sure
+                            # frames dont get split between files
                             should_split = check_split()
                     yield l
             except (KeyboardInterrupt, StopIteration):

@@ -247,7 +247,6 @@ Diagnostics:
       - clang-analyzer-webkit.UncountedLambdaCapturesChecker
       - concurrency-mt-unsafe
       - concurrency-thread-canceltype-asynchronous
-      - cppcoreguidelines-avoid-c-arrays
       - cppcoreguidelines-avoid-capturing-lambda-coroutines
       - cppcoreguidelines-avoid-const-or-ref-data-members
       - cppcoreguidelines-avoid-do-while
@@ -268,9 +267,7 @@ Diagnostics:
       - cppcoreguidelines-noexcept-destructor
       - cppcoreguidelines-noexcept-move-operations
       - cppcoreguidelines-noexcept-swap
-      - cppcoreguidelines-owning-memory
       - cppcoreguidelines-prefer-member-initializer
-      - cppcoreguidelines-pro-bounds-array-to-pointer-decay
       - cppcoreguidelines-pro-bounds-constant-array-index
       - cppcoreguidelines-pro-type-const-cast
       - cppcoreguidelines-pro-type-cstyle-cast
@@ -296,7 +293,6 @@ Diagnostics:
       - google-readability-avoid-underscore-in-googletest-name
       - google-readability-casting
       - google-readability-function-size
-      - google-readability-namespace-comments
       - google-runtime-int
       - google-runtime-operator
       - google-upgrade-googletest-case
@@ -458,9 +454,9 @@ Diagnostics:
       readability-identifier-naming.ClassCase: CamelCase
       readability-identifier-naming.FunctionCase: lower_case
       readability-identifier-naming.VariableCase: lower_case
-      readability-identifier-length.IgnoredVariableNames: 'i|j|k|w|h|x|y|z|it|ip|fd'
+      readability-identifier-length.IgnoredVariableNames: 'i|j|k|w|h|x|y|z|it|ip|fd|r|g|b'
       readability-identifier-length.IgnoredLoopCounterNames: 'i|j|k|w|h|x|y|z|it|ip|fd|u|v'
-      readability-identifier-length.IgnoredParameterNames: 'a|b|w|h|x|y|z|ip|fd'
+      readability-identifier-length.IgnoredParameterNames: 'a|b|w|h|x|y|z|ip|fd|r|g|b'
       performance-unnecessary-value-param.AllowedTypes: 'Eigen::Ref|sync_ptr'
       readability-identifier-naming.MemberCase: lower_case
       readability-identifier-naming.ProtectedMemberSuffix: _

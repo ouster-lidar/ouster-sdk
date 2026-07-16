@@ -13,8 +13,8 @@ import requests
 import pytest
 
 from ouster.sdk import core, sensor
-from ouster.sdk.core import UDPProfileLidar, TimestampMode, LidarMode, PacketFormat, ColHeader, LidarScanSet, SensorHttp
-from ouster.sdk.zone_monitor import ZoneSet
+from ouster.sdk.core import UDPProfileLidar, TimestampMode, LidarMode, PacketFormat, ColHeader, FrameSet, ZoneSet
+from ouster.sdk.sensor import SensorHttp
 from ouster.sdk._bindings import client as _client
 
 logger = logging.getLogger("HIL")
@@ -192,12 +192,12 @@ def fix_float_rounding(metadata, src):
         metadata.imu_to_sensor_transform = src.sensor_info[0].imu_to_sensor_transform
     if check_close(metadata.lidar_to_sensor_transform, src.sensor_info[0].lidar_to_sensor_transform):
         metadata.lidar_to_sensor_transform = src.sensor_info[0].lidar_to_sensor_transform
-    if check_close(metadata.extrinsic, src.sensor_info[0].extrinsic):
-        metadata.extrinsic = src.sensor_info[0].extrinsic
+    if check_close(metadata.sensor_to_body, src.sensor_info[0].sensor_to_body):
+        metadata.sensor_to_body = src.sensor_info[0].sensor_to_body
 
 
 def get_zone_set_if_it_exists(hostname: str) -> Optional[ZoneSet]:
-    sensor_http = core.SensorHttp.create(hostname)
+    sensor_http = SensorHttp.create(hostname)
     try:
         return ZoneSet(sensor_http.get_zone_monitor_config_zip())
     except RuntimeError:
@@ -248,45 +248,45 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
         assert metadata == src.sensor_info[0]
 
 
-def n_frame_id_gaps(ss: List[LidarScanSet]) -> int:
+def n_frame_id_gaps(ss: List[FrameSet]) -> int:
     """Return number of non-consecutive frame ids."""
-    return int(np.count_nonzero(np.diff([cast(core.LidarScan, s).frame_id for s, in ss]) % 2**16 != 1))
+    return int(np.count_nonzero(np.diff([cast(core.LidarFrame, s).frame_id for s, in ss]) % 2**16 != 1))
 
 
-def test_scans_consecutive(hil_configured_sensor) -> None:
-    """Test that we can batch complete consecutive scans."""
+def test_frames_consecutive(hil_configured_sensor) -> None:
+    """Test that we can batch complete consecutive frames."""
 
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(sensor.SensorScanSource(hil_configured_sensor, timeout=2.0)) as scans:
-        take(10, scans) # flush
-        ss = take(10, scans)
+    with closing(sensor.SensorFrameSetSource(hil_configured_sensor, timeout=2.0)) as frame_sets:
+        take(10, frame_sets) # flush
+        ss = take(10, frame_sets)
 
-    assert all(s is not None and s.complete() for s, in ss), "Received incomplete scans"
+    assert all(s is not None and s.complete() for s, in ss), "Received incomplete frames"
     assert n_frame_id_gaps(ss) == 0, "Gap in frame ids"
 
 
-def test_scans_read_gap(hil_configured_sensor) -> None:
-    """Test that sleeping while reading scans causes a single gap"""
+def test_frames_read_gap(hil_configured_sensor) -> None:
+    """Test that sleeping while reading frames causes a single gap"""
 
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(sensor.SensorScanSource(hil_configured_sensor, timeout=2.0)) as scans:
-        take(10, scans) # flush
-        ss = take(10, scans)
-        logger.debug("Pausing during reading scans...")
+    with closing(sensor.SensorFrameSetSource(hil_configured_sensor, timeout=2.0)) as frame_sets:
+        take(10, frame_sets) # flush
+        ss = take(10, frame_sets)
+        logger.debug("Pausing during reading frames...")
         sleep(1.0)
-        ss += take(10, scans)
+        ss += take(10, frame_sets)
 
     assert len(ss) == 20
-    assert all(s is not None and s.complete() for s, in ss), "Received incomplete scans"
+    assert all(s is not None and s.complete() for s, in ss), "Received incomplete frames"
     assert n_frame_id_gaps(ss) == 1, "Did not get exactly one gap in frame ids"
 
 
-def test_scans_read_timeout(hil_configured_sensor) -> None:
-    """Test timeout reading scans."""
+def test_frames_read_timeout(hil_configured_sensor) -> None:
+    """Test timeout reading frames."""
 
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
@@ -296,13 +296,13 @@ def test_scans_read_timeout(hil_configured_sensor) -> None:
 
     metadata[0].config.udp_port_imu = 7504
     metadata[0].config.udp_port_lidar = 7504
-    with closing(sensor.SensorScanSource(hil_configured_sensor, sensor_info=metadata, timeout=1.0)) as scans:
+    with closing(sensor.SensorFrameSetSource(hil_configured_sensor, sensor_info=metadata, timeout=1.0)) as frame_sets:
         with pytest.raises(sensor.ClientTimeout):
-            next(iter(scans))
+            next(iter(frame_sets))
 
 
-def test_scans_read_timeout_only_imu(hil_configured_sensor, imu_port) -> None:
-    """Test timeout reading scans when only IMU packets are arriving."""
+def test_frames_read_timeout_only_imu(hil_configured_sensor, imu_port) -> None:
+    """Test timeout reading frames when only IMU packets are arriving."""
 
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
@@ -311,12 +311,6 @@ def test_scans_read_timeout_only_imu(hil_configured_sensor, imu_port) -> None:
         metadata = src.sensor_info
 
     metadata[0].config.udp_port_lidar = 7504
-    with closing(sensor.SensorScanSource(hil_configured_sensor, sensor_info=metadata, timeout=1.0)) as scans:
+    with closing(sensor.SensorFrameSetSource(hil_configured_sensor, sensor_info=metadata, timeout=1.0)) as frame_sets:
         with pytest.raises(sensor.ClientTimeout):
-            next(iter(scans))
-
-
-def test_longform_client(hil_sensor_hostname, lidar_mode, timestamp_mode, lidar_port, imu_port, vlp_sensor) -> None:
-    if vlp_sensor:
-        lidar_mode = LidarMode._2048x10
-    cli = _client.SensorConnection(hil_sensor_hostname, "", lidar_mode, timestamp_mode, lidar_port, imu_port, 60)
+            next(iter(frame_sets))

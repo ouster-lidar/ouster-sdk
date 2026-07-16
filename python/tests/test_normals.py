@@ -12,9 +12,9 @@ from ouster.sdk import open_source
 from ouster.sdk.core import (
     ChanField,
     XYZLut,
-    normals,
     destagger,
 )
+from ouster.sdk.algorithm import normals
 
 
 @pytest.fixture
@@ -35,17 +35,17 @@ def input_normal_cases_osf_file(test_data_dir):
 # Tests both single-return and dual-return normals in sensor coordinate.
 def test_normals_on_car_osf(input_car_osf_file):
     src = open_source(str(input_car_osf_file))
-    scan_iter = iter(src)
-    scans = next(scan_iter)
-    scan = scans[0]
+    frame_set_iter = iter(src)
+    frames = next(frame_set_iter)
+    frame = frames[0]
     sensor_info = src.sensor_info[0]
 
     # Compute normals
-    scan.sensor_info = sensor_info
+    frame.sensor_info = sensor_info
     xyzlut = XYZLut(sensor_info)
-    h, w = scan.h, scan.w
+    h, w = frame.h, frame.w
 
-    range_staggered = scan.field(ChanField.RANGE)
+    range_staggered = frame.field(ChanField.RANGE)
     xyz_staggered = xyzlut(range_staggered).reshape(h, w, 3)
     range_destaggered = destagger(sensor_info, range_staggered)
     xyz_destaggered = destagger(sensor_info, xyz_staggered)
@@ -63,7 +63,7 @@ def test_normals_on_car_osf(input_car_osf_file):
     if np.any(valid):
         np.testing.assert_allclose(norms[valid], 1.0, atol=1e-6)
 
-    range2_staggered = scan.field(ChanField.RANGE2)
+    range2_staggered = frame.field(ChanField.RANGE2)
     xyz2_staggered = xyzlut(range2_staggered).reshape(h, w, 3)
     range2_destaggered = destagger(sensor_info, range2_staggered)
     xyz2_destaggered = destagger(sensor_info, xyz2_staggered)
@@ -120,17 +120,17 @@ def test_normals_on_car_osf(input_car_osf_file):
             )
 
 
-# Tests normals on known surfaces with boundaries in a room scan.
+# Tests normals on known surfaces with boundaries in a room frame.
 def test_normals_cube_boundaries(input_room_osf_file):
     src = open_source(str(input_room_osf_file))
-    scans = next(iter(src))
-    scan = scans[0]
-    assert scan is not None
+    frames = next(iter(src))
+    frame = frames[0]
+    assert frame is not None
     info = src.sensor_info[0]
     h, w = info.h, info.w
 
     xyzlut = XYZLut(info)
-    range_staggered = scan.field(ChanField.RANGE)
+    range_staggered = frame.field(ChanField.RANGE)
     xyz_staggered = xyzlut(range_staggered).reshape(h, w, 3)
 
     range_destaggered = destagger(info, range_staggered)
@@ -188,7 +188,7 @@ def test_normals_cube_boundaries(input_room_osf_file):
 def test_normals_target_distance_invalid():
     """It should raise ValueError when target_distance is negative."""
     xyz_destaggered = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]])
-    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]])
+    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]], np.uint32)
     sensor_origins_xyz = np.zeros((2, 3))
     # TODO should be ValueError
     with pytest.raises(RuntimeError, match=r"target_distance_m must be positive"):
@@ -215,11 +215,11 @@ def test_normals_target_distance_invalid():
 
 
 def test_normals_target_distance_sensor_origins_wrong_shape():
-    """It should raise ValueError if sensor_origins_xyz is not of shape (N, 3)"""
+    """It should raise if sensor_origins_xyz is not of shape (W, 3)"""
     xyz_destaggered = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]])
-    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]])
+    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]], np.uint32)
     sensor_origins_xyz = np.zeros((0, 0))
-    with pytest.raises(ValueError, match=r"Expected a 2D array with shape \(N, 3\)"):
+    with pytest.raises(TypeError, match=r"incompatible function arguments"):
         normals(
             xyz_destaggered,
             range_destaggered,
@@ -228,7 +228,7 @@ def test_normals_target_distance_sensor_origins_wrong_shape():
             0.017453292519943295,
             100
         )
-    with pytest.raises(ValueError, match=r"Expected a 2D array with shape \(N, 3\)"):
+    with pytest.raises(TypeError, match=r"incompatible function arguments"):
         normals(
             xyz_destaggered,
             range_destaggered,
@@ -244,7 +244,7 @@ def test_normals_target_distance_sensor_origins_wrong_shape():
 def test_normals_target_distance_sensor_origins_doesnt_match_image_width():
     """It should raise RuntimeError if sensor_origins_xyz first dimension doesn't match image width"""
     xyz_destaggered = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]])
-    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]])
+    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]], np.uint32)
     sensor_origins_xyz = np.zeros((0, 3))
     with pytest.raises(RuntimeError, match=r"normals: sensor_origins size must match image width"):
         normals(
@@ -271,7 +271,7 @@ def test_normals_target_distance_sensor_origins_doesnt_match_image_width():
 def test_normals_xyz_and_range_size_mismatch():
     """It should raise RuntimeError if xyz_destaggered and range_destaggered have different shapes"""
     xyz_destaggered = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]])
-    range_destaggered = np.array([[0.0, 1.0]])
+    range_destaggered = np.array([[0.0, 1.0]], np.uint32)
     sensor_origins_xyz = np.zeros((2, 3))
     with pytest.raises(RuntimeError, match=r"normals: xyz dimensions mismatch"):
         normals(
@@ -298,7 +298,7 @@ def test_normals_xyz_and_range_size_mismatch():
 def test_normals_angle_of_incidence():
     """It should raise ValueError when angle_of_incidence_deg is not positive."""
     xyz_destaggered = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]])
-    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]])
+    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]], np.uint32)
     sensor_origins_xyz = np.zeros((2, 3))
     expected_err = r"normals: min_angle_of_incidence_rad must be positive"
     with pytest.raises(RuntimeError, match=expected_err):
@@ -325,7 +325,7 @@ def test_normals_angle_of_incidence():
 
 def test_normals():
     xyz_destaggered = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]])
-    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]])
+    range_destaggered = np.array([[0.0, 1.0], [1.0, 1.0]], np.uint32)
     sensor_origins_xyz = np.zeros((2, 3))
     result = normals(
         xyz_destaggered,
@@ -363,7 +363,7 @@ def test_normals():
 
 def test_normals_2():
     xyz_destaggered = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]])
-    range_destaggered = np.array([[0.0, 1.0], [0.0, 0.0]])
+    range_destaggered = np.array([[0.0, 1.0], [0.0, 0.0]], np.uint32)
     sensor_origins_xyz = np.zeros((2, 3))
     result = normals(
         xyz_destaggered,

@@ -15,11 +15,11 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/version.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/buffer.h"
 #include "ouster/osf/offset.h"
-#include "ouster/version.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -54,7 +54,7 @@ class OUSTER_API_CLASS OsfFile {
      * @param[in] path The path to the OSF.
      */
     OUSTER_API_FUNCTION
-    explicit OsfFile(const std::string& path);
+    explicit OsfFile(std::string path);
 
     /**
      * Cleans up any filebuffers/memory mapping.
@@ -90,15 +90,7 @@ class OUSTER_API_CLASS OsfFile {
 
     /// The most recent public version of the OSF schema.
     static const ouster::sdk::core::Version CURRENT_VERSION;
-    OUSTER_DIAGNOSTIC_PUSH
-    OUSTER_DIAGNOSTIC_IGNORE_UNUSED
-    /**
-     * @deprecated Use CURRENT_VERSION
-     */
-    OUSTER_DEPRECATED_MSG(CURRENT_VERSION,                        // NOLINT
-                          OUSTER_DEPRECATED_LAST_SUPPORTED_0_16)  // NOLINT
-    static const ouster::sdk::core::Version current_version;
-    OUSTER_DIAGNOSTIC_POP
+
     /**
      * Convert the parsed version to its integer representation.
      *
@@ -107,8 +99,7 @@ class OUSTER_API_CLASS OsfFile {
      * parsed version.
      */
     OUSTER_API_FUNCTION
-    static uint64_t serialized_version(
-        ouster::sdk::core::Version parsed_version);
+    static uint64_t serialized_version(const ouster::sdk::core::Version& parsed_version);
 
     /**
      * Returns the osf_offset in the OSF file where the

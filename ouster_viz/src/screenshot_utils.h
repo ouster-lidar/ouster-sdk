@@ -22,8 +22,7 @@ namespace screenshot_utils {
  * @return The file name that was generated, or an empty string if there was
  * an error.
  */
-std::string write_png(const std::string& path,
-                      const std::vector<uint8_t>& pixels, int width,
+std::string write_png(const std::string& path, const std::vector<uint8_t>& pixels, int width,
                       int height);
 
 /** @brief OpenGL framebuffers store pixels starting from the bottom-left

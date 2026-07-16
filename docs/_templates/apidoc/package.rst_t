@@ -13,24 +13,23 @@ Module contents
 ---------------
 
 .. automodule:: {{ name }}
-   :members:
-   :undoc-members:
    :show-inheritance:
 
-{%- if subpackages %}
+{% if subpackages %}
 Subpackages
 -----------
 
-{%- if name == "ouster.sdk" %}
-{# Main package: show full toctree with depth 4 #}
+{% if name == "ouster.sdk" %}
+{# Main package landing: show only top-level package links #}
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 1
+   :titlesonly:
 
 {% for subpkg in subpackages | sort %}
    {{ subpkg }}
 {% endfor %}
 
-{%- else %}
+{% else %}
 {# Other packages: use titles only #}
 .. toctree::
    :maxdepth: 2
@@ -39,28 +38,31 @@ Subpackages
 {% for subpkg in subpackages | sort %}
    {{ subpkg }}
 {% endfor %}
-{%- endif %}
-{%- endif %}
+{% endif %}
+{% endif %}
 
-{%- if submodules %}
-{%- if name == "ouster.sdk" %}
+{% if submodules %}
+{% if name == "ouster.sdk" %}
 
-{# Top-level package: use default toctree behavior with depth 4 #}
+{# Top-level package landing: show only top-level submodule links #}
 Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 1
+   :titlesonly:
 
 {% for submod in submodules | sort %}
    {{ submod.replace(' module', '') }}
 {% endfor %}
 
-{%- else %}
+{% else %}
 
-{# Subpackages: inline module content directly #}
+{# Package landing: inline submodule docs on this page (same-page anchors for Classes/Functions) #}
+Submodules
+----------
 
-{%- for submod in submodules | sort %}
+{% for submod in submodules | sort %}
 {%- set mod_name = submod.replace(' module', '') %}
 
 {{ mod_name }}
@@ -68,11 +70,11 @@ Submodules
 
 .. automodule:: {{ submod }}
    :members:
+   :member-order: alphabetical
    :undoc-members:
    :show-inheritance:
 
-{%- endfor %}
-
-{%- endif %}
-{%- endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
 {%- endif -%}

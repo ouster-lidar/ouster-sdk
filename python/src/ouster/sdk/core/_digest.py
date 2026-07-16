@@ -14,9 +14,9 @@ from itertools import tee
 
 import numpy as np
 
-from ouster.sdk.core.data import (LidarScan, ColHeader)
-from ouster.sdk.core import (LidarPacket, PacketSource, PacketFormat)
-from ouster.sdk._bindings.client import ScanBatcher
+from ouster.sdk.core.data import ColHeader
+from ouster.sdk.core import (LidarFrame, LidarPacket, PacketSource, PacketFormat)
+from ouster.sdk._bindings.client import FrameBatcher
 
 
 def _md5(a: np.ndarray) -> str:
@@ -67,17 +67,17 @@ class FieldDigest:
         return cls(**{k: v.hexdigest() for k, v in hashes.items()})
 
     @classmethod
-    def from_scan(cls, ls: LidarScan) -> 'FieldDigest':
+    def from_frame(cls, lf: LidarFrame) -> 'FieldDigest':
         hashes = {}
 
-        hashes['FRAME_ID'] = str(ls.frame_id)
+        hashes['FRAME_ID'] = str(lf.frame_id)
 
         # TODO: remove astype
-        hashes['TIMESTAMP'] = _md5(ls.timestamp.astype(np.uint64))
-        hashes['STATUS'] = _md5(ls.status.astype(np.uint64))
-        hashes['MEASUREMENT_ID'] = _md5(ls.measurement_id.astype(np.uint16))
+        hashes['TIMESTAMP'] = _md5(lf.timestamp.astype(np.uint64))
+        hashes['STATUS'] = _md5(lf.status.astype(np.uint64))
+        hashes['MEASUREMENT_ID'] = _md5(lf.measurement_id.astype(np.uint16))
 
-        hashes.update({field_name: _md5(ls.field(field_name)) for field_name in ls.fields})
+        hashes.update({field_name: _md5(lf.field(field_name)) for field_name in lf.fields})
 
         return cls(**hashes)
 
@@ -91,25 +91,25 @@ class StreamDigest:
 
     Attributes:
         packet_hash: Hashed fields of the UDP packets
-        scans: List of hashed fields of the LidarScan
+        frames: List of hashed fields of the LidarFrame
     """
     packet_hash: FieldDigest
-    scans: List[FieldDigest]
+    frames: List[FieldDigest]
 
     def check(self, other: 'StreamDigest'):
         """Check that this digest is compatible with another.
 
-        Assert that for each packet and scan recorded in this digest, all
+        Assert that for each packet and frame recorded in this digest, all
         hashes match hashes in the other digest. The other digest may have
         additional hashes for fields that aren't present here.
         """
 
-        assert len(self.scans) == len(other.scans)
+        assert len(self.frames) == len(other.frames)
         logging.debug("Checking packet hash..")
         self.packet_hash.check(other.packet_hash)
 
-        logging.debug("Checking scan hash..")
-        for s, t in zip(self.scans, other.scans):
+        logging.debug("Checking frame hash..")
+        for s, t in zip(self.frames, other.frames):
             s.check(t)
 
     def to_json(self) -> str:
@@ -117,7 +117,7 @@ class StreamDigest:
         return json.dumps(
             {
                 'packet_hash': self.packet_hash.hashes,
-                'scans': [d.hashes for d in self.scans]
+                'frames': [d.hashes for d in self.frames]
             },
             indent=4)
 
@@ -132,37 +132,38 @@ class StreamDigest:
         logging.debug(f"Creating digest with {len(plist)} Lidar packets out of total {len(allpackets)}")
         metadata = source.sensor_info[0]
         pf = PacketFormat(metadata)
-        batcher = ScanBatcher(metadata)
-        scan = LidarScan(metadata)
+        batcher = FrameBatcher(metadata)
+        frame = LidarFrame(metadata)
 
         def batch():
-            nonlocal scan
-            new_scan = True
+            nonlocal frame
+            new_frame = True
             for p in plist:
-                new_scan = False
-                if batcher(p, scan):
-                    print("scan finished")
-                    yield scan
-                    scan = LidarScan(metadata)
-                    new_scan = True
-            if not new_scan:
-                yield scan
+                new_frame = False
+                if batcher.batch(p, frame):
+                    print("frame finished")
+                    yield frame
+                    frame = LidarFrame(metadata)
+                    new_frame = True
+            if not new_frame:
+                yield frame
 
-        scans_list1, scans_list2 = tee(batch())
-        for scan in scans_list1:
-            logging.debug(f"Packets for StreamDigest created a scan with complete status {scan.complete()}")
+        frames_list1, frames_list2 = tee(batch())
+        for frame in frames_list1:
+            logging.debug(f"Packets for StreamDigest created a frame with complete status {frame.complete()}")
 
-        # scan_digests = list(map(FieldDigest.from_scan, Scans(packets)))
-        scan_digests = list(map(FieldDigest.from_scan, scans_list2))
+        # frame_digests = list(map(FieldDigest.from_frame, Frames(packets)))
+        frame_digests = list(map(FieldDigest.from_frame, frames_list2))
         packet_digest = FieldDigest.from_packets(plist, pf)
 
-        return cls(packet_hash=packet_digest, scans=scan_digests)
+        return cls(packet_hash=packet_digest, frames=frame_digests)
 
     @classmethod
     def from_json(cls, json_data: str) -> 'StreamDigest':
         """Instantiate from json representation."""
         d = json.loads(json_data)
 
+        frames_data = d.get('frames', d.get('scans', []))
         return cls(
             packet_hash=FieldDigest(**d['packet_hash']),
-            scans=[FieldDigest(**hashes) for hashes in d.get('scans', [])])
+            frames=[FieldDigest(**hashes) for hashes in frames_data])

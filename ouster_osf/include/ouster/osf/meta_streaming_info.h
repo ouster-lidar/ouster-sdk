@@ -15,10 +15,10 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/core/types.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/buffer.h"
 #include "ouster/osf/metadata.h"
-#include "ouster/types.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -136,8 +136,7 @@ struct OUSTER_API_CLASS StreamStats {
      * @param[in] msg_size Set the average message size to the specified value.
      */
     OUSTER_API_FUNCTION
-    StreamStats(uint32_t s_id, ts_t receive_ts, ts_t sensor_ts,
-                uint32_t msg_size);
+    StreamStats(uint32_t s_id, ts_t receive_ts, ts_t sensor_ts, uint32_t msg_size);
 
     /**
      * Update values within the StreamStats
@@ -180,8 +179,7 @@ std::string to_string(const StreamStats& stream_stats);
  * Flat Buffer Reference:
  *   fb/streaming/streaming_info.fbs :: StreamingInfo
  */
-class OUSTER_API_CLASS StreamingInfo
-    : public MetadataEntryHelper<StreamingInfo> {
+class OUSTER_API_CLASS StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
    public:
     OUSTER_API_FUNCTION
     StreamingInfo() = default;
@@ -197,9 +195,8 @@ class OUSTER_API_CLASS StreamingInfo
      *                         stream_id/StreamStats map.
      */
     OUSTER_API_FUNCTION
-    StreamingInfo(
-        const std::vector<std::pair<uint64_t, ChunkInfo>>& chunks_info,
-        const std::vector<std::pair<uint32_t, StreamStats>>& stream_stats);
+    StreamingInfo(const std::vector<std::pair<uint64_t, ChunkInfo>>& chunks_info,
+                  const std::vector<std::pair<uint32_t, StreamStats>>& stream_stats);
 
     /**
      * @param[in] chunks_info ///< Map containing stream_id/ChunkInfo data.
@@ -242,7 +239,7 @@ class OUSTER_API_CLASS StreamingInfo
      * @return The new StreamingInfo cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer& buf);
 
     /**
      * Get the string representation for the LidarSensor object.

@@ -7,8 +7,8 @@
 
 #include <iostream>
 
-#include "ouster/os_pcap.h"
-#include "ouster/pcap.h"
+#include "ouster/pcap/os_pcap.h"
+#include "ouster/pcap/pcap.h"
 
 using namespace ouster::sdk::core;
 using namespace ouster::sdk::pcap;
@@ -31,7 +31,7 @@ TEST(FusaProfileTest, packet_size) {
 
     // The profile in the corresponding metadata should be
     // identified correctly as PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL
-    ASSERT_EQ(info.format.udp_profile_lidar, PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL);
+    ASSERT_EQ(info.format.udp_profile_lidar, UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
 
     size_t packet_size = pcap.next_packet();
     ASSERT_EQ(packet_size, 16640L);
@@ -53,14 +53,13 @@ TEST(FusaProfileTest, fields) {
     // check preconditions for the test
     constexpr int pixels_per_column = 128u;
     ASSERT_EQ(info.config.lidar_mode, LidarMode::_1024x10);
-    ASSERT_EQ(info.format.udp_profile_lidar,
-              UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
+    ASSERT_EQ(info.format.udp_profile_lidar, UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
     ASSERT_EQ(pf.pixels_per_column, pixels_per_column);
 
     // check field widths
     int expected_cols = 16;
-    ASSERT_EQ(pf.field_type(ChanField::RANGE), UINT32);
-    ASSERT_EQ(pf.field_type(ChanField::RANGE2), UINT32);
+    ASSERT_EQ(pf.field_type(ChanField::RANGE), ChanFieldType::UINT32);
+    ASSERT_EQ(pf.field_type(ChanField::RANGE2), ChanFieldType::UINT32);
     ASSERT_EQ(pf.columns_per_packet, expected_cols);
 
     // check packet header values
@@ -71,23 +70,20 @@ TEST(FusaProfileTest, fields) {
     ASSERT_EQ(pf.prod_sn(pcap.current_data()), info.sn);
     ASSERT_EQ(pf.countdown_thermal_shutdown(pcap.current_data()), 0u);
     ASSERT_EQ(pf.countdown_shot_limiting(pcap.current_data()), 0u);
-    ASSERT_EQ(pf.thermal_shutdown(pcap.current_data()), 0u);
-    ASSERT_EQ(pf.shot_limiting(pcap.current_data()), 0u);
+    ASSERT_EQ(pf.thermal_shutdown(pcap.current_data()), ThermalShutdownStatus::NORMAL);
+    ASSERT_EQ(pf.shot_limiting(pcap.current_data()), ShotLimitingStatus::NORMAL);
 
     // check column header values
-    uint64_t col_timestamps[] = {
-        647839983424, 647840089656, 647840187456, 647840275096,
-        647840379896, 647840469616, 647840567576, 647840675576,
-        647840768056, 647840861408, 647840965048, 647841059888,
-        647841161128, 647841259968, 647841351568, 647841450008};
+    uint64_t col_timestamps[] = {647839983424, 647840089656, 647840187456, 647840275096,
+                                 647840379896, 647840469616, 647840567576, 647840675576,
+                                 647840768056, 647840861408, 647840965048, 647841059888,
+                                 647841161128, 647841259968, 647841351568, 647841450008};
 
     for (int col = 0; col < expected_cols; col++) {
-        EXPECT_EQ(pf.col_timestamp(pf.nth_col(col, pcap.current_data())),
-                  col_timestamps[col]);
+        EXPECT_EQ(pf.col_timestamp(pf.nth_col(col, pcap.current_data())), col_timestamps[col]);
         // note - measurement id isn't necessarily the same as the column number
         // just a coincidence here
-        EXPECT_EQ(pf.col_measurement_id(pf.nth_col(col, pcap.current_data())),
-                  col);
+        EXPECT_EQ(pf.col_measurement_id(pf.nth_col(col, pcap.current_data())), col);
         EXPECT_EQ(pf.col_status(pf.nth_col(col, pcap.current_data())),
                   1u  // per eUDP docs, the column status of 0x01 indicates a
                       // valid column
@@ -98,11 +94,9 @@ TEST(FusaProfileTest, fields) {
     int test_col_idx = 4;
     int pixels_to_test = 16;
     const uint8_t* col = pf.nth_col(test_col_idx, pcap.current_data());
-    uint32_t expected_range[] = {0,    2328, 2328, 2320, 3096, 2312,
-                                 2304, 2280, 3056, 2296, 2264, 2256,
-                                 3000, 2272, 2240, 2240};
-    uint32_t expected_range2[] = {0,   0, 0, 0, 0,   0, 0, 0,
-                                  480, 0, 0, 0, 448, 0, 0, 0};
+    uint32_t expected_range[] = {0,    2328, 2328, 2320, 3096, 2312, 2304, 2280,
+                                 3056, 2296, 2264, 2256, 3000, 2272, 2240, 2240};
+    uint32_t expected_range2[] = {0, 0, 0, 0, 0, 0, 0, 0, 480, 0, 0, 0, 448, 0, 0, 0};
 
     uint32_t range_array[pixels_per_column];
     pf.col_field(col, ChanField::RANGE, range_array);
@@ -122,8 +116,7 @@ TEST(FusaProfileTest, fields) {
         EXPECT_EQ(nearir_array[nearir_idx], expected_nearir[nearir_idx]);
     }
 
-    uint8_t expected_refl[] = {3, 26, 31, 32, 13, 38, 44, 45,
-                               1, 58, 60, 61, 1,  67, 68, 72};
+    uint8_t expected_refl[] = {3, 26, 31, 32, 13, 38, 44, 45, 1, 58, 60, 61, 1, 67, 68, 72};
     uint8_t expected_refl2[] = {0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0};
     uint8_t refl_array[pixels_per_column];
     pf.col_field(col, ChanField::REFLECTIVITY, refl_array);

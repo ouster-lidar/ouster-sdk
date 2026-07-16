@@ -72,6 +72,7 @@ table LidarScanMsg {
     shutdown_countdown: uint8;
     shot_limiting_countdown: uint8;
     alert_flags:[uint8];
+    objects:[ObjectList];
 }
 
 // Scan data from a lidar sensor. One scan is a sweep of a sensor (360 degree).

@@ -21,7 +21,6 @@ RUN apt-get update && apt-get install -y \
     libglfw3-dev \
     libpng-dev \
     libtbb-dev \
-    robin-map-dev \
     libceres-dev \
     libzstd-dev \
     libzip-dev \
@@ -32,7 +31,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev
 
 RUN pip install --upgrade pip && \
-    pip install waitress
+    pip install "hypercorn>=0.18,<0.19"
 
 FROM ouster-sdk-base AS ouster-sdk-public
 RUN echo "Installing ouster-sdk from pypi.org" && \

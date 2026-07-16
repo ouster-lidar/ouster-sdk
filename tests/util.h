@@ -5,19 +5,31 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <map>
 #include <random>
 #include <string>
+#include <vector>
 
-#include "ouster/impl/packet_writer.h"
+#include "ouster/core/typedefs.h"
 
 class Timer {
    public:
-    void start() { t_start = std::chrono::system_clock::now(); }
+    void start() {
+        t_start = std::chrono::system_clock::now();
+    }
 
-    void stop() { t_end = std::chrono::system_clock::now(); }
+    void stop() {
+        t_end = std::chrono::system_clock::now();
+    }
+
+    int64_t elapsed_nanoseconds() {
+        using namespace std::chrono;
+        return duration_cast<nanoseconds>(t_end - t_start).count();
+    }
 
     int64_t elapsed_microseconds() {
         using namespace std::chrono;
@@ -45,8 +57,7 @@ class MovingAverage {
     }
 
     operator double() const {
-        return static_cast<double>(total_sum) /
-               static_cast<double>(std::min(samples_count, N));
+        return static_cast<double>(total_sum) / static_cast<double>(std::min(samples_count, N));
     }
 
    private:
@@ -71,8 +82,8 @@ std::map<std::string, std::string> term_styles() {
  * seeded version for consistent replication
  */
 template <typename T>
-void randomize_field(Eigen::Ref<ouster::sdk::core::img_t<T>> field,
-                     uint64_t value_mask, size_t seed) {
+void randomize_field(Eigen::Ref<ouster::sdk::core::img_t<T>> field, uint64_t value_mask,
+                     size_t seed) {
     auto g = std::mt19937(seed);
     auto d = std::uniform_int_distribution<uint64_t>(0, value_mask);
 
@@ -88,8 +99,7 @@ void randomize_field(Eigen::Ref<ouster::sdk::core::img_t<T>> field,
  * randomize field with values conforming to value_mask
  */
 template <typename T>
-void randomize_field(Eigen::Ref<ouster::sdk::core::img_t<T>> field,
-                     uint64_t value_mask) {
+void randomize_field(Eigen::Ref<ouster::sdk::core::img_t<T>> field, uint64_t value_mask) {
     std::random_device rd;
     randomize_field(field, value_mask, rd());
 }
@@ -99,15 +109,13 @@ inline std::string getenvs(const std::string& var) {
     return res ? std::string{res} : std::string{};
 }
 
-inline bool enable_performance_tests() {
-    static std::vector<std::string> yes = {"1", "Y", "YES", "yes",
-                                           "Y", "y", "ON",  "on"};
-    if (const char* env = std::getenv("OUSTER_PERFORMANCE")) {
-        for (const auto& str : yes) {
-            if (strcmp(env, str.c_str()) == 0) {
-                return true;
-            }
-        }
+inline bool enable_perf_comparison_tests() {
+    static const std::vector<std::string> yes = {"1", "y", "yes", "on"};
+    const char* env = std::getenv("OUSTER_PERF_COMPARISON");
+    if (!env) return false;
+    std::string lower;
+    for (const char* p = env; *p != '\0'; ++p) {
+        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(*p))));
     }
-    return false;
+    return std::find(yes.begin(), yes.end(), lower) != yes.end();
 }

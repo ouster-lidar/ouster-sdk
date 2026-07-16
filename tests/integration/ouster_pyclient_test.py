@@ -109,8 +109,8 @@ def run_receive_data(test_file_prefix):
         good = StreamDigest.from_json(f.read())
 
     other = StreamDigest.from_packets(core.Packets(it, info))
-    logger.debug(f"File digest has {len(good.scans)} scans; Other digest has {len(other.scans)} scans")
-    assert len(good.scans) > 0
+    logger.debug(f"File digest has {len(good.frames)} frames; Other digest has {len(other.frames)} frames")
+    assert len(good.frames) > 0
 
     good.check(other)
 
@@ -123,7 +123,7 @@ def run_read_data(test_file_prefix):
         good = StreamDigest.from_json(f.read())
     other = StreamDigest.from_packets(pcap.PcapPacketSource(path, sensor_info=[info]))
 
-    assert len(good.scans) > 0
+    assert len(good.frames) > 0
 
     good.check(other)
 

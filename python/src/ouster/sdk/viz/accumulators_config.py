@@ -2,16 +2,16 @@
 Copyright (c) 2023, Ouster, Inc.
 All rights reserved.
 
-Ouster scan accumulation for LidarScanViz
+Ouster frame accumulation for LidarFrameViz
 """
 
 MAP_MAX_POINTS_NUM: int = 1500000  # 1.5 M default
 MAP_SELECT_RATIO: float = 0.001
 
 
-class LidarScanVizAccumulatorsConfig:
+class LidarFrameVizAccumulatorsConfig:
     """Represents configuration for AccumulatorBase implementations used within
-    LidarScanVizAccumulators."""
+    LidarFrameVizAccumulators."""
     def __init__(self,
         accum_max_num: int = 0,
         accum_min_dist_meters: float = 0,

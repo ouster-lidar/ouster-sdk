@@ -1,13 +1,19 @@
-#include <pybind11/chrono.h>
-#include <pybind11/eigen.h>
-#include <pybind11/functional.h>
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/stl_bind.h>
+#include <nanobind/make_iterator.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/chrono.h>
+#include <nanobind/stl/function.h>
+#include <nanobind/stl/map.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/unique_ptr.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/trampoline.h>
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <iterator>
 #include <map>
@@ -18,11 +24,10 @@
 #include <vector>
 
 #include "common.h"
-#include "ouster/client.h"
-#include "ouster/error_handler.h"
-#include "ouster/impl/profile_extension.h"
-#include "ouster/lidar_scan.h"
-#include "ouster/lidar_scan_set.h"
+#include "ouster/core/error_handler.h"
+#include "ouster/core/frame_set.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/profile_extension.h"
 #include "ouster/osf/async_writer.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/meta_extrinsics.h"
@@ -30,17 +35,18 @@
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/operations.h"
-#include "ouster/osf/osf_scan_source.h"
-#include "ouster/osf/png_lidarscan_encoder.h"
+#include "ouster/osf/osf_frame_set_source.h"
+#include "ouster/osf/png_lidarframe_encoder.h"
 #include "ouster/osf/reader.h"
-#include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/osf/stream_lidar_frame.h"
 #include "ouster/osf/writer.h"
-#include "ouster/osf/zpng_lidarscan_encoder.h"
+#include "ouster/osf/zpng_lidarframe_encoder.h"
+#include "ouster/sensor/client.h"
 
-namespace py = pybind11;
+namespace py = nanobind;
 
 using namespace ouster::sdk;
-
+namespace {
 class FutureWrapper {
    public:
     explicit FutureWrapper(std::future<void>&& fut) : fut_(std::move(fut)) {}
@@ -50,52 +56,82 @@ class FutureWrapper {
         fut_.get();
     }
 
-    bool valid() const { return fut_.valid(); }
+    bool valid() const {
+        return fut_.valid();
+    }
 
     void wait() {
         py::gil_scoped_release release;
         fut_.wait();
     }
 
+    bool done() const {
+        using namespace std::chrono_literals;
+        return fut_.wait_for(0s) == std::future_status::ready;
+    }
+
    private:
     std::future<void> fut_;
 };
 
-inline std::vector<uint8_t> getvector(py::buffer& buf) {
-    auto info = buf.request();
-    if (info.format != py::format_descriptor<uint8_t>::format()) {
-        throw std::invalid_argument(
-            "Incompatible argument: expected a bytearray");
-    }
-    if (info.ndim != 1) {
-        throw std::invalid_argument(
-            "Incompatible argument: expect number of dimensions 1");
-    }
-    return {static_cast<uint8_t*>(info.ptr),
-            static_cast<uint8_t*>(info.ptr) + info.size};
+// Helper to extract vector from bytes object
+inline std::vector<uint8_t> getvector(const py::bytes& buf) {
+    const char* ptr = buf.c_str();
+    size_t size = buf.size();
+    return std::vector<uint8_t>(ptr, ptr + size);
 }
 
-/*
- * NOTE: Copied from _client.cpp
- * Map a dtype to a channel field type
- */
-static core::ChanFieldType field_type_of_dtype(const py::dtype& dtype) {
-    if (dtype.is(py::dtype::of<uint8_t>())) {
-        return core::ChanFieldType::UINT8;
-    } else if (dtype.is(py::dtype::of<uint16_t>())) {
-        return core::ChanFieldType::UINT16;
-    } else if (dtype.is(py::dtype::of<uint32_t>())) {
-        return core::ChanFieldType::UINT32;
-    } else if (dtype.is(py::dtype::of<uint64_t>())) {
-        return core::ChanFieldType::UINT64;
-    } else {
-        throw std::invalid_argument("Invalid dtype for a channel field");
-    }
-}
+// Helper for dtype conversion
+// Accepts a python numpy.dtype object
+inline ouster::sdk::core::ChanFieldType field_type_of_dtype(const py::object& dtype) {
+    // Extract 'kind' and 'itemsize' from the python dtype object
+    // kind is a char (S1 string), itemsize is int
+    std::string kind_str = py::cast<std::string>(dtype.attr("kind"));
+    char kind = kind_str.empty() ? '?' : kind_str[0];
+    size_t itemsize = py::cast<size_t>(dtype.attr("itemsize"));
 
-void init_osf(py::module& module, py::module& /*unused*/) {
+    using namespace ouster::sdk::core;
+    if (kind == 'u') {  // Unsigned
+        if (itemsize == 1) {
+            return ChanFieldType::UINT8;
+        }
+        if (itemsize == 2) {
+            return ChanFieldType::UINT16;
+        }
+        if (itemsize == 4) {
+            return ChanFieldType::UINT32;
+        }
+        if (itemsize == 8) {
+            return ChanFieldType::UINT64;
+        }
+    } else if (kind == 'i') {  // Signed
+        if (itemsize == 1) {
+            return ChanFieldType::INT8;
+        }
+        if (itemsize == 2) {
+            return ChanFieldType::INT16;
+        }
+        if (itemsize == 4) {
+            return ChanFieldType::INT32;
+        }
+        if (itemsize == 8) {
+            return ChanFieldType::INT64;
+        }
+    } else if (kind == 'f') {  // Float
+        if (itemsize == 4) {
+            return ChanFieldType::FLOAT32;
+        }
+        if (itemsize == 8) {
+            return ChanFieldType::FLOAT64;
+        }
+    }
+    throw std::runtime_error("Unsupported dtype for LidarFrame field");
+}
+}  // namespace
+
+void init_osf(py::module_& module, py::module_& /*unused*/) {
     module.doc() = R"doc(
-Ouster OSF Python API generated by pybind11.
+Ouster OSF Python API generated by nanobind.
 
 This module is generated from the C++ code and provides native functions
 to work with OSF files.
@@ -119,7 +155,7 @@ to work with OSF files.
 
     module.def("backup_osf_file_metablob", &osf::backup_osf_file_metablob,
                R"doc(
-         Backup the metadata blob in an OSF file.
+          Backup the metadata blob in an OSF file.
 
         :file: OSF file path (v1/v2)
         :backup_file_name: Backup path
@@ -148,61 +184,60 @@ to work with OSF files.
     // Reader
     py::class_<osf::Reader>(module, "Reader", R"(
         Reader is a main entry point to get any info out of OSF file.
-    )")
+    )",
+                            py::dynamic_attr())
         .def(py::init<const std::string&>(), py::arg("file"))
-        .def(py::init<const std::string&, py::function>(), py::arg("file"),
-             py::arg("error_handler") = py::none())
-        .def_property_readonly("metadata_id", &osf::Reader::metadata_id, R"(
+        .def(py::init<const std::string&,
+                      std::function<void(ouster::sdk::core::Severity, std::string)>>(),
+             py::arg("file"), py::arg("error_handler") = py::none())
+        .def_prop_ro("metadata_id", &osf::Reader::metadata_id, R"(
             Data id string
         )")
-        .def_property_readonly(
-            "start_ts",
-            [](const osf::Reader& reader) { return reader.start_ts().count(); },
+        .def_prop_ro(
+            "start_ts", [](const osf::Reader& reader) { return reader.start_ts().count(); },
             R"(
                 Start timestamp (ns) - the lowest message timestamp present in the file
         )")
-        .def_property_readonly(
-            "end_ts",
-            [](const osf::Reader& reader) { return reader.end_ts().count(); },
+        .def_prop_ro(
+            "end_ts", [](const osf::Reader& reader) { return reader.end_ts().count(); },
             R"(
                 End timestamp (ns) - the highest message timestamp present in the file
         )")
-        .def_property_readonly(
-            "version",
-            [](const osf::Reader& reader) { return reader.version(); },
+        .def_prop_ro(
+            "size", [](const osf::Reader& reader) { return reader.size(); },
+            "Size of the OSF file in bytes")
+        .def_prop_ro(
+            "version", [](const osf::Reader& reader) { return reader.version(); },
             "Version of OSF file format in the file")
-        .def_property_readonly("meta_store", &osf::Reader::meta_store, R"(
+        .def_prop_ro("meta_store", &osf::Reader::meta_store, R"(
                 Returns the metadata store that gives an access to all
                 *metadata entries* in the file.
         )")
-        .def_property_readonly(
-            "has_stream_info", &osf::Reader::has_stream_info,
-            "Whether ``StreamingInfo`` metadata is available (i.e. reading "
-            "messages by timestamp and streams can be performed)")
-        .def_property_readonly(
-            "has_message_idx", &osf::Reader::has_message_idx,
-            "Whether OSF contains the message counts that are needed for "
-            "``ts_by_message_idx()`` (message counts was added a bit later to "
-            "the OSF core, so this function will be obsolete over time)")
-        .def_property_readonly(
-            "has_timestamp_idx", &osf::Reader::has_timestamp_idx,
-            "Whether OSF contains the message timestamp index in the metadata "
-            "necessary to quickly collate and jump to a specific message time.")
+        .def_prop_ro("has_stream_info", &osf::Reader::has_stream_info,
+                     "Whether ``StreamingInfo`` metadata is available (i.e. reading "
+                     "messages by timestamp and streams can be performed)")
+        .def_prop_ro("has_message_idx", &osf::Reader::has_message_idx,
+                     "Whether OSF contains the message counts that are needed for "
+                     "``ts_by_message_idx()`` (message counts was added a bit later to "
+                     "the OSF core, so this function will be obsolete over time)")
+        .def_prop_ro("has_timestamp_idx", &osf::Reader::has_timestamp_idx,
+                     "Whether OSF contains the message timestamp index in the metadata "
+                     "necessary to quickly collate and jump to a specific message time.")
         .def(
             "messages",
-            [](osf::Reader& reader) {
-                return py::make_iterator(reader.messages().begin(),
-                                         reader.messages().end());
+            [](osf::Reader& self) {
+                return py::make_iterator(py::type<osf::Reader>(), "MessagesIter",
+                                         self.messages().begin(), self.messages().end());
             },
             py::keep_alive<0, 1>(), R"(
                 Creates an iterator to read messages in default ``STREAMING`` layout.
             )")
         .def(
             "messages",
-            [](osf::Reader& reader, uint64_t start_ts, uint64_t end_ts) {
-                auto msgs =
-                    reader.messages(osf::ts_t{start_ts}, osf::ts_t{end_ts});
-                return py::make_iterator(msgs.begin(), msgs.end());
+            [](osf::Reader& self, uint64_t start_ts, uint64_t end_ts) {
+                auto msgs = self.messages(osf::ts_t{start_ts}, osf::ts_t{end_ts});
+                return py::make_iterator(py::type<osf::Reader>(), "MessagesIter", msgs.begin(),
+                                         msgs.end());
             },
             py::keep_alive<0, 1>(), py::arg("start_ts"), py::arg("end_ts"),
             R"(
@@ -211,35 +246,32 @@ to work with OSF files.
                 )")
         .def(
             "messages",
-            [](osf::Reader& reader, std::vector<uint32_t> stream_ids) {
-                auto msgs = reader.messages(stream_ids);
-                return py::make_iterator(msgs.begin(), msgs.end());
+            [](osf::Reader& self, const std::vector<uint32_t>& stream_ids) {
+                auto msgs = self.messages(stream_ids);
+                return py::make_iterator(py::type<osf::Reader>(), "MessagesIter", msgs.begin(),
+                                         msgs.end());
             },
-            py::keep_alive<0, 1>(),
-            py::arg("stream_ids") = std::vector<uint32_t>{},
+            py::keep_alive<0, 1>(), py::arg("stream_ids") = std::vector<uint32_t>{},
             R"(
                     Read `messages` from only specified ``[<stream_ids>]`` list
                 )")
         .def(
             "messages",
-            [](osf::Reader& reader, std::vector<uint32_t> stream_ids,
-               uint64_t start_ts, uint64_t end_ts) {
-                auto msgs = reader.messages(stream_ids, osf::ts_t{start_ts},
-                                            osf::ts_t{end_ts});
-                return py::make_iterator(msgs.begin(), msgs.end());
+            [](osf::Reader& self, const std::vector<uint32_t>& stream_ids, uint64_t start_ts,
+               uint64_t end_ts) {
+                auto msgs = self.messages(stream_ids, osf::ts_t{start_ts}, osf::ts_t{end_ts});
+                return py::make_iterator(py::type<osf::Reader>(), "MessagesIter", msgs.begin(),
+                                         msgs.end());
             },
-            py::keep_alive<0, 1>(), py::arg("stream_ids"), py::arg("start_ts"),
-            py::arg("end_ts"),
+            py::keep_alive<0, 1>(), py::arg("stream_ids"), py::arg("start_ts"), py::arg("end_ts"),
             R"(
                     Read `messages` in ``[start_ts, end_ts]`` timestamp range (inclusive) of a
                     specified ``<stream_ids>`` list
                 )")
         .def(
             "ts_by_message_idx",
-            [](osf::Reader& reader, uint32_t stream_id,
-               uint32_t message_idx) -> py::object {
-                auto timestamp =
-                    reader.ts_by_message_idx(stream_id, message_idx);
+            [](osf::Reader& reader, uint32_t stream_id, uint32_t message_idx) -> py::object {
+                auto timestamp = reader.ts_by_message_idx(stream_id, message_idx);
                 if (timestamp) {
                     return py::int_(timestamp->count());
                 }
@@ -254,12 +286,32 @@ to work with OSF files.
                 )")
         .def(
             "chunks",
-            [](osf::Reader& reader) {
-                return py::make_iterator(reader.chunks().begin(),
-                                         reader.chunks().end());
+            [](osf::Reader& self) {
+                return py::make_iterator(py::type<osf::Reader>(), "ChunksIter",
+                                         self.chunks().begin(), self.chunks().end());
             },
             py::keep_alive<0, 1>(), R"(
                 Creates an iterator to reads chunks as they appear in a file.
+            )");
+
+    py::class_<osf::ChunkInfo>(module, "ChunkInfo")
+        .def_ro("offset", &osf::ChunkInfo::offset)
+        .def_ro("stream_id", &osf::ChunkInfo::stream_id)
+        .def_ro("message_count", &osf::ChunkInfo::message_count);
+
+    py::class_<osf::ChunkRef>(module, "ChunkRef")
+        .def_prop_ro("start_ts", &osf::ChunkRef::start_ts)
+        .def_prop_ro("end_ts", &osf::ChunkRef::end_ts)
+        .def_prop_ro("size", &osf::ChunkRef::size)
+        .def_prop_ro("offset", &osf::ChunkRef::offset)
+        .def(
+            "__iter__",
+            [](osf::ChunkRef& self) {
+                return py::make_iterator(py::type<osf::ChunkRef>(), "MessagesIter", self.begin(),
+                                         self.end());
+            },
+            py::keep_alive<0, 1>(), R"(
+                Creates an iterator to get messages as they appear in a chunk.
             )");
 
     // MessageRef
@@ -272,48 +324,41 @@ to work with OSF files.
         Underlying message memory is not copied and reference to mmap'ed file
         object until the ``decode()`` is called.
     )")
-        .def_property_readonly(
-            "id", &osf::MessageRef::id,
-            "Message id which is a ``stream_id`` and point to the "
-            "`metadata entry` that describes the stream")
-        .def_property_readonly(
+        .def_prop_ro("id", &osf::MessageRef::id,
+                     "Message id which is a ``stream_id`` and point to the "
+                     "`metadata entry` that describes the stream")
+        .def_prop_ro(
             "ts", [](const osf::MessageRef& msg) { return msg.ts().count(); },
             "Message timestamp (ns)")
-        .def_property_readonly("buffer", &osf::MessageRef::buffer,
-                               "Returns encoded message byte array")
+        .def_prop_ro("buffer", &osf::MessageRef::buffer, "Returns encoded message byte array")
         .def("__repr__", &osf::MessageRef::to_string)
         .def("__str__", &osf::MessageRef::to_string)
         .def(
             "of",
-            [](const osf::MessageRef& msg, py::object msg_stream) {
+            [](const osf::MessageRef& msg, const py::object& msg_stream) {
                 if (py::hasattr(msg_stream, "type_id")) {
-                    std::string type_id = py::cast<std::string>(
-                        py::getattr(msg_stream, "type_id"));
+                    std::string type_id = py::cast<std::string>(py::getattr(msg_stream, "type_id"));
                     return msg.is(type_id);
                 }
                 return false;
             },
-            py::arg("msg_stream"),
-            "Checks whether the message belongs to the ``msg_stream`` type")
+            py::arg("msg_stream"), "Checks whether the message belongs to the ``msg_stream`` type")
         .def(
             "decode",
             [](const osf::MessageRef& msg,
-               const nonstd::optional<std::vector<std::string>>& fields)
-                -> py::object {
-                if (msg.is<osf::LidarScanStream>()) {
-                    auto decoded_obj =
-                        msg.decode_msg<osf::LidarScanStream>(fields);
+               const nonstd::optional<std::vector<std::string>>& fields) -> py::object {
+                if (msg.is<osf::LidarFrameStream>()) {
+                    auto decoded_obj = msg.decode_msg<osf::LidarFrameStream>(fields);
                     return py::cast(*decoded_obj);
                 }
                 // TODO[pb]: Add dynamic check for Stream decoding functions ...
                 return py::none();
             },
-            py::arg("fields") = nonstd::optional<std::vector<std::string>>(),
-            py::return_value_policy::move,
+            py::arg("fields") = nonstd::optional<std::vector<std::string>>(), py::rv_policy::move,
             R"(
             Decodes the underlying object and returns it.
 
-            Currently supports only LidarScans
+            Currently supports only LidarFrames
         )");
 
     // MetadataStore
@@ -324,19 +369,17 @@ to work with OSF files.
         available streams, chunks layout method, etc.
     )")
         .def(py::init<>())
-        .def("__len__", &osf::MetadataStore::size,
-             "Number of `metadata entries` in the file")
+        .def("__len__", &osf::MetadataStore::size, "Number of `metadata entries` in the file")
         .def(
             "__iter__",
-            [](const osf::MetadataStore& metadata_store) {
-                return py::make_key_iterator(metadata_store.entries().begin(),
-                                             metadata_store.entries().end());
+            [](osf::MetadataStore& self) {
+                return py::make_key_iterator(py::type<osf::MetadataStore>(), "iter",
+                                             self.entries().begin(), self.entries().end());
             },
             py::keep_alive<0, 1>(), "Creates an iterator to get metadata id's")
         .def(
             "__getitem__",
-            [](const osf::MetadataStore& metadata_store,
-               osf::MetadataStore::key_type key) {
+            [](const osf::MetadataStore& metadata_store, osf::MetadataStore::key_type key) {
                 auto entries = metadata_store.entries();
                 auto it = entries.find(key);
                 if (it == entries.end()) {
@@ -344,22 +387,20 @@ to work with OSF files.
                 }
                 return it->second.get();
             },
-            py::arg("meta_id"), py::return_value_policy::reference,
-            "Get `metadata entry` by id")
+            py::arg("meta_id"), py::rv_policy::reference, "Get `metadata entry` by id")
         .def(
             "items",
-            [](const osf::MetadataStore& metadata_store) {
-                return py::make_iterator(metadata_store.entries().begin(),
-                                         metadata_store.entries().end());
+            [](osf::MetadataStore& self) {
+                return py::make_iterator(py::type<osf::MetadataStore>(), "items_iter",
+                                         self.entries().begin(), self.entries().end());
             },
             py::keep_alive<0, 1>(), "Key/Value pairs of `metadata entries`")
         .def(
             "find",
-            [](const osf::MetadataStore& metadata_store, py::object meta_obj) {
+            [](const osf::MetadataStore& metadata_store, const py::object& meta_obj) {
                 std::map<uint32_t, std::shared_ptr<osf::MetadataEntry>> res;
                 if (py::hasattr(meta_obj, "type_id")) {
-                    std::string type_id =
-                        py::cast<std::string>(py::getattr(meta_obj, "type_id"));
+                    std::string type_id = py::cast<std::string>(py::getattr(meta_obj, "type_id"));
                     auto& entries = metadata_store.entries();
                     auto it = entries.begin();
                     while (it != entries.end()) {
@@ -371,15 +412,13 @@ to work with OSF files.
                 }
                 return res;
             },
-            py::arg("meta_type"),
-            "Get all `metadata entries` of the specified ``meta_type``")
+            py::arg("meta_type"), "Get all `metadata entries` of the specified ``meta_type``")
         .def(
             "get",
             [](const osf::MetadataStore& metadata_store,
-               py::object meta_obj) -> std::shared_ptr<osf::MetadataEntry> {
+               const py::object& meta_obj) -> std::shared_ptr<osf::MetadataEntry> {
                 if (py::hasattr(meta_obj, "type_id")) {
-                    std::string type_id =
-                        py::cast<std::string>(py::getattr(meta_obj, "type_id"));
+                    std::string type_id = py::cast<std::string>(py::getattr(meta_obj, "type_id"));
                     auto& entries = metadata_store.entries();
                     auto it = entries.begin();
                     while (it != entries.end()) {
@@ -391,21 +430,20 @@ to work with OSF files.
                 }
                 return nullptr;
             },
-            py::arg("meta_type"),
-            "Get the first `metadata entry` of the specified ``meta_type``");
+            py::arg("meta_type"), "Get the first `metadata entry` of the specified ``meta_type``");
 
     // MetadataEntry --- / ------ <-- trampoline --- / ---
     class PyMetadataEntry : public osf::MetadataEntry {
        public:
-        using osf::MetadataEntry::MetadataEntry;
+        // NB_TRAMPOLINE defines NBBase and constructor references
+        NB_TRAMPOLINE(osf::MetadataEntry, 20);
 
         std::string type() const override {
-            PYBIND11_OVERLOAD_PURE(std::string, osf::MetadataEntry, type);
+            NB_OVERRIDE_PURE(type);
         }
 
         std::string static_type() const override {
-            PYBIND11_OVERLOAD_PURE(std::string, osf::MetadataEntry,
-                                   static_type);
+            NB_OVERRIDE_PURE(static_type);
         }
 
         std::unique_ptr<osf::MetadataEntry> clone() const override {
@@ -414,42 +452,37 @@ to work with OSF files.
         }
 
         std::vector<uint8_t> buffer() const override {
-            PYBIND11_OVERLOAD_PURE(std::vector<uint8_t>, osf::MetadataEntry,
-                                   buffer);
+            NB_OVERRIDE_PURE(buffer);
         }
 
         std::string repr() const override {
-            PYBIND11_OVERLOAD(std::string, osf::MetadataEntry, repr);
+            NB_OVERRIDE(repr);
         }
 
         std::string to_string() const override {
-            PYBIND11_OVERLOAD(std::string, osf::MetadataEntry, to_string);
+            NB_OVERRIDE(to_string);
         }
     };
 
     // MetadataEntry
-    py::class_<osf::MetadataEntry, PyMetadataEntry,
-               std::shared_ptr<osf::MetadataEntry>>(module, "MetadataEntry", R"(
+    py::class_<osf::MetadataEntry, PyMetadataEntry>(module, "MetadataEntry", R"(
         Single OSF `metadata entry`.
 
         It's typed and has corresponding encoding/decoding functions to the
         underlying bytes representation (``buffer()``/``from_buffer()``)
     )")
         .def(py::init<>())
-        .def_property_readonly("type", &osf::MetadataEntry::type,
-                               "Type of the metadata entry (use this)")
-        .def_property_readonly("static_type", &osf::MetadataEntry::static_type,
-                               "Static type, C++ compile time (in Python use "
-                               "``type_id`` of concrete type objects instead)")
-        .def_property_readonly("id", &osf::MetadataEntry::id,
-                               "Id of the metadata entry (unique for a file)")
-        .def_property_readonly(
-            "buffer", &osf::MetadataEntry::buffer,
-            "Encodes (serialize) metadata entry to a stored byte array")
+        .def_prop_ro("type", &osf::MetadataEntry::type, "Type of the metadata entry (use this)")
+        .def_prop_ro("static_type", &osf::MetadataEntry::static_type,
+                     "Static type, C++ compile time (in Python use "
+                     "``type_id`` of concrete type objects instead)")
+        .def_prop_ro("id", &osf::MetadataEntry::id, "Id of the metadata entry (unique for a file)")
+        .def_prop_ro("buffer", &osf::MetadataEntry::buffer,
+                     "Encodes (serialize) metadata entry to a stored byte array")
         .def_static(
             "from_buffer",
-            [](const std::vector<uint8_t>& buf, const std::string& type_str)
-                -> std::shared_ptr<osf::MetadataEntry> {
+            [](const std::vector<uint8_t>& buf,
+               const std::string& type_str) -> std::shared_ptr<osf::MetadataEntry> {
                 ouster::sdk::osf::OsfBuffer osf_buf;
                 osf_buf.load_data(buf);
                 return osf::MetadataEntry::from_buffer(osf_buf, type_str);
@@ -458,10 +491,10 @@ to work with OSF files.
             "Decodes (deserialize) metadata entry buffer to a typed object")
         .def(
             "of",
-            [](const osf::MetadataEntry* meta_entry, py::object meta_obj_type) {
+            [](const osf::MetadataEntry* meta_entry, const py::object& meta_obj_type) {
                 if (py::hasattr(meta_obj_type, "type_id")) {
-                    std::string type_id = py::cast<std::string>(
-                        py::getattr(meta_obj_type, "type_id"));
+                    std::string type_id =
+                        py::cast<std::string>(py::getattr(meta_obj_type, "type_id"));
                     return (type_id == meta_entry->type());
                 }
                 return false;
@@ -476,20 +509,17 @@ to work with OSF files.
         .def("__str__", &osf::MetadataEntry::to_string);
 
     // MetadataEntryRef
-    py::class_<osf::MetadataEntryRef, osf::MetadataEntry,
-               std::shared_ptr<osf::MetadataEntryRef>>(module,
-                                                       "MetadataEntryRef",
-                                                       R"(
+    py::class_<osf::MetadataEntryRef, osf::MetadataEntry>(module, "MetadataEntryRef",
+                                                          R"(
         MetadataEntryRef
 
     )")
-        .def_property_readonly_static("type_id", [](py::object) {
+        .def_prop_ro_static("type_id", [](const py::object&) {
             return osf::metadata_type<osf::MetadataEntryRef>();
         });
 
     // LidarSensor
-    py::class_<osf::LidarSensor, osf::MetadataEntry,
-               std::shared_ptr<osf::LidarSensor>>(module, "LidarSensor", R"(
+    py::class_<osf::LidarSensor, osf::MetadataEntry>(module, "LidarSensor", R"(
         Ouster Lidar Sensor metadata with sensor intrinsics (i.e. SensorInfo/Metadata)
 
         ``type_id`` static property is a `LidarSensor` metadata type identifier.
@@ -497,85 +527,71 @@ to work with OSF files.
         .def(py::init<core::SensorInfo>(), "Create from ``SensorInfo`` object")
         .def(py::init<std::string>(), py::arg("metadata_json"),
              "Create from ``metadata_json`` string representation")
-        .def_property_readonly("info", &osf::LidarSensor::info,
-                               "SensorInfo stored",
-                               py::return_value_policy::copy)
-        .def_property_readonly("metadata", &osf::LidarSensor::metadata,
-                               "metadata_json string stored")
-        .def_property_readonly_static("type_id", [](py::object) {
-            return osf::metadata_type<osf::LidarSensor>();
-        });
+        .def_prop_ro("info", &osf::LidarSensor::info, "SensorInfo stored", py::rv_policy::copy)
+        .def_prop_ro("metadata", &osf::LidarSensor::metadata, "metadata_json string stored")
+        .def_prop_ro_static(
+            "type_id", [](const py::object&) { return osf::metadata_type<osf::LidarSensor>(); });
 
-    // LidarScanStreamMeta
-    py::class_<osf::LidarScanStreamMeta, osf::MetadataEntry,
-               std::shared_ptr<osf::LidarScanStreamMeta>>(module,
-                                                          "LidarScanStreamMeta")
-        .def_property_readonly_static(
+    // LidarFrameStreamMeta
+    py::class_<osf::LidarFrameStreamMeta, osf::MetadataEntry>(module, "LidarFrameStreamMeta")
+        .def_prop_ro_static(
             "type_id",
-            [](py::object) {
-                return osf::metadata_type<osf::LidarScanStreamMeta>();
-            })
-        .def_property_readonly("sensor_meta_id",
-                               &osf::LidarScanStreamMeta::sensor_meta_id);
+            [](const py::object&) { return osf::metadata_type<osf::LidarFrameStreamMeta>(); })
+        .def_prop_ro("sensor_meta_id", &osf::LidarFrameStreamMeta::sensor_meta_id);
 
-    // LidarScanStream
-    py::class_<osf::LidarScanStream>(module, "LidarScanStream", R"(
-        `Stream` of ``LidarScan`` objects from a sensor.
+    // LidarFrameStream
+    py::class_<osf::LidarFrameStream>(module, "LidarFrameStream", R"(
+        `Stream` of ``LidarFrame`` objects from a sensor.
 
-        ``type_id`` static property is a `LidarScanStream` underlying metadata
+        ``type_id`` static property is a `LidarFrameStream` underlying metadata
         type identifier.
     )")
-        .def_property_readonly_static(
-            "type_id",
-            [](py::object) {
-                return osf::metadata_type<osf::LidarScanStream::meta_type>();
-            })
-        .def_property_readonly("meta", &osf::LidarScanStream::meta,
-                               "`metadata entry` to store `LidarScanStream` "
-                               "metadata in an OSF file");
+        .def_prop_ro_static("type_id",
+                            [](const py::object&) {
+                                return osf::metadata_type<osf::LidarFrameStream::meta_type>();
+                            })
+        .def_prop_ro("meta", &osf::LidarFrameStream::meta,
+                     "`metadata entry` to store `LidarFrameStream` "
+                     "metadata in an OSF file");
 
     // StreamStats
     py::class_<osf::StreamStats>(module, "StreamStats", R"(
         Statistics of a stream in ``STREAMING`` layout OSF files.
     )")
-        .def_readonly("stream_id", &osf::StreamStats::stream_id,
-                      "Id of a stream")
-        .def_property_readonly(
+        .def_ro("stream_id", &osf::StreamStats::stream_id, "Id of a stream")
+        .def_prop_ro(
             "start_ts",
-            [](const osf::StreamStats& stream_stats) {
-                return stream_stats.start_ts.count();
-            },
+            [](const osf::StreamStats& stream_stats) { return stream_stats.start_ts.count(); },
             "Lowest timestamp (ns) of the stream messages")
-        .def_property_readonly(
+        .def_prop_ro(
             "end_ts",
-            [](const osf::StreamStats& stream_stats) {
-                return stream_stats.end_ts.count();
-            },
+            [](const osf::StreamStats& stream_stats) { return stream_stats.end_ts.count(); },
             "Highest timestamp (ns) of the stream messages")
-        .def_property_readonly(
+        .def_prop_ro(
             "receive_timestamps",
-            [](const osf::StreamStats& self) {
-                return py::array(
-                    py::dtype::of<uint64_t>(), self.receive_timestamps.size(),
-                    self.receive_timestamps.data(), py::cast(self));
+            [](py::handle self_h) {
+                const osf::StreamStats& self = py::cast<const osf::StreamStats&>(self_h);
+                size_t shape[1] = {self.receive_timestamps.size()};
+                return py::ndarray<const uint64_t, py::numpy, py::shape<1>>(
+                    self.receive_timestamps.data(), 1, shape, self_h);
             },
             "Receive timestamps of each message in the stream.")
-        .def_property_readonly(
+        .def_prop_ro(
             "sensor_timestamps",
-            [](const osf::StreamStats& self) {
-                return py::array(py::dtype::of<uint64_t>(),
-                                 self.sensor_timestamps.size(),
-                                 self.sensor_timestamps.data(), py::cast(self));
+            [](py::handle self_h) {
+                const osf::StreamStats& self = py::cast<const osf::StreamStats&>(self_h);
+                size_t shape[1] = {self.sensor_timestamps.size()};
+                return py::ndarray<const uint64_t, py::numpy, py::shape<1>>(
+                    self.sensor_timestamps.data(), 1, shape, self_h);
             },
             "Sensor timestamps of each message in the stream.")
-        .def_readonly("message_count", &osf::StreamStats::message_count,
-                      "Number of messages in a stream")
-        .def_readonly("message_avg_size", &osf::StreamStats::message_avg_size,
-                      "Average size (bytes) of a message in a stream");
+        .def_ro("message_count", &osf::StreamStats::message_count, "Number of messages in a stream")
+        .def_ro("message_avg_size", &osf::StreamStats::message_avg_size,
+                "Average size (bytes) of a message in a stream");
 
     // StreamingInfo
-    py::class_<osf::StreamingInfo, osf::MetadataEntry,
-               std::shared_ptr<osf::StreamingInfo>>(module, "StreamingInfo", R"(
+    py::class_<osf::StreamingInfo, osf::MetadataEntry>(module, "StreamingInfo",
+                                                       R"(
         Metadata entry that appears in ``STREAMING`` layout OSF files.
 
         Establishes the `chunk` -> `stream_id` map as well as providing the
@@ -583,45 +599,44 @@ to work with OSF files.
 
         ``type_id`` static property is a `StreamingInfo` metadata type identifier.
     )")
-        .def_property_readonly_static(
+        .def_prop_ro_static(
             "type_id",
-            [](py::object) { return osf::metadata_type<osf::StreamingInfo>(); })
-        .def_property_readonly(
+            [](const py::object& /*unused*/) { return osf::metadata_type<osf::StreamingInfo>(); })
+        .def_prop_ro(
             "chunks_info",
-            [](osf::StreamingInfo& streaming_info) {
-                return py::make_iterator(streaming_info.chunks_info().begin(),
-                                         streaming_info.chunks_info().end());
+            [](osf::StreamingInfo& self) {
+                return py::make_iterator(py::type<osf::StreamingInfo>(), "chunks_info_iter",
+                                         self.chunks_info().begin(), self.chunks_info().end());
             },
-            py::keep_alive<0, 1>(),
-            "Maps `chunk` to `stream_id` by chunk offset")
-        .def_property_readonly(
+            py::keep_alive<0, 1>(), "Maps `chunk` to `stream_id` by chunk offset")
+        .def_prop_ro(
             "stream_stats",
-            [](osf::StreamingInfo& streaming_info) {
-                return py::make_iterator(streaming_info.stream_stats().begin(),
-                                         streaming_info.stream_stats().end());
+            [](osf::StreamingInfo& self) {
+                return py::make_iterator(py::type<osf::StreamingInfo>(), "stream_stats_iter",
+                                         self.stream_stats().begin(), self.stream_stats().end());
             },
             py::keep_alive<0, 1>(), "Statistics of messages in per stream");
 
     // Extrinsics
-    py::class_<osf::Extrinsics, osf::MetadataEntry,
-               std::shared_ptr<osf::Extrinsics>>(module, "Extrinsics", R"(
+    py::class_<osf::Extrinsics, osf::MetadataEntry>(module, "Extrinsics", R"(
         Extrinsics transform of a sensor/object referred by ``ref_meta_id``.
 
         ``type_id`` static property is a ``Extrinsics`` metadata type identifier.
     )")
-        .def(py::init<core::mat4d, uint32_t, std::string&>(),
-             py::arg("extrinsics"), py::arg("ref_meta_id") = 0,
-             py::arg("name") = "", "Create Extrinsics object")
-        .def_property_readonly("extrinsics", &osf::Extrinsics::extrinsics,
-                               "Extrisnics homogeneous 4x4 matrix")
-        .def_property_readonly("ref_meta_id", &osf::Extrinsics::ref_meta_id,
-                               "reference to the metadata entry id of an "
-                               "object which extrisnics is it")
-        .def_property_readonly("name", &osf::Extrinsics::name,
-                               "name of the Extrinsics object (optional)")
-        .def_property_readonly_static("type_id", [](py::object) {
-            return osf::metadata_type<osf::Extrinsics>();
-        });
+        .def(py::init<core::mat4d, uint32_t, std::string&>(), py::arg("extrinsics"),
+             py::arg("ref_meta_id") = 0, py::arg("name") = "", "Create Extrinsics object")
+        .def_prop_ro("extrinsics", &osf::Extrinsics::extrinsics,
+                     "Extrisnics homogeneous 4x4 matrix")
+        .def_prop_ro("ref_meta_id", &osf::Extrinsics::ref_meta_id,
+                     "reference to the metadata entry id of an "
+                     "object which extrisnics is it")
+        .def_prop_ro("name", &osf::Extrinsics::name, "name of the Extrinsics object (optional)")
+        .def_prop_ro_static(
+            "type_id", [](const py::object&) { return osf::metadata_type<osf::Extrinsics>(); });
+
+    // NOLINTNEXTLINE
+    py::exception<osf::OsfDropFrameError>(module, "OsfDropFrameError");
+    module.attr("OsfDropScanError") = module.attr("OsfDropFrameError");
 
     // Writer
     py::class_<osf::Writer>(module, "Writer", R"(
@@ -631,23 +646,22 @@ to work with OSF files.
         and stream interfaces that encodes messages and passes them to internal
         chunks writer.
     )")
-        .def(py::init<std::string, uint32_t>(), py::arg("file_name"),
-             py::arg("chunk_size") = 0, R"(
+        .def(py::init<std::string, uint32_t>(), py::arg("file_name"), py::arg("chunk_size") = 0, R"(
         Creates a `Writer` with specified ``chunk_size``.
 
         Default ``chunk_size`` is ``2 MB``.
         )")
         .def(
-            py::init(
-                [](const std::string& filename, const core::SensorInfo& info,
-                   const std::vector<std::string>& fields_to_write,
-                   uint32_t chunk_size, std::shared_ptr<osf::Encoder> encoder) {
-                    return new osf::Writer(filename, info, fields_to_write,
-                                           chunk_size, encoder);
-                }),
+            "__init__",
+            [](osf::Writer* self, const std::string& filename, const core::SensorInfo& info,
+               const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
+               std::shared_ptr<osf::Encoder> encoder) {
+                new (self)
+                    osf::Writer(filename, info, fields_to_write, chunk_size, std::move(encoder));
+            },
             py::arg("filename"), py::arg("info"),
-            py::arg("fields_to_write") = std::vector<std::string>{},
-            py::arg("chunk_size") = 0, py::arg("encoder") = nullptr,
+            py::arg("fields_to_write") = std::vector<std::string>{}, py::arg("chunk_size") = 0,
+            py::arg("encoder") = nullptr,
             R"(
         Creates a `Writer` with deafault ``STREAMING`` layout chunks writer.
 
@@ -662,29 +676,30 @@ to work with OSF files.
                 is used. If the current chunk being written exceeds the
                 chunk_size, a new chunk will be started on the next call to
                 `save`. This allows an application to tune the number of
-                messages (e.g. lidar scans) per chunk, which affects the
+                messages (e.g. lidar frames) per chunk, which affects the
                 granularity of the message index stored in the
                 StreamingInfo in the file metadata. A smaller chunk_size
                 means more messages are indexed and a larger number of
                 index entries. A more granular index allows for more
                 precise seeking at the slight expense of a larger file.
-            fields_to_write (List[str]): The fields from scans to
+            fields_to_write (List[str]): The fields from frames to
                 actually save into the OSF. If not provided uses the fields from
-                the first saved lidar scan for each stream. This parameter is optional.
+                the first saved lidar frame for each stream. This parameter is optional.
 
         )")
-        .def(py::init([](const std::string& filename,
-                         const std::vector<core::SensorInfo>& info,
-                         const std::vector<std::string>& fields_to_write,
-                         uint32_t chunk_size,
-                         std::shared_ptr<osf::Encoder> encoder) {
-                 return new osf::Writer(filename, info, fields_to_write,
-                                        chunk_size, encoder);
-             }),
-             py::arg("filename"), py::arg("info"),
-             py::arg("fields_to_write") = std::vector<std::string>{},
-             py::arg("chunk_size") = 0, py::arg("encoder") = nullptr,
-             R"(
+        .def(
+            "__init__",
+            [](osf::Writer* self, const std::string& filename,
+               const std::vector<core::SensorInfo>& info,
+               const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
+               std::shared_ptr<osf::Encoder> encoder) {
+                new (self)
+                    osf::Writer(filename, info, fields_to_write, chunk_size, std::move(encoder));
+            },
+            py::arg("filename"), py::arg("info"),
+            py::arg("fields_to_write") = std::vector<std::string>{}, py::arg("chunk_size") = 0,
+            py::arg("encoder") = nullptr,
+            R"(
             Creates a `Writer` with specified ``chunk_size``.
 
             Default ``chunk_size`` is ``2MB``.
@@ -693,88 +708,73 @@ to work with OSF files.
             filename (str): The filename to output to.
             info (List[SensorInfo]): The sensor info vector to use for a
                 multi stream OSF file.
-            fields_to_write (List[str]): The fields from scans to
+            fields_to_write (List[str]): The fields from frames to
                 actually save into the OSF. If not provided uses the fields from
-                the first saved lidar scan for each stream. This parameter is optional.
+                the first saved lidar frame for each stream. This parameter is optional.
             chunk_size (int): The chunksize to use for the OSF file, this arg
                 is optional.
 
         )")
         .def(
             "save",
-            [](osf::Writer& writer, uint32_t stream_index,
-               const core::LidarScan& scan) {
-                writer.save(stream_index, scan);
+            [](osf::Writer& writer, uint32_t stream_index, const core::LidarFrame& frame) {
+                writer.save(stream_index, frame);
             },
-            py::arg("stream_index"), py::arg("scan"),
+            py::arg("stream_index"), py::arg("frame"),
             R"(
-            Save a lidar scan to the OSF file.
+            Save a lidar frame to the OSF file.
 
             Args:
                 stream_index (int): The index of the corresponding
                     sensor_info to use.
-                scan (LidarScan): The scan to save.
-
+                frame (LidarFrame): The frame to save.
             )")
         .def(
             "save",
-            [](osf::Writer& writer, uint32_t stream_index,
-               const core::LidarScan& scan, uint64_t timestamp) {
-                writer.save(stream_index, scan, osf::ts_t(timestamp));
-            },
-            py::arg("stream_index"), py::arg("scan"), py::arg("ts"),
+            [](osf::Writer& writer, uint32_t stream_index, const core::LidarFrame& frame,
+               uint64_t timestamp) { writer.save(stream_index, frame, osf::ts_t(timestamp)); },
+            py::arg("stream_index"), py::arg("frame"), py::arg("ts"),
             R"(
-            Save a lidar scan to the OSF file.
+            Save a lidar frame to the OSF file.
 
             Args:
                 stream_index (int): The index of the corresponding
                     sensor_info to use.
-                scan (LidarScan): The scan to save.
-                ts (int): The timestamp to index the scan with.
+                frame (LidarFrame): The frame to save.
+                ts (int): The timestamp to index the frame with.
             )")
         .def(
             "save",
-            [](osf::Writer& writer, const core::LidarScanSet& scans) {
-                writer.save(scans);
-            },
-            py::arg("scan"),
+            [](osf::Writer& writer, const core::FrameSet& frame_set) { writer.save(frame_set); },
+            py::arg("frame"),
             R"(
-               Save a set of lidar scans to the OSF file.
+            Save a set of lidar frames to the OSF file.
 
-               Args:
-                   scans (LidarScanSet): The collation to save.
+            Args:
+            frame_set (FrameSet): The collation to save.
             )")
         .def(
             "save",
-            [](osf::Writer& writer,
-               const std::vector<std::shared_ptr<core::LidarScan>>& scans) {
-                PyErr_WarnEx(
-                    PyExc_DeprecationWarning,
-                    "Writer.save(List[Optional[LidarScan]]) is deprecated, use "
-                    "Writer.save(LidarScanSet) instead",
-                    2);
-                writer.save(scans);
+            [](osf::Writer& writer, const ouster::sdk::core::FrameSetSourceMetadataSet& src_meta) {
+                writer.save(src_meta);
             },
-            py::arg("scans"),
+            py::arg("src_meta"),
             R"(
-               Save a set of lidar scans to the OSF file.
+               Save a set of FrameSetSourceMetadata to the OSF file.
 
                Args:
-                   scans (List[LidarScan]): The scans to save. This will correspond
-                       to the list of SensorInfos.
+                   src_meta (FrameSetSourceMetadataSet): The frame set source metadata
+                       collection to save.
 
             )")
         .def(
             "set_metadata_id",
-            [](osf::Writer& writer, const std::string& str) {
-                return writer.set_metadata_id(str);
-            },
+            [](osf::Writer& writer, const std::string& str) { return writer.set_metadata_id(str); },
             R"(
                  Set the metadata identifier string.
             )")
         .def(
-            "metadata_id",
-            [](osf::Writer& writer) { return writer.metadata_id(); },
+            "metadata_id", [](osf::Writer& writer) { return writer.metadata_id(); },
             R"(
                  Return the metadata identifier string.
 
@@ -791,32 +791,31 @@ to work with OSF files.
             )")
         .def(
             "add_metadata",
-            [](osf::Writer& writer, py::object meta_obj) {
+            [](osf::Writer& writer, const py::object& meta_obj) {
                 uint32_t res = 0;
                 if (py::hasattr(meta_obj, "type_id")) {
-                    std::string type_id =
-                        py::cast<std::string>(py::getattr(meta_obj, "type_id"));
-                    osf::MetadataEntry* meta_entry =
-                        meta_obj.cast<osf::MetadataEntry*>();
+                    std::string type_id = py::cast<std::string>(py::getattr(meta_obj, "type_id"));
+                    osf::MetadataEntry* meta_entry = py::cast<osf::MetadataEntry*>(meta_obj);
                     res = writer.add_metadata(*meta_entry);
                 }
                 return res;
             },
             py::arg("m"), "Add `metadata entry` to a file")
-        .def_property_readonly("meta_store", &osf::Writer::meta_store, R"(
+        .def_prop_ro("meta_store", &osf::Writer::meta_store, R"(
                 Returns the metadata store that gives an access to all
                 *metadata entries* in the file.
         )")
         .def(
             "save_message",
-            [](osf::Writer& writer, uint32_t stream_id, uint64_t receive_ts,
-               uint64_t sensor_ts, py::array_t<uint8_t>& buf,
-               const std::string& type) {
-                writer.save_message(stream_id, osf::ts_t{receive_ts},
-                                    osf::ts_t{sensor_ts}, getvector(buf), type);
+            [](osf::Writer& writer, uint32_t stream_id, uint64_t receive_ts, uint64_t sensor_ts,
+               py::ndarray<uint8_t>& buf, const std::string& type) {
+                // ndarray to vector copy for writer
+                std::vector<uint8_t> vec(buf.data(), buf.data() + buf.size());
+                writer.save_message(stream_id, osf::ts_t{receive_ts}, osf::ts_t{sensor_ts}, vec,
+                                    type);
             },
-            py::arg("stream_id"), py::arg("receive_ts"), py::arg("sensor_ts"),
-            py::arg("buffer"), py::arg("type"), R"(
+            py::arg("stream_id"), py::arg("receive_ts"), py::arg("sensor_ts"), py::arg("buffer"),
+            py::arg("type"), R"(
                  Low-level save message routine.
 
                  Directly saves the message `buffer` with `id` and `ts` (ns)
@@ -824,17 +823,30 @@ to work with OSF files.
             )")
         .def(
             "save_message",
-            [](osf::Writer& writer, uint32_t stream_id, uint64_t receive_ts,
-               uint64_t sensor_ts, py::buffer& buf, const std::string& type) {
-                writer.save_message(stream_id, osf::ts_t{receive_ts},
-                                    osf::ts_t{sensor_ts}, getvector(buf), type);
+            [](osf::Writer& writer, uint32_t stream_id, uint64_t receive_ts, uint64_t sensor_ts,
+               py::bytes& buf, const std::string& type) {
+                writer.save_message(stream_id, osf::ts_t{receive_ts}, osf::ts_t{sensor_ts},
+                                    getvector(buf), type);
             },
-            py::arg("stream_id"), py::arg("receive_ts"), py::arg("sensor_ts"),
-            py::arg("buffer"), py::arg("type"), R"(
+            py::arg("stream_id"), py::arg("receive_ts"), py::arg("sensor_ts"), py::arg("buffer"),
+            py::arg("type"), R"(
                  Low-level save message routine.
 
                  Directly saves the message `buffer` with `id` and `ts` (ns)
                  without any further checks.
+            )")
+        .def(
+            "save_message",
+            [](osf::Writer& writer, uint32_t stream_id, uint64_t receive_ts, uint64_t sensor_ts,
+               const std::vector<uint8_t>& buf, const std::string& type) {
+                writer.save_message(stream_id, osf::ts_t{receive_ts}, osf::ts_t{sensor_ts}, buf,
+                                    type);
+            },
+            py::arg("stream_id"), py::arg("receive_ts"), py::arg("sensor_ts"), py::arg("buffer"),
+            py::arg("type"), R"(
+                 Low-level save message routine.
+
+                 Directly saves the message `buffer` (from a Python list) with `id` and `ts` (ns).
             )")
         .def(
             "add_sensor",
@@ -842,23 +854,21 @@ to work with OSF files.
                const std::vector<std::string>& fields_to_write) {
                 return writer.add_sensor(info, fields_to_write);
             },
-            py::arg("info"),
-            py::arg("fields_to_write") = std::vector<std::string>{},
+            py::arg("info"), py::arg("fields_to_write") = std::vector<std::string>{},
             R"(
                Add a sensor to the OSF file.
 
                Args:
                    info (SensorInfo): Sensor to add.
-                   fields_to_write (List[str]): The fields from scans to
+                   fields_to_write (List[str]): The fields from frames to
                        actually save into the OSF. If not provided uses the fields from
-                       the first saved lidar scan for each stream. This parameter is optional.
+                       the first saved lidar frame for each stream. This parameter is optional.
 
                Returns (int):
-                   The stream index to use to write scans to this sensor.
+                   The stream index to use to write frames to this sensor.
 
             )")
-        .def("close", &osf::Writer::close,
-             "Finish OSF file and flush everything to disk.",
+        .def("close", &osf::Writer::close, "Finish OSF file and flush everything to disk.",
              py::arg("fsync") = false)
         .def(
             "is_closed", [](osf::Writer& writer) { return writer.is_closed(); },
@@ -870,40 +880,12 @@ to work with OSF files.
 
             )")
         .def(
-            "sensor_info",
-            [](osf::Writer& writer) { return writer.sensor_info(); },
+            "sensor_info", [](osf::Writer& writer) { return writer.sensor_info(); },
             R"(
                  Return the sensor info list.
 
                  Returns (List[SensorInfo]):
                      The sensor info list.
-
-            )")
-        .def(
-            "sensor_info",
-            [](osf::Writer& writer, uint32_t stream_index) {
-                return writer.sensor_info(stream_index);
-            },
-            py::arg("stream_index"),
-            R"(
-                 Return the sensor info of the specifed stream_index.
-
-                 Args:
-                     stream_index (in): The index of the sensor to return
-                                        info about.
-
-                 Returns (SensorInfo):
-                     The correct sensor info
-
-            )")
-        .def(
-            "sensor_info_count",
-            [](osf::Writer& writer) { return writer.sensor_info_count(); },
-            R"(
-                 Return the number of sensor_info objects.
-
-                 Returns (int):
-                     The number of sensor_info objects.
 
             )")
         .def(
@@ -913,30 +895,31 @@ to work with OSF files.
             )")
         .def(
             "__exit__",
-            [](osf::Writer& writer, pybind11::object& /*exc_type*/,
-               pybind11::object& /*exc_value*/,
-               pybind11::object& /*traceback*/) {
+            [](osf::Writer& writer, py::object& /*exc_type*/, py::object& /*exc_value*/,
+               py::object& /*traceback*/) {
                 writer.close();
 
                 return py::none();
             },
             R"(
                  Allow Writer to work within `with` blocks.
-            )");
+            )",
+            py::arg("exc_type").none(), py::arg("exc_value").none(), py::arg("traceback").none());
 
     py::class_<osf::AsyncWriter>(module, "AsyncWriter")
-        .def(py::init([](const std::string& filename,
-                         const std::vector<core::SensorInfo>& info,
-                         const std::vector<std::string>& fields_to_write,
-                         uint32_t chunk_size,
-                         std::shared_ptr<osf::Encoder> encoder) {
-                 return new osf::AsyncWriter(filename, info, fields_to_write,
-                                             chunk_size, encoder);
-             }),
-             py::arg("filename"), py::arg("info"),
-             py::arg("fields_to_write") = std::vector<std::string>{},
-             py::arg("chunk_size") = 0, py::arg("encoder") = nullptr,
-             R"(
+        .def(
+            "__init__",
+            [](osf::AsyncWriter* self, const std::string& filename,
+               const std::vector<core::SensorInfo>& info,
+               const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
+               std::shared_ptr<osf::Encoder> encoder) {
+                new (self) osf::AsyncWriter(filename, info, fields_to_write, chunk_size,
+                                            std::move(encoder));
+            },
+            py::arg("filename"), py::arg("info"),
+            py::arg("fields_to_write") = std::vector<std::string>{}, py::arg("chunk_size") = 0,
+            py::arg("encoder") = nullptr,
+            R"(
              Creates an `AsyncWriter` with specified ``chunk_size``.
 
              Default ``chunk_size`` is ``2MB``.
@@ -945,76 +928,79 @@ to work with OSF files.
                 filename (str): The filename to output to.
                 info (List[SensorInfo]): The sensor info vector to use for a
                     multi stream OSF file.
-                fields_to_write (List[str]): The fields from scans to
+                fields_to_write (List[str]): The fields from frames to
                     actually save into the OSF. If not provided uses the fields from
-                    the first saved lidar scan for each stream. This parameter is optional.
+                    the first saved lidar frame for each stream. This parameter is optional.
                 chunk_size (int): The chunksize to use for the OSF file, this arg
                     is optional.
                 encoder (Encoder): an optional encoder instance,
                     used to configure how writer encodes the OSF.
         )")
-        .def("close", &osf::AsyncWriter::close,
-             "Finish OSF file and flush everything to disk.",
+        .def("close", &osf::AsyncWriter::close, "Finish OSF file and flush everything to disk.",
              py::arg("fsync") = false)
         .def(
             "save",
-            [](osf::AsyncWriter& writer, uint32_t stream_index,
-               const core::LidarScan& scan) {
-                return FutureWrapper(writer.save(stream_index, scan));
+            [](osf::AsyncWriter& writer, uint32_t stream_index, const core::LidarFrame& frame) {
+                return FutureWrapper(writer.save(stream_index, frame));
             },
-            py::arg("stream_index"), py::arg("scan"),
+            py::arg("stream_index"), py::arg("frame"),
             R"(
-               Save a lidar scan to the OSF file.
+            Save a lidar frame to the OSF file.
 
-               Args:
-                   stream_index (int): The index of the corresponding
-                       SensorInfo to use.
-                   scan (LidarScan): The scan to save.
+            Args:
+                stream_index (int): The index of the corresponding
+                    SensorInfo to use.
+                frame (LidarFrame): The frame to save.
 
-               Returns: a future.
-
+            Returns: a future.
             )")
         .def(
             "save",
-            [](osf::AsyncWriter& writer, uint32_t stream_index,
-               const core::LidarScan& scan, uint64_t timestamp) {
-                return FutureWrapper(
-                    writer.save(stream_index, scan, osf::ts_t(timestamp)));
+            [](osf::AsyncWriter& writer, uint32_t stream_index, const core::LidarFrame& frame,
+               uint64_t timestamp) {
+                return FutureWrapper(writer.save(stream_index, frame, osf::ts_t(timestamp)));
             },
-            py::arg("stream_index"), py::arg("scan"), py::arg("ts"),
+            py::arg("stream_index"), py::arg("frame"), py::arg("ts"),
             R"(
-               Save a lidar scan to the OSF file.
+               Save a lidar frame to the OSF file.
 
                Args:
                    stream_index (int): The index of the corresponding
                        SensorInfo to use.
-                   scan (LidarScan): The scan to save.
-                   ts (int): The timestamp to index the scan with.
+                   frame (LidarFrame): The frame to save.
+                   ts (int): The timestamp to index the frame with.
 
                Returns: a future.
+            )")
+        .def(
+            "save",
+            [](osf::AsyncWriter& writer, const core::FrameSet& frame_set) {
+                return FutureWrapper(writer.save(frame_set));
+            },
+            py::arg("frames"),
+            R"(
+            Save a set of lidar frames to the OSF file.
+
+            Args:
+                frame_set (FrameSet): The frames to save. This will correspond
+                    to the list of SensorInfos.
+
+            Returns: a future.
             )")
         .def(
             "save",
             [](osf::AsyncWriter& writer,
-               const std::vector<core::LidarScan>& scans) {
-                auto save_futures = writer.save(scans);
-                std::vector<FutureWrapper> wrapped_futures;
-                std::transform(save_futures.begin(), save_futures.end(),
-                               std::back_inserter(wrapped_futures),
-                               [](auto&& future) {
-                                   return FutureWrapper(std::move(future));
-                               });
-                return wrapped_futures;
+               const ouster::sdk::core::FrameSetSourceMetadataSet& src_meta) {
+                writer.save(src_meta);
             },
-            py::arg("scan"),
+            py::arg("src_meta"),
             R"(
-               Save a set of lidar scans to the OSF file.
+               Save a set of FrameSetSourceMetadata to the OSF file.
 
                Args:
-                   scans (List[LidarScan]): The scans to save. This will correspond
-                       to the list of SensorInfos.
+                   src_meta (FrameSetSourceMetadataSet): The frame set source metadata
+                       collection to save.
 
-               Returns: a list of futures.
             )")
         .def(
             "__enter__", [](osf::AsyncWriter* writer) { return writer; },
@@ -1023,68 +1009,79 @@ to work with OSF files.
             )")
         .def(
             "__exit__",
-            [](osf::AsyncWriter& writer, pybind11::object& /*exc_type*/,
-               pybind11::object& /*exc_value*/,
-               pybind11::object& /*traceback*/) {
+            [](osf::AsyncWriter& writer, py::object& /*exc_type*/, py::object& /*exc_value*/,
+               py::object& /*traceback*/) {
                 writer.close();
 
                 return py::none();
             },
             R"(
                  Allow AsyncWriter to work within `with` blocks.
-            )");
+            )",
+            py::arg("exc_type").none(), py::arg("exc_value").none(), py::arg("traceback").none());
 
     py::class_<FutureWrapper>(module, "FutureWrapper")
         .def("get", &FutureWrapper::get)
         .def("valid", &FutureWrapper::valid)
+        .def("done", &FutureWrapper::done)
         .def("wait", &FutureWrapper::wait);
 
-    py::class_<osf::LidarScanEncoder, std::shared_ptr<osf::LidarScanEncoder>>(
-        module, "LidarScanEncoder");
+    py::class_<osf::LidarFrameEncoder> lidar_frame_encoder(module, "LidarFrameEncoder");
+    (void)lidar_frame_encoder;
 
-    py::class_<osf::PngLidarScanEncoder, osf::LidarScanEncoder,
-               std::shared_ptr<osf::PngLidarScanEncoder>>(
-        module, "PngLidarScanEncoder", R"(Used by the Writer class to
-    encode LidarScans using PNG compression.)")
+    py::class_<osf::PngLidarFrameEncoder, osf::LidarFrameEncoder>(module, "PngLidarFrameEncoder",
+                                                                  R"(Used by the Writer class to
+    encode LidarFrames using PNG compression.)")
         .def(py::init<int>(), py::arg("compression_amount"));
 
-    py::class_<osf::ZPngLidarScanEncoder, osf::LidarScanEncoder,
-               std::shared_ptr<osf::ZPngLidarScanEncoder>>(
-        module, "ZPngLidarScanEncoder", R"(Used by the Writer class to
-    encode LidarScans using ZPNG compression.)")
+    py::class_<osf::ZPngLidarFrameEncoder, osf::LidarFrameEncoder>(module, "ZPngLidarFrameEncoder",
+                                                                   R"(Used by the Writer class to
+    encode LidarFrames using ZPNG compression.)")
         .def(py::init<int>(), py::arg("compression_amount"));
 
-    py::class_<osf::Encoder, std::shared_ptr<osf::Encoder>>(
+    py::class_<osf::Encoder>(
         module, "Encoder",
-        R"(Used by the Writer class to encode LidarScans, depending on configuration.)")
-        .def(py::init<std::shared_ptr<osf::LidarScanEncoder>>(),
-             py::arg("lidar_scan_encoder"));
+        R"(Used by the Writer class to encode LidarFrames, depending on configuration.)")
+        .def(py::init<std::shared_ptr<osf::LidarFrameEncoder>>(), py::arg("lidar_frame_encoder"),
+             py::sig("def __init__(self, lidar_frame_encoder: LidarFrameEncoder) "
+                     "-> None"))
+        .def(
+            "__init__",
+            [](osf::Encoder* self, std::shared_ptr<osf::LidarFrameEncoder> lidar_scan_encoder) {
+                PyErr_WarnEx(PyExc_FutureWarning,
+                             "Keyword argument 'lidar_scan_encoder' is "
+                             "deprecated, use 'lidar_frame_encoder' instead. "
+                             "The last supported version for this will be 1.0.",
+                             1);
+                new (self) osf::Encoder(lidar_scan_encoder);
+            },
+            py::arg("lidar_scan_encoder"),
+            py::sig("def __init__(self, *, lidar_scan_encoder: LidarFrameEncoder) "
+                    "-> None"));
 
-    module.def("slice_and_cast", &osf::slice_with_cast, py::arg("lidar_scan"),
-               py::arg("field_types"), "Copies LidarScan with new field types");
+    module.def("slice_and_cast", &osf::slice_and_cast, py::arg("lidar_frame"),
+               py::arg("field_types"), "Copies LidarFrame with new field types");
 
     module.def(
         "slice_and_cast",
-        [](const core::LidarScan& lidar_scan,
+        [](const core::LidarFrame& lidar_frame,
            const std::map<std::string, py::object>& field_types) {
-            core::LidarScanFieldTypes field_types_vec{};
+            core::LidarFrameFieldTypes field_types_vec{};
             for (const auto& field : field_types) {
-                auto dtype = py::dtype::from_args(field.second);
-                field_types_vec.emplace_back(field.first,
-                                             field_type_of_dtype(dtype));
+                field_types_vec.emplace_back(field.first, field_type_of_dtype(field.second));
             }
-            return osf::slice_with_cast(lidar_scan, field_types_vec);
+            return osf::slice_and_cast(lidar_frame, field_types_vec);
         },
-        py::arg("lidar_scan"), py::arg("field_types"),
-        "Copies LidarScan with new field types");
+        py::arg("lidar_frame"), py::arg("field_types"), "Copies LidarFrame with new field types");
 
-    py::class_<osf::OsfScanSource, core::ScanSource,
-               std::shared_ptr<osf::OsfScanSource>>(module, "OsfScanSource")
-        .def(py::init([](const std::string& file, const py::kwargs& kwargs) {
-                 ouster::sdk::ScanSourceOptions opts;
-                 parse_scan_source_options(kwargs, opts);
-                 return new osf::OsfScanSource(file, opts);
-             }),
-             py::arg("file"))
-        .def_property_readonly("is_collated", &osf::OsfScanSource::is_collated);
+    py::class_<osf::OsfFrameSetSource, core::FrameSetSource>(module, "OsfFrameSetSource")
+        .def(
+            "__init__",
+            [](osf::OsfFrameSetSource* self, const std::string& file, const py::kwargs& kwargs) {
+                ouster::sdk::FrameSetSourceOptions opts;
+                parse_frame_set_source_options(kwargs, opts);
+                new (self) osf::OsfFrameSetSource(file, opts);
+            },
+            py::arg("file"), py::arg("kwargs"))
+        .def_prop_ro("is_collated", &osf::OsfFrameSetSource::is_collated);
 }

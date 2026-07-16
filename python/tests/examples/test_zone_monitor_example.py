@@ -1,8 +1,7 @@
 import tempfile
 import os
-from ouster.sdk.core import SensorInfo
+from ouster.sdk.core import SensorInfo, ZoneSet
 import ouster.sdk.examples.zone_monitor_example as zone_monitor_example
-from ouster.sdk.zone_monitor import ZoneSet
 
 
 def test_create_stl_zone_set(test_data_dir):

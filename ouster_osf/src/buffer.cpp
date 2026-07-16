@@ -10,7 +10,9 @@ namespace ouster {
 namespace sdk {
 namespace osf {
 
-OsfBuffer::~OsfBuffer() { reset(); }
+OsfBuffer::~OsfBuffer() {
+    reset();
+}
 
 void OsfBuffer::reset() {
     memory_mapped_data_ = nullptr;
@@ -20,8 +22,7 @@ void OsfBuffer::reset() {
     has_value_ = false;
 }
 
-OsfBuffer::OsfBuffer()
-    : memory_mapped_data_(nullptr), size_(0), offset_(0), has_value_(false) {}
+OsfBuffer::OsfBuffer() = default;
 
 OsfBuffer::OsfBuffer(const OsfBuffer& other)
     : memory_mapped_data_(other.memory_mapped_data_),
@@ -74,8 +75,7 @@ void OsfBuffer::load_data(std::vector<uint8_t>&& data) {
     if (data.empty()) {
         throw std::logic_error("Invalid data");
     }
-    non_memory_mapped_data_ =
-        std::make_shared<std::vector<uint8_t>>(std::move(data));
+    non_memory_mapped_data_ = std::make_shared<std::vector<uint8_t>>(std::move(data));
     size_ = non_memory_mapped_data_->size();
     offset_ = 0;
     has_value_ = true;
@@ -91,8 +91,7 @@ void OsfBuffer::load_data(const std::vector<uint8_t>& data) {
     has_value_ = true;
 }
 
-void OsfBuffer::load_data(const class OsfBuffer& base_buffer, uint64_t offset,
-                          uint64_t size) {
+void OsfBuffer::load_data(const class OsfBuffer& base_buffer, uint64_t offset, uint64_t size) {
     if (!base_buffer.has_value()) {
         throw std::logic_error("Invalid base buffer");
     }
@@ -128,13 +127,21 @@ const uint8_t* OsfBuffer::data() const {
     }
 }
 
-const uint8_t* OsfBuffer::cbegin() const { return data(); }
+const uint8_t* OsfBuffer::cbegin() const {
+    return data();
+}
 
-const uint8_t* OsfBuffer::cend() const { return data() + size(); }
+const uint8_t* OsfBuffer::cend() const {
+    return data() + size();
+}
 
-uint64_t OsfBuffer::size() const { return size_; }
+uint64_t OsfBuffer::size() const {
+    return size_;
+}
 
-bool OsfBuffer::has_value() const { return has_value_; }
+bool OsfBuffer::has_value() const {
+    return has_value_;
+}
 
 }  // namespace osf
 }  // namespace sdk

@@ -1,0 +1,45 @@
+.content-with-rail {
+    display: flex;
+    gap: 2rem;
+  }
+  .content-with-rail .content {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  @media (max-width: 1100px) {
+    .right-sidebar { display: none; }
+  }
+
+/* --- prune the global toctree for the right rail --- */
+
+/* hide whole non-current top branches to avoid clutter */
+.right-sidebar .right-toc .toctree-l1:not(.current) {
+  display: none;
+}
+
+/* within the current branch, hide the L1/L2 labels but keep their children */
+.right-sidebar .right-toc .toctree-l1 > a { display: none; }
+.right-sidebar .right-toc .toctree-l2 > a { display:none; }
+
+/* turn off bullets/extra indent noise */
+.right-sidebar .right-toc ul { list-style: none; padding-left: 0; margin: 0; }
+.right-sidebar .right-toc li { margin: 0; }
+
+/* style L3/L4 */
+.right-sidebar .right-toc .toctree-l3 > a {
+  display: block;
+  padding-left: .75rem;
+  font-weight: 500;
+}
+.right-sidebar .right-toc .toctree-l4 > a {
+  display: block;
+  padding-left: 1.5rem;
+  font-weight: 400;
+  opacity: .9;
+}
+
+/* separators/spacing */
+.right-sidebar .right-toc .toctree-l3 { margin-top: .35rem; }
+
+  

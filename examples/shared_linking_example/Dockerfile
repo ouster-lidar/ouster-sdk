@@ -3,6 +3,7 @@ ARG BASE="ubuntu:22.04"
 FROM ${BASE} AS BASE_IMAGE
 ARG APT_PROXY=""
 ARG APT_MIRROR=""
+ARG APT_MIRROR_SECURITY=""
 ENV WORKSPACE=/root
 
 RUN /bin/sh -c "if ! [ -z \"$APT_PROXY\" ]; then \
@@ -12,12 +13,22 @@ RUN /bin/sh -c "if ! [ -z \"$APT_PROXY\" ]; then \
 
 RUN /bin/sh -c "if ! [ -z \"$APT_MIRROR\" ]; then \
         sed -i \"s|http://archive.ubuntu.com/ubuntu|$APT_MIRROR|g\" /etc/apt/sources.list; \
-        sed -i \"s|http://security.ubuntu.com/ubuntu|$APT_MIRROR|g\" /etc/apt/sources.list; \
     fi"
 
-RUN apt-get update \
-    && apt-get install -y python3 python3-venv python3-pip \
-    && mkdir -p $WORKSPACE/scripts/dev_script_library
+RUN /bin/sh -c "if ! [ -z \"$APT_MIRROR_SECURITY\" ]; then \
+        sed -i \"s|http://security.ubuntu.com/ubuntu|$APT_MIRROR_SECURITY|g\" /etc/apt/sources.list; \
+    fi"
+    
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+curl -4fsSL --retry 10 --retry-delay 30 --retry-all-errors \
+https://archive.ubuntu.com/ubuntu/pool/main/u/ubuntu-keyring/ubuntu-keyring_2023.11.28.1_all.deb \
+-o /tmp/ubuntu-keyring.deb && \
+dpkg -i /tmp/ubuntu-keyring.deb && \
+rm /tmp/ubuntu-keyring.deb && \
+apt-get update && \
+apt-get install -y python3 python3-venv python3-pip && \
+mkdir -p $WORKSPACE/scripts/dev_script_library && \
+rm -rf /var/lib/apt/lists/*
 
 # ============================== BUILD STAGE ==============================
 FROM BASE_IMAGE AS BUILD

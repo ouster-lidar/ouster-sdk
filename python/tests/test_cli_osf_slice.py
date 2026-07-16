@@ -32,10 +32,10 @@ def test_osf_file_new() -> str:
 
 def test_osf_slice(test_osf_file) -> None:
     """It should display a warning if slicing out of bounds."""
-    num_scans_in_src = 3
+    num_frames_in_src = 3
     # check precondition
     src = open_source(test_osf_file)
-    assert src.scans_num == [num_scans_in_src]
+    assert src.frames_num == [num_frames_in_src]
     src.close()
 
     try:
@@ -46,7 +46,7 @@ def test_osf_slice(test_osf_file) -> None:
                 CliArgs([
                     '--traceback',
                     'source', test_osf_file,
-                    'slice', f'{num_scans_in_src}:{num_scans_in_src + 20}',  # note - out of bounds
+                    'slice', f'{num_frames_in_src}:{num_frames_in_src + 20}',  # note - out of bounds
                     'save', '--ts', 'lidar', '--overwrite', result_osf.name
                 ]).args, catch_exceptions=False
             )
@@ -55,7 +55,7 @@ def test_osf_slice(test_osf_file) -> None:
             assert os.path.isfile(result_osf.name)
 
             result_src = open_source(result_osf.name)
-            assert result_src.scans_num == [0]
+            assert result_src.frames_num == [0]
             result_src.close()
     finally:
         os.unlink(result_osf.name)
@@ -64,13 +64,13 @@ def test_osf_slice(test_osf_file) -> None:
 def test_osf_slice_2(test_osf_file) -> None:
     """It should slice by indices."""
 
-    expected_num_scans = 3
+    expected_num_frames = 3
     slice_start = 1
     slice_end = 3
     # check precondition
     src = open_source(test_osf_file)
-    scans = [scan for scan in src]
-    assert src.scans_num == [expected_num_scans]
+    src_frames = [fs for fs in src]
+    assert src.frames_num == [expected_num_frames]
     src.close()
 
     try:
@@ -89,10 +89,10 @@ def test_osf_slice_2(test_osf_file) -> None:
             assert os.path.isfile(result_osf.name)
 
             result_src = open_source(result_osf.name)
-            result_scans = [scan for scan in result_src]
-            assert result_src.scans_num == [slice_end - slice_start]
-            assert result_scans[0] == scans[1]
-            assert result_scans[1] == scans[2]
+            result_frames = [fs for fs in result_src]
+            assert result_src.frames_num == [slice_end - slice_start]
+            assert result_frames[0] == src_frames[1]
+            assert result_frames[1] == src_frames[2]
             result_src.close()
     finally:
         os.unlink(result_osf.name)
@@ -101,10 +101,10 @@ def test_osf_slice_2(test_osf_file) -> None:
 def test_osf_slice_time(test_osf_file_new) -> None:
     """It should display a warning if slicing out of bounds."""
 
-    expected_num_scans = 3
+    expected_num_frames = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == [expected_num_scans]
+    assert src.frames_num == [expected_num_frames]
     src.close()
 
     try:
@@ -123,23 +123,23 @@ def test_osf_slice_time(test_osf_file_new) -> None:
             assert os.path.isfile(result_osf.name)
 
             result_src = open_source(result_osf.name)
-            assert result_src.scans_num == [0]
-            # TODO[tws] figure out how to capture "WARNING: No scans saved."
+            assert result_src.frames_num == [0]
+            # TODO[tws] figure out how to capture "WARNING: No frames saved."
             result_src.close()
     finally:
         os.unlink(result_osf.name)
 
 
 # FIXME[tws]?
-# Slicing by time yields scans when using --ts lidar
+# Slicing by time yields frames when using --ts lidar
 # Note - test_osf_file has no packet timestamps
 def test_osf_slice_time_2(test_osf_file) -> None:
-    """It will include all scans if --ts lidar is used."""
+    """It will include all frames if --ts lidar is used."""
 
-    expected_num_scans = 3
+    expected_num_frames = 3
     # check precondition
     src = open_source(test_osf_file)
-    assert src.scans_num == [expected_num_scans]
+    assert src.frames_num == [expected_num_frames]
     src.close()
 
     try:
@@ -150,7 +150,7 @@ def test_osf_slice_time_2(test_osf_file) -> None:
                 CliArgs([
                     '--traceback',
                     'source', test_osf_file,
-                    'slice', '0ms:00001ms',  # <-- note, should probably only result in a single scan
+                    'slice', '0ms:00001ms',  # <-- note, should probably only result in a single frame
                     'save',
                     '--ts', 'lidar',  # <-- NOTE using lidar timestamps
                     '--overwrite', result_osf.name
@@ -160,8 +160,8 @@ def test_osf_slice_time_2(test_osf_file) -> None:
             assert os.path.isfile(result_osf.name)
 
             result_src = open_source(result_osf.name)
-            assert result_src.scans_num == [3]
-            # TODO[tws] figure out how to capture "WARNING: No scans saved."
+            assert result_src.frames_num == [3]
+            # TODO[tws] figure out how to capture "WARNING: No frames saved."
             result_src.close()
     finally:
         os.unlink(result_osf.name)
@@ -171,10 +171,10 @@ def test_osf_slice_time_2(test_osf_file) -> None:
 def test_osf_slice_time_3(test_osf_file_new) -> None:
     """It will allow a time slice stop value equal to zero, which evalutes to False."""
 
-    expected_num_scans = 3
+    expected_num_frames = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == [expected_num_scans]
+    assert src.frames_num == [expected_num_frames]
     src.close()
 
     try:
@@ -198,10 +198,10 @@ def test_osf_slice_time_3(test_osf_file_new) -> None:
 def test_osf_slice_time_4(test_osf_file_new) -> None:
     """It will allow a time slice stop value equal to the start value."""
 
-    expected_num_scans = 3
+    expected_num_frames = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == [expected_num_scans]
+    assert src.frames_num == [expected_num_frames]
     src.close()
 
     try:
@@ -224,10 +224,10 @@ def test_osf_slice_time_4(test_osf_file_new) -> None:
 def test_osf_slice_time_5(test_osf_file_new) -> None:
     """It should slice an OSF file by time."""
 
-    scans_in_src = 3
+    frames_in_src = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == [scans_in_src]
+    assert src.frames_num == [frames_in_src]
     src.close()
 
     try:
@@ -238,7 +238,7 @@ def test_osf_slice_time_5(test_osf_file_new) -> None:
                 CliArgs([
                     '--traceback',
                     'source', test_osf_file_new,
-                    'slice', '0ms:0.0001ms',   # should only return a single scan
+                    'slice', '0ms:0.0001ms',   # should only return a single frame
                     'save', '--overwrite', result_osf.name
                 ]).args, catch_exceptions=False)
             assert result.exit_code == 0
@@ -246,7 +246,7 @@ def test_osf_slice_time_5(test_osf_file_new) -> None:
             assert os.path.isfile(result_osf.name)
 
             result_src = open_source(result_osf.name)
-            assert result_src.scans_num == [1]
+            assert result_src.frames_num == [1]
             result_src.close()
     finally:
         os.unlink(result_osf.name)

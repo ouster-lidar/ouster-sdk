@@ -112,7 +112,7 @@ commands also have subcommands that further extend or specify what
         * ``viz`` - visualizes data in a 3D point cloud viewer.
         * ``slice`` - use the slice command to extract a subset of lidar frames from a source by specifing a frame index
           interval or time duration.
-        * ``clip`` - the clip command can be used to limit the range of values of scan fields.
+        * ``clip`` - the clip command can be used to limit the range of values of frame fields.
         * ``filter`` - the filter command can be used to suppress or replace certain field measurements based on predicate.
         * ``mask`` - use the mask command to mask certain pixel from the lidar frames.
         * ``reduce`` - use the reduce command to downsample the vertical resolution of any ouster Lidar.
@@ -122,7 +122,7 @@ commands also have subcommands that further extend or specify what
         * ``save`` - saves the source data, optionally converting to a new format.
         * ``save_raw`` - save raw packets from the sensor.
         * ``save_trajectory`` - save a trajectory of the movement of selected sensor.
-        * ``normals`` - compute unit surface normals for each ``LidarScan``.
+        * ``normals`` - compute unit surface normals for each ``LidarFrame``.
         * ``localize`` - run localization based on the mapping output ply map.
         * ``plumb`` - calculate the extrinsic matrix to align each sensor's Z-axis with the gravity vector using IMU data.
         * ``live_zones`` - query or set the list of zones live on the sensor.
@@ -144,12 +144,11 @@ commands also have subcommands that further extend or specify what
     * ``util`` - Miscellaneous utilities.
 
       * ``benchmark`` - runs a performance benchmark for ouster-sdk.
-      * ``benchmark-sensor`` - runs a performance benchmark for ouster-sdk using a sensor.
       * ``system-info`` - generates system diagnostic information as a JSON string, useful to Ouster support staff when providing customer support.
       * ``network`` - manages and queries network settings on the sensor.
       * ``diagnostics`` - download diagnostics dump from a sensor.
       * ``emulate_zones`` - emulate zone monitoring off-sensor.
-      * ``stats`` - calculate and output various statistics about the scans at this point in the pipeline.
+      * ``stats`` - calculate and output various statistics about the frames at this point in the pipeline.
 
 You can now to use ``ouster-cli`` as you please, exploring available utilities with the handy
 ``---help``. If you'd prefer some more detailed examples, you can check out our :ref:`sample sessions`

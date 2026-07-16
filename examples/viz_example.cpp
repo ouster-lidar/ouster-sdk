@@ -12,15 +12,13 @@
 #include <random>
 #include <vector>
 
-#include "ouster/impl/build.h"
-#include "ouster/point_viz.h"
+#include "ouster/core/impl/build.h"
+#include "ouster/viz/point_viz.h"
 
 using namespace ouster::sdk;
-
 int main(int argc, char* /*unused*/[]) {
     if (argc != 1) {
-        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM
-                  << ")"
+        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM << ")"
                   << "\n\nUsage: viz_example" << std::endl;
 
         return EXIT_FAILURE;
@@ -37,12 +35,10 @@ int main(int argc, char* /*unused*/[]) {
 
     // populate random coordinates and color indices
     std::vector<float> points(3 * cloud_size);
-    std::generate(points.begin(), points.end(),
-                  [&]() { return dis(random_engine); });
+    std::generate(points.begin(), points.end(), [&]() { return dis(random_engine); });
 
     std::vector<float> colors(cloud_size);
-    std::generate(colors.begin(), colors.end(),
-                  [&]() { return dis2(random_engine); });
+    std::generate(colors.begin(), colors.end(), [&]() { return dis2(random_engine); });
 
     // initialize visualizer and add keyboard/mouse callbacks
     viz::PointViz viz("Viz example");

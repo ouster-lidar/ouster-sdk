@@ -5,13 +5,13 @@ import os
 import re
 from tests.conftest import PCAPS_DATA_DIR
 from ouster.sdk import core
-from ouster.sdk.core import SensorInfo, LidarMode, UDPProfileLidar, PacketWriter, LidarScan, ScanBatcher
+from ouster.sdk.core import SensorInfo, LidarMode, UDPProfileLidar, PacketFormat, LidarFrame, FrameBatcher
 from os.path import commonprefix
 from pathlib import Path
 from ouster.sdk.util import img_aspect_ratio
 from ouster.sdk.util.metadata import resolve_metadata, \
     resolve_metadata_multi, data_must_be_a_file_err, meta_must_be_a_file_err
-from ouster.sdk.util import scan_to_packets
+from ouster.sdk.util import frame_to_packets
 
 
 def test_resolve_metadata_when_data_not_a_file():
@@ -120,11 +120,11 @@ def test_img_aspect_ratio():
     assert img_aspect_ratio(SensorInfo.from_default(LidarMode._512x10)) == pytest.approx(0.09228333333333334)
 
 
-def test_scan_to_packets():
-    """It should write out the packet header fields from LidarScan if provided.
+def test_frame_to_packets():
+    """It should write out the packet header fields from LidarFrame if provided.
 
-    To test this, we'll create a scan, convert it to packets, and then batch
-    the packets back into a new scan and compare the scans.
+    To test this, we'll create a frame, convert it to packets, and then batch
+    the packets back into a new frame and compare the frames.
     """
     profile = UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
     info = SensorInfo()
@@ -137,52 +137,52 @@ def test_scan_to_packets():
     info.format.udp_profile_lidar = profile
     info.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
     info.format.header_type = core.HeaderType.STANDARD
-    info.format.column_window = (0, 1024)  # ScanBatcher depends on this being set
+    info.format.column_window = (0, 1024)  # FrameBatcher depends on this being set
 
-    writer = PacketWriter.from_info(info)
-    scan = LidarScan(info)
-    scan.frame_status = 0xabcdef0123456789
-    scan.alert_flags[:] = range(len(scan.alert_flags))
-    assert int(scan.shot_limiting()) == 0x08      # derived from frame_status
-    assert int(scan.thermal_shutdown()) == 0x09   # derived from frame_status
-    scan.shutdown_countdown = 30
-    scan.shot_limiting_countdown = 29
-    scan.frame_id = 100
-    scan.timestamp[:] = range(len(scan.timestamp))
-    scan.measurement_id[:] = range(len(scan.measurement_id))
+    packet_format = PacketFormat.from_info(info)
+    frame = LidarFrame(info)
+    frame.frame_status = 0xabcdef0123456781
+    frame.alert_flags[:] = range(len(frame.alert_flags))
+    assert int(frame.shot_limiting()) == 0x08      # derived from frame_status
+    assert int(frame.thermal_shutdown()) == 0x01   # derived from frame_status
+    frame.shutdown_countdown = 30
+    frame.shot_limiting_countdown = 29
+    frame.frame_id = 100
+    frame.timestamp[:] = range(len(frame.timestamp))
+    frame.measurement_id[:] = range(len(frame.measurement_id))
 
-    # Important: scan_to_packets assumes these are set.
-    # Also, scan_to_packets dislikes packets with timestamps equal to zero
-    assert len(scan.packet_timestamp) == scan.packet_count
-    scan.packet_timestamp[:] = range(1, len(scan.packet_timestamp) + 1)
-    scan.status[:] = np.ones(scan.status.shape)
+    # Important: frame_to_packets assumes these are set.
+    # Also, frame_to_packets dislikes packets with timestamps equal to zero
+    assert len(frame.packet_timestamp) == frame.packet_count
+    frame.packet_timestamp[:] = range(1, len(frame.packet_timestamp) + 1)
+    frame.status[:] = np.ones(frame.status.shape)
 
-    packets = scan_to_packets(scan, info)
-    crcs = [writer.crc(packet.buf) for packet in packets]
+    packets = frame_to_packets(frame, info)
+    crcs = [packet_format.crc(packet.buf) for packet in packets]
 
     # Check results
-    assert len(packets) == len(scan.packet_timestamp)
-    batcher = ScanBatcher(info)
+    assert len(packets) == len(frame.packet_timestamp)
+    batcher = FrameBatcher(info)
 
-    # Batch the packets back into a scan, which we use to test the scan-to-packet results, since methods to get packet
+    # Batch the packets back into a frame, which we use to test the frame-to-packet results, since methods to get packet
     # column headers aren't bound
-    output_scan = LidarScan(info)
+    output_frame = LidarFrame(info)
     for i, packet in enumerate(packets):
-        assert writer.init_id(packet.buf) == info.init_id
-        assert writer.prod_sn(packet.buf) == int(info.sn)
-        assert writer.frame_id(packet.buf) == scan.frame_id
-        assert writer.crc(packet.buf) == writer.calculate_crc(packet.buf)
-        assert writer.packet_type(packet.buf) == 0x1
-        batcher(packet, output_scan)
-    assert np.array_equal(output_scan.packet_timestamp, scan.packet_timestamp)
-    assert np.array_equal(output_scan.timestamp, scan.timestamp)
-    assert np.array_equal(output_scan.measurement_id, scan.measurement_id)
-    assert np.array_equal(output_scan.alert_flags, scan.alert_flags)
-    assert output_scan.shutdown_countdown == scan.shutdown_countdown
-    assert output_scan.shot_limiting_countdown == scan.shot_limiting_countdown
-    assert output_scan.shot_limiting() == scan.shot_limiting()
-    assert output_scan.thermal_shutdown() == scan.thermal_shutdown()
+        assert packet_format.init_id(packet.buf) == info.init_id
+        assert packet_format.prod_sn(packet.buf) == int(info.sn)
+        assert packet_format.frame_id(packet.buf) == frame.frame_id
+        assert packet_format.crc(packet.buf) == packet_format.calculate_crc(packet.buf)
+        assert packet_format.packet_type(packet.buf) == 0x1
+        batcher.batch(packet, output_frame)
+    assert np.array_equal(output_frame.packet_timestamp, frame.packet_timestamp)
+    assert np.array_equal(output_frame.timestamp, frame.timestamp)
+    assert np.array_equal(output_frame.measurement_id, frame.measurement_id)
+    assert np.array_equal(output_frame.alert_flags, frame.alert_flags)
+    assert output_frame.shutdown_countdown == frame.shutdown_countdown
+    assert output_frame.shot_limiting_countdown == frame.shot_limiting_countdown
+    assert output_frame.shot_limiting() == frame.shot_limiting()
+    assert output_frame.thermal_shutdown() == frame.thermal_shutdown()
 
-    # Ensure that CRCs surive the round trip packet->scan->packet conversion.
-    crcs2 = [writer.crc(packet.buf) for packet in scan_to_packets(output_scan, info)]
+    # Ensure that CRCs surive the round trip packet->frame->packet conversion.
+    crcs2 = [packet_format.crc(packet.buf) for packet in frame_to_packets(output_frame, info)]
     assert crcs == crcs2

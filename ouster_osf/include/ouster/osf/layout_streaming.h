@@ -14,9 +14,9 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/core/visibility.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/writer.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -31,8 +31,7 @@ namespace osf {
  * @ingroup OSFStreamingDefaultSize
  * @relates StreamingLayoutCW
  */
-constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE =
-    2 * 1024 * 1024;  // not strict ...
+constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024;  // not strict ...
 
 /**
  * Sreaming Layout chunking strategy
@@ -54,8 +53,7 @@ class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
      * @param[in] chunk_size The chunk size to use, this arg is optional.
      */
     OUSTER_API_FUNCTION
-    StreamingLayoutCW(Writer& writer,
-                      uint32_t chunk_size = STREAMING_DEFAULT_CHUNK_SIZE);
+    StreamingLayoutCW(Writer& writer, uint32_t chunk_size = STREAMING_DEFAULT_CHUNK_SIZE);
 
     /**
      * @copydoc ChunksWriter::save_message
@@ -63,9 +61,8 @@ class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
      * @throws std::logic_error Exception on inconsistent timestamps.
      */
     OUSTER_API_FUNCTION
-    void save_message(const uint32_t stream_id, const ts_t receive_ts,
-                      const ts_t sensor_ts, const std::vector<uint8_t>& buf,
-                      const std::string& type) override;
+    void save_message(const uint32_t stream_id, const ts_t receive_ts, const ts_t sensor_ts,
+                      const std::vector<uint8_t>& buf, const std::string& type) override;
 
     /**
      * @copydoc ChunksWriter::finish
@@ -98,8 +95,7 @@ class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
      * @param[in] sensor_ts The sensor timestamp for the messages.
      * @param[in] msg_buf A vector of message buffers to gather stats about.
      */
-    void stats_message(const uint32_t stream_id, const ts_t receive_ts,
-                       const ts_t sensor_ts,
+    void stats_message(const uint32_t stream_id, const ts_t receive_ts, const ts_t sensor_ts,
                        const std::vector<uint8_t>& msg_buf);
 
     /**
@@ -109,8 +105,7 @@ class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
      * @param[in] chunk_builder The chunk builder to use for formulating the
      *                          chunk.
      */
-    void finish_chunk(uint32_t stream_id,
-                      const std::shared_ptr<ChunkBuilder>& chunk_builder);
+    void finish_chunk(uint32_t stream_id, const std::shared_ptr<ChunkBuilder>& chunk_builder);
 
     /**
      * Chunk size to use for writing.

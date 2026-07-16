@@ -1,0 +1,23 @@
+{% set api_tab_docs = [
+  {'title': 'Python', 'doc': 'python/api_python/ouster.sdk'},
+  {'title': 'C++', 'doc': 'cpp/api_cpp/namespace_ouster__sdk'}
+] %}
+{% set is_python_page = pagename.startswith('python/api_python/') or pagename.startswith('_modules/') %}
+{% set is_cpp_page = pagename.startswith('cpp/api_cpp/') %}
+{% set show_api_tabs = is_python_page or is_cpp_page %}
+{% if show_api_tabs %}
+  <div id="subtitlearea" class="subtitle-area">
+    <div class="subtitle-inner">
+      <div class="api-language-tabs">
+        {% for tab in api_tab_docs %}
+          {% if tab.title == 'Python' %}
+            {% set is_active = is_python_page %}
+          {% else %}
+            {% set is_active = is_cpp_page %}
+          {% endif %}
+          <a class="api-language-tab{% if is_active %} is-active{% endif %}" href="{{ pathto(tab.doc) }}">{{ tab.title }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+{% endif %}

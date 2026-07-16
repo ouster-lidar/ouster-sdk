@@ -7,17 +7,15 @@ namespace sdk {
 namespace osf {
 namespace impl {
 // NOLINTBEGIN(misc-include-cleaner)
-flatbuffers::Offset<gen::MetadataEntry> make_entry(
-    const MetadataEntry& entry, flatbuffers::FlatBufferBuilder& fbb) {
+flatbuffers::Offset<gen::MetadataEntry> make_entry(const MetadataEntry& entry,
+                                                   flatbuffers::FlatBufferBuilder& fbb) {
     auto buf = entry.buffer();
-    return gen::CreateMetadataEntryDirect(fbb, entry.id(), entry.type().c_str(),
-                                          &buf);
+    return gen::CreateMetadataEntryDirect(fbb, entry.id(), entry.type().c_str(), &buf);
 }
 
 std::vector<flatbuffers::Offset<gen::MetadataEntry>> make_entries(
     const MetadataStore& store, flatbuffers::FlatBufferBuilder& fbb) {
-    using FbEntriesVector =
-        std::vector<flatbuffers::Offset<gen::MetadataEntry>>;
+    using FbEntriesVector = std::vector<flatbuffers::Offset<gen::MetadataEntry>>;
     FbEntriesVector entries;
     for (const auto& entry : store.entries()) {
         auto entry_offset = make_entry(*entry.second, fbb);

@@ -7,7 +7,7 @@
 #include "ouster/osf/basics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/reader.h"
-#include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/osf/stream_lidar_frame.h"
 
 namespace ouster {
 namespace osf {
@@ -17,7 +17,7 @@ class MetadataTest : public OsfTestWithData {};
 
 TEST_F(MetadataTest, TestDupeMetadata) {
     MetadataStore meta_store_ = {};
-    LidarScanStreamMeta data(1011121314, {});
+    LidarFrameStreamMeta data(1011121314, {});
     EXPECT_EQ(meta_store_.add(data), 1);
 
     std::stringstream output_stream;
@@ -32,13 +32,20 @@ TEST_F(MetadataTest, TestDupeMetadata) {
 
 class MetadataTestApi : public ouster::osf::MetadataEntry {
    public:
-    MetadataTestApi(std::string type, std::string static_type,
-                    std::vector<uint8_t> buffer)
+    MetadataTestApi(std::string type, std::string static_type, std::vector<uint8_t> buffer)
         : _type(type), _static_type(static_type), _buffer(buffer){};
-    std::vector<uint8_t> buffer() const { return _buffer; };
-    std::unique_ptr<MetadataEntry> clone() const { return nullptr; };
-    std::string type() const { return _type; };
-    std::string static_type() const { return _static_type; };
+    std::vector<uint8_t> buffer() const {
+        return _buffer;
+    };
+    std::unique_ptr<MetadataEntry> clone() const {
+        return nullptr;
+    };
+    std::string type() const {
+        return _type;
+    };
+    std::string static_type() const {
+        return _static_type;
+    };
 
    private:
     std::string _type;
@@ -47,8 +54,8 @@ class MetadataTestApi : public ouster::osf::MetadataEntry {
 };
 
 TEST_F(MetadataTest, MiscMetadataEntryTests) {
-    MetadataTestApi test("Screams And Whispers - Dance With the Dead",
-                         "Good song", {1, 2, 3, 4, 5});
+    MetadataTestApi test("Screams And Whispers - Dance With the Dead", "Good song",
+                         {1, 2, 3, 4, 5});
     EXPECT_EQ(test.repr(), "MetadataEntry: 01 02 03 04 05");
     EXPECT_EQ(test.to_string(),
               "MetadataEntry: [id = 0, type = Screams And Whispers - Dance "

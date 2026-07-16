@@ -1,4 +1,4 @@
-include README.rst CMakeLists.txt mypy.ini tox.ini requirements.txt
+include README.rst CMakeLists.txt mypy.ini tox.ini requirements.txt stubgen_pattern.txt stubgen.py
 graft src
 graft tests
 
@@ -12,3 +12,6 @@ prune sdk/build
 recursive-exclude sdk Jenkinsfile
 recursive-exclude sdk scripts
 prune sdk/venv
+prune sdk/_private
+exclude sdk/.gitmodules
+exclude sdk/VERSION.generated

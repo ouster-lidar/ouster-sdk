@@ -5,7 +5,7 @@
 #include <unordered_set>
 
 #include "camera.h"
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 namespace ouster {
 namespace sdk {
@@ -33,6 +33,8 @@ class Indexed {
 
     std::deque<Front> death_queue_;
 
+    std::unique_ptr<typename GL::GlobalState> global_state_;
+
     bool back_contains(const std::shared_ptr<T>& obj) {
         return back_.find(obj) != back_.end();
     }
@@ -44,6 +46,13 @@ class Indexed {
    public:
     Indexed() = default;
 
+    const typename GL::GlobalState& global_state() {
+        if (!global_state_) {
+            global_state_ = std::make_unique<typename GL::GlobalState>();
+        }
+        return *global_state_;
+    }
+
     void add(const std::shared_ptr<T>& obj) {
         // any object being added will automatically be considered "dirty",
         // since it may not have prior GL state
@@ -51,19 +60,48 @@ class Indexed {
         back_.insert(obj);
     }
 
-    bool remove(const std::shared_ptr<T>& obj) { return back_.erase(obj); }
+    const std::unordered_set<BackStatePtr>& get_drawables() const {
+        return back_;
+    }
+
+    bool remove(const std::shared_ptr<T>& obj) {
+        return back_.erase(obj);
+    }
 
     void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
+        auto& state = global_state();
+        GL::beginDraw(state);
         for (auto& obj : front_) {
             if (!obj.second.gl) {
                 // init GL for added
                 obj.second.gl = std::make_unique<GL>(*obj.second.state);
             }
-            obj.second.gl->draw(ctx, camera, *obj.second.state);
+            obj.second.gl->draw(state, ctx, camera, *obj.second.state);
         }
+        GL::endDraw();
     }
 
-    void clean_up_removed_drawables() { death_queue_.clear(); }
+    void draw_select(const WindowCtx& ctx, const impl::CameraData& camera, uint32_t& start_index,
+                     std::vector<std::pair<Selectable*, uint32_t>>& ranges) {
+        auto& state = global_state();
+        GL::beginDraw(state);
+        for (auto& obj : front_) {
+            if (!obj.first->selectable()) {
+                continue;
+            }
+            if (!obj.second.gl) {
+                // init GL for added
+                obj.second.gl = std::make_unique<GL>(*obj.second.state);
+            }
+            ranges.push_back({obj.second.state.get(), start_index});
+            obj.second.gl->draw_select(state, ctx, camera, *obj.second.state, start_index);
+        }
+        GL::endDraw();
+    }
+
+    void clean_up_removed_drawables() {
+        death_queue_.clear();
+    }
 
     void update_new_and_existing_drawables() {
         for (auto it = front_.begin(); it != front_.end();) {

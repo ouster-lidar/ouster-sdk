@@ -1,4 +1,4 @@
-#include "ouster/triangle.h"
+#include "ouster/core/triangle.h"
 
 #include <gtest/gtest.h>
 
@@ -22,22 +22,4 @@ TEST(Triangle, test_edges) {
     EXPECT_EQ(triangle1.edges[0], Coord(2, 0, 0));    // B - A
     EXPECT_EQ(triangle1.edges[1], Coord(-1, 1, 0));   // C - B
     EXPECT_EQ(triangle1.edges[2], Coord(-1, -1, 0));  // A - C
-}
-
-TEST(Triangle, test_inside) {
-    // A counterclockwise triangle in the XY plane.
-    Triangle triangle1({-1.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0});
-    EXPECT_TRUE(triangle1.inside({0, 0, 0}));
-    EXPECT_FALSE(triangle1.inside({-2, 0, 0}));
-    EXPECT_FALSE(triangle1.inside({2, 0, 0}));
-    EXPECT_FALSE(triangle1.inside({0, -2, 0}));
-    EXPECT_FALSE(triangle1.inside({0, 2, 0}));
-
-    // NOTE, this method assumes the point is already in the same plane as the
-    // triangle. Since the following points are not within the same plane, the
-    // inside method would not necessarily return false.
-    EXPECT_TRUE(triangle1.inside({0, 0, -2}));
-    EXPECT_TRUE(triangle1.inside({0, 0, 2}));
-    EXPECT_TRUE(triangle1.inside({0, 0, -200}));
-    EXPECT_TRUE(triangle1.inside({0, 0, 200}));
 }

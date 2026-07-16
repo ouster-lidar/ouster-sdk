@@ -16,14 +16,14 @@ from ouster.sdk import core, pcap
 from ouster.sdk.examples.colormaps import normalize
 
 
-def pcap_3d_one_scan(source_file: str,
+def pcap_3d_one_frame(source_file: str,
                      num: int = 0,
                      visualize: bool = True):
-    """Render one scan from a pcap file in the Open3D viewer.
+    """Render one frame from a pcap file in the Open3D viewer.
 
     Args:
         source: path to pcap
-        num: scan number in a given pcap file (satrs from *0*)
+        num: frame number in a given pcap file (satrs from *0*)
         visualize: when False, return xyz array without opening a window
     """
     try:
@@ -35,30 +35,30 @@ def pcap_3d_one_scan(source_file: str,
         exit(1)
 
     # open source
-    source = pcap.PcapScanSource(source_file)
+    source = pcap.PcapFrameSetSource(source_file)
     metadata = source.sensor_info[0]
 
     from more_itertools import nth
-    # get single scan by index
-    scans = nth(source, num)
+    # get single frame by index
+    frames = nth(source, num)
 
-    if not scans:
-        print(f"ERROR: Scan # {num} in not present in pcap file")
+    if not frames:
+        print(f"ERROR: Frame # {num} in not present in pcap file")
         source.close()
         exit(1)
 
-    scan = scans[0]
-    assert scan is not None
+    frame = frames[0]
+    assert frame is not None
 
-    # [doc-stag-open3d-one-scan]
-    # compute point cloud using core.SensorInfo and core.LidarScan
-    xyz = core.XYZLut(metadata)(scan)
-    # [doc-etag-open3d-one-scan]
+    # [doc-stag-open3d-one-frame]
+    # compute point cloud using core.SensorInfo and core.LidarFrame
+    xyz = core.XYZLut(metadata)(frame)
+    # [doc-etag-open3d-one-frame]
 
     if not visualize:
         source.close()
         return xyz
-    # [doc-stag-open3d-one-scan-pointcloud]
+    # [doc-stag-open3d-one-frame-pointcloud]
     # create point cloud and coordinate axes geometries
     cloud = o3d.geometry.PointCloud(
         o3d.utility.Vector3dVector(xyz.reshape((-1, 3))))  # type: ignore
@@ -86,7 +86,7 @@ def pcap_3d_one_scan(source_file: str,
     vis.run()
     vis.destroy_window()
     source.close()
-    # [doc-etag-open3d-one-scan-pointcloud]
+    # [doc-etag-open3d-one-frame-pointcloud]
 
 
 def pcap_display_xyz_points(source_file: str,
@@ -95,23 +95,23 @@ def pcap_display_xyz_points(source_file: str,
     """Plot point cloud using matplotlib or return xyz/colors when plot is False."""
 
     # open the source
-    source = pcap.PcapScanSource(source_file)
+    source = pcap.PcapFrameSetSource(source_file)
     metadata = source.sensor_info[0]
 
     # [doc-stag-pcap-render-xyz-points]
     from more_itertools import nth
-    scans = nth(source, num)
-    if not scans:
-        print(f"ERROR: Scan # {num} in not present in pcap file")
+    frames = nth(source, num)
+    if not frames:
+        print(f"ERROR: Frame # {num} in not present in pcap file")
         exit(1)
 
-    scan = scans[0]
-    assert scan is not None
+    frame = frames[0]
+    assert frame is not None
 
     # transform data to 3d points and graph
     xyzlut = core.XYZLut(metadata)
-    xyz = xyzlut(scan.field(core.ChanField.RANGE))
-    key = scan.field(core.ChanField.REFLECTIVITY)
+    xyz = xyzlut(frame.field(core.ChanField.RANGE))
+    key = frame.field(core.ChanField.REFLECTIVITY)
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     colors = normalize(key.flatten())
     # [doc-etag-pcap-render-xyz-points]
@@ -129,7 +129,7 @@ def pcap_display_xyz_points(source_file: str,
     ax.set_ylim3d([-r, r])  # type: ignore
     ax.set_zlim3d([-r, r])  # type: ignore
 
-    plt.title("3D Points XYZ for scan")
+    plt.title("3D Points XYZ for frame")
 
     ax.scatter(x, y, z, c=colors, s=0.2)  # type: ignore
     plt.show()
@@ -142,13 +142,13 @@ def pcap_to_las(source_file: str,
                 las_dir: str = ".",
                 las_base: str = "las_out",
                 las_ext: str = "las") -> None:
-    "Write scans from a pcap to las files (one per lidar scan)."
+    "Write frames from a pcap to las files (one per lidar frame)."
 
     from itertools import islice
     import laspy  # type: ignore
 
     # open source
-    source = pcap.PcapScanSource(source_file)
+    source = pcap.PcapFrameSetSource(source_file)
     metadata = source.sensor_info[0]
 
     if (metadata.format.udp_profile_lidar ==
@@ -161,16 +161,16 @@ def pcap_to_las(source_file: str,
     # precompute xyzlut to save computation in a loop
     xyzlut = core.XYZLut(metadata)
 
-    # create an iterator of LidarScans from pcap and bound it if num is specified
-    scans = iter(source)
+    # create an iterator of LidarFrames from pcap and bound it if num is specified
+    frames = iter(source)
     if num:
-        scans = islice(scans, num)
+        frames = islice(frames, num)
 
-    for idx, scanl in enumerate(scans):
-        for scan in scanl:
-            if scan is None:
+    for idx, frame_set in enumerate(frames):
+        for frame in frame_set:
+            if frame is None:
                 continue
-            xyz = xyzlut(scan.field(core.ChanField.RANGE))
+            xyz = xyzlut(frame.field(core.ChanField.RANGE))
 
             las = laspy.create()
             las.x = xyz[:, :, 0].flatten()
@@ -188,9 +188,9 @@ def pcap_to_pcd(source_file: str,
                 pcd_dir: str = ".",
                 pcd_base: str = "pcd_out",
                 pcd_ext: str = "pcd") -> None:
-    "Write scans from a pcap to pcd files (one per lidar scan)."
+    "Write frames from a pcap to pcd files (one per lidar frame)."
     # open source
-    source = pcap.PcapScanSource(source_file)
+    source = pcap.PcapFrameSetSource(source_file)
     metadata = source.sensor_info[0]
 
     if (metadata.format.udp_profile_lidar ==
@@ -215,16 +215,16 @@ def pcap_to_pcd(source_file: str,
     # precompute xyzlut to save computation in a loop
     xyzlut = core.XYZLut(metadata)
 
-    # create an iterator of LidarScans from pcap and bound it if num is specified
-    scans = iter(source)
+    # create an iterator of LidarFrames from pcap and bound it if num is specified
+    frames = iter(source)
     if num:
-        scans = islice(scans, num)
+        frames = islice(frames, num)
 
-    for idx, scanl in enumerate(scans):
-        for scan in scanl:
-            if scan is None:
+    for idx, frame_set in enumerate(frames):
+        for frame in frame_set:
+            if frame is None:
                 continue
-            xyz = xyzlut(scan.field(core.ChanField.RANGE))
+            xyz = xyzlut(frame.field(core.ChanField.RANGE))
 
             pcd = o3d.geometry.PointCloud()  # type: ignore
 
@@ -242,7 +242,7 @@ def pcap_to_ply(source_file: str,
                 ply_dir: str = ".",
                 ply_base: str = "ply_out",
                 ply_ext: str = "ply") -> None:
-    "Write scans from a pcap to ply files (one per lidar scan)."
+    "Write frames from a pcap to ply files (one per lidar frame)."
 
     # Don't need to print warning about dual returns since this leverages pcap_to_pcd
 
@@ -254,31 +254,29 @@ def pcap_to_ply(source_file: str,
                 pcd_ext=ply_ext)
 
 
-def pcap_query_scan(source_file: str,
+def pcap_query_frame(source_file: str,
                     num: int = 0):
     """
-    Example: Query available fields in LidarScan
+    Example: Query available fields in LidarFrame
 
     Args:
         source_file: Path to pcap file
-        num: scan number in a given pcap file (satrs from *0*)
+        num: frame number in a given pcap file (satrs from *0*)
     """
     # open source
-    source = pcap.PcapScanSource(source_file)
-    scans = iter(source)
+    source = pcap.PcapFrameSetSource(source_file)
+    frames = iter(source)
 
-    # [doc-stag-pcap-query-scan]
-    scanl = next(scans)
-    fields_info = []
-    print("Available fields and corresponding dtype in LidarScan")
-    for scan in scanl:
-        if scan is None:
-            continue
-        for field in scan.fields:
-            dtype = scan.field(field).dtype
-            fields_info.append((str(field), dtype))
-            print('{0:15} {1}'.format(str(field), dtype))
-    # [doc-etag-pcap-query-scan]
+    frame_set = next(frames)
+    print("Available fields and corresponding dtype in LidarFrame")
+    # [doc-stag-pcap-query-frame]
+    for frame in frame_set:
+        if not frame: continue  # noqa: E701
+        for field_name in frame.fields:
+            field_data = frame.field(field_name)
+            print('{0:15} {1}'.format(field_name,
+                                      field_data.dtype))
+    # [doc-etag-pcap-query-frame]
 
 
 def pcap_read_packets(
@@ -334,13 +332,13 @@ def pcap_to_csv(
 def main():
     """Pcap examples runner."""
     examples = {
-        "open3d-one-scan": pcap_3d_one_scan,
+        "open3d-one-frame": pcap_3d_one_frame,
         "plot-xyz-points": pcap_display_xyz_points,
         "pcap-to-las": pcap_to_las,
         "pcap-to-pcd": pcap_to_pcd,
         "pcap-to-ply": pcap_to_ply,
         "pcap-to-csv": pcap_to_csv,
-        "query-scan": pcap_query_scan,
+        "query-frame": pcap_query_frame,
         "read-packets": pcap_read_packets,
     }
 
@@ -355,10 +353,10 @@ def main():
                         metavar='EXAMPLE',
                         choices=examples.keys(),
                         help='name of the example to run')
-    parser.add_argument('--scan-num',
+    parser.add_argument('--frame-num',
                         type=int,
                         default=1,
-                        help='index of scan to use')
+                        help='index of frame to use')
     args = parser.parse_args()
 
     try:
@@ -370,7 +368,7 @@ def main():
 
     print(f'example: {args.example}')
 
-    example(args.pcap_path, args.scan_num)
+    example(args.pcap_path, args.frame_num)
 
 
 if __name__ == "__main__":

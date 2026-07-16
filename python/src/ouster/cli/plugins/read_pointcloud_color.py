@@ -1,5 +1,7 @@
 import numpy as np
 from typing import Optional
+import laspy
+
 
 from ouster.sdk._bindings.viz import (calref_palette, magma_palette)
 
@@ -146,8 +148,56 @@ def _parse_pcd(path: str):
     return prop_names, data, n_points
 
 
+def _parse_las(path: str):
+    """Parse a LAS file using laspy. Returns (prop_names, data, n_points).
+
+    XYZ coordinates are automatically scaled by laspy. Intensity is
+    included only when at least one point has a non-zero value. RGB channels
+    (uint16 in LAS) are down-scaled to [0, 255] and included only when at
+    least one channel is non-zero.
+    """
+    # Read the LAS file
+    try:
+        las = laspy.read(path)
+    except laspy.errors.LaspyException as e:
+        raise ValueError(f"{e}; if trying to read a laz file make sure to pip install `lazrs` or `laszip` packages")
+
+    # las.x, las.y, and las.z automatically apply the header's scale and offset
+    x = np.array(las.x, dtype=np.float64)
+    y = np.array(las.y, dtype=np.float64)
+    z = np.array(las.z, dtype=np.float64)
+
+    prop_names = ['x', 'y', 'z']
+    columns = [x, y, z]
+
+    # Get available dimensions from the point format
+    dim_names = list(las.point_format.dimension_names)
+
+    # Extract Intensity if present and non-zero
+    if 'intensity' in dim_names:
+        intensity = np.array(las.intensity, dtype=np.float64)
+        if float(intensity.max()) > 0.0:
+            prop_names.append('intensity')
+            columns.append(intensity)
+
+    # Extract RGB if present and non-zero
+    if all(c in dim_names for c in ('red', 'green', 'blue')):
+        red = np.array(las.red, dtype=np.float64) * (255.0 / 65535.0)
+        green = np.array(las.green, dtype=np.float64) * (255.0 / 65535.0)
+        blue = np.array(las.blue, dtype=np.float64) * (255.0 / 65535.0)
+
+        if float(red.max()) > 0.0 or float(green.max()) > 0.0 or float(blue.max()) > 0.0:
+            prop_names += ['red', 'green', 'blue']
+            columns += [red, green, blue]
+
+    data = np.column_stack(columns)
+    n_points = len(las.points)
+
+    return prop_names, data, n_points
+
+
 def read_pointcloud_color(path: str) -> np.ndarray:
-    """Read a PLY or PCD file and return xyz + color as an (n, 6) float64 array.
+    """Read a PLY, PCD, or LAS file and return xyz + color as an (n, 6) float64 array.
 
     The returned columns are [x, y, z, r, g, b] where r/g/b are in [0, 1].
 
@@ -160,7 +210,7 @@ def read_pointcloud_color(path: str) -> np.ndarray:
         4. If the file only has xyz: colour by normalised xyz coordinates.
 
     Args:
-        path: Path to the PLY or PCD file (ASCII or binary).
+        path: Path to the PLY (ASCII or binary), PCD (ASCII or binary), or LAS file (binary).
 
     Returns:
         np.ndarray of shape (n, 6) and dtype float64.
@@ -168,8 +218,12 @@ def read_pointcloud_color(path: str) -> np.ndarray:
     ext = path.rsplit('.', 1)[-1].lower() if '.' in path else ''
     if ext == 'pcd':
         prop_names, data, n_vertices = _parse_pcd(path)
-    else:
+    elif ext == 'las' or ext == 'laz':
+        prop_names, data, n_vertices = _parse_las(path)
+    elif ext == 'ply':
         prop_names, data, n_vertices = _parse_ply(path)
+    else:
+        raise ValueError(f"Unsupported file extension: {ext}")
 
     lower_names = [n.lower() for n in prop_names]
 

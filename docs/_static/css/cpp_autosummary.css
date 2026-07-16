@@ -1,77 +1,77 @@
 /* Transform C++ namespace lists into autosummary-style tables */
-.rst-content section[id*="class"] ul,
-.rst-content section[id*="function"] ul,
-.rst-content section[id*="enum"] ul,
-.rst-content section[id*="typedef"] ul,
-.rst-content section[id*="variable"] ul,
-.rst-content section#classes ul,
-.rst-content section#functions ul,
-.rst-content section#enums ul,
-.rst-content section#typedefs ul,
-.rst-content section#variables ul {
+.content section[id*="class"] ul:not(.simple),
+.content section[id*="function"] ul:not(.simple),
+.content section[id*="enum"] ul:not(.simple),
+.content section[id*="typedef"] ul:not(.simple),
+.content section[id*="variable"] ul:not(.simple),
+.content section#classes ul:not(.simple),
+.content section#functions ul:not(.simple),
+.content section#enums ul:not(.simple),
+.content section#typedefs ul:not(.simple),
+.content section#variables ul:not(.simple) {
     display: block;
     list-style: none;
     padding: 0;
     margin: 0;
-    border: 1px solid #e1e4e5;
+    border: 1px solid var(--toc-border, #e1e4e5);
     background-color: #fff;
     margin-bottom: 20px;
 }
 
 /* Style list items to match Python autosummary table rows */
-.rst-content section[id*="class"] ul li,
-.rst-content section[id*="function"] ul li,
-.rst-content section[id*="enum"] ul li,
-.rst-content section[id*="typedef"] ul li,
-.rst-content section[id*="variable"] ul li,
-.rst-content section#classes ul li,
-.rst-content section#functions ul li,
-.rst-content section#enums ul li,
-.rst-content section#typedefs ul li,
-.rst-content section#variables ul li {
+.content section[id*="class"] ul:not(.simple) li,
+.content section[id*="function"] ul:not(.simple) li,
+.content section[id*="enum"] ul:not(.simple) li,
+.content section[id*="typedef"] ul:not(.simple) li,
+.content section[id*="variable"] ul:not(.simple) li,
+.content section#classes ul:not(.simple) li,
+.content section#functions ul:not(.simple) li,
+.content section#enums ul:not(.simple) li,
+.content section#typedefs ul:not(.simple) li,
+.content section#variables ul:not(.simple) li {
     display: block;
     border-bottom: 1px solid #f1f1f1;
     margin: 0;
     padding: 0;
 }
 
-.rst-content section[id*="class"] ul li:last-child,
-.rst-content section[id*="function"] ul li:last-child,
-.rst-content section[id*="enum"] ul li:last-child,
-.rst-content section[id*="typedef"] ul li:last-child,
-.rst-content section[id*="variable"] ul li:last-child,
-.rst-content section#classes ul li:last-child,
-.rst-content section#functions ul li:last-child,
-.rst-content section#enums ul li:last-child,
-.rst-content section#typedefs ul li:last-child,
-.rst-content section#variables ul li:last-child {
+.content section[id*="class"] ul:not(.simple) li:last-child,
+.content section[id*="function"] ul:not(.simple) li:last-child,
+.content section[id*="enum"] ul:not(.simple) li:last-child,
+.content section[id*="typedef"] ul:not(.simple) li:last-child,
+.content section[id*="variable"] ul:not(.simple) li:last-child,
+.content section#classes ul:not(.simple) li:last-child,
+.content section#functions ul:not(.simple) li:last-child,
+.content section#enums ul:not(.simple) li:last-child,
+.content section#typedefs ul:not(.simple) li:last-child,
+.content section#variables ul:not(.simple) li:last-child {
     border-bottom: none;
 }
 
-.rst-content section[id*="class"] ul li:nth-child(even),
-.rst-content section[id*="function"] ul li:nth-child(even),
-.rst-content section[id*="enum"] ul li:nth-child(even),
-.rst-content section[id*="typedef"] ul li:nth-child(even),
-.rst-content section[id*="variable"] ul li:nth-child(even),
-.rst-content section#classes ul li:nth-child(even),
-.rst-content section#functions ul li:nth-child(even),
-.rst-content section#enums ul li:nth-child(even),
-.rst-content section#typedefs ul li:nth-child(even),
-.rst-content section#variables ul li:nth-child(even) {
+.content section[id*="class"] ul:not(.simple) li:nth-child(even),
+.content section[id*="function"] ul:not(.simple) li:nth-child(even),
+.content section[id*="enum"] ul:not(.simple) li:nth-child(even),
+.content section[id*="typedef"] ul:not(.simple) li:nth-child(even),
+.content section[id*="variable"] ul:not(.simple) li:nth-child(even),
+.content section#classes ul:not(.simple) li:nth-child(even),
+.content section#functions ul:not(.simple) li:nth-child(even),
+.content section#enums ul:not(.simple) li:nth-child(even),
+.content section#typedefs ul:not(.simple) li:nth-child(even),
+.content section#variables ul:not(.simple) li:nth-child(even) {
     background-color: #f9f9f9;
 }
 
 /* Style C++ links to match Python autosummary code elements exactly */
-.rst-content section[id*="class"] ul li a,
-.rst-content section[id*="function"] ul li a,
-.rst-content section[id*="enum"] ul li a,
-.rst-content section[id*="typedef"] ul li a,
-.rst-content section[id*="variable"] ul li a,
-.rst-content section#classes ul li a,
-.rst-content section#functions ul li a,
-.rst-content section#enums ul li a,
-.rst-content section#typedefs ul li a,
-.rst-content section#variables ul li a {
+.content section[id*="class"] ul:not(.simple) li a,
+.content section[id*="function"] ul:not(.simple) li a,
+.content section[id*="enum"] ul:not(.simple) li a,
+.content section[id*="typedef"] ul:not(.simple) li a,
+.content section[id*="variable"] ul:not(.simple) li a,
+.content section#classes ul:not(.simple) li a,
+.content section#functions ul:not(.simple) li a,
+.content section#enums ul:not(.simple) li a,
+.content section#typedefs ul:not(.simple) li a,
+.content section#variables ul:not(.simple) li a {
     display: block;
     padding: 8px 12px;
     text-decoration: none;
@@ -82,25 +82,25 @@
     font-size: inherit;
 }
 
-.rst-content section[id*="class"] ul li a:hover,
-.rst-content section[id*="function"] ul li a:hover,
-.rst-content section[id*="enum"] ul li a:hover,
-.rst-content section[id*="typedef"] ul li a:hover,
-.rst-content section[id*="variable"] ul li a:hover,
-.rst-content section#classes ul li a:hover,
-.rst-content section#functions ul li a:hover,
-.rst-content section#enums ul li a:hover,
-.rst-content section#typedefs ul li a:hover,
-.rst-content section#variables ul li a:hover {
+.content section[id*="class"] ul:not(.simple) li a:hover,
+.content section[id*="function"] ul:not(.simple) li a:hover,
+.content section[id*="enum"] ul:not(.simple) li a:hover,
+.content section[id*="typedef"] ul:not(.simple) li a:hover,
+.content section[id*="variable"] ul:not(.simple) li a:hover,
+.content section#classes ul:not(.simple) li a:hover,
+.content section#functions ul:not(.simple) li a:hover,
+.content section#enums ul:not(.simple) li a:hover,
+.content section#typedefs ul:not(.simple) li a:hover,
+.content section#variables ul:not(.simple) li a:hover {
     background-color: #e3f2fd;
     text-decoration: none;
 }
 
 /* Transform C++ reference links to match Python autosummary styling exactly */
-.rst-content section ul li a .std-ref {
+.content a .std-ref {
     /* Match the exact Python autosummary styling */
     background-color: transparent !important;
-    border: 1px solid #e1e4e5 !important;
+    border: 1px solid var(--toc-border, #e1e4e5) !important;
     border-radius: 3px !important;
     color: #2980b9 !important;
     font-size: 14px !important;
@@ -111,20 +111,20 @@
     display: inline !important;
 }
 
-.rst-content section ul li a:hover .std-ref {
+.content a:hover .std-ref {
     background-color: #f1f8ff !important;
     border-color: #2980b9 !important;
     color: #1565c0 !important;
 }
 
 /* Alternative approach: Create code-style wrapper around C++ links */
-.rst-content section ul li a .std-ref::before {
+.content a .std-ref::before {
     /* Add the same CSS classes that Python autosummary uses */
     content: "";
 }
 
 /* Make C++ links look exactly like Python autosummary code elements */
-.rst-content section ul li a .std-ref {
+.content a .std-ref {
     /* Apply the exact same styles as Python's code elements */
     background: #f8f9fa !important;
     border: 1px solid #e9ecef !important;
@@ -138,11 +138,7 @@
 }
 
 /* Override to match the exact Python autosummary appearance */
-.rst-content section ul li a {
-    position: relative;
-}
-
-.rst-content section ul li a .std-ref {
+.content a .std-ref {
     /* Match Python's autosummary table code styling exactly */
     background-color: #f8f9fa;
     border: 1px solid #e9ecef;
@@ -151,40 +147,135 @@
     font-size: 13px;
     font-weight: normal;
     padding: 2px 4px;
-    text-decoration: none;
+    text-decoration: underline;
     white-space: normal;
     display: inline;
 }
 
-.rst-content section ul li a:hover .std-ref {
+.content a:hover .std-ref {
     background-color: #e3f2fd;
     border-color: #2980b9;
     color: #1565c0;
 }
 
+/* ------------------------------------------------------------------
+ * Namespace toctree styling (cpp/api_cpp/namespace_*.html)
+ * Make the nested li structure look like the Python autosummary tables.
+ * ------------------------------------------------------------------ */
+.content section[id^="namespace-"] section > h2 + ul.simple,
+.content section[id^="namespace-"] > ul.simple {
+    border: 1px solid var(--toc-border, #e1e4e5);
+    border-radius: 4px;
+    background-color: #fff;
+    margin: 24px 0;
+    padding: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple,
+.content section[id^="namespace-"] > ul.simple {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li,
+.content section[id^="namespace-"] > ul.simple > li {
+    margin: 0;
+    border-bottom: 1px solid #f1f1f1;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li:last-child,
+.content section[id^="namespace-"] > ul.simple > li:last-child {
+    border-bottom: none;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li:nth-child(even),
+.content section[id^="namespace-"] > ul.simple > li:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li:nth-child(odd),
+.content section[id^="namespace-"] > ul.simple > li:nth-child(odd) {
+    background-color: #fff;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li > ul > li,
+.content section[id^="namespace-"] > ul.simple > li > ul > li {
+    background-color: inherit;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li > p > a,
+.content section[id^="namespace-"] > ul.simple > li > p > a {
+    display: block;
+    padding: 8px 14px;
+    background-color: inherit;
+    text-decoration: underline;
+    color: inherit;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li > p > a:hover,
+.content section[id^="namespace-"] > ul.simple > li > p > a:hover {
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple > li > p,
+.content section[id^="namespace-"] > ul.simple > li > p {
+    margin: 0;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple ul a,
+.content section[id^="namespace-"] > ul.simple ul a {
+    padding-left: 32px;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple ul ul a,
+.content section[id^="namespace-"] > ul.simple ul ul a {
+    padding-left: 50px;
+}
+
+.content section[id^="namespace-"] section > h2 + ul.simple ul ul ul a,
+.content section[id^="namespace-"] > ul.simple ul ul ul a {
+    padding-left: 68px;
+}
+
+
+.content section[id^="namespace-"] section > h2 + ul.simple code,
+.content section[id^="namespace-"] > ul.simple code {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    color: #2c3e50;
+    font-size: 13px;
+    padding: 0.2em 0.4em;
+    white-space: normal;
+}
+
 /* Clean up section headers with appropriate icons */
-.rst-content h2[id*="class"],
-.rst-content h2[id*="function"],
-.rst-content h2[id*="enum"],
-.rst-content h2[id*="typedef"],
-.rst-content h2[id*="variable"],
-.rst-content h2#classes,
-.rst-content h2#functions,
-.rst-content h2#enums,
-.rst-content h2#typedefs,
-.rst-content h2#variables {
+.content h2[id*="class"],
+.content h2[id*="function"],
+.content h2[id*="enum"],
+.content h2[id*="typedef"],
+.content h2[id*="variable"],
+.content h2#classes,
+.content h2#functions,
+.content h2#enums,
+.content h2#typedefs,
+.content h2#variables {
     font-size: 1.2em;
     font-weight: bold;
     color: #404040;
-    border-bottom: 1px solid #e1e4e5;
+    border-bottom: 1px solid var(--toc-border, #e1e4e5);
     margin-top: 30px;
     margin-bottom: 15px;
     padding-bottom: 6px;
 }
 
 /* Ensure C++ code elements match Python autosummary exactly */
-.rst-content section ul li a .std-ref,
-.rst-content section ul li code.xref {
+.content a .std-ref,
+.content code.xref {
     /* Apply Python autosummary exact styling */
     background-color: #f8f9fa;
     border: 1px solid #e9ecef;
@@ -193,15 +284,20 @@
     font-size: 13px;
     font-weight: normal;
     padding: 2px 4px;
-    text-decoration: none;
+    text-decoration: underline;
     white-space: normal;
     word-wrap: break-word;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
 }
 
-.rst-content section ul li a:hover .std-ref,
-.rst-content section ul li a:hover code.xref {
+/* Ensure nested pre/span links (e.g., identifier names) show underline */
+.content a span.pre {
+    text-decoration: underline;
+}
+
+.content section ul:not(.simple) li a:hover .std-ref,
+.content section ul:not(.simple) li a:hover code.xref {
     background-color: #e3f2fd;
     border-color: #2980b9;
     color: #1565c0;

@@ -17,18 +17,30 @@ ouster-sdk/index.html
 This repository contains Ouster SDK source code for connecting to and configuring ouster sensors,
 reading and visualizing data.
 
-* `ouster_client <ouster_client/>`_ contains an example C++ client for ouster sensors
+* `ouster_core <ouster_core/>`_ contains the Ouster SDK core C++ library
+* `ouster_algorithm <ouster_algorithm/>`_ contains shared perception and mapping algorithms
 * `ouster_pcap <ouster_pcap/>`_ contains C++ pcap functions for ouster sensors
 * `ouster_osf <ouster_osf/>`_ contains C++ OSF library to store ouster sensors data
 * `ouster_viz <ouster_viz/>`_ contains a customizable point cloud visualizer
 * `python <python/>`_ contains the code for the ouster sensor python SDK (``ouster-sdk`` Python package)
-* `sdk-extenstions` is a submodule of the ouster-sdk repository which is currently for internal use only.
-The submodule cannot be cloned or updated.
 
 .. note::
     Ouster ROS driver code has been moved out to a separate GitHub repository. To get started using the
     driver follow the instructions provided on the repository's main page: https://github.com/ouster-lidar/ouster-ros
 
+Python Package Installation
+===========================
+
+Public (PyPI)
+-------------
+
+To upgrade:
+
+``python3 -m pip install --upgrade ouster-sdk``
+
+For a fresh install:
+
+``python3 -m pip install ouster-sdk``
 
 Contact
 =======
@@ -40,7 +52,6 @@ For community discussions and questions, visit the `Ouster Community Forum <http
 For support of Ouster products outside of the SDK, please use `Ouster Customer Support <https://ouster1234567.my.site.com/customers>`_.
 
 For suspected security problems, please contact us at security@ouster.io.
-
 
 License
 =======

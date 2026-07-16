@@ -9,7 +9,7 @@
 
 #include "camera.h"
 #include "glfw.h"
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 namespace ouster {
 namespace sdk {
@@ -25,28 +25,33 @@ namespace impl {
 class GLImage {
     constexpr static int SIZE_FRACTION_MAX = 20;
 
-    // global gl state
-    static bool initialized;
-    static GLuint vao;
-    static GLuint program_id;
-    static GLuint vertex_id;
-    static GLuint uv_id;
-    static GLuint mono_id;
-    static GLuint image_id;
-    static GLuint mask_id;
-    static GLuint palette_id;
-    static GLuint use_palette_id;
-
     // per-image gl state
     std::array<GLuint, 2> vertexbuffers_;
-    GLuint image_texture_id_{0};
-    GLuint mask_texture_id_{0};
     GLuint palette_texture_id_{0};
     GLuint image_index_id_{0};
 
     float x0_{-1}, x1_{0}, y0_{0}, y1_{-1}, hshift_{0};
 
    public:
+    struct GlobalState {
+        GLuint vao;
+        GLuint program_id;
+        GLuint vertex_id;
+        GLuint uv_id;
+        GLint mono_id;
+        GLint image_id;
+        GLint mask_id;
+        GLint palette_id;
+        GLint use_palette_id;
+
+        GlobalState();
+        ~GlobalState();
+
+        // Make sure it cant be copied
+        GlobalState(const GlobalState&) = delete;
+        GlobalState& operator=(const GlobalState&) = delete;
+    };
+
     GLImage();
 
     GLImage(const Image& image);
@@ -59,13 +64,10 @@ class GLImage {
      * Modifies the camera to offset it so that it is centered on the region not
      * covered by image.
      */
-    void draw(const WindowCtx& ctx, const CameraData& camera, Image& image);
+    void draw(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera,
+              Image& image);
 
-    static void initialize();
-
-    static void uninitialize();
-
-    static void beginDraw();
+    static void beginDraw(const GlobalState& state);
 
     static void endDraw();
 };

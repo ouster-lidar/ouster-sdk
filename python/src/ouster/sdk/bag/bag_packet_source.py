@@ -50,7 +50,7 @@ class ChannelMetadata(Structure):
     ]
 
 
-def anybag_monkey(self, paths, default_typestore=None):
+def _anybag_monkey(self, paths, default_typestore=None):
     if ".mcap" not in str(paths[0]):
         self.old_init(paths, default_typestore=default_typestore)
         return
@@ -64,7 +64,7 @@ def anybag_monkey(self, paths, default_typestore=None):
     self.typestore = get_typestore(Stores.EMPTY) if default_typestore is None else default_typestore
 
 
-def bag2_monkey(self, paths, default_typestore=None):
+def _bag2_monkey(self, paths, default_typestore=None):
     path = paths[0] if type(paths) is list else paths
     if ".mcap" not in str(path):
         self.old_init(paths)
@@ -165,13 +165,13 @@ class BagPacketSource(_PacketSource):
         from rosbags.rosbag2 import Reader as Reader2
 
         # lets monkeypatch AnyReader
-        if AnyReader.__init__ != anybag_monkey:
+        if AnyReader.__init__ != _anybag_monkey:
             AnyReader.old_init = AnyReader.__init__
-            AnyReader.__init__ = anybag_monkey
+            AnyReader.__init__ = _anybag_monkey
 
-        if Reader2.__init__ != bag2_monkey:
+        if Reader2.__init__ != _bag2_monkey:
             Reader2.old_init = Reader2.__init__
-            Reader2.__init__ = bag2_monkey
+            Reader2.__init__ = _bag2_monkey
 
         msg_text = """
         uint8[] buf
@@ -240,11 +240,11 @@ class BagPacketSource(_PacketSource):
                 with open(m, 'r') as file:
                     self._metadata[idx] = SensorInfo(file.read())
 
-        # estimate the scan count from packet count
-        self._scan_count = 0
+        # estimate the frame count from packet count
+        self._frame_count = 0
         for con in lidar_connections:
             ppf = self._metadata[self._id_map[con.topic][0]].format.lidar_packets_per_frame()
-            self._scan_count += math.ceil(con.msgcount / ppf)
+            self._frame_count += math.ceil(con.msgcount / ppf)
 
         self._pf = []
         for m in self._metadata:
@@ -255,7 +255,7 @@ class BagPacketSource(_PacketSource):
         populate_extrinsics(extrinsics_file or "", extrinsics or [], self._metadata)
 
     def __length_hint__(self):
-        return self._scan_count
+        return self._frame_count
 
     def __iter__(self) -> Iterator[Tuple[int, Packet]]:
         with self._lock:
@@ -284,7 +284,7 @@ class BagPacketSource(_PacketSource):
                                   f"{self._pf[idx].lidar_packet_size} for sensor {idx}")
                             self._size_error_count += 1
                             continue
-                    packet = LidarPacket(msg_len)
+                    packet = LidarPacket(self._pf[idx])
                     packet.buf[:] = msg.buf[:msg_len]
                 elif msg_type == 1:
                     if msg_len != self._pf[idx].imu_packet_size:
@@ -296,7 +296,7 @@ class BagPacketSource(_PacketSource):
                                   f"{self._pf[idx].imu_packet_size} for sensor {idx}")
                             self._size_error_count += 1
                             continue
-                    packet = ImuPacket(msg_len)
+                    packet = ImuPacket(self._pf[idx])
                     packet.buf[:] = msg.buf[:msg_len]
                 elif msg_type == 3:
                     # this packet is new so does not have the off by one issue
@@ -305,7 +305,7 @@ class BagPacketSource(_PacketSource):
                               f"{self._pf[idx].zone_packet_size} for sensor {idx}")
                         self._size_error_count += 1
                         continue
-                    packet = ZonePacket(msg_len)
+                    packet = ZonePacket(self._pf[idx])
                     packet.buf[:] = msg.buf[:msg_len]
                 else:
                     continue

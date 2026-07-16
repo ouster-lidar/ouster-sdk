@@ -7,10 +7,10 @@ include(Coverage)
 
 # ==== Libraries ====
 add_library(ouster_sensor STATIC src/client.cpp src/netcompat.cpp src/sensor_packet_source.cpp
-  src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_scan_source.cpp)
+  src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_frame_set_source.cpp)
 target_link_libraries(ouster_sensor
   PUBLIC
-    OusterSDK::ouster_client
+    OusterSDK::ouster_core
     Eigen3::Eigen
     $<BUILD_INTERFACE:ouster_build>
     Threads::Threads

@@ -1,0 +1,38 @@
+# Whitelist of top-level files and folders to restore
+# One path per line. Lines starting with # are ignored.
+# Blank lines are ignored.
+# Files
+.github
+cmake
+docs
+examples
+ouster_algorithm
+ouster_core
+ouster_library
+ouster_mapping
+ouster_osf
+ouster_pcap
+ouster_perception
+ouster_sensor
+ouster_viz
+python
+scripts
+tests
+thirdparty
+.clang-format
+.clang-tidy
+.clang-tidy-autofix
+.clangd
+.dockerignore
+.gitignore
+CHANGELOG.rst
+CMakeLists.txt
+CMakeSettings.json
+COPYRIGHT
+Jenkinsfile
+LICENSE
+LICENSE-bin
+README.rst
+Security.md
+VERSION
+vcpkg.json

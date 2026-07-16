@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -19,7 +19,7 @@
 namespace ouster {
 namespace sdk {
 namespace viz {
-
+using core::Matrix4fR;
 using Eigen::Vector3d;
 using Translation3d = Eigen::Translation<double, 3>;
 
@@ -47,8 +47,8 @@ using decidegree = int;
 /*
  * Convert integral degrees to decidegrees
  */
-constexpr decidegree operator""_deg(unsigned long long int angle) {
-    return angle * 10;
+constexpr decidegree operator""_deg(unsigned long long int angle) {  // NOLINT(google-runtime-int)
+    return static_cast<decidegree>(angle * 10);
 }
 
 /*
@@ -66,7 +66,9 @@ double decidegree2radian(T angle) {
     return static_cast<double>(M_PI * angle / 180.0_deg);
 }
 
-int dd(float degrees) { return std::lround(degrees * 10); }
+int dd(float degrees) {
+    return static_cast<int>(std::lround(degrees * 10));
+}
 
 }  // namespace
 
@@ -84,7 +86,7 @@ int dd(float degrees) { return std::lround(degrees * 10); }
  * precision is needed to prevent floating point error.
  */
 Camera::Camera()
-    : target_{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+    : target_{IDENTITY4D},
       view_offset_{0, 0, 0},
       roll_{0},
       pitch_{-45_deg},
@@ -123,7 +125,9 @@ void Camera::set_roll(float degrees) {
     roll_ = (360_deg + dd(degrees)) % 360_deg;
 }
 
-float Camera::get_roll() const { return roll_; }
+float Camera::get_roll() const {
+    return static_cast<float>(roll_);
+}
 
 // left positive, right negative
 void Camera::yaw(float degrees) {
@@ -134,7 +138,9 @@ void Camera::set_yaw(float degrees) {
     yaw_ = (360_deg + dd(degrees)) % 360_deg;
 }
 
-float Camera::get_yaw() const { return static_cast<float>(yaw_) / 10.0; }
+float Camera::get_yaw() const {
+    return static_cast<float>(yaw_) / 10.0f;
+}
 
 // down positive, up negative
 void Camera::pitch(float degrees) {
@@ -145,20 +151,22 @@ void Camera::set_pitch(float degrees) {
     pitch_ = std::max(-180_deg, std::min(0, dd(degrees)));
 }
 
-float Camera::get_pitch() const { return static_cast<float>(pitch_) / 10.0; }
+float Camera::get_pitch() const {
+    return static_cast<float>(pitch_) / 10.0f;
+}
 
 // in is positive, out is negative
 void Camera::dolly(double amount) {
-    log_distance_ = std::max(
-        LOG_DISTANCE_MIN, std::min(LOG_DISTANCE_MAX, log_distance_ - amount));
+    log_distance_ = std::max(LOG_DISTANCE_MIN, std::min(LOG_DISTANCE_MAX, log_distance_ - amount));
 }
 
 void Camera::set_dolly(double log_distance) {
-    log_distance_ =
-        std::max(LOG_DISTANCE_MIN, std::min(LOG_DISTANCE_MAX, log_distance));
+    log_distance_ = std::max(LOG_DISTANCE_MIN, std::min(LOG_DISTANCE_MAX, log_distance));
 }
 
-double Camera::get_dolly() const { return log_distance_; }
+double Camera::get_dolly() const {
+    return log_distance_;
+}
 
 void Camera::dolly_xy(double x, double y) {
     // OpenGL y goes from top to bottom
@@ -167,28 +175,34 @@ void Camera::dolly_xy(double x, double y) {
     double scale = std::tan(M_PI / 3600.0 * fov_);
     dolly_vector *= view_distance() * scale;
     // apply 3d offset in the direction of the camera view
-    auto rot =
-        (Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
-         Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()})
-            .matrix();
-    Eigen::Map<Eigen::Vector3d>{view_offset_.data()} +=
-        rot.transpose() * dolly_vector;
+    auto rot = (Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
+                Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()})
+                   .matrix();
+    Eigen::Map<Eigen::Vector3d>{view_offset_.data()} += rot.transpose() * dolly_vector;
 }
 
 void Camera::set_view_offset(const vec3d& view_offset) {
     view_offset_ = view_offset;
 }
 
-vec3d Camera::get_view_offset() const { return view_offset_; }
+vec3d Camera::get_view_offset() const {
+    return view_offset_;
+}
 
 void Camera::set_fov(float degrees) {
     fov_ = std::max(0.0_deg, std::min(360.0_deg, dd(degrees)));
 }
 
-float Camera::get_fov() const { return static_cast<float>(fov_ / 10.0); }
+float Camera::get_fov() const {
+    return static_cast<float>(fov_ / 10.0);
+}
 
-void Camera::set_orthographic(bool b) { orthographic_ = b; }
-bool Camera::is_orthographic() const { return orthographic_; }
+void Camera::set_orthographic(bool state) {
+    orthographic_ = state;
+}
+bool Camera::is_orthographic() const {
+    return orthographic_;
+}
 
 void Camera::set_proj_offset(float x, float y) {
     proj_offset_x_ = x, proj_offset_y_ = y;
@@ -198,8 +212,12 @@ vec2d Camera::get_proj_offset() const {
     return {proj_offset_x_, proj_offset_y_};
 }
 
-void Camera::set_target(const mat4d& target) { target_ = target; }
-mat4d Camera::get_target() const { return target_; }
+void Camera::set_target(const mat4d& target) {
+    target_ = target;
+}
+mat4d Camera::get_target() const {
+    return target_;
+}
 
 /*
  * Calculate camera matrices.
@@ -223,18 +241,17 @@ mat4d Camera::get_target() const { return target_; }
  */
 impl::CameraData Camera::matrices(double aspect) const {
     // calculate view matrix
-    Eigen::Matrix4d view =
-        (Translation3d{Vector3d::UnitZ() * -view_distance()} *
-         Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
-         Eigen::AngleAxisd{decidegree2radian(roll_), Vector3d::UnitY()} *
-         Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()} *
-         Translation3d{Eigen::Map<const Eigen::Vector3d>{view_offset_.data()}})
-            .matrix();
+    core::Matrix4dR view = (Translation3d{Vector3d::UnitZ() * -view_distance()} *
+                            Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
+                            Eigen::AngleAxisd{decidegree2radian(roll_), Vector3d::UnitY()} *
+                            Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()} *
+                            Translation3d{Eigen::Map<const Eigen::Vector3d>{view_offset_.data()}})
+                               .matrix();
 
     // calculate projection matrix
     const double scale = std::tan(M_PI / 3600.0 * fov_);
     const double view_dist = view_distance();
-    const double far_dist = std::min(10000.0, 100 * view_dist);
+    const double far_dist = 10000.0;
     const double near_dist = 0.1;
 
     // for diagonal fov, use ratio of each dimension to diagonal
@@ -242,7 +259,7 @@ impl::CameraData Camera::matrices(double aspect) const {
     double aspect_w = std::sin(aspect_angle);
     double aspect_h = std::cos(aspect_angle);
 
-    Eigen::Matrix4d proj = Eigen::Matrix4d::Zero();
+    core::Matrix4dR proj = core::Matrix4dR::Zero();
     if (orthographic_) {
         proj(0, 0) = 1 / (aspect_w * scale * view_dist);
         proj(0, 3) = -proj_offset_x_;
@@ -261,7 +278,7 @@ impl::CameraData Camera::matrices(double aspect) const {
         proj(3, 2) = -1;
     }
 
-    return {proj, view, Eigen::Map<const Eigen::Matrix4d>{target_.data()}};
+    return {proj, view, target_};
 }
 
 }  // namespace viz

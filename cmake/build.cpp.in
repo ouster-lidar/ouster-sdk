@@ -1,0 +1,21 @@
+#include "ouster/core/visibility.h"
+
+namespace ouster {
+namespace sdk {
+
+extern OUSTER_API_VAR const char* const BUILD_HASH = "@GIT_HASH@";
+
+extern OUSTER_API_VAR const char* const BUILD_BRANCH = "@GIT_BRANCH@";
+
+extern OUSTER_API_VAR const char* const BUILD_TYPE = "@BUILD_TYPE@";
+
+extern OUSTER_API_VAR const char* const BUILD_SYSTEM = "@BUILD_SYSTEM@";
+
+extern OUSTER_API_VAR const char* const SDK_VERSION = "@OusterSDK_VERSION_STRING@";
+
+extern OUSTER_API_VAR const char* const SDK_VERSION_FULL =
+    "@OusterSDK_VERSION_STRING@+@GIT_HASH@-@BUILD_TYPE@";
+
+}
+
+}

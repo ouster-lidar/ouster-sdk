@@ -57,7 +57,7 @@ def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: core.SensorInf
     meta1 = copy(meta)
     core.XYZLut(meta1)
 
-    meta1.beam_azimuth_angles = meta1.beam_azimuth_angles + [0.0]
+    meta1.beam_azimuth_angles = list(meta1.beam_azimuth_angles) + [0.0]
     with pytest.raises(ValueError):
         core.XYZLut(meta1)
 
@@ -86,67 +86,62 @@ def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: core.SensorInf
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_xyz_lut_scan_dims(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> None:
-    """Check that (in)valid lidar scan dimensions are handled by xyzlut."""
+def test_xyz_lut_frame_dims(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> None:
+    """Check that (in)valid lidar frame dimensions are handled by xyzlut."""
     w = meta.format.columns_per_frame
     h = meta.format.pixels_per_column
 
     xyzlut = core.XYZLut(meta)
 
-    assert xyzlut(core.LidarScan(h, w)).shape == (h, w, 3)
+    assert xyzlut(core.LidarFrame(meta)).shape == (h, w, 3)
 
+    meta.format.pixels_per_column = h + 1
+    meta.format.columns_per_frame = w
     with pytest.raises(ValueError):
-        xyzlut(core.LidarScan(h + 1, w))
+        xyzlut(core.LidarFrame(meta))
 
+    meta.format.pixels_per_column = h
+    meta.format.columns_per_frame = w - 1
     with pytest.raises(ValueError):
-        xyzlut(core.LidarScan(h, w - 1))
+        xyzlut(core.LidarFrame(meta))
+
+    meta.format.pixels_per_column = h + 1
+    meta.format.columns_per_frame = w
+    with pytest.raises(ValueError):
+        xyzlut(core.LidarFrame(meta).field("RANGE"))
+
+    meta.format.pixels_per_column = h
+    meta.format.columns_per_frame = w - 1
+    with pytest.raises(ValueError):
+        xyzlut(core.LidarFrame(meta).field("RANGE"))
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_xyz_calcs(stream_digest: digest.StreamDigest,
-                   scan: core.LidarScan, meta: core.SensorInfo) -> None:
+                   frame: core.LidarFrame, meta: core.SensorInfo) -> None:
     """Compare the optimized xyz projection to a reference implementation."""
 
     # compute 3d points using reference implementation
-    xyz_beam_to_sensor_docs = reference.xyz_proj_beam_to_sensor_transform(meta, scan)
+    xyz_beam_to_sensor_docs = reference.xyz_proj_beam_to_sensor_transform(meta, frame)
 
     # transform data to 3d points using optimized implementation
     xyzlut = core.XYZLut(meta)
-    xyz_from_lut = xyzlut(scan)
+    xyz_from_lut = xyzlut(frame)
 
     assert np.allclose(xyz_beam_to_sensor_docs, xyz_from_lut)
 
     if "OS-DOME" not in meta.prod_line:
         # for non-os-dome the old reference implementation should be correct as well
-        xyz_origin_to_origin_mm_docs = reference.xyz_proj_origin_to_origin_mm(meta, scan)
+        xyz_origin_to_origin_mm_docs = reference.xyz_proj_origin_to_origin_mm(meta, frame)
         assert np.allclose(xyz_from_lut, xyz_origin_to_origin_mm_docs)
 
 
-def test_xyz_range(stream_digest: digest.StreamDigest, scan: core.LidarScan,
+def test_xyz_range(stream_digest: digest.StreamDigest, frame: core.LidarFrame,
                    meta: core.SensorInfo) -> None:
     """Test that projection works on an ndarrays as well."""
     xyzlut = core.XYZLut(meta)
 
-    range = scan.field(core.ChanField.RANGE)
-    xyz_from_scan = xyzlut(scan)
+    range = frame.field(core.ChanField.RANGE)
+    xyz_from_frame = xyzlut(frame)
     xyz_from_range = xyzlut(range)
-    assert np.array_equal(xyz_from_scan, xyz_from_range)
-
-
-def test_xyz_range_dtype(stream_digest: digest.StreamDigest, scan: core.LidarScan,
-                         meta: core.SensorInfo) -> None:
-    """Test that projection works on an ndarrays of different dtypes."""
-    xyzlut = core.XYZLut(meta)
-
-    range = scan.field(core.ChanField.RANGE)
-    range[:] = range.astype(np.uint8)
-    xyz_from_scan = xyzlut(scan)
-    xyz_from_range_8 = xyzlut(range.astype(np.uint8))
-    xyz_from_range_16 = xyzlut(range.astype(np.uint16))
-    xyz_from_range_32 = xyzlut(range.astype(np.uint32))
-    xyz_from_range_64 = xyzlut(range.astype(np.uint64))
-
-    assert np.array_equal(xyz_from_scan, xyz_from_range_8)
-    assert np.array_equal(xyz_from_scan, xyz_from_range_16)
-    assert np.array_equal(xyz_from_scan, xyz_from_range_32)
-    assert np.array_equal(xyz_from_scan, xyz_from_range_64)
+    assert np.array_equal(xyz_from_frame, xyz_from_range)

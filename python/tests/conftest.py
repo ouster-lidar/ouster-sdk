@@ -8,10 +8,17 @@ from os import path, environ
 from typing import Iterator
 from pathlib import Path
 
+import click.testing as _ct
 from more_itertools import partition
 import pytest
 from ouster.sdk import core, pcap
 from ouster.sdk.viz import Cloud
+
+# Workaround for Click CliRunner bug (pallets/click#824, fixed in Click 8.3.2
+# via PR #3139). _NamedTextIOWrapper.close() closes the BytesIO buffer it
+# wraps, causing "ValueError: I/O operation on closed file" when background
+# threads outlive cli.main(). Remove this once Click >= 8.3.2 is available.
+_ct._NamedTextIOWrapper.close = lambda self: None  # type: ignore[assignment]
 
 pytest.register_assert_rewrite('ouster.sdk.core._digest')
 import ouster.sdk.core._digest as digest  # noqa
@@ -21,6 +28,22 @@ try:
     from ouster.cli.plugins import cli_mapping  # type: ignore # noqa: F401 # yes... it has to be in this order.
 
     _has_mapping = False  # NOTE: temporarily disabled due to CLI chaining -- Tim T.
+except ImportError:
+    pass
+
+_has_perception = False
+try:
+    from ouster.sdk._bindings.perception import DetectionEngine as _PE
+    try:
+        # The stub always raises RuntimeError("DetectionEngine is only available
+        # with distributed binaries."). A real engine raises TypeError (wrong args)
+        # or succeeds, so any non-"distributed binaries" outcome means it's real.
+        _PE.create([])
+        _has_perception = True
+    except RuntimeError as _e:
+        _has_perception = "distributed binaries" not in str(_e)
+    except Exception:
+        _has_perception = True
 except ImportError:
     pass
 
@@ -48,21 +71,51 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     """Register custom "interactive" marker."""
     config.addinivalue_line("markers", "interactive: run interactive tests")
+    config.addinivalue_line("markers", "slow: long-running tests (skipped unless env var ENABLE_SLOW_DOC_TESTS=1)")
     config.addinivalue_line("markers", "performance: perform longer versions of performance tests")
+    config.addinivalue_line("markers", "perception: requires a functional DetectionEngine (distributed binaries)")
 
 
 def pytest_collection_modifyitems(items, config) -> None:
-    """Deselect any items marked "interactive" unless the --interactive flag is set."""
+    """Deselect items marked 'interactive' or 'slow' unless the corresponding flag is set."""
+    all_deselected: list = []
 
-    normal, interactive = partition(
+    non_interactive_it, interactive_it = partition(
         lambda item: bool(item.get_closest_marker("interactive")), items)
+    non_interactive = list(non_interactive_it)
+    interactive = list(interactive_it)
+    if config.option.interactive:
+        selected = interactive
+        all_deselected.extend(non_interactive)
+    else:
+        selected = non_interactive
+        all_deselected.extend(interactive)
 
-    select, deselect = (interactive,
-                        normal) if config.option.interactive else (normal,
-                                                                   interactive)
+    slow_enabled = environ.get("ENABLE_SLOW_DOC_TESTS", "0") == "1"
+    non_slow_it, slow_it = partition(
+        lambda item: bool(item.get_closest_marker("slow")), selected)
+    non_slow = list(non_slow_it)
+    slow = list(slow_it)
+    if slow_enabled:
+        selected = slow
+        all_deselected.extend(non_slow)
+    else:
+        selected = non_slow
+        all_deselected.extend(slow)
 
-    config.hook.pytest_deselected(items=deselect)
-    items[:] = select
+    # Skip tests marked 'perception' when the real DetectionEngine is unavailable
+    # (i.e. the build only contains the stub that raises RuntimeError on create()).
+    if not _has_perception:
+        non_perception_it, perception_it = partition(
+            lambda item: bool(item.get_closest_marker("perception")), selected)
+        non_perception = list(non_perception_it)
+        perception = list(perception_it)
+        for item in perception:
+            item.add_marker(pytest.mark.skip(reason="DetectionEngine requires distributed binaries"))
+        selected = non_perception + perception
+
+    config.hook.pytest_deselected(items=all_deselected)
+    items[:] = selected
 
 
 # test data
@@ -149,21 +202,21 @@ def packets(real_pcap_path: str,
 
 
 @pytest.fixture
-def scan(packets: core.PacketSource) -> core.LidarScan:
-    batcher = core.ScanBatcher(packets.sensor_info[0])
-    scan = core.LidarScan(packets.sensor_info[0])
+def frame(packets: core.PacketSource) -> core.LidarFrame:
+    batcher = core.FrameBatcher(packets.sensor_info[0])
+    lidar_frame = core.LidarFrame(packets.sensor_info[0])
 
     def batch():
-        nonlocal scan
-        new_scan = True
+        nonlocal lidar_frame
+        new_frame = True
         for idx, p in packets:
-            new_scan = False
-            if isinstance(p, core.LidarPacket) and batcher(p, scan):
-                yield scan
-                scan = core.LidarScan(packets.sensor_info[0])
-                new_scan = True
-        if not new_scan:
-            yield scan
+            new_frame = False
+            if isinstance(p, core.LidarPacket) and batcher.batch(p, lidar_frame):
+                yield lidar_frame
+                lidar_frame = core.LidarFrame(packets.sensor_info[0])
+                new_frame = True
+        if not new_frame:
+            yield lidar_frame
     return next(iter(batch()))
 
 
@@ -211,6 +264,19 @@ def has_mapping() -> bool:
     return _has_mapping
 
 
+@pytest.fixture
+def has_perception() -> bool:
+    return _has_perception
+
+
+class MockCamera:
+    def dolly(*args, **kwargs):
+        pass
+
+    def set_target(*args, **kwargs):
+        pass
+
+
 class MockPointViz():
 
     class MockTargetDisplay:
@@ -247,4 +313,33 @@ class MockPointViz():
         return MockPointViz.MockTargetDisplay()
 
     def set_notification(*args, **kwargs):
+        pass
+
+    def update(*args, **kwargs):
+        pass
+
+    def run_once(*args, **kwargs):
+        pass
+
+    def run(*args, **kwargs):
+        pass
+
+    @property
+    def camera(self):
+        return MockCamera()
+
+    @property
+    def viewport_height(self):
+        return 100
+
+    def pop_mouse_pos_handler(*args, **kwargs):
+        pass
+
+    def pop_mouse_button_handler(*args, **kwargs):
+        pass
+
+    def pop_key_handler(*args, **kwargs):
+        pass
+
+    def pop_frame_buffer_resize_handler(*args, **kwargs):
         pass

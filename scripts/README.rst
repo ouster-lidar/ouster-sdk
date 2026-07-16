@@ -13,22 +13,12 @@ Getting Started
 ^^^^^^^^^^^^^^^^^^^
 Python Dependencies
 ^^^^^^^^^^^^^^^^^^^
-The Ouster SDK Dev Script Cli uses the following python dependencies:
-
-* flufl.lock: Provides file-based locking for managing shared resources.
-* gitpython: Used for interacting with Git repositories programmatically.
-* click: A framework for building command-line interfaces.
-* tqdm: Adds progress bars for long-running operations.
-* libclang: Provides bindings for parsing and analyzing C++ code.
-* flake8: A Python linter for enforcing code style.
-* mypy: A static type checker for Python.
-* pybind11: Used for creating Python bindings for C++ code.
-
-To install using pip on linux/macOS/windows, run the following command
+The Ouster SDK Dev Script CLI requires the Python packages listed in
+``scripts/requirements.txt``.  Install them with:
 
 .. code-block:: bash
 
-    python3 -m pip install flufl.lock gitpython click tqdm libclang flake8 mypy pybind11
+    python3 -m pip install -r scripts/requirements.txt
 
 
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -50,7 +40,7 @@ Below are the installation instructions for macOS and Linux.
 
    .. code-block:: bash
 
-      brew install bison pkg-config flex
+      brew install m4 bison pkg-config flex
 
 ### Linux
 1. **Update Package Manager**:
@@ -66,6 +56,31 @@ Below are the installation instructions for macOS and Linux.
    .. code-block:: bash
 
       sudo apt install -y flex bison libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential
+
+
+^^^^^^^^^^^
+VCPKG Setup
+^^^^^^^^^^^
+
+Once the system-level build tools above are installed, use the Dev Script CLI to
+install the remaining vcpkg package requirements and bootstrap a local vcpkg
+checkout. On Linux/macOS run:
+
+.. code-block:: bash
+
+   # Install vcpkg package requirements via the system package manager
+   # (apt on Debian/Ubuntu, brew on macOS). No-op on Windows.
+   python3 ./scripts/dev.py utils install-vcpkg-package-requirements
+
+   # Initialize the bundled vcpkg checkout so the SDK builds against it.
+   python3 ./scripts/dev.py utils enable-local-vcpkg
+
+Pass ``--reinit`` to ``enable-local-vcpkg`` to force re-initialization of the
+local vcpkg repo:
+
+.. code-block:: bash
+
+   python3 ./scripts/dev.py utils enable-local-vcpkg --reinit
 
 
 ^^^^^^^^^^^^^^^^^^
@@ -265,7 +280,7 @@ Generate Documentation:
 
 .. code-block:: bash
 
-   python3 scripts/dev.py docs build-doxygen-docs
+   python3 scripts/dev.py build doxygen
 
 ^^^^^^^^^^^^^^^^^^^^^
 Environment Variables
@@ -314,6 +329,117 @@ Below is an example using the `--threads` option.
 
       unset OSDK_DEV_CLI_THREADS
 
+----------------
+Shell Completion
+----------------
+
+The Dev Script CLI supports tab-completion for commands, sub-commands, and
+options in Bash, Zsh, Fish, and PowerShell.  Completion is powered by
+Click's built-in shell completion machinery, so it is always up-to-date
+with the live command tree — no regeneration needed when new commands are
+added.
+
+The CLI also detects when the shell is requesting completions and skips all
+heavy initialisation (vcpkg probing, directory creation, etc.), so
+tab-completion is fast.
+
+^^^^
+Bash
+^^^^
+
+Add the following line to ``~/.bashrc`` (or ``~/.bash_profile`` on macOS):
+
+.. code-block:: bash
+
+   eval "$(_DEV_COMPLETE=bash_source dev)"
+
+Then reload your shell:
+
+.. code-block:: bash
+
+   source ~/.bashrc
+
+^^^
+Zsh
+^^^
+
+Add the following line to ``~/.zshrc``:
+
+.. code-block:: zsh
+
+   eval "$(_DEV_COMPLETE=zsh_source dev)"
+
+Then reload your shell:
+
+.. code-block:: zsh
+
+   source ~/.zshrc
+
+^^^^
+Fish
+^^^^
+
+Add the following line to ``~/.config/fish/config.fish``:
+
+.. code-block:: fish
+
+   _DEV_COMPLETE=fish_source dev | source
+
+Then reload your shell:
+
+.. code-block:: fish
+
+   source ~/.config/fish/config.fish
+
+^^^^^^^^^^
+PowerShell
+^^^^^^^^^^
+
+PowerShell requires a static completion script (Click has no built-in
+PowerShell support).  Generate it once, then source it from your profile:
+
+.. code-block:: powershell
+
+   # Generate the script
+   python scripts/dev.py completions generate --shell powershell --output-dir ~
+
+   # Add to your $PROFILE (run once)
+   Add-Content $PROFILE ". $HOME\dev_completions.ps1"
+
+Re-run ``completions generate --shell powershell`` after adding new commands
+to keep the PowerShell script up-to-date.
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Using a different invocation name
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``eval`` snippets above assume ``dev`` is on your ``PATH``.  If you
+invoke the script as ``python scripts/dev.py`` or via the ``dev.sh`` wrapper,
+adjust the variable name to match:
+
+.. code-block:: bash
+
+   # For dev.py
+   eval "$(_DEV_PY_COMPLETE=bash_source python scripts/dev.py)"
+
+   # For dev.sh
+   eval "$(_DEV_SH_COMPLETE=bash_source ./scripts/dev.sh)"
+
+You can also generate a static file for any shell and inspect the
+install hints with:
+
+.. code-block:: bash
+
+   python scripts/dev.py completions generate --shell bash
+   python scripts/dev.py completions generate --shell zsh
+   python scripts/dev.py completions generate --shell fish
+
+Or print interactive setup instructions for your current shell:
+
+.. code-block:: bash
+
+   python scripts/dev.py completions setup
+
 ------------------------------------------
 Writing New Plugins for the Dev Script Cli
 ------------------------------------------
@@ -341,8 +467,8 @@ Plugin Structure
     * This is the main directory for the Ouster SDK Dev Script Cli plugins.
   * SDK Extensions Location.
 
-    * ouster-sdk/sdk-extensions/scripts/dev_script_library.
-    * This is the aux directory for internal(to ouster) development scripts.
+    * sdk-extensions/scripts/dev_script_library.
+    * Additional plugin modules can be placed here to extend the CLI.
 
 * File Specifics
 
@@ -350,7 +476,7 @@ Plugin Structure
   * At the bottom of the file, two functions are required
 
     * import_module: In the import_module function, register your command with the
-      appropriate command group (e.g., build, test, lint, utils, or docs).
+      appropriate command group (e.g., build, test, lint, utils, or cleanup).
     * finalize: In the finalize function, if your plugin requires cleanup or additional
       setup after all plugins are loaded, implement the finalize function
       (If not needed, you still need to define the finalize function as an empty function).

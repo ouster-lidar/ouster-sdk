@@ -156,7 +156,10 @@ def process(file_to_check, tempdir):
     compdb = clang.cindex.CompilationDatabase.fromDirectory(tempdir)
     commands = compdb.getCompileCommands(file_to_check)
 
-    file_args = ["-D OUSTER_CHECK_EXPORTS=1"]
+    # Compile commands end with `-c <source_file>`; strip those last two args
+    # before passing to libclang's parse(), which already receives the source
+    # file as its first argument and treats a duplicate as a parse error.
+    file_args = ["-DOUSTER_CHECK_EXPORTS=1"]
     for command in commands:
         for argument in command.arguments:
             file_args.append(argument)
@@ -208,7 +211,7 @@ def check_cpp_exports(ctx, paths, verbose, cmake_bin, vcpkg_toolchain,
 
     ctx.obj.build_options.run_vcpkg_initialized_check()
 
-    ctx.obj.build_libs.check_for_python_lib("clang.cindex", display_name="libclang")
+    ctx.obj.build_libs.check_for_python_libs([("clang.cindex", "libclang"), "nanobind"])
     ctx.obj.build_libs.check_for_tool(ctx.obj.build_options.cmake_bin)
     # if vcpkg_toolchain is None:
     #     ctx.obj.build_libs.initialize_vcpkg(ctx.obj.vcpkg_dir)
@@ -242,12 +245,13 @@ def check_cpp_exports(ctx, paths, verbose, cmake_bin, vcpkg_toolchain,
         raise RuntimeError("Please check the output for details.")
 
     if len(paths) == 0:
-        paths = [f"{ctx.obj.sdk_dir}/ouster_client/include/ouster",
+        paths = [f"{ctx.obj.sdk_dir}/ouster_core/include/ouster/core",
+                 f"{ctx.obj.sdk_dir}/ouster_algorithm/include/ouster",
                  f"{ctx.obj.sdk_dir}/ouster_osf/include/ouster/osf",
-                 f"{ctx.obj.sdk_dir}/ouster_pcap/include/ouster",
-                 f"{ctx.obj.sdk_dir}/ouster_viz/include/ouster",
-                 f"{ctx.obj.sdk_dir}/ouster_sensor/include/ouster",
-                 f"{ctx.obj.sdk_dir}/ouster_mapping/include/ouster"]
+                 f"{ctx.obj.sdk_dir}/ouster_pcap/include/ouster/pcap",
+                 f"{ctx.obj.sdk_dir}/ouster_viz/include/ouster/viz",
+                 f"{ctx.obj.sdk_dir}/ouster_sensor/include/ouster/sensor",
+                 f"{ctx.obj.sdk_dir}/ouster_mapping/include/ouster/mapping"]
 
     files = []
     for item in paths:
@@ -261,31 +265,28 @@ def check_cpp_exports(ctx, paths, verbose, cmake_bin, vcpkg_toolchain,
         else:
             files.append(item)
 
-    pool = Pool(processes=ctx.obj.build_options.threads)
-
     progress_bar = sys.stdout.isatty()
     bar = None
     if progress_bar:
         try:
             from tqdm import tqdm
+            bar = tqdm(total=len(files))
         except ImportError:
             print("tqdm not found, cant display progress bar. please install tqdm")
-    if progress_bar:
-        bar = tqdm(total=len(files))
-
-    results = [pool.apply_async(process, args=(file_to_check,
-                                               check_exports_commands_dir))
-               for file_to_check in files]
+            progress_bar = False
 
     missing = []
     wrong = []
     files_complete = []
-    while len(results) > 0:
-        if progress_bar:
-            bar.refresh()
-            time.sleep(0.1)
-        for item in results:
-            if item.ready():
+    with Pool(processes=ctx.obj.build_options.threads) as pool:
+        results = [pool.apply_async(process, args=(file_to_check,
+                                                   check_exports_commands_dir))
+                   for file_to_check in files]
+        while results:
+            if progress_bar:
+                bar.refresh()
+            ready = [item for item in results if item.ready()]
+            for item in ready:
                 results.remove(item)
                 missing_annotation, wrong_annotation, file_to_check = item.get()
                 missing.extend(missing_annotation)
@@ -299,7 +300,7 @@ def check_cpp_exports(ctx, paths, verbose, cmake_bin, vcpkg_toolchain,
                             tqdm.write(f"    {remaining}")
                     bar.update()
                     bar.refresh()
-                break
+            time.sleep(0.1)
     if progress_bar:
         bar.clear()
         bar.close()
@@ -316,8 +317,8 @@ def check_cpp_exports(ctx, paths, verbose, cmake_bin, vcpkg_toolchain,
             print(item)
 
     if issues:
-        click.ClickException("ERROR: Issues found in C++ SDK exports." +
-                             "Please fix the above issues.")
+        raise click.ClickException("ERROR: Issues found in C++ SDK exports." +
+                                   "Please fix the above issues.")
     else:
         print("No issues detected")
 

@@ -1,12 +1,12 @@
 from enum import IntEnum
 from functools import wraps
-from ouster.sdk.core import LidarScan, ScanSource
+from ouster.sdk.core import FrameSet, FrameSetSource
 from typing import (Callable, List, Any, Tuple,
                     Dict, Optional, Iterator, Iterable)
 from threading import Event
 from dataclasses import dataclass
 from ouster.sdk.sensor import ClientTimeout
-from ouster.sdk.zone_monitor import ZoneSet
+from ouster.sdk.core import ZoneSet
 import queue
 import click
 
@@ -14,10 +14,11 @@ from datetime import datetime, timezone
 
 
 class SourceCommandType(IntEnum):
-    MULTICOMMAND_UNSUPPORTED = 0
-    PROCESSOR_UNREPEATABLE = 1
-    PROCESSOR = 2
-    CONSUMER = 3
+    MULTICOMMAND_UNSUPPORTED = 0  # command which can not be chained with any other
+    PROCESSOR_UNREPEATABLE = 1  # processor which cannot be repeated
+    PROCESSOR = 2  # command which looks at each scan but does not perform any I/O
+    CONSUMER = 3  # command which looks at each scan and performs I/O
+    SINGLE_CONSUMER = 4  # consumer command which does not need to look at each scan
 
 
 @dataclass(init=False)
@@ -25,19 +26,22 @@ class SourceCommandContext:
     source_uri: Optional[str]
     source_options: Dict[str, Any]
     other_options: Dict[str, Any]
-    scan_source: Optional[ScanSource]
-    scan_iter: Optional[Iterable[List[Optional[LidarScan]]]]
+    frame_set_source: Optional[FrameSetSource]
+    frame_set_iter: Optional[Iterable[FrameSet]]
     terminate_evt: Optional[Event]
     main_thread_fn: Optional[Callable[[None], None]]
     invoked_command_names: List[str]
     misc: Dict[Any, Any]
     terminate_exception: Optional[Exception]
     emulated_zone_monitoring_configuration: Optional[ZoneSet]
+    save_collations: bool
+    slam_local_map_viz_enabled: bool
+    slam_local_map_viz_points: Optional[Tuple[int, Any]]
 
     def __init__(self) -> None:
         self.source_uri = ""
-        self.scan_source = None
-        self.scan_iter = None
+        self.frame_set_source = None
+        self.frame_set_iter = None
         self.terminate_evt = None
         self.main_thread_fn = None
         self.invoked_command_names = []
@@ -45,6 +49,9 @@ class SourceCommandContext:
         self.terminate_exception = None
         self.source_options = {}
         self.other_options = {}
+        self.save_collations = False
+        self.slam_local_map_viz_enabled = False
+        self.slam_local_map_viz_points = None
 
     # [kk] NOTE: get and __getitem__ are defined to support
     # older code that still treats ctx.obj as a dict

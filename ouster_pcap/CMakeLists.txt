@@ -5,7 +5,7 @@ find_package(libtins REQUIRED)
 include(Coverage)
 message(STATUS "Building with PCAP support================================")
 # ==== Libraries ====
-add_library(ouster_pcap STATIC src/pcap.cpp src/os_pcap.cpp src/indexed_pcap_reader.cpp src/ip_reassembler.cpp src/pcap_packet_source.cpp src/pcap_scan_source.cpp)
+add_library(ouster_pcap STATIC src/pcap.cpp src/os_pcap.cpp src/indexed_pcap_reader.cpp src/ip_reassembler.cpp src/pcap_packet_source.cpp src/pcap_frame_set_source.cpp)
 target_include_directories(ouster_pcap SYSTEM PRIVATE
   ${PCAP_INCLUDE_DIR})
 target_include_directories(ouster_pcap PUBLIC
@@ -26,7 +26,7 @@ if(WIN32)
 endif()
 target_link_libraries(ouster_pcap
   PUBLIC
-    OusterSDK::ouster_client
+    OusterSDK::ouster_core
     $<INSTALL_INTERFACE:libpcap::libpcap>
     $<INSTALL_INTERFACE:libtins::libtins>
   PRIVATE

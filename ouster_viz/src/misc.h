@@ -10,7 +10,7 @@
 #include "camera.h"
 #include "glfw.h"
 #include "gltext.h"
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 namespace ouster {
 namespace sdk {
@@ -21,20 +21,28 @@ namespace impl {
  * Render a set of rings on the ground as markers to helpvisualize lidar range.
  */
 class GLRings {
-    static bool initialized;
-    static GLuint ring_vao;
-    static GLuint ring_program_id;
-    static GLuint ring_xyz_id;
-    static GLuint ring_proj_view_id;
-    static GLuint ring_range_id;
-    static GLuint ring_thickness_id;
-    static GLuint xyz_buffer;
-
-    int ring_size_;
+    double ring_size_;
     int ring_line_width_;
     bool rings_enabled_;
 
    public:
+    struct GlobalState {
+        GLuint ring_vao;
+        GLuint ring_program_id;
+        GLint ring_xyz_id;
+        GLint ring_proj_view_id;
+        GLint ring_range_id;
+        GLint ring_thickness_id;
+        GLuint xyz_buffer;
+
+        GlobalState();
+        ~GlobalState();
+
+        // Make sure it cant be copied
+        GlobalState(const GlobalState&) = delete;
+        GlobalState& operator=(const GlobalState&) = delete;
+    };
+
     /*
      * Instantiate the rings
      */
@@ -46,40 +54,40 @@ class GLRings {
      * Draws the rings from the point of view of the camera. The rings are
      * always centered on the camera's target.
      */
-    void draw(const WindowCtx& ctx, const CameraData& camera);
-
-    /*
-     * Initializes shader program, vertex buffers and handles after OpenGL
-     * context has been created
-     */
-    static void initialize();
-
-    static void uninitialize();
+    void draw(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera) const;
 };
 
 /*
  * Manages opengl state for drawing a cuboid
  */
 class GLCuboid {
-    static bool initialized;
-    static GLuint cuboid_vao;
-    static GLuint cuboid_program_id;
-    static GLuint cuboid_xyz_id;
-    static GLuint cuboid_proj_view_id;
-    static GLuint cuboid_rgba_id;
-
-    const std::array<GLfloat, 24> xyz_;
-    const std::array<GLubyte, 36> indices_;
-    const std::array<GLubyte, 24> edge_indices_;
-
-    GLuint xyz_buffer_{0};
-    GLuint indices_buffer_{0};
-    GLuint edge_indices_buffer_{0};
-    Eigen::Matrix4d transform_;
+    core::Matrix4dR transform_;
     vec4f rgba_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    struct GlobalState {
+        GLuint cuboid_vao;
+        GLuint cuboid_program_id;
+        GLint cuboid_xyz_id;
+        GLint cuboid_proj_view_id;
+        GLint cuboid_rgba_id;
+        const std::array<GLfloat, 24> xyz;
+        const std::array<GLubyte, 36> indices;
+        const std::array<GLubyte, 24> edge_indices;
+
+        GLuint xyz_buffer{0};
+        GLuint indices_buffer{0};
+        GLuint edge_indices_buffer{0};
+
+        GlobalState();
+        ~GlobalState();
+
+        // Make sure it cant be copied
+        GlobalState(const GlobalState&) = delete;
+        GlobalState& operator=(const GlobalState&) = delete;
+    };
 
     GLCuboid();
 
@@ -93,16 +101,16 @@ class GLCuboid {
     /*
      * Draws the cuboids from the point of view of the camera
      */
-    void draw(const WindowCtx& ctx, const CameraData& camera, Cuboid& cuboid);
+    void draw(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera,
+              Cuboid& cuboid);
 
     /*
-     * Initializes shader program and handles
+     * Draws the cuboid for selection
      */
-    static void initialize();
+    void draw_select(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera,
+                     Cuboid& cuboid, uint32_t& start_index);
 
-    static void uninitialize();
-
-    static void beginDraw();
+    static void beginDraw(const GlobalState& state);
 
     static void endDraw();
 };
@@ -111,19 +119,27 @@ class GLCuboid {
  * Manages opengl state for drawing lines
  */
 class GLLines {
-    static bool initialized;
-    static GLuint lines_vao;
-    static GLuint lines_program_id;
-    static GLuint lines_xyz_id;
-    static GLuint lines_proj_view_id;
-    static GLuint lines_rgba_id;
-
     GLuint xyz_buffer_{0};
-    Eigen::Matrix4d transform_;
+    core::Matrix4dR transform_;
     vec4f rgba_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    struct GlobalState {
+        GLuint lines_vao;
+        GLuint lines_program_id;
+        GLint lines_xyz_id;
+        GLint lines_proj_view_id;
+        GLint lines_rgba_id;
+
+        GlobalState();
+        ~GlobalState();
+
+        // Make sure it cant be copied
+        GlobalState(const GlobalState&) = delete;
+        GlobalState& operator=(const GlobalState&) = delete;
+    };
 
     GLLines();
 
@@ -137,16 +153,10 @@ class GLLines {
     /*
      * Draws the cuboids from the point of view of the camera
      */
-    void draw(const WindowCtx& ctx, const CameraData& camera, Lines& lines);
+    void draw(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera,
+              Lines& lines);
 
-    /*
-     * Initializes shader program and handles
-     */
-    static void initialize();
-
-    static void uninitialize();
-
-    static void beginDraw();
+    static void beginDraw(const GlobalState& state);
 
     static void endDraw();
 };
@@ -164,6 +174,15 @@ class GLLabel {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+    struct GlobalState {
+        GlobalState() = default;
+        ~GlobalState() = default;
+
+        // Make sure it cant be copied
+        GlobalState(const GlobalState&) = delete;
+        GlobalState& operator=(const GlobalState&) = delete;
+    };
+
     GLLabel();
 
     // for Indexed<T, U>
@@ -175,14 +194,20 @@ class GLLabel {
 
     GLLabel& operator=(const GLLabel&) = delete;
 
-    void draw(const WindowCtx& ctx, const CameraData& camera, Label& label);
+    void draw(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera,
+              Label& label);
 
-    static void beginDraw();
+    static void beginDraw(const GlobalState& state);
 
     static void endDraw();
 
     static float get_text_height(const Label& label);
 };
+
+/*
+ * Convert an Object to a 4x4 transform for a unit cuboid
+ */
+core::Matrix4dR object_to_cuboid_transform(const ouster::sdk::core::Object& obj);
 
 }  // namespace impl
 }  // namespace viz

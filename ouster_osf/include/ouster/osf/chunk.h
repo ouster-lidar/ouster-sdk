@@ -16,9 +16,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ouster/core/types.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/metadata.h"
-#include "ouster/types.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -155,8 +155,7 @@ class OUSTER_API_CLASS ChunksPile {
     /**
      * stream_id to offset map.
      */
-    using StreamChunksMap =
-        std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
+    using StreamChunksMap = std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
 
     /**
      * Default blank constructor.
@@ -172,9 +171,8 @@ class OUSTER_API_CLASS ChunksPile {
      * in bytes relative to the header.
      */
     OUSTER_API_FUNCTION
-    ChunksPile(
-        const std::vector<ChunkState>& chunks,
-        uint64_t end_of_chunks_offset);  // TODO[tws] replace this constructor
+    ChunksPile(const std::vector<ChunkState>& chunks,
+               uint64_t end_of_chunks_offset);  // TODO[tws] replace this constructor
     // with one that initializes the entire ChunksPile (including with stream
     // info.)
 
@@ -214,18 +212,17 @@ class OUSTER_API_CLASS ChunksPile {
      * @return The streaming info if found, or nullptr.
      */
     OUSTER_API_FUNCTION
-    ChunkInfoNode* get_info_by_message_idx(uint32_t stream_id,
-                                           uint32_t message_idx);
+    ChunkInfoNode* get_info_by_message_idx(uint32_t stream_id, uint32_t message_idx);
 
     /**
      * Return the chunk associated with a lower bound timestamp.
      *
      * @param[in] stream_id The stream to look for chunks in.
-     * @param[in] ts The lower bound for the chunk.
+     * @param[in] timestamp The lower bound for the chunk.
      * @return The chunk if found, or nullptr.
      */
     OUSTER_API_FUNCTION
-    ChunkState* get_by_lower_bound_ts(uint32_t stream_id, const ts_t ts);
+    ChunkState* get_by_lower_bound_ts(uint32_t stream_id, const ts_t timestamp);
 
     /**
      * Return the next chunk identified by the offset.

@@ -1,0 +1,63 @@
+<navbar @toggle-sidebar="toggleSidebar">
+  <router-link to="{{ pathto(master_doc) }}" class="home-link">
+    {% if logo_url %}
+      <img class="logo" src="{{ pathto(logo_url, 1) }}" alt="logo"/>
+    {% elif logo %}
+      <img class="logo" src="{{ pathto('_static/' + logo, 1) }}" alt="logo"/>
+    {% else %}
+      <span class="site-name">{{ project|e }}</span>
+    {% endif %}
+  </router-link>
+
+  <div class="links">
+    <navlinks class="can-hide">
+      {%- include "util/navlinks.html" %}
+      {%- include "util/extlinks.html" %}
+    </navlinks>
+    <div class="github-link-header">
+      {% for link in navbar_links %}
+        {% if link.docname is defined %}
+          <a href="{{ pathto(link.docname) }}"{% if link.new_tab %} target="_blank"{% endif %} rel="noopener">
+            <span>{{ link.label }}</span>
+          </a>
+        {% else %}
+          <a href="{{ link.url }}" target="_blank" rel="noopener">
+            <span>{{ link.label }}</span>
+          </a>
+        {% endif %}
+      {% endfor %}
+      {% if migration_guides %}
+        <div class="nav-dropdown" tabindex="0" aria-haspopup="true" aria-label="Migration guides menu">
+          <span class="nav-dropdown-label">Migration Guides</span>
+          <div class="nav-dropdown-menu" role="menu">
+            {% for guide in migration_guides %}
+              <a href="{{ pathto(guide.docname) }}" target="_blank" rel="noopener" role="menuitem">
+                <span>{{ guide.title }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+      <a class="github-link" href="{{ navbar_github_url }}" target="_blank" rel="noopener" title="GitHub">
+        <img src="{{ pathto('_static/github-mark-white.svg', 1) }}" alt="GitHub">
+      </a>
+      <div class="mobile-nav-dropdown" tabindex="0" aria-haspopup="true" aria-label="Menu">
+        <span class="mobile-nav-dropdown-label" aria-hidden="true"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="1.25em" height="1.25em"><path d="M201.4 342.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 274.7 54.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z"/></svg></span>
+        <div class="mobile-nav-dropdown-menu" role="menu">
+          {% for link in navbar_links %}
+            {% if link.docname is defined %}
+              <a href="{{ pathto(link.docname) }}"{% if link.new_tab %} target="_blank"{% endif %} rel="noopener"><span>{{ link.label }}</span></a>
+            {% else %}
+              <a href="{{ link.url }}" target="_blank" rel="noopener"><span>{{ link.label }}</span></a>
+            {% endif %}
+          {% endfor %}
+          {% if migration_guides %}
+            {% for guide in migration_guides %}
+              <a href="{{ pathto(guide.docname) }}" target="_blank" rel="noopener" role="menuitem"><span>{{ guide.title }}</span></a>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</navbar>

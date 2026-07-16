@@ -22,21 +22,20 @@ def test_kiss_slam_runs():
     from ouster.sdk.mapping import SlamConfig, SlamEngine
     data = os.path.join(data_path, "short.pcap")
 
-    config = SlamConfig()
+    config = SlamConfig.create('lio')
     config.min_range = 1
     config.max_range = 50
     config.voxel_size = 0.5
-    config.backend = "kiss"
 
-    scans = open_source(data)
-    slam = SlamEngine(scans.sensor_info, config)
-    scans_iter = iter(scans)
+    source = open_source(data)
+    slam = SlamEngine.create(source.sensor_info, config)
+    source_iter = iter(source)
 
-    # Kiss ICP intial first return scan all poses are eye(4)
-    scan1 = next(scans_iter)
-    result1 = slam.update(scan1)
-    scan2 = next(scans_iter)
-    # Kiss ICP second return scan poses are not eye(4)
-    result2 = slam.update(scan2)
-    assert (np.array_equal(result1[0].pose[0, :, :], np.eye(4)) and
-            not np.array_equal(result2[0].pose[0, :, :], np.eye(4)))
+    # Kiss ICP initial first return frame all poses are eye(4)
+    frame1 = next(source_iter)
+    result1 = slam.update(frame1)
+    frame2 = next(source_iter)
+    # Kiss ICP second return frame poses are not eye(4)
+    result2 = slam.update(frame2)
+    assert (np.array_equal(result1[0].body_to_world[0, :, :], np.eye(4)) and
+            not np.array_equal(result2[0].body_to_world[0, :, :], np.eye(4)))

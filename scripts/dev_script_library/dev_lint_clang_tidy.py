@@ -49,7 +49,7 @@ class AbstractClangTidy(abc.ABC):
 
     def __init__(self, paths, threads, split_names, base_dir,
                  raw_output_file=None, json_output_file=None, json_summary_output_file=None,
-                 progress_bar=True, quiet=True):
+                 progress_bar=True, quiet=True, verbose=False):
         # Common initialization logic
         self._files = list(paths)
         self._threads = int(threads) if threads else os.cpu_count()
@@ -60,6 +60,7 @@ class AbstractClangTidy(abc.ABC):
         self._json_summary_output_file = json_summary_output_file
         self._progress_bar = progress_bar
         self._quiet = quiet
+        self._verbose = verbose
 
         self._clang_message_regex = re.compile(r"^(?P<path>.+):(?P<line_number>\d+):(?P<column_number>\d+): "
                                                r"(?P<msg_level>\S+): (?P<msg>.*?)( \[(?P<name>[^]]*)\])?$")
@@ -96,7 +97,7 @@ class AbstractClangTidy(abc.ABC):
             with open(self._raw_output_file, 'w') as f:
                 f.write(self._raw_output)
 
-        if not self._quiet:
+        if self._verbose:
             print("Raw Output:")
             print(self._raw_output)
 
@@ -159,10 +160,10 @@ class ClangTidy(AbstractClangTidy):
                  compile_commands, clang_tidy_config, build_dir, split_names,
                  base_dir, fix=False, timing_json=None, raw_output_file=None,
                  json_output_file=None, json_summary_output_file=None,
-                 progress_bar=True, quiet=True):
+                 progress_bar=True, quiet=True, verbose=False):
         super().__init__(paths, threads, split_names, base_dir, raw_output_file=raw_output_file,
                          json_output_file=json_output_file, json_summary_output_file=json_summary_output_file,
-                         progress_bar=progress_bar, quiet=quiet)
+                         progress_bar=progress_bar, quiet=quiet, verbose=verbose)
         self._clang_tidy_bin = clang_tidy_bin
         self._clang_apply_bin = clang_apply_bin
         self._compile_commands = compile_commands
@@ -207,19 +208,18 @@ class ClangTidy(AbstractClangTidy):
         with Pool(processes=self._threads) as pool:
             results = [pool.apply_async(self._tidy_thread, args=(f,)) for f in self._files]
             raw_outputs = []
-            while len(results) > 0:
+            while results:
                 if bar is not None:
                     bar.refresh()
-                for item in results:
-                    if item.ready():
-                        results.remove(item)
-                        raw_outputs.append(item.get())
-                        if bar is not None:
-                            bar.update()
-                            bar.refresh()
-                        else:
-                            print(f"Files Remaining: {len(results)}")
-                        break
+                ready = [item for item in results if item.ready()]
+                for item in ready:
+                    results.remove(item)
+                    raw_outputs.append(item.get())
+                    if bar is not None:
+                        bar.update()
+                        bar.refresh()
+                    else:
+                        print(f"Files Remaining: {len(results)}")
                 time.sleep(0.1)
         if bar is not None:
             bar.clear()
@@ -243,12 +243,11 @@ class ClangTidy(AbstractClangTidy):
                     "system_time": 0.0,
                     "wall_time": 0.0
                 }
-                self._timing[timing_name]["user_time"] += float(
-                    user_time)
-                self._timing[timing_name]["system_time"] += float(
-                    system_time)
-                self._timing[timing_name]["wall_time"] += float(
-                    wall_time)
+            # Accumulate outside the if-block so repeated entries for the same
+            # timing_name are summed correctly across all occurrences.
+            self._timing[timing_name]["user_time"] += float(user_time)
+            self._timing[timing_name]["system_time"] += float(system_time)
+            self._timing[timing_name]["wall_time"] += float(wall_time)
 
     def _generate_reports(self):
         super()._generate_reports()
@@ -264,7 +263,7 @@ class ClangdTidy(AbstractClangTidy):
                  compile_commands, clang_tidy_config, split_names,
                  base_dir, fix=False, timing_json=None, raw_output_file=None,
                  json_output_file=None, json_summary_output_file=None,
-                 progress_bar=True, quiet=True):
+                 progress_bar=True, quiet=True, verbose=False):
         super().__init__(paths, threads, split_names, base_dir, raw_output_file=raw_output_file,
                          json_output_file=json_output_file, json_summary_output_file=json_summary_output_file,
                          progress_bar=progress_bar, quiet=quiet)
@@ -543,9 +542,24 @@ def help_for_missing_clang_tidy(flag):
 def _get_changed_files(diffs):
     paths = set()
     for diff in diffs:
+        # Use b_path (the new/current side). b_path is None for deleted files,
+        # which we want to skip. New files have b_path set and a_path=None.
         if diff.b_path:
             paths.add(diff.b_path)
     return [p for p in paths if p and os.path.exists(p)]
+
+
+def _read_blob(blob):
+    """Read a git blob's content as lines"""
+    if blob is None:
+        return []
+    # Submodule gitlinks have mode 0o160000
+    if blob.mode == 0o160000:
+        return []
+    try:
+        return blob.data_stream.read().decode('utf-8', 'ignore').splitlines()
+    except ValueError:
+        return []
 
 
 def get_added_line_numbers(diff):
@@ -554,10 +568,10 @@ def get_added_line_numbers(diff):
     Handles cases where the file is newly created or deleted.
     """
     # Use an empty list if a blob is None (e.g., a new file has no a_blob)
-    b_content = diff.a_blob.data_stream.read().decode('utf-8', 'ignore').splitlines() if diff.a_blob else []
+    b_content = _read_blob(diff.a_blob)
 
     # Use an empty list if b_blob is None (e.g., a deleted file)
-    a_content = diff.b_blob.data_stream.read().decode('utf-8', 'ignore').splitlines() if diff.b_blob else []
+    a_content = _read_blob(diff.b_blob)
 
     added_lines = set()
 
@@ -585,6 +599,12 @@ def check_for_new_warnings_in_diff(entries, diffs, log_skipped_file=None,
     prev_warnings = []
     # Pre-calculate all added lines for each changed file
     for diff in diffs:
+        # Skip submodule gitlink entries — mode 160000 is a commit pointer in
+        # another repo
+        if getattr(diff.b_blob, 'mode', None) == 0o160000 or getattr(diff.a_blob, 'mode', None) == 0o160000:
+            continue
+        # Use b_path (the new/current side) as key — it matches entry.path from
+        # clang-tidy. b_path is None for deleted files, which we skip.
         if diff.b_path:
             added_lines_by_file[diff.b_path] = list(get_added_line_numbers(diff))
 
@@ -592,7 +612,7 @@ def check_for_new_warnings_in_diff(entries, diffs, log_skipped_file=None,
     for entry in entries:
         if entry.path in added_lines_by_file:
             added_lines = added_lines_by_file[entry.path]
-            if entry.line_number in added_lines and entry.msg_level == "Warning":
+            if entry.line_number in added_lines and entry.msg_level.lower() == "warning":
                 new_warnings.append(entry)
             else:
                 skipped_warnings.append(str(entry))
@@ -612,6 +632,7 @@ def check_for_new_warnings_in_diff(entries, diffs, log_skipped_file=None,
             for warning in new_warnings:
                 print(json.dumps(warning.__dict__, indent=4))
                 f.write(json.dumps(warning.__dict__, indent=4))
+            print(f"{len(new_warnings)} new warnings found")
         return False
     return True
 
@@ -644,6 +665,10 @@ def check_for_new_warnings_in_diff(entries, diffs, log_skipped_file=None,
               default=False,
               is_flag=True,
               help='Do not emit stdout messages.')
+@click.option('-v', '--verbose',
+              default=False,
+              is_flag=True,
+              help="Emit more raw output for debugging")
 @click.option('--cmake-bin',
               default="cmake",
               help='Pass in alternative cmakes binary.')
@@ -675,7 +700,7 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
                fix, raw_output, json_output, json_summary_output,
                timing_json, quiet, cmake_bin, vcpkg_toolchain,
                vcpkg_triplet, use_system_libs, threads,
-               no_manifest_mode, diff_against, paths):
+               no_manifest_mode, diff_against, paths, verbose):
     """Run clang-tidy."""
     manifest_mode = not no_manifest_mode
     ctx.obj.build_options.process_args(
@@ -688,10 +713,9 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
 
     config_file = os.path.join(ctx.obj.sdk_dir, ".clang-tidy")
 
-    ctx.obj.build_libs.check_for_python_lib("pybind11")
-    ctx.obj.build_libs.check_for_tool(ctx.obj.build_options.cmake_bin)
+    ctx.obj.build_libs.check_for_python_libs(["nanobind", "numpy"])
     if diff_against:
-        ctx.obj.build_libs.check_for_python_lib("git", display_name="gitpython")
+        ctx.obj.build_libs.check_for_python_libs([("git", "gitpython")])
 
     is_clang_tidy = None
     if clang_tidy_bin is None:
@@ -706,7 +730,7 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
 
     if not ctx.obj.build_libs.check_for_tool(clang_tidy_bin):
         help_for_missing_clang_tidy("--clang-tidy-bin")
-        raise
+        raise click.ClickException(f"Tool not found: {clang_tidy_bin}")
 
     clang_tidy_version = ClangBinVersion(clang_tidy_bin)
     if clang_tidy_version.is_clang():
@@ -715,7 +739,8 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
             print("ERROR: clang-tidy needs to be updated, minimum version is 16")
             print(f"       current clang-tidy version is {clang_tidy_major_version}")
             help_for_missing_clang_tidy("--clang-tidy-bin")
-            raise
+            raise click.ClickException(
+                f"clang-tidy version {clang_tidy_major_version} is too old; minimum is 16")
         is_clang_tidy = True
     else:
         is_clang_tidy = False
@@ -729,14 +754,15 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
             config_file = f"{config_file}-autofix"
         if not ctx.obj.build_libs.check_for_tool(clang_apply_replacements_bin):
             help_for_missing_clang_tidy("--clang-apply-replacements-bin")
-            raise
+            raise click.ClickException(f"Tool not found: {clang_apply_replacements_bin}")
         clang_tidy_apply_version = ClangBinVersion(clang_apply_replacements_bin)
         clang_tidy_apply_major_version = clang_tidy_apply_version.get_major_version()
         if clang_tidy_apply_major_version < 16:
             print("ERROR: clang-apply-replacements needs to be updated, minimum version is 16")
             print(f"       current clang-apply-replacements version is {clang_tidy_apply_major_version}")
             help_for_missing_clang_tidy("--clang-apply-replacements-bin")
-            raise
+            raise click.ClickException(
+                f"clang-apply-replacements version {clang_tidy_apply_major_version} is too old; minimum is 16")
 
     print(f"Manifest Mode: {ctx.obj.build_options.manifest_mode}")
 
@@ -825,7 +851,7 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
                          ctx.obj.cmake_build_dir, False, ctx.obj.sdk_dir,
                          fix and fix_confirmed, timing_json, raw_output,
                          json_output, json_summary_output,
-                         sys.stdout.isatty(), quiet)
+                         sys.stdout.isatty(), quiet=quiet, verbose=verbose)
         print("Running clang-tidy...")
     else:
         if fix:
@@ -842,7 +868,8 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
                           json_output_file=json_output,
                           json_summary_output_file=json_summary_output,
                           progress_bar=sys.stdout.isatty(),
-                          quiet=quiet)
+                          quiet=quiet,
+                          verbose=verbose)
         print("Running clangd-tidy...")
     entries = tidy.run_tidy()
 

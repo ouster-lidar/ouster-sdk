@@ -6,20 +6,20 @@ All rights reserved.
 import numpy as np
 from typing import Optional
 from ouster.sdk._bindings.viz import Cloud, PointViz
-from ouster.sdk.viz.model import LidarScanVizModel
+from ouster.sdk.viz.model import LidarFrameVizModel
 from ouster.sdk.viz.accum_base import AccumulatorBase
 from ouster.sdk.viz.track import Track
 
 
 class TracksAccumulator(AccumulatorBase):
-    """Encapsulates render state for tracks (scan positions) and key frames
-    (which are "interesting" scan positions according to the LidarScanVizAccumulatorsConfig.)
+    """Encapsulates render state for tracks (frame positions) and key frames
+    (which are "interesting" frame positions according to the LidarFrameVizAccumulatorsConfig.)
     Cloud objects (from the ouster_viz library) are used to render the tracks."""
     DEFAULT_PT_SIZE = 5
     DEFAULT_KF_PT_SIZE = 10
 
     # TODO[tws] support MultiTrack?
-    def __init__(self, model: LidarScanVizModel, point_viz: PointViz, track: Track):
+    def __init__(self, model: LidarFrameVizModel, point_viz: PointViz, track: Track):
         super().__init__(model, point_viz, track)
         self._accum_mode_track = True
 
@@ -54,7 +54,7 @@ class TracksAccumulator(AccumulatorBase):
     def _ensure_cloud_track(self) -> None:
         """Create/re-create the Clouds used to render the track in the viz."""
         pnum = self._track._xyz.shape[0]
-        if self._cloud_track.size < pnum:
+        if self._cloud_track.size != pnum:
             self._viz.remove(self._cloud_track)
             self._viz.remove(self._cloud_kf_track)
             self._cloud_track = Cloud(pnum)

@@ -3,7 +3,7 @@ import numpy as np
 import ouster.sdk._bindings.pcap as _pcap
 from ouster.sdk.core import LidarMode, SensorInfo, UDPProfileLidar, ChanField, PacketFormat, LidarPacket
 from ouster.sdk.pcap import PacketInfo
-import ouster.sdk.pcap as pcap
+from ouster.sdk import core, pcap, open_packet_source
 from ouster.sdk.util import (resolve_metadata)
 from tests.conftest import PCAPS_DATA_DIR
 
@@ -71,6 +71,16 @@ def test_fusa_fields():
     '''
 
 
+def test_packet_overheat():
+    pcap_name = os.path.join(PCAPS_DATA_DIR, 'shot_limiting_test.pcap')
+    num_packets = 0
+    for idx, packet in open_packet_source(pcap_name):
+        num_packets += 1
+        assert packet.shot_limiting() == core.ShotLimitingStatus.IMMINENT
+        assert packet.thermal_shutdown() == core.ThermalShutdownStatus.IMMINENT
+    assert num_packets == 1
+
+
 def test_packet_crc():
     """Check that the calculated CRC matches the stored one"""
     pcap_name = os.path.join(PCAPS_DATA_DIR, 'crc_test.pcap')
@@ -93,10 +103,10 @@ def test_fusa_reading_pcap():
     pcap_name = os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.pcap')
     meta = open(resolve_metadata(pcap_name)).read()
     si = SensorInfo(meta)
-    source = pcap.PcapScanSource(pcap_name, sensor_info=[si])
-    scans = list(iter(source))
-    assert len(scans) == 1
+    source = pcap.PcapFrameSetSource(pcap_name, sensor_info=[si])
+    frames = list(iter(source))
+    assert len(frames) == 1
 
-    ls = scans[0][0]
+    ls = frames[0][0]
     assert np.count_nonzero(ls.field(ChanField.FLAGS)) == 8
     assert np.count_nonzero(ls.field(ChanField.FLAGS2)) == 0

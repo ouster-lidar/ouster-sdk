@@ -3,7 +3,7 @@
  * All rights reserved.
  */
 
-#include "ouster/pcap_packet_source.h"
+#include "ouster/pcap/pcap_packet_source.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -15,22 +15,20 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/compat_ops.h"
-#include "ouster/impl/open_source_impl.h"
-#include "ouster/indexed_pcap_reader.h"
-#include "ouster/open_source.h"
-#include "ouster/packet.h"
-#include "ouster/packet_source.h"
-#include "ouster/types.h"
+#include "ouster/core/compat_ops.h"
+#include "ouster/core/impl/open_source_impl.h"
+#include "ouster/core/open_source.h"
+#include "ouster/core/packet.h"
+#include "ouster/core/packet_source.h"
+#include "ouster/core/types.h"
+#include "ouster/pcap/indexed_pcap_reader.h"
 
 using namespace ouster::sdk::core;
-
 namespace ouster {
 namespace sdk {
 namespace pcap {
 
-PcapPacketSourceOptions::PcapPacketSourceOptions(
-    const PacketSourceOptions& opts)
+PcapPacketSourceOptions::PcapPacketSourceOptions(const PacketSourceOptions& opts)
     : PacketSourceOptions(opts) {}
 
 PcapPacketSourceOptions::PcapPacketSourceOptions() = default;
@@ -41,19 +39,18 @@ class PcapPacketIteratorImpl : public PacketIteratorImpl {
     int64_t current_location_;
 
    public:
-    PcapPacketIteratorImpl(PcapPacketSource* source, uint64_t scan_index)
+    PcapPacketIteratorImpl(PcapPacketSource* source, uint64_t frame_index)
         : source_(source), current_location_(source_->start_location_) {
         if (!source_->reader_) {
             throw std::runtime_error("Cannot iterate over a closed source.");
         }
-        if (scan_index > 0) {
+        if (frame_index > 0) {
             const auto& index = source_->reader_->get_index();
-            if (scan_index >= index.global_frame_indices.size()) {
-                throw std::out_of_range(
-                    "Indexed past the end of the scan source.");
+            if (frame_index >= index.global_frame_indices.size()) {
+                throw std::out_of_range("Indexed past the end of the packet source.");
             }
-            current_location_ = static_cast<int64_t>(
-                index.global_frame_indices[scan_index].file_offset);
+            current_location_ =
+                static_cast<int64_t>(index.global_frame_indices[frame_index].file_offset);
         }
     }
 
@@ -75,16 +72,18 @@ class PcapPacketIteratorImpl : public PacketIteratorImpl {
             const auto& info = reader.current_info();
             const auto len = reader.current_length();
             const auto data = reader.current_data();
-            const auto res = reader.check_sensor_idx_for_current_packet(
-                source_->soft_id_check_);
+            const auto res = reader.check_sensor_idx_for_current_packet(source_->soft_id_check_);
             auto& idx = res.second;
 
             // increment our errors
+            OUSTER_DIAGNOSTIC_PUSH
+            OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
             if (res.first == IdxErrorType::Size) {
                 source_->size_error_count_++;
             } else if (res.first == IdxErrorType::Id) {
                 source_->id_error_count_++;
             }
+            OUSTER_DIAGNOSTIC_POP
             if (!idx) {
                 // no idea who this is from, try again
                 offset++;
@@ -93,11 +92,11 @@ class PcapPacketIteratorImpl : public PacketIteratorImpl {
 
             const auto& packet_format = source_->packet_formats_[idx.value()];
             if (len == packet_format->lidar_packet_size) {
-                packet_.second = std::make_shared<LidarPacket>();
+                packet_.second = std::make_shared<LidarPacket>(packet_format);
             } else if (len == packet_format->imu_packet_size) {
-                packet_.second = std::make_shared<ImuPacket>();
+                packet_.second = std::make_shared<ImuPacket>(packet_format);
             } else if (len == packet_format->zone_packet_size) {
-                packet_.second = std::make_shared<ZonePacket>();
+                packet_.second = std::make_shared<ZonePacket>(packet_format);
             } else {
                 packet_.second.reset();
             }
@@ -106,8 +105,6 @@ class PcapPacketIteratorImpl : public PacketIteratorImpl {
             if (packet_.second) {
                 packet_.first = static_cast<int>(idx.value());
                 packet_.second->host_timestamp = info.timestamp.count() * 1000;
-                packet_.second->format = packet_format;
-                packet_.second->buf.resize(len);
                 memcpy(packet_.second->buf.data(), data, len);
                 continue;
             }
@@ -120,7 +117,9 @@ class PcapPacketIteratorImpl : public PacketIteratorImpl {
         return false;
     }
 
-    std::pair<int, std::shared_ptr<Packet>> value() override { return packet_; }
+    std::pair<int, std::shared_ptr<Packet>> value() override {
+        return packet_;
+    }
 };
 
 namespace {
@@ -188,12 +187,12 @@ std::vector<std::string> resolve_metadata_multi(const std::string& data_path) {
         scores.emplace_back(score, file);
     }
 
-    std::sort(
-        scores.begin(), scores.end(),
-        [](const std::pair<int, std::string>& a,
-           const std::pair<int, std::string>& b) { return a.first > b.first; });
+    std::sort(scores.begin(), scores.end(),
+              [](const std::pair<int, std::string>& a, const std::pair<int, std::string>& b) {
+                  return a.first > b.first;
+              });
 
-    // finally grab all scans with the same score
+    // finally grab all frames with the same score
     std::vector<std::string> found;
     auto best_score = (!scores.empty()) ? scores.front().first : 0;
     for (const auto& file : scores) {
@@ -212,19 +211,17 @@ std::vector<std::string> resolve_metadata_multi(const std::string& data_path) {
     return found;
 }
 
-std::vector<SensorInfo> find_metadata(const std::string& file,
-                                      PcapPacketSourceOptions& options) {
+std::vector<SensorInfo> find_metadata(const std::string& file, PcapPacketSourceOptions& options) {
     bool has_sensor_info = !options.sensor_info.retrieve().empty();
     bool has_meta = !options.meta.retrieve().empty();
     if (has_sensor_info && has_meta) {
         throw std::invalid_argument(
-            "Cannot provide both sensor_info and meta to PcapScanSource.");
+            "Cannot provide both sensor_info and meta to PcapFrameSetSource.");
     }
     if (has_sensor_info) {
         return options.sensor_info.retrieve();
     }
-    auto meta =
-        has_meta ? options.meta.retrieve() : resolve_metadata_multi(file);
+    auto meta = has_meta ? options.meta.retrieve() : resolve_metadata_multi(file);
     std::vector<SensorInfo> list;
     for (const auto& file : meta) {
         auto temp_info = metadata_from_json(file);
@@ -233,17 +230,16 @@ std::vector<SensorInfo> find_metadata(const std::string& file,
     return list;
 }
 
-PcapPacketSource::PcapPacketSource(
-    const std::string& source,
-    const std::function<void(PcapPacketSourceOptions&)>& options)
-    : PcapPacketSource(source, ouster::sdk::impl::get_packet_options(options)) {
-}
+PcapPacketSource::PcapPacketSource(const std::string& file,
+                                   const std::function<void(PcapPacketSourceOptions&)>& options)
+    : PcapPacketSource(file, ouster::sdk::impl::get_packet_options(options)) {}
 
+OUSTER_DIAGNOSTIC_PUSH
+OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
 PcapPacketSource::PcapPacketSource(
-    const std::string& file,  ///< [in] sensor hostnames to connect to, for
-                              ///< multiple comma separate
-    PcapPacketSourceOptions
-        options  ///< [in] common scan source options or null for default
+    const std::string& file,         ///< [in] sensor hostnames to connect to, for
+                                     ///< multiple comma separate
+    PcapPacketSourceOptions options  ///< [in] common frame set source options or null for default
     )
     : reader_(new IndexedPcapReader(file, find_metadata(file, options))),
       index_(options.index.retrieve()) {
@@ -258,8 +254,8 @@ PcapPacketSource::PcapPacketSource(
         sensor_info_.emplace_back(new SensorInfo(info));
     }
 
-    populate_extrinsics(options.extrinsics_file.retrieve(),
-                        options.extrinsics.retrieve(), sensor_info_);
+    populate_extrinsics(options.extrinsics_file.retrieve(), options.extrinsics.retrieve(),
+                        sensor_info_);
 
     for (const auto& info : sensor_info()) {
         packet_formats_.emplace_back(std::make_shared<PacketFormat>(*info));
@@ -267,35 +263,39 @@ PcapPacketSource::PcapPacketSource(
 
     options.check("PcapPacketSource");
 }
+OUSTER_DIAGNOSTIC_POP
 
-bool PcapPacketSource::is_live() const { return false; }
+bool PcapPacketSource::is_live() const {
+    return false;
+}
 
-uint64_t PcapPacketSource::id_error_count() const { return id_error_count_; }
+uint64_t PcapPacketSource::id_error_count() const {
+    return id_error_count_;
+}
 
 uint64_t PcapPacketSource::size_error_count() const {
     return size_error_count_;
 }
 
-const std::vector<std::shared_ptr<SensorInfo>>& PcapPacketSource::sensor_info()
-    const {
+const std::vector<std::shared_ptr<SensorInfo>>& PcapPacketSource::sensor_info() const {
     return sensor_info_;
 }
 
 PacketIterator PcapPacketSource::begin() const {
-    return PacketIterator(this, new PcapPacketIteratorImpl(
-                                    const_cast<PcapPacketSource*>(this), 0));
+    return PacketIterator(this, new PcapPacketIteratorImpl(const_cast<PcapPacketSource*>(this), 0));
 }
 
-PacketIterator PcapPacketSource::begin_scan(uint64_t scan_index) const {
+PacketIterator PcapPacketSource::begin_frame(uint64_t frame_index) const {
     if (!index_) {
-        throw std::runtime_error("not supported on unindexed scan sources");
+        throw std::runtime_error("not supported on unindexed packet sources");
     }
     return PacketIterator(
-        this, new PcapPacketIteratorImpl(const_cast<PcapPacketSource*>(this),
-                                         scan_index));
+        this, new PcapPacketIteratorImpl(const_cast<PcapPacketSource*>(this), frame_index));
 }
 
-void PcapPacketSource::close() { reader_.reset(); }
+void PcapPacketSource::close() {
+    reader_.reset();
+}
 }  // namespace pcap
 }  // namespace sdk
 }  // namespace ouster

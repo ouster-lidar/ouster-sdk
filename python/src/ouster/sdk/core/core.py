@@ -9,7 +9,7 @@ from typing import (Iterable, Iterator, List, Callable, Tuple, Union)
 import logging
 import numpy as np
 
-from ouster.sdk._bindings.client import (SensorInfo, PacketFormat, LidarScan,
+from ouster.sdk._bindings.client import (SensorInfo, PacketFormat, LidarFrame,
                       LidarPacket, ImuPacket, ZonePacket, Packet, PacketSource)
 
 logger = logging.getLogger("ouster.sdk.core.core")
@@ -72,31 +72,17 @@ class FrameBorder:
         return False
 
 
-def first_valid_column_pose(scan: LidarScan) -> np.ndarray:
-    """Return first valid column pose of a LidarScan"""
-    return scan.pose[scan.get_first_valid_column()]
+def first_valid_column_pose(frame: LidarFrame) -> np.ndarray:
+    """Return first valid column pose of a LidarFrame"""
+    try:
+        return frame.body_to_world[frame.get_first_valid_column()]
+    except RuntimeError:
+        return np.identity(4, dtype=np.float64)
 
 
-def last_valid_column_pose(scan: LidarScan) -> np.ndarray:
-    """Return last valid column pose of a LidarScan"""
-    return scan.pose[scan.get_last_valid_column()]
-
-
-def valid_packet_idxs(scan: LidarScan) -> np.ndarray:
-    """Checks for valid packets that was used in in the scan construction"""
-    valid_cols = scan.status & 0x1
-    valid_packet_ts = scan.packet_timestamp != 0
-    sp = np.split(valid_cols, scan.packet_timestamp.shape[0])
-    # here we consider the packet is valid when either one is true:
-    #   - any columns in the packet has a valid status
-    #   - packet_timestamp is not zero, which may occur even when
-    #     all columns/px data in invalid state within the packet.
-    #     It means that we received the packet without per px data
-    #     but with all other headers in place
-    valid_packets = np.logical_or(np.any(sp, axis=1), valid_packet_ts)
-    return np.nonzero(valid_packets)[0]
-
-
-def poses_present(scan: LidarScan) -> bool:
-    """Check whether any of scan.pose in not identity"""
-    return not np.allclose(np.eye(4), scan.pose)
+def last_valid_column_pose(frame: LidarFrame) -> np.ndarray:
+    """Return last valid column pose of a LidarFrame"""
+    try:
+        return frame.body_to_world[frame.get_last_valid_column()]
+    except RuntimeError:
+        return np.identity(4, dtype=np.float64)

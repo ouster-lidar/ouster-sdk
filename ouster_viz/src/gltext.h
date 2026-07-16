@@ -53,8 +53,8 @@ extern "C" {
 #error OpenGL header must be included prior to including glText header
 #endif
 
-#include <stdint.h> /* uint8_t, uint16_t, uint32_t, uint64_t */
-#include <stdlib.h> /* malloc(), calloc(), free() */
+#include <stdint.h>                                     /* uint8_t, uint16_t, uint32_t, uint64_t */
+#include <stdlib.h>                                     /* malloc(), calloc(), free() */
 #include <string.h> /* memset(), memcpy(), strlen() */  // NOLINT(misc-include-cleaner)
 
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(GLT_DEBUG)
@@ -85,9 +85,7 @@ extern "C" {
 #define GLT_VERSION_MINOR 1
 #define GLT_VERSION_PATCH 6
 
-#define GLT_VERSION                                             \
-    GLT_STRINGIFY_VERSION(GLT_VERSION_MAJOR, GLT_VERSION_MINOR, \
-                          GLT_VERSION_PATCH)
+#define GLT_VERSION GLT_STRINGIFY_VERSION(GLT_VERSION_MAJOR, GLT_VERSION_MINOR, GLT_VERSION_PATCH)
 #define GLT_NAME_VERSION GLT_NAME " " GLT_VERSION
 
 #define GLT_NULL 0
@@ -130,13 +128,11 @@ GLT_API void gltEndDraw();
 GLT_API void gltDrawText(GLTtext* text, const GLfloat mvp[16]);
 
 GLT_API void gltDrawText2D(GLTtext* text, GLfloat x, GLfloat y, GLfloat scale);
-GLT_API void gltDrawText2DAligned(GLTtext* text, GLfloat x, GLfloat y,
-                                  GLfloat scale, int horizontalAlignment,
-                                  int verticalAlignment);
+GLT_API void gltDrawText2DAligned(GLTtext* text, GLfloat x, GLfloat y, GLfloat scale,
+                                  int horizontalAlignment, int verticalAlignment);
 
-GLT_API void gltDrawText3D(GLTtext* text, GLfloat x, GLfloat y, GLfloat z,
-                           GLfloat scale, GLfloat view[16],
-                           GLfloat projection[16]);
+GLT_API void gltDrawText3D(GLTtext* text, GLfloat x, GLfloat y, GLfloat z, GLfloat scale,
+                           GLfloat view[16], GLfloat projection[16]);
 
 GLT_API void gltColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a);
 GLT_API void gltGetColor(GLfloat* r, GLfloat* g, GLfloat* b, GLfloat* a);
@@ -169,8 +165,7 @@ static GLboolean gltInitialized = GL_FALSE;
 
 #define _GLT_TEXT2D_POSITION_SIZE 2
 #define _GLT_TEXT2D_TEXCOORD_SIZE 2
-#define _GLT_TEXT2D_VERTEX_SIZE \
-    (_GLT_TEXT2D_POSITION_SIZE + _GLT_TEXT2D_TEXCOORD_SIZE)
+#define _GLT_TEXT2D_VERTEX_SIZE (_GLT_TEXT2D_POSITION_SIZE + _GLT_TEXT2D_TEXCOORD_SIZE)
 
 #define _GLT_TEXT2D_POSITION_OFFSET 0
 #define _GLT_TEXT2D_TEXCOORD_OFFSET _GLT_TEXT2D_POSITION_SIZE
@@ -237,8 +232,7 @@ struct GLTtext {
 
 GLT_API void _gltGetViewportSize(GLint* width, GLint* height);
 
-GLT_API void _gltMat4Mult(const GLfloat lhs[16], const GLfloat rhs[16],
-                          GLfloat result[16]);
+GLT_API void _gltMat4Mult(const GLfloat lhs[16], const GLfloat rhs[16], GLfloat result[16]);
 
 GLT_API void _gltUpdateBuffers(GLTtext* text);
 
@@ -268,16 +262,14 @@ GLT_API GLTtext* gltCreateText(void) {
     glBindBuffer(GL_ARRAY_BUFFER, text->_vbo);
 
     glEnableVertexAttribArray(_GLT_TEXT2D_POSITION_LOCATION);
-    glVertexAttribPointer(
-        _GLT_TEXT2D_POSITION_LOCATION, _GLT_TEXT2D_POSITION_SIZE, GL_FLOAT,
-        GL_FALSE, (_GLT_TEXT2D_VERTEX_SIZE * sizeof(GLfloat)),
-        (const void*)(_GLT_TEXT2D_POSITION_OFFSET * sizeof(GLfloat)));
+    glVertexAttribPointer(_GLT_TEXT2D_POSITION_LOCATION, _GLT_TEXT2D_POSITION_SIZE, GL_FLOAT,
+                          GL_FALSE, (_GLT_TEXT2D_VERTEX_SIZE * sizeof(GLfloat)),
+                          (const void*)(_GLT_TEXT2D_POSITION_OFFSET * sizeof(GLfloat)));
 
     glEnableVertexAttribArray(_GLT_TEXT2D_TEXCOORD_LOCATION);
-    glVertexAttribPointer(
-        _GLT_TEXT2D_TEXCOORD_LOCATION, _GLT_TEXT2D_TEXCOORD_SIZE, GL_FLOAT,
-        GL_FALSE, (_GLT_TEXT2D_VERTEX_SIZE * sizeof(GLfloat)),
-        (const void*)(_GLT_TEXT2D_TEXCOORD_OFFSET * sizeof(GLfloat)));
+    glVertexAttribPointer(_GLT_TEXT2D_TEXCOORD_LOCATION, _GLT_TEXT2D_TEXCOORD_SIZE, GL_FLOAT,
+                          GL_FALSE, (_GLT_TEXT2D_VERTEX_SIZE * sizeof(GLfloat)),
+                          (const void*)(_GLT_TEXT2D_TEXCOORD_OFFSET * sizeof(GLfloat)));
 
     glBindVertexArray(0);
 
@@ -425,8 +417,7 @@ GLT_API void gltDrawText2D(GLTtext* text, GLfloat x, GLfloat y, GLfloat scale) {
 #endif
 
     const GLfloat model[16] = {
-        scale, 0.0f, 0.0f,  0.0f, 0.0f, scale, 0.0f, 0.0f,
-        0.0f,  0.0f, scale, 0.0f, x,    y,     0.0f, 1.0f,
+        scale, 0.0f, 0.0f, 0.0f, 0.0f, scale, 0.0f, 0.0f, 0.0f, 0.0f, scale, 0.0f, x, y, 0.0f, 1.0f,
     };
 
     GLfloat mvp[16];
@@ -435,9 +426,8 @@ GLT_API void gltDrawText2D(GLTtext* text, GLfloat x, GLfloat y, GLfloat scale) {
     _gltDrawText();
 }
 
-GLT_API void gltDrawText2DAligned(GLTtext* text, GLfloat x, GLfloat y,
-                                  GLfloat scale, int horizontalAlignment,
-                                  int verticalAlignment) {
+GLT_API void gltDrawText2DAligned(GLTtext* text, GLfloat x, GLfloat y, GLfloat scale,
+                                  int horizontalAlignment, int verticalAlignment) {
     if (!text) return;
 
     if (text->_dirty) _gltUpdateBuffers(text);
@@ -457,9 +447,8 @@ GLT_API void gltDrawText2DAligned(GLTtext* text, GLfloat x, GLfloat y,
     gltDrawText2D(text, x, y, scale);
 }
 
-GLT_API void gltDrawText3D(GLTtext* text, GLfloat x, GLfloat y, GLfloat z,
-                           GLfloat scale, GLfloat view[16],
-                           GLfloat projection[16]) {
+GLT_API void gltDrawText3D(GLTtext* text, GLfloat x, GLfloat y, GLfloat z, GLfloat scale,
+                           GLfloat view[16], GLfloat projection[16]) {
     if (!text) return;
 
     if (text->_dirty) _gltUpdateBuffers(text);
@@ -467,13 +456,8 @@ GLT_API void gltDrawText3D(GLTtext* text, GLfloat x, GLfloat y, GLfloat z,
     if (!text->vertexCount) return;
 
     const GLfloat model[16] = {
-        scale, 0.0f,
-        0.0f,  0.0f,
-        0.0f,  -scale,
-        0.0f,  0.0f,
-        0.0f,  0.0f,
-        scale, 0.0f,
-        x,     y + (GLfloat)_gltFontGlyphHeight * scale,
+        scale, 0.0f, 0.0f, 0.0f,  0.0f, -scale, 0.0f,
+        0.0f,  0.0f, 0.0f, scale, 0.0f, x,      y + (GLfloat)_gltFontGlyphHeight * scale,
         z,     1.0f,
     };
 
@@ -492,8 +476,7 @@ GLT_API void gltColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {
 
 GLT_API void gltGetColor(GLfloat* r, GLfloat* g, GLfloat* b, GLfloat* a) {
     GLfloat color[4];
-    glGetUniformfv(_gltText2DShader, _gltText2DShaderColorUniformLocation,
-                   color);
+    glGetUniformfv(_gltText2DShader, _gltText2DShaderColorUniformLocation, color);
 
     if (r) (*r) = color[0];
     if (g) (*g) = color[1];
@@ -548,8 +531,7 @@ GLT_API GLfloat gltGetTextWidth(const GLTtext* text, GLfloat scale) {
 GLT_API GLfloat gltGetTextHeight(const GLTtext* text, GLfloat scale) {
     if (!text || !text->_text) return 0.0f;
 
-    return (GLfloat)(gltCountNewLines(text->_text) + 1) *
-           gltGetLineHeight(scale);
+    return (GLfloat)(gltCountNewLines(text->_text) + 1) * gltGetLineHeight(scale);
 }
 
 GLT_API GLboolean gltIsCharacterSupported(const char c) {
@@ -621,8 +603,7 @@ GLT_API void _gltGetViewportSize(GLint* width, GLint* height) {
     if (height) (*height) = dimensions[3];
 }
 
-GLT_API void _gltMat4Mult(const GLfloat lhs[16], const GLfloat rhs[16],
-                          GLfloat result[16]) {
+GLT_API void _gltMat4Mult(const GLfloat lhs[16], const GLfloat rhs[16], GLfloat result[16]) {
     int c, r, i;
 
     for (c = 0; c < 4; c++) {
@@ -659,12 +640,10 @@ GLT_API void _gltUpdateBuffers(GLTtext* text) {
     }
 
     const GLsizei vertexCount =
-        countDrawable * 2 *
-        3;  // 3 vertices in a triangle, 2 triangles in a quad
+        countDrawable * 2 * 3;  // 3 vertices in a triangle, 2 triangles in a quad
 
     const GLsizei vertexSize = _GLT_TEXT2D_VERTEX_SIZE;
-    GLfloat* vertices =
-        (GLfloat*)malloc(vertexCount * vertexSize * sizeof(GLfloat));
+    GLfloat* vertices = (GLfloat*)malloc(vertexCount * vertexSize * sizeof(GLfloat));
 
     if (!vertices) return;
 
@@ -749,9 +728,8 @@ GLT_API void _gltUpdateBuffers(GLTtext* text) {
     text->_vertices = vertices;
 
     glBindBuffer(GL_ARRAY_BUFFER, text->_vbo);
-    glBufferData(GL_ARRAY_BUFFER,
-                 vertexCount * _GLT_TEXT2D_VERTEX_SIZE * sizeof(GLfloat),
-                 vertices, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertexCount * _GLT_TEXT2D_VERTEX_SIZE * sizeof(GLfloat), vertices,
+                 GL_DYNAMIC_DRAW);
 
     text->_dirty = GL_FALSE;
 }
@@ -859,8 +837,7 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
     if (ouster::sdk::viz::GLFWContext::is_opengl_es()) {
         glShaderSource(vertexShader, 1, &_gltText2DVertexShaderSourceES, NULL);
     } else {
-        glShaderSource(vertexShader, 1, &_gltText2DVertexShaderSourceCore,
-                       NULL);
+        glShaderSource(vertexShader, 1, &_gltText2DVertexShaderSourceCore, NULL);
     }
     glCompileShader(vertexShader);
 
@@ -878,8 +855,7 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
 
             glGetShaderInfoLog(vertexShader, infoLogSize, NULL, infoLog);
 
-            printf("Vertex Shader #%u <Info Log>:\n%s\n", vertexShader,
-                   infoLog);
+            printf("Vertex Shader #%u <Info Log>:\n%s\n", vertexShader, infoLog);
 
             free(infoLog);
         }
@@ -898,11 +874,9 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
 
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     if (ouster::sdk::viz::GLFWContext::is_opengl_es()) {
-        glShaderSource(fragmentShader, 1, &_gltText2DFragmentShaderSourceES,
-                       NULL);
+        glShaderSource(fragmentShader, 1, &_gltText2DFragmentShaderSourceES, NULL);
     } else {
-        glShaderSource(fragmentShader, 1, &_gltText2DFragmentShaderSourceCore,
-                       NULL);
+        glShaderSource(fragmentShader, 1, &_gltText2DFragmentShaderSourceCore, NULL);
     }
     glCompileShader(fragmentShader);
 
@@ -920,8 +894,7 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
 
             glGetShaderInfoLog(fragmentShader, infoLogSize, NULL, infoLog);
 
-            printf("Fragment Shader #%u <Info Log>:\n%s\n", fragmentShader,
-                   infoLog);
+            printf("Fragment Shader #%u <Info Log>:\n%s\n", fragmentShader, infoLog);
 
             free(infoLog);
         }
@@ -944,10 +917,8 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
     glAttachShader(_gltText2DShader, vertexShader);
     glAttachShader(_gltText2DShader, fragmentShader);
 
-    glBindAttribLocation(_gltText2DShader, _GLT_TEXT2D_POSITION_LOCATION,
-                         "position");
-    glBindAttribLocation(_gltText2DShader, _GLT_TEXT2D_TEXCOORD_LOCATION,
-                         "texCoord");
+    glBindAttribLocation(_gltText2DShader, _GLT_TEXT2D_POSITION_LOCATION, "position");
+    glBindAttribLocation(_gltText2DShader, _GLT_TEXT2D_TEXCOORD_LOCATION, "texCoord");
 
     glBindFragDataLocation(_gltText2DShader, 0, "fragColor");
 
@@ -991,10 +962,8 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
 
     glUseProgram(_gltText2DShader);
 
-    _gltText2DShaderMVPUniformLocation =
-        glGetUniformLocation(_gltText2DShader, "mvp");
-    _gltText2DShaderColorUniformLocation =
-        glGetUniformLocation(_gltText2DShader, "color");
+    _gltText2DShaderMVPUniformLocation = glGetUniformLocation(_gltText2DShader, "mvp");
+    _gltText2DShaderColorUniformLocation = glGetUniformLocation(_gltText2DShader, "color");
 
     glUniform1i(glGetUniformLocation(_gltText2DShader, "diffuse"), 0);
 
@@ -1131,15 +1100,13 @@ GLT_API GLboolean _gltCreateText2DFontTexture(void) {
 
     GLsizei drawableGlyphCount = 0;
 
-    _GLTglyphdata* glyphsData =
-        (_GLTglyphdata*)calloc(_gltFontGlyphCount, sizeof(_GLTglyphdata));
+    _GLTglyphdata* glyphsData = (_GLTglyphdata*)calloc(_gltFontGlyphCount, sizeof(_GLTglyphdata));
 
     uint64_t glyphPacked;
     uint32_t glyphMarginPacked;
 
     uint16_t glyphX, glyphY, glyphWidth, glyphHeight;
-    uint16_t glyphMarginLeft, glyphMarginTop, glyphMarginRight,
-        glyphMarginBottom;
+    uint16_t glyphMarginLeft, glyphMarginTop, glyphMarginRight, glyphMarginBottom;
 
     uint16_t glyphDataWidth, glyphDataHeight;
 
@@ -1198,8 +1165,7 @@ GLT_API GLboolean _gltCreateText2DFontTexture(void) {
 
         glyph->drawable = GL_FALSE;
 
-        if ((glyphDataWidth > 0) && (glyphDataHeight > 0))
-            glyph->drawable = GL_TRUE;
+        if ((glyphDataWidth > 0) && (glyphDataHeight > 0)) glyph->drawable = GL_TRUE;
 
         if (glyph->drawable) {
             drawableGlyphCount++;
@@ -1212,9 +1178,8 @@ GLT_API GLboolean _gltCreateText2DFontTexture(void) {
 
     const GLsizei textureGlyphPadding =
         1;  // amount of pixels added around the whole bitmap texture
-    const GLsizei textureGlyphSpacing =
-        1;  // amount of pixels added between each glyph on the final bitmap
-            // texture
+    const GLsizei textureGlyphSpacing = 1;  // amount of pixels added between each glyph on the
+                                            // final bitmap texture
 
     texWidth += textureGlyphSpacing * (drawableGlyphCount - 1);
 
@@ -1224,17 +1189,14 @@ GLT_API GLboolean _gltCreateText2DFontTexture(void) {
     const GLsizei texAreaSize = texWidth * texHeight;
 
     const GLsizei texPixelComponents = 4;  // R, G, B, A
-    GLubyte* texData =
-        (GLubyte*)malloc(texAreaSize * texPixelComponents * sizeof(GLubyte));
+    GLubyte* texData = (GLubyte*)malloc(texAreaSize * texPixelComponents * sizeof(GLubyte));
 
     GLsizei texPixelIndex;
 
-    for (texPixelIndex = 0; texPixelIndex < (texAreaSize * texPixelComponents);
-         texPixelIndex++)
+    for (texPixelIndex = 0; texPixelIndex < (texAreaSize * texPixelComponents); texPixelIndex++)
         texData[texPixelIndex] = 0;
 
-#define _GLT_TEX_PIXEL_INDEX(x, y) \
-    ((y)*texWidth * texPixelComponents + (x)*texPixelComponents)
+#define _GLT_TEX_PIXEL_INDEX(x, y) ((y)*texWidth * texPixelComponents + (x)*texPixelComponents)
 
 #define _GLT_TEX_SET_PIXEL(x, y, r, g, b, a)        \
     {                                               \
@@ -1245,8 +1207,7 @@ GLT_API GLboolean _gltCreateText2DFontTexture(void) {
         texData[texPixelIndex + 3] = a;             \
     }
 
-    const int glyphDataTypeSizeBits =
-        sizeof(_GLT_FONT_GLYPH_DATA_TYPE) * 8;  // 8 bits in a byte
+    const int glyphDataTypeSizeBits = sizeof(_GLT_FONT_GLYPH_DATA_TYPE) * 8;  // 8 bits in a byte
 
     int data0Index = 0;
     int data1Index = 0;
@@ -1363,8 +1324,8 @@ GLT_API GLboolean _gltCreateText2DFontTexture(void) {
     glGenTextures(1, &_gltText2DFontTexture);
     glBindTexture(GL_TEXTURE_2D, _gltText2DFontTexture);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texWidth, texHeight, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, texData);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texWidth, texHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 texData);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
