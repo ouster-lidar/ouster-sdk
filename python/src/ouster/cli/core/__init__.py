@@ -9,6 +9,10 @@ import os
 from typing import Optional
 
 from ouster.sdk import __version__
+from ouster.cli.version_metadata import (
+    _sdk_build_metadata,
+    sdk_build_metadata_display_order,
+)
 from ouster.sdk.core import init_logger
 from ouster.sdk.sensor import ClientError
 
@@ -62,6 +66,13 @@ def print_version(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
     click.echo(f"ouster-cli, version {__version__}")
+    meta = _sdk_build_metadata()
+    if meta:
+        click.echo("")
+        click.echo("SDK build metadata (native extension):")
+        for attr, label in sdk_build_metadata_display_order():
+            if attr in meta:
+                click.echo(f"  {label}: {meta[attr]}")
 
     click.echo('\nPlugins provided:')
     for plugin in find_plugins():
@@ -88,9 +99,14 @@ def cli(ctx, trace: bool, sdk_log_level: Optional[str]) -> None:
     """Experimental sensor utilities CLI."""
     global TRACEBACK
     # we keep TRACEBACK global because it's used in the main click
-    # runner below on the exception hanling path, where context is not
+    # runner below on the exception handling path, where context is not
     # available
     TRACEBACK = trace
+    # set the terminal width since click doesnt seem to bother
+    try:
+        ctx.terminal_width = os.get_terminal_size().columns
+    except OSError:
+        pass
 
     ctx.ensure_object(dict)
     ctx.obj['TRACEBACK'] = TRACEBACK

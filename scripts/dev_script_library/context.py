@@ -26,8 +26,10 @@ class ClickContext:
             """Get vcpkg directory"""
             return self._vcpkg_dir_getter()
 
-        def process_args(self, cmake_bin="cmake", vcpkg_toolchain=None,
-                         vcpkg_triplet=None, threads=None, manifest_mode=True,
+        _UNSET = object()
+
+        def process_args(self, cmake_bin="cmake", vcpkg_toolchain=_UNSET,
+                         vcpkg_triplet=_UNSET, threads=None, manifest_mode=True,
                          use_system_libs=False, coverage_flags=False):
             """ Centralized spot for processing args for vcpkg and cmake
             and setting defaults """
@@ -36,7 +38,15 @@ class ClickContext:
             self.coverage_flags = coverage_flags
             if self.coverage_flags:
                 self.build_env["CMAKE_COVERAGE_TESTS"] = "true"
+
+            # Only resolve vcpkg_toolchain when it was explicitly provided or
+            # has not been set yet (i.e. first call from __init__).
+            _toolchain_provided = vcpkg_toolchain is not self._UNSET
+            if not _toolchain_provided:
+                vcpkg_toolchain = self.vcpkg_toolchain  # keep current value
+
             if vcpkg_toolchain is None:
+                # Auto-discover from local vcpkg dir or VCPKG_ROOT env var.
                 if os.path.exists(self.vcpkg_dir) and os.path.isdir(self.vcpkg_dir):
                     if os.path.exists(os.path.join(self.vcpkg_dir,
                                                    "scripts", "buildsystems",
@@ -49,22 +59,27 @@ class ClickContext:
                                                        "scripts", "buildsystems",
                                                        "vcpkg.cmake")
             else:
-                vcpkg_root_path = os.path.dirname(os.path.abspath(vcpkg_toolchain))
-                vcpkg_root_path = os.path.abspath(os.path.join(vcpkg_root_path,
-                                                               "..", ".."))
-                vcpkg_triplet_folder = os.path.join(vcpkg_root_path,
-                                                    "triplets")
+                # Explicit toolchain path: check whether it points at a full
+                # vcpkg install (with a triplets/ folder) or a pre-installed
+                # copy that has no manifest mode support.
+                vcpkg_root_path = os.path.abspath(
+                    os.path.join(os.path.dirname(os.path.abspath(vcpkg_toolchain)),
+                                 "..", ".."))
+                vcpkg_triplet_folder = os.path.join(vcpkg_root_path, "triplets")
                 if not os.path.exists(vcpkg_triplet_folder):
-                    # we have a pure installed vcpkg folder
-                    # dont use manifest mode
                     manifest_mode = False
+
+            # Only resolve vcpkg_triplet when explicitly provided or not yet set.
+            if vcpkg_triplet is self._UNSET:
+                vcpkg_triplet = self.vcpkg_triplet  # keep current value
             if vcpkg_triplet is None:
                 vcpkg_triplet = self._process_triplet()
+
             self.cmake_bin = cmake_bin
             self.vcpkg_toolchain = vcpkg_toolchain
             self.vcpkg_triplet = vcpkg_triplet
             if threads is None:
-                self.threads = int(max(1, os.cpu_count() / 2))
+                self.threads = int(max(1, (os.cpu_count() or 2) / 2))
             else:
                 self.threads = threads
             self.build_env["VCPKG_MAX_CONCURRENCY"] = str(self.threads)
@@ -74,18 +89,21 @@ class ClickContext:
                 self.vcpkg_cache_handler()
 
         def _process_triplet(self):
-            arch = ""
-            if platform.machine() == "aarch64" or platform.machine() == "arm64":
+            machine = platform.machine().lower()
+            if machine in ("aarch64", "arm64"):
                 arch = "arm64"
-            elif platform.machine() == "x86_64":
+            elif machine in ("x86_64", "amd64"):
                 arch = "x64"
-            if platform.system() == "Windows":
-                triplet = f"{arch}-windows-static-md"
-            elif platform.system() == "Linux":
-                triplet = f"{arch}-linux"
-            elif platform.system() == "Darwin":
-                triplet = f"{arch}-osx"
-            return triplet
+            else:
+                return None
+            system = platform.system()
+            if system == "Windows":
+                return f"{arch}-windows-static-md"
+            elif system == "Linux":
+                return f"{arch}-linux"
+            elif system == "Darwin":
+                return f"{arch}-osx"
+            return None
 
         def run_vcpkg_initialized_check(self, alt_condition=False, local_vcpkg_only=False):
             first_condition = self.vcpkg_toolchain is None and self.use_system_libs is False
@@ -122,13 +140,22 @@ class ClickContext:
         self.sdk_dir = os.path.abspath(os.path.join(self.dev_dir, '..', '..'))
         self.sdkx_dir = os.path.abspath(os.path.join(self.sdk_dir,
                                                      'sdk-extensions'))
+        self.sdk_private_dir = os.path.abspath(os.path.join(self.sdk_dir,
+                                                            '_private'))
         self.sdkx_dev_dir = os.path.abspath(os.path.join(self.sdkx_dir,
                                                          'scripts',
                                                          "dev_script_library"))
+        self.sdkx_private_dev_dir = os.path.abspath(os.path.join(self.sdk_private_dir,
+                                                                 "scripts",
+                                                                 "dev_script_library"))
         self.sdk_build_dir = os.path.abspath(os.path.join(self.sdk_dir,
                                                           'build', "dev"))
-        self._sdk_artifact_dir = os.path.abspath(os.path.join(self.sdk_dir,
-                                                             'artifacts', "dev"))
+        if "ARTIFACT_DIR" in os.environ:
+            print(f"Using ARTIFACT_DIR from environment: {os.environ['ARTIFACT_DIR']}")
+            self._sdk_artifact_dir = os.path.abspath(os.environ["ARTIFACT_DIR"])
+        else:
+            self._sdk_artifact_dir = os.path.abspath(os.path.join(self.sdk_dir,
+                                                                 'artifacts', "dev"))
         self._cmake_build_dir = os.path.abspath(os.path.join(self.sdk_build_dir,
                                                             "cmake"))
         self._docs_build_dir = os.path.abspath(os.path.join(self.sdk_build_dir,
@@ -138,12 +165,12 @@ class ClickContext:
         self.sdk_test_dir = os.path.abspath(os.path.join(self.sdk_dir,
                                                          'build', "dev", "test"))
         self.vcpkg_json_file = os.path.join(self.sdk_dir, 'vcpkg.json')
-        if "DEV_PERSISTANT_DIR" in os.environ:
-            print(f"Using DEV_PERSISTANT_DIR from environment: {os.environ['DEV_PERSISTANT_DIR']}"),
-            self._dev_persistant_dir = os.environ["DEV_PERSISTANT_DIR"]
+        if "DEV_PERSISTENT_DIR" in os.environ:
+            print(f"Using DEV_PERSISTENT_DIR from environment: {os.environ['DEV_PERSISTENT_DIR']}")
+            self._dev_persistent_dir = os.environ["DEV_PERSISTENT_DIR"]
         else:
-            self._dev_persistant_dir = os.path.join(Path.home(), '.osdkv2')
-        self._vcpkg_dir = os.path.join(self._dev_persistant_dir, 'vcpkg')
+            self._dev_persistent_dir = os.path.join(Path.home(), '.osdkv2')
+        self._vcpkg_dir = os.path.join(self._dev_persistent_dir, 'vcpkg')
         self.submodules = {}
         # include this in the context for plugins not in this folder to have access to this
         self.build_libs = build_libs
@@ -155,10 +182,10 @@ class ClickContext:
 
     @property
     def vcpkg_dir(self):
-        """Create vcpkg directory on first access"""
-        # This will trigger dev_persistant_dir creation first
+        """Create vcpkg directory on first access."""
+        # This will trigger dev_persistent_dir creation first
         # in case it doesn't exist
-        self.dev_persistant_dir
+        self.dev_persistent_dir
         return self._vcpkg_dir
 
     @property
@@ -169,48 +196,45 @@ class ClickContext:
             self._build_options = self.BuildOptions(lambda: self.vcpkg_dir)
         return self._build_options
 
+    def _ensure_dir(self, path, name):
+        """Create directory on first access and return it."""
+        if not os.path.isdir(path):
+            try:
+                os.makedirs(path)
+            except PermissionError:
+                fallback = os.path.abspath(os.path.join(self.sdk_dir, name))
+                print(f"Warning: Could not create dir '{path}', "
+                      f"falling back to '{fallback}'")
+                path = fallback
+                os.makedirs(path, exist_ok=True)
+        return path
+
     @property
     def cmake_build_dir(self):
-        """Create CMake build directory"""
-        if not os.path.isdir(self._cmake_build_dir):
-            os.makedirs(self._cmake_build_dir)
-        return self._cmake_build_dir
+        return self._ensure_dir(self._cmake_build_dir, "cmake_build")
 
     @property
     def docs_build_dir(self):
-        """Create docs build directory"""
-        if not os.path.isdir(self._docs_build_dir):
-            os.makedirs(self._docs_build_dir)
-        return self._docs_build_dir
+        return self._ensure_dir(self._docs_build_dir, "docs")
 
     @property
     def python_build_dir(self):
-        """Create Python build directory"""
-        if not os.path.isdir(self._python_build_dir):
-            os.makedirs(self._python_build_dir)
-        return self._python_build_dir
+        return self._ensure_dir(self._python_build_dir, "python_build")
 
     @property
-    def dev_persistant_dir(self):
-        """Create DEV_PERSISTANT_DIR"""
-        if not os.path.isdir(self._dev_persistant_dir):
-            os.makedirs(self._dev_persistant_dir)
-        return self._dev_persistant_dir
+    def dev_persistent_dir(self):
+        return self._ensure_dir(self._dev_persistent_dir, "persistent")
 
     @property
     def sdk_artifact_dir(self):
-        """Create SDK artifact directory"""
-        if not os.path.isdir(self._sdk_artifact_dir):
-            os.makedirs(self._sdk_artifact_dir)
-        return self._sdk_artifact_dir
+        return self._ensure_dir(self._sdk_artifact_dir, "artifact")
 
     def print_output_location(self, item):
         print(f"Output files for: \"{item}\" can be located in: {self.sdk_artifact_dir}")
 
     def add_module(self, module_file):
         module_dir = os.path.dirname(module_file)
-        module_file = os.path.basename(module_file)
-        module_name = module_file.replace(".py", "")
+        module_name = os.path.splitext(os.path.basename(module_file))[0]
         if module_dir not in sys.path:
             sys.path.append(module_dir)
         module = importlib.import_module(module_name)

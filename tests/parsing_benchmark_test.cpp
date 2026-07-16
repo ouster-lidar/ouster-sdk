@@ -5,13 +5,14 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <iomanip>
 #include <numeric>
 #include <random>
 
-#include "ouster/lidar_scan.h"
-#include "ouster/pcap.h"
-#include "ouster/types.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/types.h"
+#include "ouster/pcap/pcap.h"
 #include "util.h"
 
 using namespace ouster::sdk::core;
@@ -22,9 +23,9 @@ namespace sensor_utils {
 
 struct parse_col {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
-                    const PacketFormat& pf, const uint8_t* packet_buf) const {
-        for (int icol = 0; icol < pf.columns_per_packet; icol++) {
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f, const PacketFormat& pf,
+                    const uint8_t* packet_buf) const {
+        for (uint32_t icol = 0; icol < pf.columns_per_packet; icol++) {
             const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
             const uint16_t m_id = pf.col_measurement_id(col_buf);
             pf.col_field(col_buf, f, field.col(m_id).data(), field.cols());
@@ -35,8 +36,8 @@ struct parse_col {
 template <int BlockDim>
 struct parse_block {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
-                    const PacketFormat& pf, const uint8_t* packet_buf) const {
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f, const PacketFormat& pf,
+                    const uint8_t* packet_buf) const {
         pf.block_field<T, BlockDim>(field.data(), field.cols(), f, packet_buf);
     }
 };
@@ -47,13 +48,11 @@ using HashMap = std::map<std::string, size_t>;
 // https://wjngkoh.wordpress.com/2015/03/04/c-hash-function-for-eigen-matrix-and-vector/
 struct matrix_hash {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> matrix, const std::string& f,
-                    HashMap& map) const {
+    void operator()(Eigen::Ref<img_t<T>> matrix, const std::string& f, HashMap& map) const {
         size_t seed = 0;
         for (int i = 0; i < matrix.size(); ++i) {
             auto elem = *(matrix.data() + i);
-            seed ^=
-                std::hash<T>()(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= std::hash<T>()(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         }
         map[f] = seed;
     }
@@ -77,8 +76,7 @@ struct test_fixture {
     uint64_t col_timestamp;
 };
 
-class ParsingBenchmarkTestFixture
-    : public ::testing::TestWithParam<test_fixture> {};
+class ParsingBenchmarkTestFixture : public ::testing::TestWithParam<test_fixture> {};
 
 // clang-format off
 INSTANTIATE_TEST_CASE_P(
@@ -135,15 +133,13 @@ TEST_P(ParsingBenchmarkTestFixture, ParseCorrectnessTest) {
     EXPECT_EQ(pf.prod_sn(pcap.current_data()), test_params.prod_sn);
     EXPECT_EQ(pf.countdown_thermal_shutdown(pcap.current_data()), 0);
     EXPECT_EQ(pf.countdown_shot_limiting(pcap.current_data()), 0);
-    EXPECT_EQ(pf.thermal_shutdown(pcap.current_data()), 0);
+    EXPECT_EQ(pf.thermal_shutdown(pcap.current_data()), ThermalShutdownStatus::NORMAL);
     const uint8_t* col = pf.nth_col(7, pcap.current_data());
     EXPECT_EQ(pf.col_status(col), 1u);
     EXPECT_EQ(pf.col_timestamp(col), test_params.col_timestamp);
     EXPECT_EQ(pf.col_measurement_id(col), 7);
 
-    auto ls =
-        LidarScan(info.format.columns_per_frame, info.format.pixels_per_column,
-                  info.format.udp_profile_lidar);
+    auto ls = LidarFrame(info);
 
     auto parse_and_hash = [&](auto parser) -> HashMap {
         // reset
@@ -152,8 +148,7 @@ TEST_P(ParsingBenchmarkTestFixture, ParseCorrectnessTest) {
         // parse
         while (pcap.next_packet()) {
             if (pcap.current_info().dst_port == 7502)
-                impl::foreach_channel_field(ls, pf, parser, pf,
-                                            pcap.current_data());
+                impl::foreach_channel_field(ls, pf, parser, pf, pcap.current_data());
         }
 
         HashMap map;
@@ -173,7 +168,7 @@ TEST_P(ParsingBenchmarkTestFixture, ParseCorrectnessTest) {
     EXPECT_TRUE(hashes == parse_and_hash(parse_block<4>{}));
 }
 
-TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
+TEST_P(ParsingBenchmarkTestFixture, FrameBatcherBenchTest) {
     std::map<std::string, std::string> styles = term_styles();
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
@@ -182,8 +177,8 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
     auto pf = PacketFormat(info);
 
     std::cout << styles["yellow"] << styles["bold"]
-              << "CHECKING PARSING PERFORMANCE WITH: "
-              << test_params.pcap_filename << styles["reset"] << std::endl;
+              << "CHECKING PARSING PERFORMANCE WITH: " << test_params.pcap_filename
+              << styles["reset"] << std::endl;
 
     // load up packets into memory to avoid I/O latency messing with benchmarks
     std::vector<std::vector<uint8_t>> packets;
@@ -192,20 +187,17 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
         while (pcap.next_packet()) {
             if (pcap.current_info().dst_port == 7502) {
                 std::vector<uint8_t> packet(pcap.current_length());
-                std::memcpy(packet.data(), pcap.current_data(),
-                            pcap.current_length());
+                std::memcpy(packet.data(), pcap.current_data(), pcap.current_length());
                 packets.push_back(std::move(packet));
             }
         }
     }
 
-    auto ls =
-        LidarScan(info.format.columns_per_frame, info.format.pixels_per_column,
-                  info.format.udp_profile_lidar);
+    auto ls = LidarFrame(info);
 
-    // By default run the shortest possible test unless OUSTER_PERFORMANCE is
-    // set
-    int N_SCANS = enable_performance_tests() ? 1000 : 1;
+    // By default run the shortest possible test unless OUSTER_PERF_COMPARISON
+    // is set
+    int N_FRAMES = enable_perf_comparison_tests() ? 1000 : 1;
     constexpr int MOVING_AVG_WINDOW = 100;
     using MovingAverage64 = MovingAverage<int64_t, int64_t, MOVING_AVG_WINDOW>;
     static std::map<std::string, MovingAverage64> mv;
@@ -223,8 +215,7 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
     };
 
     std::vector<std::function<void()>> all_methods = {
-        [&]() { parse(parse_col{}, "col"); },
-        [&]() { parse(parse_block<4>{}, "block4"); },
+        [&]() { parse(parse_col{}, "col"); }, [&]() { parse(parse_block<4>{}, "block4"); },
         [&]() { parse(parse_block<8>{}, "block8"); },
         [&]() { parse(parse_block<16>{}, "block16"); }};
 
@@ -232,36 +223,32 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
     std::vector<int> ids(all_methods.size());
     std::iota(std::begin(ids), std::end(ids), 0);
 
-    for (auto i = 0; i < N_SCANS; ++i) {
+    for (auto i = 0; i < N_FRAMES; ++i) {
         std::shuffle(std::begin(ids), std::end(ids), g);
         for (auto m : ids) all_methods[m]();
 
         if (++output_ctr % MOVING_AVG_WINDOW == 0) {
             ss.str("");
-            ss << styles["bold"] << "runs: " << styles["reset"]
-               << styles["magenta"] << std::setw(3) << output_ctr << " "
-               << styles["reset"];
-            ss << styles["bold"] << "col[time]: " << styles["reset"]
-               << styles["cyan"] << std::setw(4) << lround(mv["col"]) << "μs, "
-               << styles["reset"];
+            ss << styles["bold"] << "runs: " << styles["reset"] << styles["magenta"] << std::setw(3)
+               << output_ctr << " " << styles["reset"];
+            ss << styles["bold"] << "col[time]: " << styles["reset"] << styles["cyan"]
+               << std::setw(4) << lround(mv["col"]) << "μs, " << styles["reset"];
 
             auto best_time = std::min_element(
-                mv.begin(), mv.end(), [](const auto& a, const auto& b) -> bool {
-                    return a.second < b.second;
-                });
+                mv.begin(), mv.end(),
+                [](const auto& a, const auto& b) -> bool { return a.second < b.second; });
 
-            ss << styles["bold"] << "best " << best_time->first
-               << "[time]:" << styles["reset"] << styles["cyan"] << std::setw(4)
-               << lround(best_time->second) << "μs, " << styles["reset"];
+            ss << styles["bold"] << "best " << best_time->first << "[time]:" << styles["reset"]
+               << styles["cyan"] << std::setw(4) << lround(best_time->second) << "μs, "
+               << styles["reset"];
 
             for (std::string name : {"col", "block4", "block8", "block16"}) {
                 auto speedup = lround(100.0f * mv["col"] / mv[name]);
-                auto color_modifier =
-                    name == best_time->first
-                        ? styles["blue"]
-                        : (speedup >= 100 ? styles["green"] : styles["red"]);
-                ss << styles["bold"] << name << ": " << color_modifier
-                   << std::setw(4) << speedup << "%, " << styles["reset"];
+                auto color_modifier = name == best_time->first
+                                          ? styles["blue"]
+                                          : (speedup >= 100 ? styles["green"] : styles["red"]);
+                ss << styles["bold"] << name << ": " << color_modifier << std::setw(4) << speedup
+                   << "%, " << styles["reset"];
             }
             std::cout << ss.str() << std::endl;
         }

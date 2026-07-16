@@ -56,7 +56,7 @@ def print_stream_table(all_infos):
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) -> None:
-    """Print information about a pcap file to stdout."""
+    """Print information about a file to stdout."""
     file = ctx.source_uri or ""
     try:
         import ouster.sdk.pcap as pcap

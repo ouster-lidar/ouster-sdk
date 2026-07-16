@@ -5,7 +5,12 @@ option(USE_OPENMP "Enable the use of OpenMP" ON)
 find_package(Ceres REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Sophus REQUIRED)
-find_package(KissIcp REQUIRED)
+find_package(TBB CONFIG REQUIRED)
+
+if(MSVC)
+  add_compile_definitions(_ENABLE_EXTENDED_ALIGNED_STORAGE)
+endif()
+
 
 if(USE_OPENMP)
   if (APPLE)
@@ -34,10 +39,11 @@ add_library(ouster_mapping STATIC
     src/slam_util.cpp
     src/deskew_method.cpp
     src/active_time_correction.cpp
-    src/kiss_icp.cpp
-    src/kiss_slam.cpp
+    src/adaptive_threshold.cpp
+    src/icp_registration.cpp
+    src/lio_slam.cpp
     src/slam_engine.cpp
-    src/kiss_localization.cpp
+    src/lio_localization.cpp
     src/localization_engine.cpp
 )
 
@@ -47,7 +53,6 @@ target_include_directories(ouster_mapping
      ${CERES_INCLUDE_DIRS}
      ${EIGEN3_INCLUDE_DIRS}
      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/sophus>
-     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/kiss-icp/cpp>
    PUBLIC
       $<INSTALL_INTERFACE:include>
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -55,7 +60,7 @@ target_include_directories(ouster_mapping
 )
 
 # On Linux gcc_s MUST be linked against before CERES to avoid libunwind issues
-# Numpy and friends use gcc_s for exception handling, but CERES (actually its dependency glog) 
+# Numpy and friends use gcc_s for exception handling, but CERES (actually its dependency glog)
 # wants to use libunwind. If you mix and match bad things happen.
 # Putting gcc_s first causes the linker to prefer it.
 if(UNIX AND NOT APPLE)
@@ -69,22 +74,30 @@ if (NOT TARGET Ceres::ceres)
     set(CERES_LIBRARIES_INTERNAL ${CERES_LIBRARIES})
 endif()
 
+# On Windows shared builds, Ceres and its heavy static deps are pre-linked into
+# ouster_ceres_deps.dll to avoid LNK1189 (>65535 .lib members).  Use that
+# import library instead of absorbing the full static archives.
+if(WIN32 AND BUILD_SHARED_LIBRARY AND TARGET OusterSDK::ouster_ceres_deps)
+  set(CERES_LIBRARIES_INTERNAL OusterSDK::ouster_ceres_deps)
+endif()
+
 set(OPENMP_LIBRARIES_INTERNAL "")
 if(USE_OPENMP AND OPENMP_CXX_FOUND)
   set(OPENMP_LIBRARIES_INTERNAL OpenMP::OpenMP_CXX)
 endif()
 
 target_link_libraries(ouster_mapping
+  PUBLIC
+    OusterSDK::ouster_algorithm
   PRIVATE
     ${MAPPING_OS_LIBRARIES}
     $<BUILD_INTERFACE:Sophus::Sophus>
-    $<BUILD_INTERFACE:kiss_icp_core>
+    TBB::tbb
     ${CERES_LIBRARIES_INTERNAL}
     Eigen3::Eigen
-    OusterSDK::ouster_client
+    OusterSDK::ouster_core
     OusterSDK::ouster_osf
     ${OPENMP_LIBRARIES_INTERNAL}
-    ${kiss_icp_cpp_LIBRARIES}
 )
 
 target_compile_definitions(ouster_mapping PUBLIC GLOG_USE_GLOG_EXPORT)

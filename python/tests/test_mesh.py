@@ -46,3 +46,20 @@ endsolid test_zone_0
         )
     assert m.load_from_stl(f.name) is True
     assert len(m.triangles) == 1
+
+
+def test_mesh_bindings_4(tmp_path):
+    """It should be able to save an STL file."""
+    m = Mesh([
+        Triangle(
+                np.array([0.0, 0.0, 0.0]),
+                np.array([1.0, 0.0, 0.0]),
+                np.array([0.0, 1.0, 0.0]),
+        ),
+    ])
+    out_path = tmp_path / "test_zone_1.stl"
+    m.save_stl_binary(str(out_path))
+    loaded_mesh = Mesh()
+    assert loaded_mesh.load_from_stl(str(out_path)) is True
+    assert len(loaded_mesh.triangles) == 1
+    assert loaded_mesh == m

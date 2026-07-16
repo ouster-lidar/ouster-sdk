@@ -101,6 +101,7 @@ macro(make_binary_schemas_command)
   add_custom_command(
     OUTPUT ${BIN_FILE}
     DEPENDS ${MOD_ARG_FB_FILE}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${BIN_DIR}
     COMMAND
       ${FLATC} -b --schema
         -o ${BIN_DIR}
@@ -129,6 +130,7 @@ macro(make_cpp_gen_command)
   add_custom_command(
       OUTPUT ${GEN_FILE}
       DEPENDS ${MOD_ARG_FB_FILE}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${GEN_DIR}
       COMMAND
         ${FLATC} --cpp --no-includes --scoped-enums
           -o ${GEN_DIR}

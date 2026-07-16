@@ -1,0 +1,94 @@
+<div class="sidebar-links" role="navigation" aria-label="main navigation">
+  {% set restrict_prefix = None %}
+  {% if pagename.startswith('python/api_python/') or pagename.startswith('_modules/') %}
+    {% set restrict_prefix = 'python/api_python/' %}
+  {% elif pagename.startswith('cpp/api_cpp/') %}
+    {% set restrict_prefix = 'cpp/api_cpp/' %}
+  {% endif %}
+
+  {% for toc in toctree_data %}
+    {% set toc_entries = toc.entries if toc.entries is defined else [] %}
+    {% set toc_hidden = toc.hidden if toc.hidden is defined else False %}
+    {% if toc_entries and (not toc_hidden or restrict_prefix) %}
+      {% set groups = namespace(items=[]) %}
+      {% set hide_titles = ['Module contents', 'Subpackages', 'Submodules', 'Namespaces'] %}
+      {% set examples_doc = 'python/api_python/ouster.sdk.examples' %}
+      {% for entry in toc_entries %}
+        {% set entry_doc = entry.docname if entry.docname is defined else None %}
+        {% set skip_entry = (entry.title is defined and entry.title in hide_titles)
+          or (entry_doc == examples_doc) %}
+        {% if skip_entry %}
+          {# skip this entry entirely #}
+        {% else %}
+          {% set raw_children = (entry.children if entry.children is defined else []) | list %}
+
+          {% set show_entry = namespace(value=(restrict_prefix is none)) %}
+          {% if not show_entry.value and entry_doc and entry_doc.startswith(restrict_prefix) %}
+            {% set show_entry.value = True %}
+          {% endif %}
+          {% if not show_entry.value and restrict_prefix %}
+            {% for child in raw_children %}
+              {% set child_doc = child.docname if child.docname is defined else None %}
+              {% if child_doc and child_doc.startswith(restrict_prefix) %}
+                {% set show_entry.value = True %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+
+          {% if show_entry.value %}
+            {% set filtered_children = namespace(items=[]) %}
+            {% for child in raw_children %}
+              {% set child_doc = child.docname if child.docname is defined else None %}
+              {% set same_doc = child_doc is not none and entry_doc is not none and child_doc == entry_doc %}
+              {% if not restrict_prefix or (child_doc and child_doc.startswith(restrict_prefix)) %}
+                {% if not same_doc %}
+                  {% set _ = filtered_children.items.append(child) %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set _ = groups.items.append({'entry': entry, 'children': filtered_children.items}) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {% if groups.items %}
+        <div class="sidebar-group">
+          <p class="caption">
+            <span class="caption-text"><a href="{{ toc.href }}">{{ toc.title }}</a></span>
+          </p>
+          <ul class="{% if toc.current %}current{% endif %}">
+            {% for item in groups.items %}
+              {% set entry = item.entry %}
+              {% set children = item.children %}
+              <li class="toctree-l1 {% if entry.current %}current{% endif %}">
+                {% if entry.ext_resource %}
+                  <a href="{{ pathto(entry.name, 1) }}" class="reference">{{ entry.title }} <outboundlink></outboundlink></a>
+                {% else %}
+                  <a href="{{ pathto(entry.name) }}" class="reference internal {% if entry.current %}current{% endif %}">{{ entry.title }}</a>
+                {% endif %}
+
+                {% if children %}
+                  <ul>
+                    {% for child in children %}
+                      {% set child_doc = child.docname if child.docname is defined else None %}
+                      {% set skip_child = child.title is defined and child.title in hide_titles %}
+                      {% if child_doc and not skip_child %}
+                        {% set child_href = pathto(child_doc) %}
+                        {% if child.anchor %}
+                          {% set child_href = child_href + '#' + child.anchor %}
+                        {% endif %}
+                        <li class="toctree-l2 {% if child.current %}current{% endif %}">
+                          <a href="{{ child_href }}" class="reference internal {% if child.current %}current{% endif %}">{{ child.title }}</a>
+                        </li>
+                      {% endif %}
+                    {% endfor %}
+                  </ul>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+</div>

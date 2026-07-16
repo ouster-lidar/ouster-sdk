@@ -13,8 +13,8 @@
 
 #include "os_sensor/common_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
-#include "ouster/lidar_scan.h"
-#include "ouster/visibility.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -22,27 +22,30 @@ namespace osf {
 namespace impl {
 
 // Non-owning reference to encoded single PNG buffer
-struct EncodedScanChannelData {
+struct EncodedFrameChannelData {
     const uint8_t* data_internal;
     size_t size_internal;
 
-    inline const uint8_t* data() const { return data_internal; }
-    inline size_t size() const { return size_internal; }
+    inline const uint8_t* data() const {
+        return data_internal;
+    }
+    inline size_t size() const {
+        return size_internal;
+    }
 };
 
 // Encoded single PNG buffer
-using ScanChannelData = std::vector<uint8_t>;
+using FrameChannelData = std::vector<uint8_t>;
 
 // Encoded PNG buffers
-using ScanData = std::vector<ScanChannelData>;
+using FrameData = std::vector<FrameChannelData>;
 
 bool png_osf_write_init(png_structpp png_ptrp, png_infopp png_info_ptrp);
-void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
-                         ScanChannelData& res_buf, uint32_t width,
-                         uint32_t height, int sample_depth, int color_type,
+void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr, FrameChannelData& res_buf,
+                         uint32_t width, uint32_t height, int sample_depth, int color_type,
                          int compression_amount);
 /**
- * libpng only versions for Encode/Decode LidarScan to PNG buffers
+ * libpng only versions for Encode/Decode LidarFrame to PNG buffers
  */
 
 // ========== Decode Functions ===================================
@@ -62,9 +65,8 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 
 /** @copydoc OSFPngDecode8 */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_8bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode_8bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                           const EncodedFrameChannelData& channel_buf);
 
 /**
  * @copydoc OSFPngDecode8
@@ -72,10 +74,9 @@ OUSTER_API_FUNCTION bool decode_8bit_image(
  *                      image form
  */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_8bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf,
-    const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode_8bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                           const EncodedFrameChannelData& channel_buf,
+                                           const std::vector<int>& px_offset);
 
 /**
  * @defgroup OSFPngDecode16 Decoding Functionality.
@@ -96,16 +97,14 @@ OUSTER_API_FUNCTION bool decode_8bit_image(
  *                      image form
  */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_16bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf,
-    const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode_16bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf,
+                                            const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode16 */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_16bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode_16bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf);
 
 /**
  * @defgroup OSFPngDecode24 Decoding Functionality.
@@ -126,16 +125,14 @@ OUSTER_API_FUNCTION bool decode_16bit_image(
  *                      image form.
  */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_24bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf,
-    const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode_24bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf,
+                                            const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode24 */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_24bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode_24bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf);
 
 /**
  * @defgroup OSFPngDecode32 Decoding Functionality.
@@ -156,16 +153,14 @@ OUSTER_API_FUNCTION bool decode_24bit_image(
  *                      image form.
  */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_32bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf,
-    const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode_32bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf,
+                                            const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode32 */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_32bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode_32bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf);
 
 /**
  * @defgroup OSFPngDecode64 Decoding Functionality.
@@ -186,16 +181,14 @@ OUSTER_API_FUNCTION bool decode_32bit_image(
  *                      image form.
  */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_64bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf,
-    const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode_64bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf,
+                                            const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode64 */
 template <typename T>
-OUSTER_API_FUNCTION bool decode_64bit_image(
-    Eigen::Ref<ouster::sdk::core::img_t<T>> img,
-    const EncodedScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode_64bit_image(Eigen::Ref<ouster::sdk::core::img_t<T>> img,
+                                            const EncodedFrameChannelData& channel_buf);
 
 /**
  * Decode Field from a data buffer.
@@ -205,8 +198,7 @@ OUSTER_API_FUNCTION bool decode_64bit_image(
  * @param[in] buffer buffer to decode
  */
 OUSTER_API_FUNCTION
-void decode_field(ouster::sdk::core::Field& field,
-                  const EncodedScanChannelData& buffer,
+void decode_field(ouster::sdk::core::Field& field, const EncodedFrameChannelData& buffer,
                   const std::vector<int>& px_offset = {});
 
 }  // namespace impl

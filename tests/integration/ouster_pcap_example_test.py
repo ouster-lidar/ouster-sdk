@@ -56,7 +56,7 @@ def test_simple_packet_record(tmpdir):
     lidar_packets = []
     for buf, timestamp in lidar_buffers:
         # Create the lidar packet
-        packet = core.LidarPacket(lidar_packet_size)
+        packet = core.LidarPacket(pf)
         packet.buf[:] = buf[:]
         packet.host_timestamp = int(timestamp * 1e9)
         lidar_packets.append(packet)
@@ -64,7 +64,7 @@ def test_simple_packet_record(tmpdir):
     imu_packets = []
     for buf, timestamp in imu_buffers:
         # Create the imu packet
-        packet = core.ImuPacket(imu_packet_size)
+        packet = core.ImuPacket(pf)
         packet.buf[:] = buf[:]
         packet.host_timestamp = int(timestamp * 1e9)
         imu_packets.append(packet)

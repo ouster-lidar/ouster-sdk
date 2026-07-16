@@ -35,9 +35,8 @@ std::string generate_filename(const std::string& path) {
     // Convert itto time_t for standard formatting
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
     // Get the milliseconds
-    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      now.time_since_epoch()) %
-                  1000;
+    auto now_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
     std::ostringstream filename_ss;
     std::tm local_time;
@@ -55,17 +54,15 @@ std::string generate_filename(const std::string& path) {
 
     filename_ss << final_path << "viz_screenshot_"
                 << std::put_time(&local_time,
-                                 "%Y-%m-%d_%H-%M-%S")  // Date and time
-                << "." << std::setw(3) << std::setfill('0')
-                << now_ms.count()  // Milliseconds
+                                 "%Y-%m-%d_%H-%M-%S")                          // Date and time
+                << "." << std::setw(3) << std::setfill('0') << now_ms.count()  // Milliseconds
                 << ".png";
     return filename_ss.str();
 }
 
 }  // namespace
 
-std::string write_png(const std::string& path,
-                      const std::vector<uint8_t>& pixels, int width,
+std::string write_png(const std::string& path, const std::vector<uint8_t>& pixels, int width,
                       int height) {
     if (pixels.empty() || width <= 0 || height <= 0) {
         // Invalid image dimensions or empty pixel data
@@ -79,11 +76,9 @@ std::string write_png(const std::string& path,
     }
 
     // Set up libpng
-    png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr,
-                                              nullptr, nullptr);
+    png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
     if (png == nullptr) {
-        throw std::runtime_error(
-            "write_png: Failed to create png write struct");
+        throw std::runtime_error("write_png: Failed to create png write struct");
     }
 
     png_infop info = png_create_info_struct(png);
@@ -92,6 +87,9 @@ std::string write_png(const std::string& path,
         throw std::runtime_error("write_png: Failed to create png info struct");
     }
 
+    // libpng error handling requires setjmp; exceptions cannot propagate
+    // through C library callbacks.
+    // NOLINTNEXTLINE(cert-err52-cpp)
     if (setjmp(png_jmpbuf(png))) {
         png_destroy_write_struct(&png, &info);
         throw std::runtime_error("write_png: Error during PNG creation");
@@ -99,7 +97,7 @@ std::string write_png(const std::string& path,
 
     auto write_fn = [](png_structp png_ptr, png_bytep data, png_size_t length) {
         auto* file = static_cast<std::ofstream*>(png_get_io_ptr(png_ptr));
-        file->write(reinterpret_cast<const char*>(data), length);
+        file->write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(length));
     };
 
     auto flush_fn = [](png_structp png_ptr) {
@@ -109,9 +107,8 @@ std::string write_png(const std::string& path,
 
     png_set_write_fn(png, &file, write_fn, flush_fn);
 
-    png_set_IHDR(png, info, width, height, 8, PNG_COLOR_TYPE_RGB,
-                 PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
-                 PNG_FILTER_TYPE_DEFAULT);
+    png_set_IHDR(png, info, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+                 PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 
 #ifdef __APPLE__
     // On Apple, "Display P3" is the default color profile setting.
@@ -126,7 +123,7 @@ std::string write_png(const std::string& path,
 
     std::vector<png_bytep> row_pointers(height);
     for (int y = 0; y < height; ++y) {
-        row_pointers[y] = const_cast<png_bytep>(&pixels[y * width * 3]);
+        row_pointers[y] = const_cast<png_bytep>(&pixels[static_cast<size_t>(y) * width * 3]);
     }
 
     png_write_image(png, row_pointers.data());

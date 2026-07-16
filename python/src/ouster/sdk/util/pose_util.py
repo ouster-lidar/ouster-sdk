@@ -415,13 +415,13 @@ def traj_interp(traj_poses: TrajPoses, ts: Union[Sequence[Numeric],
 
 
 class Poser(Protocol):
-    """Actor that adds poses to LidarScans"""
+    """Actor that adds poses to LidarFrames"""
 
     def __call__(self,
-                 scan: core.LidarScan,
+                 frame: core.LidarFrame,
                  *,
-                 col_ts: Optional[np.ndarray] = None) -> core.LidarScan:
-        """Add poses to the scan, modifying in-place."""
+                 col_ts: Optional[np.ndarray] = None) -> core.LidarFrame:
+        """Add poses to the frame, modifying in-place."""
         ...
 
 
@@ -602,29 +602,29 @@ class TrajectoryEvaluator(Poser):
         return bool(self._poses)
 
     def __call__(self,
-                 scan: core.LidarScan,
+                 frame: core.LidarFrame,
                  *,
-                 col_ts: Optional[np.ndarray] = None) -> core.LidarScan:
-        """Add poses to the scan.
+                 col_ts: Optional[np.ndarray] = None) -> core.LidarFrame:
+        """Add poses to the frame.
 
         Use `col_ts` if the column timestamps need to be remapped to a
         different time scale.
 
         Args:
-            col_ts: optional array of [scan.W] remapped timestamps to use
-                    instead of scan.timestamp for pose calculations.
+            col_ts: optional array of [frame.W] remapped timestamps to use
+                    instead of frame.timestamp for pose calculations.
         """
-        valid_cols = (np.bitwise_and(scan.status, 1) == 1)
-        if col_ts is not None and col_ts.ndim == 1 and col_ts.size == scan.w:
+        valid_cols = (np.bitwise_and(frame.status, 1) == 1)
+        if col_ts is not None and col_ts.ndim == 1 and col_ts.size == frame.w:
             ts = col_ts[valid_cols]
         else:
-            ts = scan.timestamp[valid_cols]
+            ts = frame.timestamp[valid_cols]
 
         if ts.size == 0:
-            return scan
+            return frame
 
-        scan.pose[valid_cols] = self.poses_at(ts)
-        return scan
+        frame.body_to_world[valid_cols] = self.poses_at(ts)
+        return frame
 
     def __len__(self) -> int:
         return len(self._poses)
@@ -633,79 +633,34 @@ class TrajectoryEvaluator(Poser):
         return self._poses[idx]
 
 
-def get_rot_matrix_to_align_to_gravity(accel_x: float, accel_y: float, accel_z: float):
-    """
-    Computes the rotation matrix needed to align a given acceleration vector
-    with the direction of gravity, fixing the yaw angle to zero.
-
-    Args:
-        accel_x: x-component of the acceleration vector.
-        accel_y: y-component of the acceleration vector.
-        accel_z: z-component of the acceleration vector.
-
-    Returns:
-        A 3x3 rotation matrix that aligns the acceleration vector with the gravity vector [0,0,1]
-        while fixing the yaw angle to zero.
-    """
-    gravity_vector = np.array([0, 0, 1])
-
-    accel_vector = np.array([accel_x, accel_y, accel_z])
-    accel_vector = normalize_vector(accel_vector)
-
-    axis = np.cross(accel_vector, gravity_vector)
-    if np.linalg.norm(axis) > 0:
-        axis = normalize_vector(axis)
-    angle = np.arccos(np.dot(accel_vector, gravity_vector))
-
-    # Rodrigues' rotation formula
-    K = np.array([[0, -axis[2], axis[1]],
-                  [axis[2], 0, -axis[0]],
-                  [-axis[1], axis[0], 0]])
-
-    rot_align_gravity = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
-
-    forward = np.dot(rot_align_gravity, np.array([1, 0, 0]))
-
-    yaw_angle = np.arctan2(forward[1], forward[0])
-
-    rot_counter_yaw = np.array([[np.cos(-yaw_angle), -np.sin(-yaw_angle), 0],
-                            [np.sin(-yaw_angle), np.cos(-yaw_angle), 0],
-                            [0, 0, 1]])
-
-    # Final rotation matrix
-    rotation_matrix = rot_counter_yaw @ rot_align_gravity
-
-    return rotation_matrix
-
-
-def pose_scans(
+def pose_frames(
     source,
     *,
     poses: Optional[Poser] = None
 ):
-    """Add poses to LidarScans stream.
+    """Add poses to LidarFrames stream.
 
     Args:
         source: one of:
-            - Sequence[core.LidarScan] - single scan sources
-            - Sequence[core.LidarScanSet] - multi scans sources
+            - Sequence[core.LidarFrame] - single frame sources
+            - Sequence[core.FrameSet] - multi frame set sources
     """
 
     for obj in source:
-        if isinstance(obj, core.LidarScan):
-            # Iterator[core.LidarScan]
+        if isinstance(obj, core.LidarFrame):
+            # Iterator[core.LidarFrame]
             yield poses(obj) if poses is not None else obj
-        elif isinstance(obj, core.LidarScanSet):
-            # collated scans: List[LidarScanSet]
+        elif isinstance(obj, core.FrameSet):
+            # collated frame sets: List[FrameSet]
             if poses is not None:
                 yield [
-                    poses(scan) if scan is not None else None for scan in obj
+                    poses(frame) if frame is not None else None for frame in obj
                 ]
             else:
                 yield obj
         else:
             raise ValueError(
-                "Expected one of types: LidarScan, Tuple[Optional[LidarScan]]"
+                "Expected one of types: LidarFrame, Tuple[Optional[LidarFrame]]"
                 "elements. But got:", type(obj))
 
 
@@ -727,38 +682,38 @@ def make_kiss_traj_poses(poses: Union[Sequence[Pose], np.ndarray]) -> TrajPoses:
     """Makes a traj poses from kiss poses.
 
     Args:
-        poses: pose for every scan in the sequence as returned by KissICP
+        poses: pose for every frame in the sequence as returned by KissICP
 
     Returns:
-        trajectory poses timestamped by the scan index mid point: 0.5
-        For example scan indexes 0, 1, 2 produce timestamps 0.5, 1.5, 2.5
+        trajectory poses timestamped by the frame index mid point: 0.5
+        For example frame indexes 0, 1, 2 produce timestamps 0.5, 1.5, 2.5
     """
     traj_poses = list([(0.5 + i, p) for i, p in enumerate(poses)])
     return traj_poses
 
 
-def pose_scans_from_kitti(
+def pose_frames_from_kitti(
     source,
     kitti_poses: str
 ):
-    """Add poses to LidarScans stream using the previously saved per scan poses.
+    """Add poses to LidarFrames stream using the previously saved per frame poses.
 
-    Every pose is considered to be in the middle of the scan. We assume that
-    very first scan starts at t = 0 and ends at t = 1, thus the first pose
+    Every pose is considered to be in the middle of the frame. We assume that
+    very first frame starts at t = 0 and ends at t = 1, thus the first pose
     is timestamped as 0.5, second pose is timestamped at 1.5 (middle of the
-    second scan), and so on ... to the very last pose N which timestamped at
-    N + 0.5 for the last N scan.
+    second frame), and so on ... to the very last pose N which timestamped at
+    N + 0.5 for the last N frame.
 
     Args:
         source: one of:
-            - Sequence[core.LidarScan] - single scan sources
-            - Sequence[core.LidarScanSet] - multi scans sources
+            - Sequence[core.LidarFrame] - single frame sources
+            - Sequence[core.FrameSet] - multi frame set sources
         kitti_poses: path to the file with in kitti poses format, i.e. every
                      line contains 12 floats of 4x4 homogeneous transformation
                      matrix (``[:3, :]`` in numpy notation, row-major serialized)
     """
 
-    # load one pose per scan
+    # load one pose per frame
     poses = load_kitti_poses(kitti_poses)
 
     # make time indexed poses starting from 0.5
@@ -768,40 +723,44 @@ def pose_scans_from_kitti(
     norm_col_ts: Optional[np.ndarray]
     norm_col_ts = None
 
-    scan_idx = -1
+    frame_idx = -1
 
-    start_scan_frame_id = -1
-    start_scan_ts = -1
+    start_frame_id = -1
+    start_frame_ts = -1
 
     for obj, in source:
-        if isinstance(obj, core.LidarScan):
-            # Iterator[core.LidarScan]
-            scan = obj
+        if isinstance(obj, core.LidarFrame):
+            # Iterator[core.LidarFrame]
+            frame = obj
 
-            # checking for the source looping (if frame_id and scan_ts was seen)
-            if start_scan_frame_id < 0:
-                start_scan_frame_id = scan.frame_id
-                start_scan_ts = scan.get_first_valid_column_timestamp()
-            elif (start_scan_frame_id == scan.frame_id and
-                  start_scan_ts == scan.get_first_valid_column_timestamp()):
-                # loop detected, reset scan_idx
-                scan_idx = -1
+            # checking for the source looping (if frame_id and frame_ts was seen)
+            try:
+                first_valid_col_ts = frame.timestamp[frame.get_first_valid_column()]
+            except RuntimeError:
+                continue
+            if start_frame_id < 0:
+                start_frame_id = frame.frame_id
+                start_frame_ts = first_valid_col_ts
+            elif (start_frame_id == frame.frame_id and
+                  start_frame_ts == first_valid_col_ts):
+                # loop detected, reset frame_idx
+                frame_idx = -1
 
-            scan_idx += 1
+            frame_idx += 1
             if norm_col_ts is None:
-                norm_col_ts = np.linspace(0, 1.0, scan.w, endpoint=False)
-            idx_ts = scan_idx + norm_col_ts
+                norm_col_ts = np.linspace(0, 1.0, frame.w, endpoint=False)
+            idx_ts = frame_idx + norm_col_ts
 
-            traj_eval(scan, col_ts=idx_ts)
-            yield scan
+            traj_eval(frame, col_ts=idx_ts)
+            yield frame
 
-        elif isinstance(obj, core.LidarScanSet):
-            # collated scans: core.LidarScanSet
-            # TODO[pb]: Make it for multi scan sources when we have stable
+        elif isinstance(obj, core.FrameSet):
+            # collated frame sets: core.FrameSet
+            # TODO[pb]: Make it for multi frame set sources when we have stable
             #           multi source interfaces
-            raise ValueError("Multi scan sources not yet implemented. Got: ",
+            raise ValueError("Multi frame set sources not yet implemented. Got: ",
                              type(obj))
         else:
             raise ValueError(
-                "Expected one of types: LidarScan, Tuple[Optional[LidarScan]]"
+                "Expected one of types: LidarFrame, Tuple[Optional[LidarFrame]]"
                 "elements. But got:", type(obj))

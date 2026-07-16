@@ -17,8 +17,7 @@ class MetaStreamingInfoTests : public OsfTestWithData {};
 /// @todo move this to a better place
 TEST_F(MetaStreamingInfoTests, StreamingPrintTests) {
     ChunkInfo data = {1, 2, 3};
-    EXPECT_EQ(to_string(data),
-              "{offset = 1, stream_id = 2, message_count = 3}");
+    EXPECT_EQ(to_string(data), "{offset = 1, stream_id = 2, message_count = 3}");
 
     ts_t t(5678L);
     StreamStats data2(4, t, t, 6);

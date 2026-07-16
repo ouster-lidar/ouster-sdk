@@ -1,10 +1,10 @@
 .. _osf:
 
-==================
-Open Sensor Format
-==================
+====================
+Ouster Sensor Format
+====================
 
-The *Open Sensor Format* (OSF) is an extensible file format for storing
+The *Ouster Sensor Format* (OSF) is an extensible file format for storing
 time-series data, based on FlatBuffers_.
 
 Compared to pcap, it offers the following advantages:
@@ -25,14 +25,14 @@ Reading and writing OSF files
 Reading, writing, and recording new OSF files are all possible with the Ouster
 SDK and the Ouster SDK CLI.
 
-* :doc:`Python API examples <../python/examples/osf-examples>`
-* :doc:`C++ API examples <../cpp/examples/simple_examples>`
-* :doc:`CLI examples <../cli/sample-sessions>`
+* :ref:`Python API examples <ex-osf-python-examples>`
+* :ref:`C++ API examples <ex-cpp-simple-examples>`
+* :ref:`CLI examples <adjust-playback-rate-and-looping>`
 
 Getting example OSF files
 -------------------------
 
-The :doc:`sample data page <../sample-data>` has instructions for obtaining sample datasets. Sample
+The :doc:`sample data page </getting-started/download_data>` has instructions for obtaining sample datasets. Sample
 datasets are available in OSF format in addition to pcap.
 
 OSF format details
@@ -45,14 +45,14 @@ OSF file.
 An OSF file generally contains the following:
 
 #. A header, which contains the location of the OSF metadata.
-#. A series of "chunks", each of which contain one or more messages, typically containing lidar scans - see :ref:`LidarScan reference <lidar-scan>`.
+#. A series of "chunks", each of which contain one or more messages, typically containing lidar frames - see :ref:`LidarFrame reference <ex-python-lidarframe>`.
 
 #. Metadata, a collection of generic buffers usually containing the following:
 
    a. An index of chunks (meant to provide the file offset, in bytes, for a chunk given a timestamp.)
    b. An ``ouster/v1/streaming/StreamingInfo``, which contains the start, end timestamps and number of messages for each chunk as well as some statistics.
-   c. An ``ouster/v1/os_sensor/LidarSensor``, which contains the configuration of the sensor used to collect the data contained in a stream of lidar scans.
-   d. An ``ouster/v1/os_sensor/LidarScanStream``, which indicates which fields are present in each lidar scan.
+   c. An ``ouster/v1/os_sensor/LidarSensor``, which contains the configuration of the sensor used to collect the data contained in a stream of lidar frames.
+   d. An ``ouster/v1/os_sensor/LidarFrameStream``, which indicates which fields are present in each lidar frame.
 
 For more details of the structure of an OSF file, consult the definition files
 found in the ``ouster_osf/fb`` directory of the Ouster SDK repository.

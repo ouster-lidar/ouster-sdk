@@ -9,14 +9,16 @@
 
 #include "os_sensor/common_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
-#include "ouster/error_handler.h"
-#include "ouster/field.h"
-#include "ouster/lidar_scan.h"
+#include "ouster/core/error_handler.h"
+#include "ouster/core/field.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/object.h"
+#include "ouster/core/pose.h"
+#include "ouster/core/types.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/impl/basics.h"
 #include "ouster/osf/impl/png_tools.h"
-#include "ouster/osf/lidarscan_encoder.h"
-#include "ouster/types.h"
+#include "ouster/osf/lidarframe_encoder.h"
 
 namespace ouster {
 namespace sdk {
@@ -42,57 +44,64 @@ flatbuffers::Offset<flatbuffers::Vector<const T*>> create_vector_of_structs(
     T* buf_to_write;
     auto res_off = fbb.CreateUninitializedVectorOfStructs(len, &buf_to_write);
     if (len > 0) {
-        memcpy(buf_to_write, reinterpret_cast<const uint8_t*>(v),
-               sizeof(T) * len);
+        memcpy(buf_to_write, reinterpret_cast<const uint8_t*>(v), sizeof(T) * len);
     }
     return res_off;
 }
 
-impl::gen::CHAN_FIELD_TYPE to_osf_enum(ouster::sdk::core::ChanFieldType f);
+impl::gen::CHAN_FIELD_TYPE to_osf_enum(ouster::sdk::core::ChanFieldType field_type);
 
-ouster::sdk::core::ChanFieldType from_osf_enum(impl::gen::CHAN_FIELD_TYPE ft);
+ouster::sdk::core::ChanFieldType from_osf_enum(impl::gen::CHAN_FIELD_TYPE field_type);
 
-impl::gen::FIELD_CLASS to_osf_enum(ouster::sdk::core::FieldClass ff);
+impl::gen::FIELD_CLASS to_osf_enum(ouster::sdk::core::FieldClass field_class);
 
-ouster::sdk::core::FieldClass from_osf_enum(impl::gen::FIELD_CLASS ff);
+ouster::sdk::core::FieldClass from_osf_enum(impl::gen::FIELD_CLASS field_class);
 
 nonstd::optional<impl::gen::CHAN_FIELD> to_osf_enum(const std::string& f);
 
 std::string from_osf_enum(impl::gen::CHAN_FIELD f);
 
-flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>>
-fb_save_fields(
-    flatbuffers::FlatBufferBuilder& fbb, const LidarScanEncoder& encoder,
-    const std::vector<std::pair<std::string, const ouster::sdk::core::Field*>>&
-        fields);
+flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> fb_save_fields(
+    flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+    const std::vector<std::pair<std::string, const ouster::sdk::core::Field*>>& fields);
 
-flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>>
-fb_save_fields(
-    flatbuffers::FlatBufferBuilder& fbb, const LidarScanEncoder& encoder,
+flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> fb_save_fields(
+    flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
     const std::unordered_map<std::string, ouster::sdk::core::Field>& fields);
 
-flatbuffers::Offset<
-    flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>>
-fb_save_scan_channels(flatbuffers::FlatBufferBuilder& fbb,
-                      const LidarScanEncoder& encoder,
-                      const ouster::sdk::core::LidarScan& scan,
-                      const ouster::sdk::core::LidarScanFieldTypes& field_types,
-                      const std::vector<int>& px_offset);
+flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>>
+fb_save_frame_channels(flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+                       const ouster::sdk::core::LidarFrame& frame,
+                       const ouster::sdk::core::LidarFrameFieldTypes& field_types,
+                       const std::vector<int>& px_offset);
 
 using AddFieldFn = std::function<ouster::sdk::core::Field&(
-    const std::string&, const ouster::sdk::core::FieldDescriptor&,
-    ouster::sdk::core::FieldClass)>;
+    const std::string&, const ouster::sdk::core::FieldDescriptor&, ouster::sdk::core::FieldClass)>;
 
-void fb_restore_fields(
-    const flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>* fb_fields,
-    const nonstd::optional<std::vector<std::string>>& fields_to_decode,
-    AddFieldFn add_field, const core::error_handler_t& error_handler);
+void fb_restore_fields(const flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>* fb_fields,
+                       const nonstd::optional<std::vector<std::string>>& fields_to_decode,
+                       const AddFieldFn& add_field, const core::error_handler_t& error_handler);
 
 void fb_restore_channels(
-    const flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>*
-        fb_channels,
-    const ouster::sdk::core::LidarScanFieldTypes& field_types,
-    const std::vector<int>& px_offset, ouster::sdk::core::LidarScan& scan,
+    const flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>* fb_channels,
+    const ouster::sdk::core::LidarFrameFieldTypes& field_types, const std::vector<int>& px_offset,
+    ouster::sdk::core::LidarFrame& frame, const core::error_handler_t& error_handler);
+
+flatbuffers::Offset<impl::gen::Pose> fb_save_pose(flatbuffers::FlatBufferBuilder& fbb,
+                                                  const core::Pose& pose);
+
+bool fb_restore_pose(const impl::gen::Pose* fb_pose, core::Pose& pose,
+                     std::vector<std::pair<core::Severity, std::string>>& errors,
+                     const std::string& context);
+
+flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::ObjectList>>>
+fb_save_object_lists(
+    flatbuffers::FlatBufferBuilder& fbb,
+    const std::unordered_map<std::string, std::vector<core::Object>>& object_lists);
+
+void fb_restore_object_lists(
+    const flatbuffers::Vector<flatbuffers::Offset<impl::gen::ObjectList>>* fb_obj_lists,
+    std::unordered_map<std::string, std::vector<core::Object>>& object_lists,
     const core::error_handler_t& error_handler);
 
 }  // namespace osf

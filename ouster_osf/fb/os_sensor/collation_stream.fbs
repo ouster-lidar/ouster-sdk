@@ -10,6 +10,7 @@ struct ScanID {
 table CollationMsg {
     scan_ids:[ScanID];
     fields:[Field];
+    objects:[ObjectList];
 }
 
 table CollationStream {

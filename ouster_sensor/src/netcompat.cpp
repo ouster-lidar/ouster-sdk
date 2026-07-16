@@ -15,7 +15,7 @@
  *
  **/
 
-#include "ouster/impl/netcompat.h"  // NOLINT(misc-include-cleaner)
+#include "ouster/sensor/impl/netcompat.h"  // NOLINT(misc-include-cleaner)
 
 #include <array>
 #include <cstring>
@@ -44,9 +44,13 @@ namespace impl {
 struct StaticWrapper {
     WSADATA wsa_data;
 
-    StaticWrapper() { WSAStartup(MAKEWORD(1, 1), &wsa_data); }
+    StaticWrapper() {
+        WSAStartup(MAKEWORD(1, 1), &wsa_data);
+    }
 
-    ~StaticWrapper() { WSACleanup(); }
+    ~StaticWrapper() {
+        WSACleanup();
+    }
 };
 
 static StaticWrapper resources = {};
@@ -64,8 +68,8 @@ std::string socket_get_error() {
     std::array<char, 256> buf = {};
 #ifdef _WIN32
     int errnum = WSAGetLastError();
-    if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, errnum, 0,
-                      buf.data(), buf.size(), nullptr) != 0) {
+    if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, errnum, 0, buf.data(), buf.size(),
+                      nullptr) != 0) {
         return buf.data();
     } else {
         return std::string{"Unknown WSA error "} + std::to_string(errnum);
@@ -97,8 +101,7 @@ bool socket_valid(SOCKET sock) {
 bool socket_exit() {
 #ifdef _WIN32
     auto result = WSAGetLastError();
-    return result == WSAECONNRESET || result == WSAECONNABORTED ||
-           result == WSAESHUTDOWN;
+    return result == WSAECONNRESET || result == WSAECONNABORTED || result == WSAESHUTDOWN;
 #else
     return errno == EINTR;
 #endif
@@ -132,10 +135,9 @@ int socket_set_reuse(SOCKET sock) {
 int socket_set_rcvtimeout(SOCKET sock, int timeout_sec) {
 #ifdef _WIN32
     DWORD timeout_ms = timeout_sec * 1000;
-    return setsockopt(
-        sock, SOL_SOCKET, SO_RCVTIMEO,
-        (const char*)(&timeout_ms),  // NOLINT (misc-include-cleaner)
-        sizeof timeout_ms);
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
+                      (const char*)(&timeout_ms),  // NOLINT (misc-include-cleaner)
+                      sizeof timeout_ms);
 #else
     struct timeval tv;  // NOLINT (misc-include-cleaner)
     tv.tv_sec = timeout_sec;

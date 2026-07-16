@@ -10,6 +10,7 @@ option(OUSTER_OSF_NO_THREADING "Don't use threads, useful for WASM targets" OFF)
 find_package(ZLIB REQUIRED)
 find_package(PNG REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(CURL REQUIRED)
 find_package(Threads)
 include(Coverage)
 
@@ -82,10 +83,11 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/crc32.cpp
                               src/metadata.cpp
                               src/metadata_impl.cpp
+                              src/metadata_stream.cpp
                               src/meta_lidar_sensor.cpp
                               src/meta_extrinsics.cpp
                               src/meta_streaming_info.cpp
-                              src/stream_lidar_scan.cpp
+                              src/stream_lidar_frame.cpp
                               src/layout_streaming.cpp
                               src/buffer.cpp
                               src/file.cpp
@@ -95,16 +97,17 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/reader.cpp
                               src/chunk.cpp
                               src/operations.cpp
-                              src/osf_scan_source.cpp
+                              src/osf_frame_set_source.cpp
                               src/fb_utils.cpp
                               src/writer.cpp
                               src/async_writer.cpp
                               src/sensor_info_stream.cpp
-                              src/png_lidarscan_encoder.cpp
-                              src/zpng_lidarscan_encoder.cpp
+                              src/png_lidarframe_encoder.cpp
+                              src/zpng_lidarframe_encoder.cpp
                               src/fb_common.cpp
                               src/collation_stream.cpp
                               src/offset.cpp
+                              src/callback_osf_file.cpp
 )
 
 add_library(ouster_osf_internal_impl STATIC src/empty_file.cpp)
@@ -142,12 +145,14 @@ target_include_directories(ouster_osf
 )
 target_link_libraries(ouster_osf
   PUBLIC
-    OusterSDK::ouster_client
+    OusterSDK::ouster_core
+    $<INSTALL_INTERFACE:CURL::libcurl>
   PRIVATE
     flatbuffers::flatbuffers
     PNG::PNG
     ZLIB::ZLIB
     zpng
+    $<BUILD_INTERFACE:CURL::libcurl>
 )
 target_include_directories(ouster_osf
   PUBLIC
@@ -157,10 +162,10 @@ target_include_directories(ouster_osf
 add_dependencies(ouster_osf cpp_gen)
 add_library(OusterSDK::ouster_osf ALIAS ouster_osf)
 
-# Check if ouster_client compiled with -mavx2 option and add those to ouster_osf
+# Check if ouster_core compiled with -mavx2 option and add those to ouster_osf
 # If we are not matching -mavx2 compile flag Eigen lib functions might crash with
 # SegFault and double free/memory corruption errors...
-get_target_property(CLIENT_OPTIONS OusterSDK::ouster_client COMPILE_OPTIONS)
+get_target_property(CLIENT_OPTIONS OusterSDK::ouster_core COMPILE_OPTIONS)
 if(CLIENT_OPTIONS MATCHES ".*-mavx2.*")
   target_compile_options(ouster_osf PUBLIC -mavx2)
 endif()

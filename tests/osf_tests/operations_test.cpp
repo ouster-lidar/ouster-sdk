@@ -26,7 +26,7 @@
 #include "ouster/osf/impl/fb_utils.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/reader.h"
-#include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/osf/stream_lidar_frame.h"
 #include "ouster/osf/stream_osf_file.h"
 
 namespace ouster {
@@ -115,9 +115,8 @@ class FileSha {
 class OperationsTest : public OsfTestWithDataAndFiles {};
 
 TEST_F(OperationsTest, GetOsfDumpInfo) {
-    std::string osf_info_str = dump_metadata(
-        path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"),
-        true);
+    std::string osf_info_str =
+        dump_metadata(path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"), true);
 
     jsoncons::json osf_info_obj;
 
@@ -146,8 +145,7 @@ TEST_F(OperationsTest, GetOsfDumpInfo) {
 }
 
 TEST_F(OperationsTest, ParseAndPrintSmoke) {
-    parse_and_print(
-        path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
+    parse_and_print(path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
 }
 
 TEST_F(OperationsTest, FileShaTest) {
@@ -155,15 +153,13 @@ TEST_F(OperationsTest, FileShaTest) {
     std::string temp_dir;
     EXPECT_TRUE(make_tmp_dir(temp_dir));
     std::string temp_file = path_concat(temp_dir, "test_file");
-    test_file_out.open(temp_file, std::fstream::out | std::fstream::trunc |
-                                      std::fstream::binary);
+    test_file_out.open(temp_file, std::fstream::out | std::fstream::trunc | std::fstream::binary);
     test_file_out << "Testing here for hashing\n";
     test_file_out.close();
     auto sha = FileSha(temp_file);
-    EXPECT_EQ(
-        sha.get_string(),
-        "0x568c47f13b8a96ab5027037c0a44450fd493e91ba92a95bd1f81e23604d8dd99e687"
-        "6d5bbdf3d5b05ec7b9d03e84fd678690e57a1ecbc40863637deab9a35253");
+    EXPECT_EQ(sha.get_string(),
+              "0x568c47f13b8a96ab5027037c0a44450fd493e91ba92a95bd1f81e23604d8dd99e687"
+              "6d5bbdf3d5b05ec7b9d03e84fd678690e57a1ecbc40863637deab9a35253");
 
     unlink_path(temp_file);
     remove_dir(temp_dir);
@@ -177,8 +173,7 @@ TEST_F(OperationsTest, BackupMetadataTest) {
     EXPECT_TRUE(make_tmp_dir(temp_dir));
 
     std::string temp_file = path_concat(temp_dir, "temp.osf");
-    EXPECT_EQ(append_binary_file(temp_file, osf_file_path),
-              file_size(osf_file_path));
+    EXPECT_EQ(append_binary_file(temp_file, osf_file_path), file_size(osf_file_path));
     auto size1 = file_size(temp_file);
     auto sha1 = FileSha(temp_file).get_string();
     std::string temp_backup = path_concat(temp_dir, "temp_backup");
@@ -195,8 +190,7 @@ TEST_F(OperationsTest, BackupMetadataTest) {
     bad_append_out.close();
 
     auto sha3 = FileSha(temp_file).get_string();
-    EXPECT_THROW(restore_osf_file_metablob(temp_file, temp_backup),
-                 std::runtime_error);
+    EXPECT_THROW(restore_osf_file_metablob(temp_file, temp_backup), std::runtime_error);
     remove_dir(temp_dir);
 }
 
@@ -209,8 +203,7 @@ TEST_F(OperationsTest, BackupMetadataTest2) {
     EXPECT_TRUE(make_tmp_dir(temp_dir));
 
     std::string temp_file = path_concat(temp_dir, "temp.osf");
-    EXPECT_EQ(append_binary_file(temp_file, osf_file_path),
-              file_size(osf_file_path));
+    EXPECT_EQ(append_binary_file(temp_file, osf_file_path), file_size(osf_file_path));
     auto sha1 = FileSha(temp_file).get_string();
     std::string temp_backup = path_concat(temp_dir, "temp_backup");
     backup_osf_file_metablob(temp_file, temp_backup);
@@ -243,16 +236,12 @@ ouster::sdk::core::SensorInfo _gen_new_metadata(int start_number) {
     new_metadata.format.columns_per_packet = 2 + start_number;
     new_metadata.format.columns_per_frame = 3 + start_number;
     new_metadata.format.column_window = {9 + start_number, 10 + start_number};
-    new_metadata.format.udp_profile_lidar =
-        ouster::sdk::core::UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8;
-    new_metadata.format.udp_profile_imu =
-        ouster::sdk::core::UDPProfileIMU::LEGACY;
+    new_metadata.format.udp_profile_lidar = ouster::sdk::core::UDPProfileLidar::RNG15_RFL8_NIR8;
+    new_metadata.format.udp_profile_imu = ouster::sdk::core::UDPProfileIMU::LEGACY;
     new_metadata.format.header_type = ouster::sdk::core::HeaderType::STANDARD;
     new_metadata.format.fps = 11 + start_number;
-    new_metadata.beam_azimuth_angles.resize(
-        new_metadata.format.pixels_per_column);
-    new_metadata.beam_altitude_angles.resize(
-        new_metadata.format.pixels_per_column);
+    new_metadata.beam_azimuth_angles.resize(new_metadata.format.pixels_per_column);
+    new_metadata.beam_altitude_angles.resize(new_metadata.format.pixels_per_column);
     for (size_t i = 0; i < new_metadata.format.pixels_per_column; i++) {
         new_metadata.beam_azimuth_angles[i] = (double)i;
         new_metadata.beam_altitude_angles[i] = (double)i;
@@ -274,7 +263,7 @@ ouster::sdk::core::SensorInfo _gen_new_metadata(int start_number) {
             if (i == j) {
                 value = 1.0;
             }
-            new_metadata.extrinsic(i, j) = value;
+            new_metadata.sensor_to_body(i, j) = value;
         }
     }
 
@@ -295,32 +284,26 @@ void _verify_empty_metadata(jsoncons::json& test_root, int entry_count = 0) {
 void _write_init_metadata(std::string& temp_file, uint64_t header_size,
                           MetadataStore meta_store_ = {}) {
     // Copied and modified from writer.cpp under osf/src
-    flatbuffers::FlatBufferBuilder metadata_fbb =
-        flatbuffers::FlatBufferBuilder(32768);
+    flatbuffers::FlatBufferBuilder metadata_fbb = flatbuffers::FlatBufferBuilder(32768);
 
     std::vector<ouster::sdk::osf::impl::gen::ChunkOffset> chunks_{};
 
-    std::vector<flatbuffers::Offset<ouster::sdk::osf::impl::gen::MetadataEntry>>
-        entries =
-            ouster::sdk::osf::impl::make_entries(meta_store_, metadata_fbb);
+    std::vector<flatbuffers::Offset<ouster::sdk::osf::impl::gen::MetadataEntry>> entries =
+        ouster::sdk::osf::impl::make_entries(meta_store_, metadata_fbb);
     char id[4] = {0};
-    auto metadata = ouster::sdk::osf::impl::gen::CreateMetadataDirect(
-        metadata_fbb, id, 0, 0, &chunks_, &entries);
+    auto metadata = ouster::sdk::osf::impl::gen::CreateMetadataDirect(metadata_fbb, id, 0, 0,
+                                                                      &chunks_, &entries);
 
-    metadata_fbb.FinishSizePrefixed(
-        metadata, ouster::sdk::osf::impl::gen::MetadataIdentifier());
+    metadata_fbb.FinishSizePrefixed(metadata, ouster::sdk::osf::impl::gen::MetadataIdentifier());
 
     const uint8_t* buf = metadata_fbb.GetBufferPointer();
     uint32_t metadata_size = metadata_fbb.GetSize();
 
     uint64_t metadata_offset = header_size;
-    uint64_t metadata_saved_size =
-        impl::buffer_to_file(buf, metadata_size, temp_file, true);
-    EXPECT_TRUE(metadata_saved_size &&
-                metadata_saved_size == metadata_size + CRC_BYTES_SIZE);
-    EXPECT_TRUE(ouster::sdk::osf::impl::finish_osf_file(
-                    temp_file, metadata_offset, metadata_saved_size) ==
-                header_size);
+    uint64_t metadata_saved_size = impl::buffer_to_file(buf, metadata_size, temp_file, true);
+    EXPECT_TRUE(metadata_saved_size && metadata_saved_size == metadata_size + CRC_BYTES_SIZE);
+    EXPECT_TRUE(ouster::sdk::osf::impl::finish_osf_file(temp_file, metadata_offset,
+                                                        metadata_saved_size) == header_size);
 }
 
 TEST_F(OperationsTest, MetadataRewriteTestSimple) {
@@ -347,8 +330,7 @@ TEST_F(OperationsTest, MetadataRewriteTestSimple) {
 
     jsoncons::json new_root{};
     EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
-    EXPECT_EQ(new_root,
-              output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
+    EXPECT_EQ(new_root, output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
     unlink_path(temp_file);
 }
 
@@ -381,10 +363,8 @@ TEST_F(OperationsTest, MetadataRewriteTestMulti) {
     auto temp_string = new_metadata2.to_json_string();
     EXPECT_TRUE(_parse_json(temp_string, new_root2));
 
-    EXPECT_EQ(new_root,
-              output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
-    EXPECT_EQ(new_root2,
-              output_root["metadata"]["entries"][1]["buffer"]["sensor_info"]);
+    EXPECT_EQ(new_root, output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
+    EXPECT_EQ(new_root2, output_root["metadata"]["entries"][1]["buffer"]["sensor_info"]);
     unlink_path(temp_file);
 }
 
@@ -394,7 +374,7 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
     std::string temp_file = path_concat(temp_dir, "temp.osf");
     uint64_t header_size = ouster::sdk::osf::impl::start_osf_file(temp_file);
     MetadataStore meta_store_ = {};
-    LidarScanStreamMeta pre_existing_data(12345678, {});
+    LidarFrameStreamMeta pre_existing_data(12345678, {});
     meta_store_.add(pre_existing_data);
     _write_init_metadata(temp_file, header_size, meta_store_);
 
@@ -404,10 +384,9 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
 
     _verify_empty_metadata(test_root, 1);
 
-    EXPECT_EQ(test_root["metadata"]["entries"][0]["type"],
-              "ouster/v1/os_sensor/LidarScanStream");
+    EXPECT_EQ(test_root["metadata"]["entries"][0]["type"], "ouster/v1/os_sensor/LidarScanStream");
     EXPECT_EQ(test_root["metadata"]["entries"][0]["buffer"],
-              "LidarScanStreamMeta: sensor_id = 12345678, field_types = {}");
+              "LidarFrameStreamMeta: sensor_id = 12345678, field_types = {}");
 
     ouster::sdk::core::SensorInfo new_metadata = _gen_new_metadata(100);
 
@@ -421,9 +400,8 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
     EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
 
     EXPECT_EQ(output_root["metadata"]["entries"][0]["buffer"],
-              "LidarScanStreamMeta: sensor_id = 12345678, field_types = {}");
-    EXPECT_EQ(new_root,
-              output_root["metadata"]["entries"][1]["buffer"]["sensor_info"]);
+              "LidarFrameStreamMeta: sensor_id = 12345678, field_types = {}");
+    EXPECT_EQ(new_root, output_root["metadata"]["entries"][1]["buffer"]["sensor_info"]);
     EXPECT_EQ(output_root["metadata"]["entries"].size(), 2);
     unlink_path(temp_file);
 }

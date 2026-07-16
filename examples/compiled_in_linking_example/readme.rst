@@ -1,4 +1,7 @@
-This is a simple example on how to build and link a cpp project with the ouster_pcap
+Compiled In Linking example
+---------------------------
+
+This is a simple example on how to build and link a cpp project with the ``ouster_pcap``
 library.
 
 Bash script to run the example in a container:

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "indexed.h"
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 using namespace ouster::sdk::viz;
 
@@ -13,26 +13,37 @@ struct Obj {
     int dirty_called{0};
 
     Obj() = default;
-    Obj(std::string d) { data = d; }
+    Obj(std::string d) {
+        data = d;
+    }
 
     void update_from(Obj& other) {
         *this = other;
         update_from_called++;
     }
 
-    void clear() { clear_called++; }
+    void clear() {
+        clear_called++;
+    }
 
-    void dirty() { dirty_called++; }
+    void dirty() {
+        dirty_called++;
+    }
 };
 
 struct GLObj {
+    struct GlobalState {};
+
     int draw_called{0};
     GLObj(Obj&) {}
-    void draw(const WindowCtx&, const ouster::sdk::viz::impl::CameraData&,
-              Obj& obj) {
+    void draw(const GlobalState& /*state*/, const WindowCtx&,
+              const ouster::sdk::viz::impl::CameraData&, Obj& obj) {
         draw_called++;
         obj.draw_called++;
     }
+
+    static void endDraw() {}
+    static void beginDraw(const GlobalState& /*state*/) {}
 };
 
 struct IndexedTest : public Indexed<GLObj, Obj> {

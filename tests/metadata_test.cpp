@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/types.h"
+#include "ouster/core/types.h"
 
 using namespace ouster::sdk::core;
 
@@ -83,18 +83,17 @@ TEST_P(MetaFiles, combinedTestMetadata) {
 
 class product_info_test : public ProductInfo {
    public:
-    product_info_test(std::string product_info_string, std::string form_factor,
-                      bool short_range, std::string beam_config, int beam_count)
-        : ProductInfo(product_info_string, form_factor, short_range,
-                      beam_config, beam_count){};
+    product_info_test(std::string product_info_string, std::string form_factor, bool short_range,
+                      std::string beam_config, int beam_count, bool rgb = false)
+        : ProductInfo(product_info_string, form_factor, short_range, beam_config, beam_count,
+                      rgb){};
 };
 
 TEST(Util, TestProdlineDecoder) {
     EXPECT_EQ(ProductInfo(), ProductInfo());
     EXPECT_EQ(ProductInfo::create_product_info("OS-0-128-BH02-SR"),
               ProductInfo::create_product_info("OS-0-128-BH02-SR"));
-    EXPECT_NE(ProductInfo::create_product_info("OS-0-128-BH02-SR"),
-              ProductInfo());
+    EXPECT_NE(ProductInfo::create_product_info("OS-0-128-BH02-SR"), ProductInfo());
     EXPECT_NE(ProductInfo::create_product_info("OS-0-128"),
               ProductInfo::create_product_info("OS-0-128-BH02-SR"));
     EXPECT_NE(ProductInfo::create_product_info("OS-0-128-BH02"),
@@ -110,179 +109,135 @@ TEST(Util, TestProdlineDecoder) {
     }
     EXPECT_TRUE(error_recieved);
 
-    auto bad_count =
-        ProductInfo::create_product_info("OS-0-STUFF HERE-BH02-SR");
+    auto bad_count = ProductInfo::create_product_info("OS-0-STUFF HERE-BH02-SR");
     EXPECT_EQ(bad_count.beam_count, 0);
 
-    std::vector<std::pair<std::string, std::shared_ptr<product_info_test>>>
-        test_product_infos = {
-            std::make_pair("FOOBAR-1234",
-                           std::make_shared<product_info_test>(
-                               "FOOBAR-1234", "FOOBAR1234", false, "U", 0)),
-            std::make_pair("OS-0-128", std::make_shared<product_info_test>(
-                                           "OS-0-128", "OS0", false, "U", 128)),
-            std::make_pair("OS-0-128-BH02-SR",
-                           std::make_shared<product_info_test>(
-                               "OS-0-128-BH02-SR", "OS0", true, "BH02", 128)),
-            std::make_pair("OS-0-32-AH02",
-                           std::make_shared<product_info_test>(
-                               "OS-0-32-AH02", "OS0", false, "AH02", 32)),
-            std::make_pair("OS-0-32-BH02",
-                           std::make_shared<product_info_test>(
-                               "OS-0-32-BH02", "OS0", false, "BH02", 32)),
-            std::make_pair("OS-0-32-G",
-                           std::make_shared<product_info_test>(
-                               "OS-0-32-G", "OS0", false, "G", 32)),
-            std::make_pair("OS-0-32-U0",
-                           std::make_shared<product_info_test>(
-                               "OS-0-32-U0", "OS0", false, "U0", 32)),
-            std::make_pair("OS-0-32-U1",
-                           std::make_shared<product_info_test>(
-                               "OS-0-32-U1", "OS0", false, "U1", 32)),
-            std::make_pair("OS-0-32-U2",
-                           std::make_shared<product_info_test>(
-                               "OS-0-32-U2", "OS0", false, "U2", 32)),
-            std::make_pair("OS-0-32-U3",
-                           std::make_shared<product_info_test>(
-                               "OS-0-32-U3", "OS0", false, "U3", 32)),
-            std::make_pair("OS-0-64-AH",
-                           std::make_shared<product_info_test>(
-                               "OS-0-64-AH", "OS0", false, "AH", 64)),
-            std::make_pair("OS-0-64-BH",
-                           std::make_shared<product_info_test>(
-                               "OS-0-64-BH", "OS0", false, "BH", 64)),
-            std::make_pair("OS-0-64-G",
-                           std::make_shared<product_info_test>(
-                               "OS-0-64-G", "OS0", false, "G", 64)),
-            std::make_pair("OS-0-64-U02",
-                           std::make_shared<product_info_test>(
-                               "OS-0-64-U02", "OS0", false, "U02", 64)),
-            std::make_pair("OS-0-64-U13",
-                           std::make_shared<product_info_test>(
-                               "OS-0-64-U13", "OS0", false, "U13", 64)),
-            std::make_pair("OS-1-128", std::make_shared<product_info_test>(
-                                           "OS-1-128", "OS1", false, "U", 128)),
-            std::make_pair("OS-1-128-SR",
-                           std::make_shared<product_info_test>(
-                               "OS-1-128-SR", "OS1", true, "U", 128)),
-            std::make_pair("OS-1-16-A1",
-                           std::make_shared<product_info_test>(
-                               "OS-1-16-A1", "OS1", false, "A1", 16)),
-            std::make_pair("OS-1-16-U0",
-                           std::make_shared<product_info_test>(
-                               "OS-1-16-U0", "OS1", false, "U0", 16)),
-            std::make_pair("OS-1-32-A02",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-A02", "OS1", false, "A02", 32)),
-            std::make_pair("OS-1-32-BH02",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-BH02", "OS1", false, "BH02", 32)),
-            std::make_pair("OS-1-32-BH13",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-BH13", "OS1", false, "BH13", 32)),
-            std::make_pair("OS-1-32-C",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-C", "OS1", false, "C", 32)),
-            std::make_pair("OS-1-32-G",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-G", "OS1", false, "G", 32)),
-            std::make_pair("OS-1-32-U0",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-U0", "OS1", false, "U0", 32)),
-            std::make_pair("OS-1-32-U1",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-U1", "OS1", false, "U1", 32)),
-            std::make_pair("OS-1-32-U2",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-U2", "OS1", false, "U2", 32)),
-            std::make_pair("OS-1-32-U3",
-                           std::make_shared<product_info_test>(
-                               "OS-1-32-U3", "OS1", false, "U3", 32)),
-            std::make_pair("OS-1-64", std::make_shared<product_info_test>(
-                                          "OS-1-64", "OS1", false, "U", 64)),
-            std::make_pair("OS-1-64-AH",
-                           std::make_shared<product_info_test>(
-                               "OS-1-64-AH", "OS1", false, "AH", 64)),
-            std::make_pair("OS-1-64-BH",
-                           std::make_shared<product_info_test>(
-                               "OS-1-64-BH", "OS1", false, "BH", 64)),
-            std::make_pair("OS-1-64-G",
-                           std::make_shared<product_info_test>(
-                               "OS-1-64-G", "OS1", false, "G", 64)),
-            std::make_pair("OS-1-64-U02",
-                           std::make_shared<product_info_test>(
-                               "OS-1-64-U02", "OS1", false, "U02", 64)),
-            std::make_pair("OS-1-64-U13",
-                           std::make_shared<product_info_test>(
-                               "OS-1-64-U13", "OS1", false, "U13", 64)),
-            std::make_pair("OS-2-128", std::make_shared<product_info_test>(
-                                           "OS-2-128", "OS2", false, "U", 128)),
-            std::make_pair("OS-2-32-BH02",
-                           std::make_shared<product_info_test>(
-                               "OS-2-32-BH02", "OS2", false, "BH02", 32)),
-            std::make_pair("OS-2-32-G",
-                           std::make_shared<product_info_test>(
-                               "OS-2-32-G", "OS2", false, "G", 32)),
-            std::make_pair("OS-2-32-U0",
-                           std::make_shared<product_info_test>(
-                               "OS-2-32-U0", "OS2", false, "U0", 32)),
-            std::make_pair("OS-2-32-U2",
-                           std::make_shared<product_info_test>(
-                               "OS-2-32-U2", "OS2", false, "U2", 32)),
-            std::make_pair("OS-2-64-BH",
-                           std::make_shared<product_info_test>(
-                               "OS-2-64-BH", "OS2", false, "BH", 64)),
-            std::make_pair("OS-2-64-G",
-                           std::make_shared<product_info_test>(
-                               "OS-2-64-G", "OS2", false, "G", 64)),
-            std::make_pair("OS-2-64-U02",
-                           std::make_shared<product_info_test>(
-                               "OS-2-64-U02", "OS2", false, "U02", 64)),
-            std::make_pair("OS-DOME-128",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-128", "OSDOME", false, "U", 128)),
-            std::make_pair("OS-DOME-32-AH02",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-AH02", "OSDOME", false, "AH02", 32)),
-            std::make_pair("OS-DOME-32-AH13",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-AH13", "OSDOME", false, "AH13", 32)),
-            std::make_pair("OS-DOME-32-BH02",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-BH02", "OSDOME", false, "BH02", 32)),
-            std::make_pair("OS-DOME-32-BH13",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-BH13", "OSDOME", false, "BH13", 32)),
-            std::make_pair("OS-DOME-32-G",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-G", "OSDOME", false, "G", 32)),
-            std::make_pair("OS-DOME-32-U0",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-U0", "OSDOME", false, "U0", 32)),
-            std::make_pair("OS-DOME-32-U1",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-U1", "OSDOME", false, "U1", 32)),
-            std::make_pair("OS-DOME-32-U2",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-U2", "OSDOME", false, "U2", 32)),
-            std::make_pair("OS-DOME-32-U3",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-32-U3", "OSDOME", false, "U3", 32)),
-            std::make_pair("OS-DOME-64-AH",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-64-AH", "OSDOME", false, "AH", 64)),
-            std::make_pair("OS-DOME-64-BH",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-64-BH", "OSDOME", false, "BH", 64)),
-            std::make_pair("OS-DOME-64-G",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-64-G", "OSDOME", false, "G", 64)),
-            std::make_pair("OS-DOME-64-U02",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-64-U02", "OSDOME", false, "U02", 64)),
-            std::make_pair("OS-DOME-64-U13",
-                           std::make_shared<product_info_test>(
-                               "OS-DOME-64-U13", "OSDOME", false, "U13", 64))};
+    std::vector<std::pair<std::string, std::shared_ptr<product_info_test>>> test_product_infos = {
+        std::make_pair("FOOBAR-1234", std::make_shared<product_info_test>(
+                                          "FOOBAR-1234", "FOOBAR1234", false, "U", 0)),
+        std::make_pair("OS-0-128",
+                       std::make_shared<product_info_test>("OS-0-128", "OS0", false, "U", 128)),
+        std::make_pair("OS-0-128-BH02-SR", std::make_shared<product_info_test>(
+                                               "OS-0-128-BH02-SR", "OS0", true, "BH02", 128)),
+        std::make_pair("OS-0-32-AH02", std::make_shared<product_info_test>("OS-0-32-AH02", "OS0",
+                                                                           false, "AH02", 32)),
+        std::make_pair("OS-0-32-BH02", std::make_shared<product_info_test>("OS-0-32-BH02", "OS0",
+                                                                           false, "BH02", 32)),
+        std::make_pair("OS-0-32-G",
+                       std::make_shared<product_info_test>("OS-0-32-G", "OS0", false, "G", 32)),
+        std::make_pair("OS-0-32-U0",
+                       std::make_shared<product_info_test>("OS-0-32-U0", "OS0", false, "U0", 32)),
+        std::make_pair("OS-0-32-U1",
+                       std::make_shared<product_info_test>("OS-0-32-U1", "OS0", false, "U1", 32)),
+        std::make_pair("OS-0-32-U2",
+                       std::make_shared<product_info_test>("OS-0-32-U2", "OS0", false, "U2", 32)),
+        std::make_pair("OS-0-32-U3",
+                       std::make_shared<product_info_test>("OS-0-32-U3", "OS0", false, "U3", 32)),
+        std::make_pair("OS-0-64-AH",
+                       std::make_shared<product_info_test>("OS-0-64-AH", "OS0", false, "AH", 64)),
+        std::make_pair("OS-0-64-BH",
+                       std::make_shared<product_info_test>("OS-0-64-BH", "OS0", false, "BH", 64)),
+        std::make_pair("OS-0-64-G",
+                       std::make_shared<product_info_test>("OS-0-64-G", "OS0", false, "G", 64)),
+        std::make_pair("OS-0-64-U02",
+                       std::make_shared<product_info_test>("OS-0-64-U02", "OS0", false, "U02", 64)),
+        std::make_pair("OS-0-64-U13",
+                       std::make_shared<product_info_test>("OS-0-64-U13", "OS0", false, "U13", 64)),
+        std::make_pair("OS-1-128",
+                       std::make_shared<product_info_test>("OS-1-128", "OS1", false, "U", 128)),
+        std::make_pair("OS-1-128-SR",
+                       std::make_shared<product_info_test>("OS-1-128-SR", "OS1", true, "U", 128)),
+        std::make_pair("OS-1-16-A1",
+                       std::make_shared<product_info_test>("OS-1-16-A1", "OS1", false, "A1", 16)),
+        std::make_pair("OS-1-16-U0",
+                       std::make_shared<product_info_test>("OS-1-16-U0", "OS1", false, "U0", 16)),
+        std::make_pair("OS-1-32-A02",
+                       std::make_shared<product_info_test>("OS-1-32-A02", "OS1", false, "A02", 32)),
+        std::make_pair("OS-1-32-BH02", std::make_shared<product_info_test>("OS-1-32-BH02", "OS1",
+                                                                           false, "BH02", 32)),
+        std::make_pair("OS-1-32-BH13", std::make_shared<product_info_test>("OS-1-32-BH13", "OS1",
+                                                                           false, "BH13", 32)),
+        std::make_pair("OS-1-32-C",
+                       std::make_shared<product_info_test>("OS-1-32-C", "OS1", false, "C", 32)),
+        std::make_pair("OS-1-32-G",
+                       std::make_shared<product_info_test>("OS-1-32-G", "OS1", false, "G", 32)),
+        std::make_pair("OS-1-32-U0",
+                       std::make_shared<product_info_test>("OS-1-32-U0", "OS1", false, "U0", 32)),
+        std::make_pair("OS-1-32-U1",
+                       std::make_shared<product_info_test>("OS-1-32-U1", "OS1", false, "U1", 32)),
+        std::make_pair("OS-1-32-U2",
+                       std::make_shared<product_info_test>("OS-1-32-U2", "OS1", false, "U2", 32)),
+        std::make_pair("OS-1-32-U3",
+                       std::make_shared<product_info_test>("OS-1-32-U3", "OS1", false, "U3", 32)),
+        std::make_pair("OS-1-64",
+                       std::make_shared<product_info_test>("OS-1-64", "OS1", false, "U", 64)),
+        std::make_pair("OS-1-64-AH",
+                       std::make_shared<product_info_test>("OS-1-64-AH", "OS1", false, "AH", 64)),
+        std::make_pair("OS-1-64-BH",
+                       std::make_shared<product_info_test>("OS-1-64-BH", "OS1", false, "BH", 64)),
+        std::make_pair("OS-1-64-G",
+                       std::make_shared<product_info_test>("OS-1-64-G", "OS1", false, "G", 64)),
+        std::make_pair("OS-1-64-U02",
+                       std::make_shared<product_info_test>("OS-1-64-U02", "OS1", false, "U02", 64)),
+        std::make_pair("OS-1-64-U13",
+                       std::make_shared<product_info_test>("OS-1-64-U13", "OS1", false, "U13", 64)),
+        std::make_pair("OS-2-128",
+                       std::make_shared<product_info_test>("OS-2-128", "OS2", false, "U", 128)),
+        std::make_pair("OS-2-32-BH02", std::make_shared<product_info_test>("OS-2-32-BH02", "OS2",
+                                                                           false, "BH02", 32)),
+        std::make_pair("OS-2-32-G",
+                       std::make_shared<product_info_test>("OS-2-32-G", "OS2", false, "G", 32)),
+        std::make_pair("OS-2-32-U0",
+                       std::make_shared<product_info_test>("OS-2-32-U0", "OS2", false, "U0", 32)),
+        std::make_pair("OS-2-32-U2",
+                       std::make_shared<product_info_test>("OS-2-32-U2", "OS2", false, "U2", 32)),
+        std::make_pair("OS-2-64-BH",
+                       std::make_shared<product_info_test>("OS-2-64-BH", "OS2", false, "BH", 64)),
+        std::make_pair("OS-2-64-G",
+                       std::make_shared<product_info_test>("OS-2-64-G", "OS2", false, "G", 64)),
+        std::make_pair("OS-2-64-U02",
+                       std::make_shared<product_info_test>("OS-2-64-U02", "OS2", false, "U02", 64)),
+        std::make_pair("OS-DOME-128", std::make_shared<product_info_test>("OS-DOME-128", "OSDOME",
+                                                                          false, "U", 128)),
+        std::make_pair("OS-DOME-32-AH02", std::make_shared<product_info_test>(
+                                              "OS-DOME-32-AH02", "OSDOME", false, "AH02", 32)),
+        std::make_pair("OS-DOME-32-AH13", std::make_shared<product_info_test>(
+                                              "OS-DOME-32-AH13", "OSDOME", false, "AH13", 32)),
+        std::make_pair("OS-DOME-32-BH02", std::make_shared<product_info_test>(
+                                              "OS-DOME-32-BH02", "OSDOME", false, "BH02", 32)),
+        std::make_pair("OS-DOME-32-BH13", std::make_shared<product_info_test>(
+                                              "OS-DOME-32-BH13", "OSDOME", false, "BH13", 32)),
+        std::make_pair("OS-DOME-32-G", std::make_shared<product_info_test>("OS-DOME-32-G", "OSDOME",
+                                                                           false, "G", 32)),
+        std::make_pair("OS-DOME-32-U0", std::make_shared<product_info_test>(
+                                            "OS-DOME-32-U0", "OSDOME", false, "U0", 32)),
+        std::make_pair("OS-DOME-32-U1", std::make_shared<product_info_test>(
+                                            "OS-DOME-32-U1", "OSDOME", false, "U1", 32)),
+        std::make_pair("OS-DOME-32-U2", std::make_shared<product_info_test>(
+                                            "OS-DOME-32-U2", "OSDOME", false, "U2", 32)),
+        std::make_pair("OS-DOME-32-U3", std::make_shared<product_info_test>(
+                                            "OS-DOME-32-U3", "OSDOME", false, "U3", 32)),
+        std::make_pair("OS-DOME-64-AH", std::make_shared<product_info_test>(
+                                            "OS-DOME-64-AH", "OSDOME", false, "AH", 64)),
+        std::make_pair("OS-DOME-64-BH", std::make_shared<product_info_test>(
+                                            "OS-DOME-64-BH", "OSDOME", false, "BH", 64)),
+        std::make_pair("OS-DOME-64-G", std::make_shared<product_info_test>("OS-DOME-64-G", "OSDOME",
+                                                                           false, "G", 64)),
+        std::make_pair("OS-DOME-64-U02", std::make_shared<product_info_test>(
+                                             "OS-DOME-64-U02", "OSDOME", false, "U02", 64)),
+        std::make_pair("OS-DOME-64-U13", std::make_shared<product_info_test>(
+                                             "OS-DOME-64-U13", "OSDOME", false, "U13", 64)),
+        std::make_pair("OS-0-MAX-64", std::make_shared<product_info_test>("OS-0-MAX-64", "OS0MAX",
+                                                                          false, "U", 64)),
+        std::make_pair("OS-1-MAX-256-U02", std::make_shared<product_info_test>(
+                                               "OS-1-MAX-256-U02", "OS1MAX", false, "U02", 256)),
+        std::make_pair("OS-2-MAX-64-U02", std::make_shared<product_info_test>(
+                                              "OS-2-MAX-64-U02", "OS2MAX", false, "U02", 64)),
+        std::make_pair("OS-2-MAX-64-RGB-U02",
+                       std::make_shared<product_info_test>("OS-2-MAX-64-RGB-U02", "OS2MAX", false,
+                                                           "U02", 64, true)),
+        std::make_pair("OS-2-64-RGB-U02", std::make_shared<product_info_test>(
+                                              "OS-2-64-RGB-U02", "OS2", false, "U02", 64, true))};
 
     for (auto it : test_product_infos) {
         auto actual = ProductInfo::create_product_info(it.first);

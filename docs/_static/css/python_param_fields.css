@@ -1,0 +1,107 @@
+/* Improve formatting of Python API parameter lists */
+.content dl.field-list.simple > dd > ul.simple,
+.content dl.field-list > dd > ul.simple {
+    list-style: disc outside;
+    margin: 0 0 1.25rem 1.6rem;
+    padding-left: 1.0rem;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li,
+.content dl.field-list > dd > ul.simple > li {
+    margin: 0.35rem 0;
+    padding: 0;
+    display: list-item;
+}
+
+.content dl.field-list.simple > dd > p,
+.content dl.field-list > dd > p {
+    margin: 0 0 1.25rem 1.6rem;
+    padding-left: 1.0rem;
+    display: list-item;
+    list-style: disc outside;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li > p,
+.content dl.field-list > dd > ul.simple > li > p {
+    margin: 0;
+    display: inline;
+}
+
+/* Render parameter names like inline code badges */
+.content dl.field-list.simple > dd > ul.simple > li > p > strong,
+.content dl.field-list > dd > ul.simple > li > p > strong,
+.content dl.field-list.simple > dd > p > strong,
+.content dl.field-list > dd > p > strong {
+    font-family: var(--font-monospace, Menlo, Consolas, "Liberation Mono", monospace);
+    background-color: #f8f9fa;
+    border: 1px solid #e3e6eb;
+    border-radius: 4px;
+    padding: 0.12rem 0.35rem;
+    font-weight: 600;
+    color: #1f2933;
+    display: inline-block;
+    margin-right: 0.4rem;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li > p > strong::after,
+.content dl.field-list > dd > ul.simple > li > p > strong::after,
+.content dl.field-list.simple > dd > p > strong::after,
+.content dl.field-list > dd > p > strong::after {
+    content: "";
+}
+
+/* Tone down rendered type hints */
+.content dl.field-list.simple > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type,
+.content dl.field-list > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type,
+.content dl.field-list.simple > dd > p > .sphinx_autodoc_typehints-type,
+.content dl.field-list > dd > p > .sphinx_autodoc_typehints-type {
+    font-size: 0.92em;
+    color: #5f6368;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type code,
+.content dl.field-list > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type code,
+.content dl.field-list.simple > dd > p > .sphinx_autodoc_typehints-type code,
+.content dl.field-list > dd > p > .sphinx_autodoc_typehints-type code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type .pre,
+.content dl.field-list > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type .pre,
+.content dl.field-list.simple > dd > p > .sphinx_autodoc_typehints-type .pre,
+.content dl.field-list > dd > p > .sphinx_autodoc_typehints-type .pre {
+    color: inherit;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type a,
+.content dl.field-list > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type a,
+.content dl.field-list.simple > dd > p > .sphinx_autodoc_typehints-type a,
+.content dl.field-list > dd > p > .sphinx_autodoc_typehints-type a {
+    color: #2c5282;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type a:hover,
+.content dl.field-list > dd > ul.simple > li > p > .sphinx_autodoc_typehints-type a:hover,
+.content dl.field-list.simple > dd > p > .sphinx_autodoc_typehints-type a:hover,
+.content dl.field-list > dd > p > .sphinx_autodoc_typehints-type a:hover {
+    text-decoration: underline;
+}
+
+dl.field-list>dt {
+    font-size: 1em;
+}
+
+.content dl.field-list.simple > dd > ul.simple > li > p > strong,
+.content dl.field-list > dd > ul.simple > li > p > strong,
+.content dl.field-list.simple > dd > p > strong,
+.content dl.field-list > dd > p > strong {
+    font-size: 0.85em;
+    color: #476582;
+    background-color: #1b1f230d;
+    border-radius: 3px;
+    padding-top: 0em;
+    padding-bottom: 0em;
+}

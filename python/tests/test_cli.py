@@ -14,7 +14,8 @@ from click.testing import CliRunner
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins import source, source_osf  # noqa: F401
-from ouster.sdk.core import io_type_from_extension, OusterIoType
+from ouster.sdk.core import io_type_from_extension, OusterIoType, FrameSet, Object
+from ouster.sdk import open_source
 
 from tests.conftest import PCAPS_DATA_DIR, OSFS_DATA_DIR
 import ouster.sdk._bindings.osf as osf
@@ -40,7 +41,7 @@ class set_directory(object):
 
 @pytest.fixture
 def test_osf_file() -> str:
-    return str(Path(OSFS_DATA_DIR) / 'OS-1-128_v2.3.0_1024x10_lb_n3.osf')
+    return str(Path(OSFS_DATA_DIR) / 'OS-0-128_v3.0.1_1024x10_20241017_141645.osf')
 
 
 @pytest.fixture
@@ -89,9 +90,9 @@ def test_16x1_extrinsics(test_osf_file, tmp_path):
         0.000000, 0.000000, 0.000000, 1.000000
     ])
 
-    tmp_osf = osf.OsfScanSource(tmp_osf_file)
+    tmp_osf = osf.OsfFrameSetSource(tmp_osf_file)
 
-    extrinsic_from_osf = np.array(tmp_osf.sensor_info[0].extrinsic).flatten()
+    extrinsic_from_osf = np.array(tmp_osf.sensor_info[0].sensor_to_body).flatten()
 
     assert np.allclose(extrinsic_from_osf, expected_extrinsics, atol=0.0001)
     assert result.exit_code == 0
@@ -180,8 +181,9 @@ def test_source_help(runner) -> None:
     result = runner.invoke(core.cli, CliArgs(['source', '--help']).args)
 
     # check that a variety of SOURCE commands are in the output
-    assert "PCAP|OSF|BAG|MCAP info" in result.output
-    assert "SENSOR config" in result.output
+    assert "SENSOR|PCAP|OSF|URL|BAG|MCAP" in result.output
+    assert "config" in result.output
+    assert "live_zones" in result.output
 
     # check that general message is there
     assert "Run a command with the specified source" in result.output
@@ -537,15 +539,18 @@ def get_stats(monkeypatch, runner, filename, args = []):
 def test_source_split_save(test_pcap_file2, runner, tmp_path, args, monkeypatch):
     """Make sure we save the expected number of files with the expected number of frames."""
     with set_directory(tmp_path):
-        ext, split_size, num_files, num_files_windows = args
+        ext, split_size, num_files, num_files_weird = args
         assert not os.listdir(tmp_path)  # no files in output dir
         result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file2, 'save', '--split',
                                                   str(split_size), 'test' + ext]).args)
         assert result.exit_code == 0
         # test we got the expected number of files
         files = os.listdir(tmp_path)
-        if sys.platform.startswith("win"):
-            assert len(files) == num_files_windows
+
+        file_number_split = sys.platform.startswith("win")
+        file_number_split |= (sys.version_info[0] == 3 and sys.version_info[1] == 14)
+        if file_number_split:
+            assert len(files) == num_files_weird
         else:
             assert len(files) == num_files
         assert ('test' + ext) in files
@@ -558,7 +563,7 @@ def test_source_split_save(test_pcap_file2, runner, tmp_path, args, monkeypatch)
 def test_source_split_save_raw(test_pcap_file2, runner, tmp_path, args, monkeypatch):
     """Make sure we save the expected number of files with the expected number of frames."""
     with set_directory(tmp_path):
-        ext, split_size, num_files, num_files_windows = args
+        ext, split_size, num_files, num_files_weird = args
         assert not os.listdir(tmp_path)  # no files in output dir
         result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file2, 'save_raw', '--split',
                                                   str(split_size), 'test' + ext]).args)
@@ -566,8 +571,10 @@ def test_source_split_save_raw(test_pcap_file2, runner, tmp_path, args, monkeypa
         assert result.exit_code == 0
         # test we got the expected number of files
         files = os.listdir(tmp_path)
-        if sys.platform.startswith("win"):
-            assert len(files) == num_files_windows
+        file_number_split = sys.platform.startswith("win")
+        file_number_split |= (sys.version_info[0] == 3 and sys.version_info[1] == 14)
+        if file_number_split:
+            assert len(files) == num_files_weird
         else:
             assert len(files) == num_files
         assert ('test' + ext) in files
@@ -589,11 +596,44 @@ def test_source_stats(test_pcap_file, runner, monkeypatch):
     assert "Count: 1" in result
     assert "First Receive Time: 1650408693" in result
     assert "Sizes: 1024x128" in result
-    assert "Incomplete Scans" in result
+    assert "Incomplete Frames" in result
+
+
+def test_source_stats_with_objects(tmp_path, test_osf_file, runner, monkeypatch):
+    """ouster-cli source ... stats should display correct stats."""
+    test_source = open_source(test_osf_file)
+    tmp_osf_file = str(Path(tmp_path) / "tmp_file.osf")
+    with osf.Writer(tmp_osf_file, test_source.sensor_info) as writer:
+        frame_set = next(iter(test_source))
+        frame_set.objects['frame_set_objects'] = [Object()]
+        frame_set.objects['frame_set_objects_2'] = [Object(), Object()]
+        assert type(frame_set) is FrameSet
+        assert len(frame_set) == 1
+        assert sum([len(v) for v in frame_set.objects.values()]) == 3
+        for frame in frame_set:
+            frame.status[:] = 1
+            frame.timestamp[:] = 1
+            frame.packet_timestamp[:] = 1
+            frame.objects['frame_objects'] = [Object(), Object(), Object()]
+            frame.objects['frame_objects_2'] = [Object(), Object()]
+        writer.save(frame_set)
+        writer.close()
+        try:
+            written = open_source(tmp_osf_file)
+            frame_set = next(iter(written))  # make sure we can read the file we just wrote
+            assert sum([len(v) for v in frame_set.objects.values()]) == 3
+            result = get_stats(monkeypatch, runner, tmp_osf_file)
+            assert "Objects in Frame Sets: 3" in result
+            assert "Objects in Frames: 5" in result
+        finally:
+            try:
+                os.unlink(tmp_osf_file)
+            except Exception:
+                pass
 
 
 def test_source_filter_no_lidar(runner, monkeypatch):
-    """ouster-cli source --filter on data with no lidar packets should pass through scans"""
+    """ouster-cli source --filter on data with no lidar packets should pass through frames"""
     test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'imu_zm_no_lidar.pcap')
     result = get_stats(monkeypatch, runner, test_pcap_file, args = [])
     assert "Count: 1" in result
@@ -602,7 +642,7 @@ def test_source_filter_no_lidar(runner, monkeypatch):
 
 
 def test_source_filter(runner, monkeypatch):
-    """ouster-cli source --filter removes incomplete scans"""
+    """ouster-cli source --filter removes incomplete frames"""
     test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'crc_test.pcap')
     result = get_stats(monkeypatch, runner, test_pcap_file, args = [])
     assert "Count: 2" in result
@@ -638,19 +678,19 @@ def test_source_filter_xyz_coord_frame_modes(
 ):
     """XYZ coord frames should map to expected LUT/dewarp behavior."""
     import ouster.sdk.core as sdk_core
-    import ouster.sdk.core.scan_ops as so
+    import ouster.sdk.core.frame_ops as so
     source_filter_fn = inspect.unwrap(source.source_filter.callback)
 
     xyzlut_use_extrinsics = []
     dewarp_points_args = []
-    scan_tokens = []
+    frame_tokens = []
 
-    class FakeScanSource:
+    class FakeFrameSetSource:
         sensor_info = [object()]
 
     ctx = source.SourceCommandContext()
-    ctx.scan_source = FakeScanSource()
-    ctx.scan_iter = lambda: iter([[{"scan": 1}]])  # type: ignore
+    ctx.frame_set_source = FakeFrameSetSource()
+    ctx.frame_set_iter = lambda: iter([[{"frame": 1}]])  # type: ignore
 
     def fake_xyzlut(sensor_info, use_extrinsics=True):
         xyzlut_use_extrinsics.append(use_extrinsics)
@@ -661,9 +701,9 @@ def test_source_filter_xyz_coord_frame_modes(
 
         return fake_xyz
 
-    def fake_filter_xyz(scan, xyzlut, axis_idx, lower, upper, invalid,
+    def fake_filter_xyz(frame, xyzlut, axis_idx, lower, upper, invalid,
                         filtered_fields=None, dewarp_points=False):
-        scan_tokens.append(scan)
+        frame_tokens.append(frame)
         dewarp_points_args.append(dewarp_points)
         return None
 
@@ -678,9 +718,9 @@ def test_source_filter_xyz_coord_frame_modes(
         invalid_value=0,
         coord_frame=coord_frame,
     )
-    list(ctx.scan_iter())  # type: ignore[operator]
+    list(ctx.frame_set_iter())  # type: ignore[operator]
 
-    assert scan_tokens
+    assert frame_tokens
     assert xyzlut_use_extrinsics
     assert set(xyzlut_use_extrinsics) == {expected_use_extrinsics}
     assert dewarp_points_args
@@ -733,3 +773,73 @@ def test_source_osf_dump_short(test_osf_file, runner):
     assert 'buffer' not in meta['metadata']['entries'][0]
     assert meta['metadata']['entries'][0]['type'] == "ouster/v1/os_sensor/LidarSensor"
     assert result.exit_code == 0
+
+
+@pytest.mark.perception
+@pytest.mark.skipif(sys.platform == "win32", reason="Does not run on Windows")
+def test_source_save_collations(test_osf_file, runner, tmp_path):
+    """ Verify collations should only be saved in the OSF if they were added or in the OG source"""
+    from ouster.cli.plugins.perception import source_detect  # noqa: F401
+    OUTPUT_OSF_FILE = str(Path(tmp_path) / "output.osf")
+    result = runner.invoke(core.cli, ['source', test_osf_file, 'slice', '2:', 'save', OUTPUT_OSF_FILE])
+    print(result.output)
+    assert result.exit_code == 0
+    assert "Saving OSF file" in result.output
+
+    # validate that it has no collations
+    with open_source(OUTPUT_OSF_FILE) as src:
+        assert not src.contains_collations
+
+    result = runner.invoke(core.cli, ['source', test_osf_file, 'slice', '2:',
+                                      'detect', 'save', "--overwrite", OUTPUT_OSF_FILE])
+    print(result.output)
+    assert result.exit_code == 0
+    assert "Saving OSF file" in result.output
+
+    # validate that it has collations
+    with open_source(OUTPUT_OSF_FILE) as src:
+        assert src.contains_collations
+
+    # validate that resaving it still has collations
+    OUTPUT_OSF_FILE2 = str(Path(tmp_path) / "output2.osf")
+    result = runner.invoke(core.cli, ['source', OUTPUT_OSF_FILE,
+                                      'save', "--overwrite", OUTPUT_OSF_FILE2])
+    print(result.output)
+    assert result.exit_code == 0
+    assert "Saving OSF file" in result.output
+
+    # validate that it has collations
+    with open_source(OUTPUT_OSF_FILE2) as src:
+        assert src.contains_collations
+
+
+def test_source_save_frame_set_source_metadata(test_osf_file, tmp_path, runner):
+    """Verify that when we save an OSF, we include the frame source metadata."""
+    from ouster.sdk.core import ClassMapSet, FrameSetSourceMetadataSet
+    src = open_source(test_osf_file)
+    src_osf_name = str(Path(tmp_path) / "src.osf")
+    dst_osf_name = str(Path(tmp_path) / "dst.osf")
+    writer = osf.Writer(src_osf_name, src.sensor_info)
+    src.close()
+    class_maps = ClassMapSet({
+    })
+    metadata = FrameSetSourceMetadataSet()
+    metadata['class_maps'] = class_maps
+    metadata['additional_info'] = "Test additional info"
+    writer.save(metadata)
+    writer.close()
+
+    assert os.path.exists(src_osf_name)
+    assert os.path.getsize(src_osf_name) > 0
+    print(f"Created source OSF file at {src_osf_name} with size {os.path.getsize(src_osf_name)} bytes")
+
+    try:
+        result = runner.invoke(core.cli, ['source', src_osf_name, 'save', dst_osf_name])
+        assert result.exit_code == 0
+        dst_src = open_source(dst_osf_name)
+        dst_metadata_keys = dst_src.metadata_keys()
+        assert 'class_maps' in dst_metadata_keys
+        assert 'additional_info' in dst_metadata_keys
+    finally:
+        os.unlink(src_osf_name)
+        os.unlink(dst_osf_name)

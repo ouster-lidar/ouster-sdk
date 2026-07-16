@@ -3,7 +3,7 @@
  * All rights reserved.
  */
 
-#include "ouster/cartesian.h"
+#include "ouster/core/impl/cartesian.h"
 
 #include <gtest/gtest.h>
 
@@ -13,14 +13,14 @@
 #include <numeric>
 #include <random>
 
-#include "ouster/lidar_scan.h"
-#include "ouster/typedefs.h"
-#include "ouster/xyzlut.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/typedefs.h"
+#include "ouster/core/xyzlut.h"
 #include "util.h"
 
-using ouster::sdk::core::cartesianT;
 using ouster::sdk::core::img_t;
 using ouster::sdk::core::XYZLut;
+using ouster::sdk::core::impl::cartesianT;
 
 using ouster::sdk::core::ArrayX3dR;
 using ouster::sdk::core::ArrayX3fR;
@@ -29,25 +29,22 @@ using ouster::sdk::core::PointCloudXYZf;
 
 // Same as ouster::cartesian but uses single float precision
 PointCloudXYZf cartesian_f(const Eigen::Ref<const img_t<uint32_t>>& range,
-                           const ArrayX3fR& direction,
-                           const ArrayX3fR& offset) {
+                           const ArrayX3fR& direction, const ArrayX3fR& offset) {
     if (range.cols() * range.rows() != direction.rows())
         throw std::invalid_argument("unexpected image dimensions");
-    auto reshaped = Eigen::Map<const Eigen::ArrayX<uint32_t>>(
-        range.data(), range.cols() * range.rows());
+    auto reshaped =
+        Eigen::Map<const Eigen::ArrayX<uint32_t>>(range.data(), range.cols() * range.rows());
     auto nooffset = direction.colwise() * reshaped.cast<float>();
     return (nooffset == 0.0).select(nooffset, nooffset + offset).matrix();
 }
 
-class CartesianParameterizedTestFixture
-    : public ::testing::TestWithParam<std::pair<int, int>> {
+class CartesianParameterizedTestFixture : public ::testing::TestWithParam<std::pair<int, int>> {
    protected:
-    int scan_width;
-    int scan_height;
+    int frame_width;
+    int frame_height;
 };
 
-INSTANTIATE_TEST_CASE_P(CartesianParametrisedTests,
-                        CartesianParameterizedTestFixture,
+INSTANTIATE_TEST_CASE_P(CartesianParametrisedTests, CartesianParameterizedTestFixture,
                         ::testing::Values(std::pair<int, int>{512, 128},
                                           std::pair<int, int>{1024, 128},
                                           std::pair<int, int>{2048, 128},
@@ -59,13 +56,11 @@ TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatch) {
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 
-    ArrayX3dR direction = 0.5 * ArrayX3dR::Random(ROWS, COLS) +
-                          ArrayX3dR::Constant(ROWS, COLS, 1.0);
-    ArrayX3dR offset = 0.005 * (ArrayX3dR::Random(ROWS, COLS) +
-                                ArrayX3dR::Constant(ROWS, COLS, 1.0));
-    XYZLut lut;
-    lut.direction = direction;
-    lut.offset = offset;
+    ArrayX3dR direction =
+        0.5 * ArrayX3dR::Random(ROWS, COLS) + ArrayX3dR::Constant(ROWS, COLS, 1.0);
+    ArrayX3dR offset =
+        0.005 * (ArrayX3dR::Random(ROWS, COLS) + ArrayX3dR::Constant(ROWS, COLS, 1.0));
+    XYZLut lut(direction, offset, HEIGHT, WIDTH);
 
     img_t<uint32_t> range = img_t<uint32_t>::Random(WIDTH, HEIGHT);
 
@@ -73,7 +68,7 @@ TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatch) {
 
     PointCloudXYZd points = PointCloudXYZd::Zero(ROWS, COLS);
 
-    cartesianT(points, range, direction, offset);
+    cartesianT<double>(points, range, direction, offset);
     EXPECT_TRUE(points.isApprox(points0));
 }
 
@@ -83,13 +78,11 @@ TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatchF) {
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 
-    ArrayX3dR direction = 0.5 * ArrayX3dR::Random(ROWS, COLS) +
-                          ArrayX3dR::Constant(ROWS, COLS, 1.0);
-    ArrayX3dR offset = 0.005 * (ArrayX3dR::Random(ROWS, COLS) +
-                                ArrayX3dR::Constant(ROWS, COLS, 1.0));
-    XYZLut lut;
-    lut.direction = direction;
-    lut.offset = offset;
+    ArrayX3dR direction =
+        0.5 * ArrayX3dR::Random(ROWS, COLS) + ArrayX3dR::Constant(ROWS, COLS, 1.0);
+    ArrayX3dR offset =
+        0.005 * (ArrayX3dR::Random(ROWS, COLS) + ArrayX3dR::Constant(ROWS, COLS, 1.0));
+    XYZLut lut(direction, offset, HEIGHT, WIDTH);
 
     ArrayX3fR directionF = direction.cast<float>();
     ArrayX3fR offsetF = offset.cast<float>();
@@ -101,7 +94,7 @@ TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatchF) {
 
     PointCloudXYZf pointsF = PointCloudXYZf::Zero(ROWS, COLS);
 
-    cartesianT(pointsF, range, directionF, offsetF);
+    cartesianT<float>(pointsF, range, directionF, offsetF);
     EXPECT_TRUE(pointsF.isApprox(points0F));
 }
 
@@ -113,17 +106,14 @@ TEST_P(CartesianParameterizedTestFixture, SpeedCheck) {
     const auto HEIGHT = test_params.second;
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
-    std::cout << styles["yellow"] << styles["bold"]
-              << "CHECKING PERFORMANCE FOR LIDAR MODE: [" << WIDTH << "x"
-              << HEIGHT << "]" << styles["reset"] << std::endl;
+    std::cout << styles["yellow"] << styles["bold"] << "CHECKING PERFORMANCE FOR LIDAR MODE: ["
+              << WIDTH << "x" << HEIGHT << "]" << styles["reset"] << std::endl;
 
-    ArrayX3dR direction = 0.5 * ArrayX3dR::Random(ROWS, COLS) +
-                          ArrayX3dR::Constant(ROWS, COLS, 1.0);
-    ArrayX3dR offset = 0.005 * (ArrayX3dR::Random(ROWS, COLS) +
-                                ArrayX3dR::Constant(ROWS, COLS, 1.0));
-    XYZLut lut;
-    lut.direction = direction;
-    lut.offset = offset;
+    ArrayX3dR direction =
+        0.5 * ArrayX3dR::Random(ROWS, COLS) + ArrayX3dR::Constant(ROWS, COLS, 1.0);
+    ArrayX3dR offset =
+        0.005 * (ArrayX3dR::Random(ROWS, COLS) + ArrayX3dR::Constant(ROWS, COLS, 1.0));
+    XYZLut lut(direction, offset, HEIGHT, WIDTH);
 
     ArrayX3fR directionF = direction.cast<float>();
     ArrayX3fR offsetF = offset.cast<float>();
@@ -133,9 +123,9 @@ TEST_P(CartesianParameterizedTestFixture, SpeedCheck) {
     PointCloudXYZf pointsF = PointCloudXYZf(ROWS, COLS);
     img_t<uint32_t> range = img_t<uint32_t>(WIDTH, HEIGHT);
 
-    // By default run the shortest possible test unless OUSTER_PERFORMANCE is
-    // set
-    int N_SCANS = enable_performance_tests() ? 100 : 1;
+    // By default run the shortest possible test unless OUSTER_PERF_COMPARISON
+    // is set
+    int N_FRAMES = enable_perf_comparison_tests() ? 100 : 1;
 
     constexpr int MOVING_AVG_WINDOW = 30;
     using MovingAverage64 = MovingAverage<int64_t, int64_t, MOVING_AVG_WINDOW>;
@@ -148,20 +138,19 @@ TEST_P(CartesianParameterizedTestFixture, SpeedCheck) {
     using CartesianMethod = std::function<void(const img_t<uint32_t>& range)>;
     std::vector<std::pair<std::string, CartesianMethod>> all_cartesians;
 
-    all_cartesians.emplace_back("c0", [&](const img_t<uint32_t>& range) {
-        points = cartesian(range, lut);
-    });
+    all_cartesians.emplace_back(
+        "c0", [&](const img_t<uint32_t>& range) { points = cartesian(range, lut); });
 
     all_cartesians.emplace_back("c0f", [&](const img_t<uint32_t>& range) {
         pointsF = cartesian_f(range, directionF, offsetF);
     });
 
     all_cartesians.emplace_back("cT", [&](const img_t<uint32_t>& range) {
-        cartesianT(points, range, direction, offset);
+        cartesianT<double>(points, range, direction, offset);
     });
 
     all_cartesians.emplace_back("cfT", [&](const img_t<uint32_t>& range) {
-        cartesianT(pointsF, range, directionF, offsetF);
+        cartesianT<float>(pointsF, range, directionF, offsetF);
     });
 
     std::default_random_engine g;
@@ -169,15 +158,14 @@ TEST_P(CartesianParameterizedTestFixture, SpeedCheck) {
     std::vector<int> ids(all_cartesians.size());
     std::iota(std::begin(ids), std::end(ids), 0);
 
-    for (auto i = 0; i < N_SCANS; ++i) {
-        auto p = std::ceil(10 * float(i) / float(N_SCANS)) / 10;
+    for (auto i = 0; i < N_FRAMES; ++i) {
+        auto p = std::ceil(10 * float(i) / float(N_FRAMES)) / 10;
         auto unary_expr = [&g, &d, p](auto) {
             return d(g) >= p ? 0U : static_cast<uint32_t>(d(g) * 10000);
         };
 
         auto valid_returns = (range != 0).count();
-        auto percentage_valid =
-            int(roundf(float(valid_returns) / float(range.size()) * 100));
+        auto percentage_valid = int(roundf(float(valid_returns) / float(range.size()) * 100));
 
         std::shuffle(std::begin(ids), std::end(ids), g);
         for (auto i : ids) {
@@ -191,26 +179,22 @@ TEST_P(CartesianParameterizedTestFixture, SpeedCheck) {
 
         if (++output_ctr % MOVING_AVG_WINDOW == 0) {
             ss.str("");
-            ss << styles["bold"] << "returns: " << styles["reset"]
-               << styles["magenta"] << std::setw(3) << percentage_valid << "%, "
-               << styles["reset"];
-            ss << styles["bold"] << "c0[time]: " << styles["reset"]
-               << styles["cyan"] << std::setw(4) << mv["c0"] << "μs, "
-               << styles["reset"];
+            ss << styles["bold"] << "returns: " << styles["reset"] << styles["magenta"]
+               << std::setw(3) << percentage_valid << "%, " << styles["reset"];
+            ss << styles["bold"] << "c0[time]: " << styles["reset"] << styles["cyan"]
+               << std::setw(4) << mv["c0"] << "μs, " << styles["reset"];
 
             auto best_time = std::min_element(
-                mv.begin(), mv.end(), [](const auto& a, const auto& b) -> bool {
-                    return a.second < b.second;
-                });
+                mv.begin(), mv.end(),
+                [](const auto& a, const auto& b) -> bool { return a.second < b.second; });
 
             for (const auto& x : mv) {
                 auto speedup = lround(100.0f * mv["c0"] / x.second);
-                auto color_modifier =
-                    x.first == best_time->first
-                        ? styles["blue"]
-                        : (speedup >= 100 ? styles["green"] : styles["red"]);
-                ss << styles["bold"] << x.first << ": " << color_modifier
-                   << std::setw(4) << speedup << "%, " << styles["reset"];
+                auto color_modifier = x.first == best_time->first
+                                          ? styles["blue"]
+                                          : (speedup >= 100 ? styles["green"] : styles["red"]);
+                ss << styles["bold"] << x.first << ": " << color_modifier << std::setw(4) << speedup
+                   << "%, " << styles["reset"];
             }
             std::cout << ss.str() << std::endl;
         }

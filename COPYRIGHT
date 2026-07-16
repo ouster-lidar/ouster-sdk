@@ -19,10 +19,6 @@ Files: thirdparty/spdlog/*
 Copyright: 2016 Gabi Melman.
 License: MIT
 
-Files: thirdparty/kiss-icp/*
-Copyright: 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill Stachniss.
-License: MIT
-
 Files: thirdparty/glad/*
 Copyright: The Khronos Group, Public Domain
 License: Apache-2.0
@@ -38,6 +34,10 @@ License: MIT
 Files: thirdparty/zpng/*
 Copyright: 2018 Christopher A. Taylor
 License: BSD-3-Clause
+
+Files: thirdparty/robin-map/*
+Copyright: 2017 Thibaut Goetghebuer-Planchon
+License: MIT
 
 FILES: examples/cxxopts.hpp
 Copyright (c) 2014-2022 Jarryd Beck

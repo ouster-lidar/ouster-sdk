@@ -1,0 +1,1945 @@
+:root {
+    --ou-accent: #000000;
+    --accentColor: var(--ou-accent);
+    --link-color: #222; /* dark grey */
+    --content-width: min(900px, calc(100vw - 4rem));
+    --content-bias: 100px;
+    --footer-bias: 200px;
+    --api-class-background: #fafaf947;
+    --sidebar-width-desktop: 20rem;
+    --sidebar-width-compact: 16.4rem;
+    --subtitle-gap: 2.5rem;
+    --subtitle-offset: calc(var(--sidebar-width-desktop) + var(--subtitle-gap));
+    --right-rail-width: calc(6rem);
+    --page-nav-gap: clamp(calc((100vw - (var(--subtitle-offset) + var(--right-rail-width) + 48rem)) / 2),
+                          33rem);
+    --righttoc-top: 4.5rem;
+    --navbar-height: 3.6rem;
+    --subtitle-fixed-height: 0rem;
+    --content-scroll-offset: var(--navbar-height);
+    --color-table-row: #f7f7f7;
+    --sidebar-link-padding: 0.35rem 1rem 0.35rem 1.25rem;
+    --sidebar-link-active-left: 1.5rem;
+    --sidebar-sub-link-padding: 0.35rem 1rem 0.35rem 2rem;
+    --sidebar-sub-link-indent: 2rem;
+    --sidebar-border-width: 4px;
+    --sidebar-accent-color: var(--ou-accent);
+    --layout-gutter: 1.25rem;
+    --navbar-logo-offset: 2rem;
+    --toctree-left-padding: 1.9rem;
+    --solid-white: #ffffff;
+    --sidebar-version-switcher-margin-x: 0;
+    /* Reserve space so the last sidebar link clears the sticky version switcher. */
+    --sidebar-version-switcher-reserve: 6.5rem;
+    --scroll-snippet-max-height: 15rem;
+    --import-scroll-snippet-max-height: 4rem;
+}
+
+:root,
+html {
+    color-scheme: light;
+}
+
+@media (max-width: 615px) {
+body:has(.right-sidebar) {
+        --right-rail-width: 0rem;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    html {
+        color-scheme: light !important;
+    }
+    body,
+    .vp-sidebar,
+    .sidebar,
+    .sidebar-sticky,
+    .sidebar-links,
+    .page,
+    .content,
+    .main-content {
+        background-color: var(--solid-white) !important;
+        color: #1b1b1b !important;
+    }
+    .content table.docutils tbody tr:nth-child(odd) {
+        background-color: var(--color-table-row) !important;
+    }
+    .theme-dark tr:nth-child(2n) {
+        background-color: var(--color-table-row) !important;
+    }
+}
+
+html, body {
+    display: block;
+    font-family: Saans, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-size: 1rem;
+    line-height: 1.1;
+    letter-spacing: 0.2px;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    --content-scroll-offset: var(--navbar-height);
+}
+
+/* 1. Constrain the root app container */
+#app {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 2. Allow theme container to fill space but not overflow */
+#app > .theme-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* 3. FIX: Target .page class (not page tag) and use flex: 1 to respect navbar height */
+.page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+  
+.content-with-rail {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;             /* only this element scrolls */
+}
+
+
+/* Limit smaller monospace text to the ouster.sdk API section */
+#ouster-sdk .pre {
+    font-size: 13px;
+}
+
+/* #searchbox CSS */
+/* Add accent border to the text input inside the searchformwrapper */
+.searchformwrapper input[type="text"] {
+    border: 1px solid rgb(220 220 228) !important;
+    border-radius: 4px;
+    padding: 0.6em 0.8em;
+    font-size: 0.98rem;
+    outline: none;
+}
+
+.searchformwrapper input[type="text"]:hover,
+.searchformwrapper input[type="text"]:focus {
+    border-color: var(--ou-accent) !important;
+    box-shadow: 0 0 0 2px rgba(75,46,248,0.15);
+}
+
+.searchformwrapper input[type="submit"] {
+    border: 2px solid rgb(239 239 246 / var(--ouster-page-bg-opacity, 1)) !important;
+    border-radius: 6px;
+    padding: 0.4em 0.8em;
+    outline: none;
+    margin-left: 0.5em; /* Add space between text input and button */
+}
+
+/* Center the contents of the #searchbox */
+#searchbox {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 0.5rem;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Ensure searchbox is visible when not inside vp-sidebar (e.g., on API pages) */
+/* Target searchboxes on API pages that may not be inside vp-sidebar */
+body[data-page-name^="cpp/api_cpp/"] #searchbox,
+body[data-page-name^="python/api_python/"] #searchbox,
+body[data-page-name^="_modules/"] #searchbox {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    padding: 1.3rem 1rem 0.75rem 1rem !important;
+    background-color: var(--solid-white) !important;
+    border-bottom: 1px solid var(--solid-white) !important;
+    margin-bottom: 0.5rem;
+}
+
+/* Center the form elements horizontally */
+#searchbox .searchformwrapper form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+#searchbox .caption > .caption-text {
+    display: none !important;
+}
+
+
+.literal-block-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.literal-block-wrapper > :not(.code-block-caption) {
+    order: 1;
+}
+
+.literal-block-wrapper .code-block-caption {
+    order: 2;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.sidebar-button .icon {
+    color: var(--solid-white) !important;
+    fill: var(--solid-white);
+}
+
+/* Sidebar current item: color strip-- */
+.sidebar-links li[class*="toctree-"].current > .sidebar-link-row > a,
+.sidebar-links .sidebar-link-row > a[aria-current="page"] {
+    /* border-left: 4px solid var(--ou-accent) !important;
+    box-shadow: inset 4px 0 0 var(--ou-accent) !important; */
+    position: relative;
+}
+
+
+/* Base styling for sidebar toctree links */
+.sidebar-links li[class*="toctree-"] > .sidebar-link-row > a {
+    border-left: var(--sidebar-border-width) solid transparent;
+    position: relative;
+    /* padding-left: var(--toctree-left-padding) !important; */
+}
+
+
+/* Accent color for .toctree-l2 when hovered, focused, or current */
+.sidebar-links .toctree-l2 > a:hover,
+.sidebar-links .toctree-l2 > a:focus,
+.sidebar-links .toctree-l2.current > a,
+.sidebar-links .toctree-l2 > a[aria-current="page"] {
+    border-left: var(--sidebar-border-width) solid transparent !important;
+    box-shadow: inset var(--sidebar-border-width) 0 0 transparent !important;
+    color: var(--ou-accent) !important;
+    font-weight: bold;
+}
+
+.sidebar-links li.current > .sidebar-link-row > a::before,
+.sidebar-links .sidebar-link-row > a[aria-current="page"]::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: var(--sidebar-border-width); background: var(--sidebar-accent-color);
+}
+
+/* Non-current links keep a transparent strip */
+.sidebar-links li > .sidebar-link-row > a,
+.sidebar-links .sidebar-link-row > a {
+    border-left: var(--sidebar-border-width) solid transparent;
+}
+
+.vp-sidebar,
+.vp-sidebar .sidebar,
+.vp-sidebar .sidebar-sticky {
+    /* Use flexbox to push version switcher to bottom */
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.vp-sidebar::-webkit-scrollbar,
+.vp-sidebar .sidebar::-webkit-scrollbar,
+.vp-sidebar .sidebar-sticky::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+/* Sidebar links: flex: 0 0 auto so .vp-sidebar handles scrolling */
+.vp-sidebar .sidebar-links {
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow-y: visible;
+    overflow-x: hidden;
+}
+
+/* Version switcher: fixed to the bottom of the sidebar area so it never
+ * overlaps scrollable nav items regardless of scroll position.  The parent
+ * .vp-sidebar gets matching padding-bottom so the last items remain reachable.
+ */
+.vp-sidebar .sidebar-version-switcher {
+    position: fixed !important;
+    left: 0;
+    bottom: 0 !important;
+    margin: 0 !important;   /* neutralise base margin-bottom / margin-top: auto */
+    width: 18rem;           /* keep in sync with .vp-sidebar width override below */
+    z-index: 11;
+    background: var(--solid-white);
+    border-right: 1px solid var(--solid-white);
+    padding-top: 1.5rem;
+    overflow: visible;
+}
+
+/* Reserve space at the bottom of the sidebar scroll area equal to the
+ * fixed version switcher so the last nav item can be scrolled into view.
+ * padding-bottom lets the user manually scroll the last item above the
+ * switcher; scroll-padding-bottom makes scrollIntoView() also respect the
+ * reserved zone (the browser does not account for position:fixed overlays). */
+.vp-sidebar {
+    padding-bottom: var(--sidebar-version-switcher-reserve);
+    scroll-padding-bottom: var(--sidebar-version-switcher-reserve);
+}
+
+/* Tabbed API link badges */
+a.ouster-tabbed-api-link.reference.internal {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    color: #2980b9;
+    font-size: 15px;
+    font-weight: normal;
+    padding: 2px 4px;
+    text-decoration: underline;
+    white-space: normal;
+    word-wrap: break-word;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    position: relative;
+    z-index: 0;
+}
+
+a.ouster-tabbed-api-link.reference.internal:hover,
+a.ouster-tabbed-api-link.reference.internal:focus-visible {
+    z-index: 50;
+}
+
+a.ouster-tabbed-api-link.reference.internal::after {
+    content: "View API reference";
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 6px);
+    transform: translateX(-50%);
+    z-index: 1;
+    background-color: #1b1f23;
+    color: var(--solid-white);
+    padding: 0.2rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.75em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease-in-out;
+}
+
+a.ouster-tabbed-api-link.reference.internal:hover::after,
+a.ouster-tabbed-api-link.reference.internal:focus-visible::after {
+    opacity: 1;
+}
+
+.vp-sidebar:hover,
+.vp-sidebar:hover .sidebar,
+.vp-sidebar:hover .sidebar-sticky {
+    overflow-y: auto;
+    scrollbar-width: none; /* Hide scrollbar even on hover */
+    -ms-overflow-style: none; /* Hide scrollbar in IE and Edge */
+}
+
+/* Hide scrollbar for webkit browsers (Chrome, Safari, etc.) */
+.vp-sidebar:hover::-webkit-scrollbar,
+.vp-sidebar:hover .sidebar::-webkit-scrollbar,
+.vp-sidebar:hover .sidebar-sticky::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+.sidebar-links li.toctree-l1 {
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-links .api-section-list {
+    list-style: none;
+    margin: 0.35rem 0 0 0;
+    padding-left: 0.25rem;
+    border-left: 5px solid #000000;
+}
+
+.sidebar-links .api-section-list > li > a,
+.sidebar-links .api-section-list > li > .sidebar-link-row > a {
+    display: block;
+    padding: 0.3rem 0.5rem 0.3rem 0.8rem;
+    font-size: 0.88rem;
+    color: #1f2937;
+    border-left: none !important;
+    margin-left: -2px;
+}
+
+/* Python API + viewcode _modules sidebars only (not cpp/api_cpp). */
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > a[href="#classes"],
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#classes"],
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > a[href="#functions"],
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#functions"],
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > a[href="#submodules"],
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#submodules"],
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > a[href="#classes"],
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#classes"],
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > a[href="#functions"],
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#functions"],
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > a[href="#submodules"],
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#submodules"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > a[href="#classes"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#classes"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > a[href="#functions"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#functions"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > a[href="#namespaces"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#namespaces"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > a[href="#enums"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#enums"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > a[href="#typedefs"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#typedefs"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > a[href="#variables"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#variables"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > a[href="#defines"],
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row > a[href="#defines"] {
+    color: #111827;
+}
+
+.sidebar-links .api-section-list > li > ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 0.8rem;
+}
+
+.sidebar-links .api-section-list > li > ul > li > a {
+    display: block;
+    padding: 0.24rem 0.5rem 0.24rem 0.6rem;
+    font-size: 0.74rem;
+    line-height: 1.34;
+    color: #374151;
+    border-left: none !important;
+    margin-left: -2px;
+}
+
+.sidebar-links .api-section-list a.hash-active {
+    font-weight: 600 !important;
+    color: #111827 !important;
+    background: rgba(59, 130, 246, 0.12) !important;
+    border-radius: 4px;
+}
+
+/* Add a bit of breathing room between sibling entries in long API lists. */
+.sidebar-links .api-section-list > li > ul > li + li {
+    margin-top: 0.2rem;
+}
+
+.sidebar-links .api-section-list > li > ul > li > ul > li > a {
+    display: block;
+    padding: 0.15rem 0.5rem 0.15rem 0.5rem;
+    font-size: 0.78rem;
+    color: #4b5563;
+    border-left: none !important;
+    margin-left: -2px;
+}
+
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > ul.collapsed,
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > ul.collapsed,
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > ul.collapsed {
+    display: none;
+}
+
+.sidebar-links .api-section-list > li > ul:not(.collapsed) {
+    display: block;
+}
+
+body[data-page-name^="cpp/api_cpp/"] .sidebar-links .api-section-list > li > .sidebar-link-row,
+body[data-page-name^="python/api_python/"] .sidebar-links .api-section-list > li > .sidebar-link-row,
+body[data-page-name^="_modules/"] .sidebar-links .api-section-list > li > .sidebar-link-row {
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-links .api-section-list > li > .sidebar-link-row > .sidebar-toggle {
+    flex: 0 0 1.4rem;
+    min-width: 1.4rem;
+    flex-shrink: 0;
+}
+
+.sidebar-links .api-section-list > li > .sidebar-link-row > a {
+    flex: 1 1 auto;
+    min-width: 0;
+    /* Keep Classes/Functions/Submodules aligned with Module contents. */
+    padding: 0.3rem 0.5rem 0.3rem 2.5rem !important;
+    margin-left: -2px !important;
+    border-left: none !important;
+    box-shadow: none !important;
+}
+
+.vp-sidebar .toctree-l1.current > .sidebar-link-row > a {
+    border-left: none !important;
+    padding: var(--sidebar-link-padding);
+}
+
+.vp-sidebar .toctree-l1 > .sidebar-link-row > a.current {
+    padding: var(--sidebar-link-padding) !important;
+}
+
+/* Set border and box-shadow for current .toctree-l2 item to transparent */
+.vp-sidebar .toctree-l2.current > .sidebar-link-row > a,
+.vp-sidebar .toctree-l2 > .sidebar-link-row > a.current {
+    border-left: var(--sidebar-border-width) solid transparent !important;
+    box-shadow: inset var(--sidebar-border-width) 0 0 transparent !important;
+}
+
+.vp-sidebar .sidebar-links li.toctree-l2.current > .sidebar-link-row > a::before,
+.vp-sidebar .sidebar-links li.toctree-l2 > .sidebar-link-row > a.current::before {
+    background: transparent !important;
+}
+
+li.toctree-l2 {
+    padding-left: 0rem !important;
+}
+
+/* C++ API: hide fallback toctree-l3 links only when api-section-list exists too. */
+body[data-page-name^="cpp/api_cpp/"] li.toctree-l2:has(> ul.api-section-list) > ul:not(.api-section-list) > li.toctree-l3 {
+    display: none;
+}
+
+/* Increase font size for current API reference sidebar links */
+body[data-page-name^="python/api_python/"] .vp-sidebar .toctree-l1.current a,
+body[data-page-name^="cpp/api_cpp/"] .vp-sidebar .toctree-l1.current a,
+body[data-page-name^="_modules"] .vp-sidebar .toctree-l1.current a {
+    font-size: 1rem;
+    border-left: #a1a2a3 !important;
+    padding-left: 2.5rem;
+}
+
+body[data-page-name^="python/api_python/"] .vp-sidebar .toctree-l1 ul,
+body[data-page-name^="cpp/api_cpp/"] .vp-sidebar .toctree-l1 ul,
+body[data-page-name^="_modules"] .vp-sidebar .toctree-l1 ul {
+    font-size: 1rem;
+    border-left: #a1a2a3 !important;
+}
+
+.vp-sidebar .toctree-l1 ul {
+    border-left: 4px solid transparent !important;
+}
+
+.sidebar-links li.toctree-l1.current > .sidebar-link-row > a::before {
+    background: transparent !important;
+}
+
+.sidebar-links .sidebar-link-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-left: 4px solid transparent !important;
+}
+
+.sidebar-links .sidebar-link-row > a {
+    flex: 1;
+    padding: var(--sidebar-link-padding) !important;
+}
+
+.sidebar-links .sidebar-link-row > a.reference.internal.current,
+.sidebar-links .sidebar-link-row > a.reference.internal[aria-current="page"] {
+    padding-left: var(--sidebar-link-active-left) !important;
+    margin-left: 0 !important;
+}
+
+.sidebar-links li.toctree-l2 > .sidebar-link-row > a {
+    padding: var(--sidebar-sub-link-padding) !important;
+}
+
+.sidebar-links li.toctree-l3 > .sidebar-link-row > a {
+    padding: 0.35rem 1rem 0.35rem 2.75rem !important;
+}
+
+.sidebar-links li.toctree-l2.current > .sidebar-link-row > a,
+.sidebar-links li.toctree-l2 > .sidebar-link-row > a.reference.internal.current,
+.sidebar-links li.toctree-l2 > .sidebar-link-row > a.reference.internal[aria-current="page"] {
+    padding-left: var(--sidebar-sub-link-indent) !important;
+    margin-left: 0 !important;
+}
+
+.sidebar-links li.toctree-l3.current > .sidebar-link-row > a,
+.sidebar-links li.toctree-l3 > .sidebar-link-row > a.reference.internal.current,
+.sidebar-links li.toctree-l3 > .sidebar-link-row > a.reference.internal[aria-current="page"] {
+    padding-left: 2.75rem !important;
+    margin-left: 0 !important;
+    font-size: 0.78rem !important;
+}
+
+/* Keep nested section lists from jumping when their parent is current */
+.sidebar-links li[class*="toctree-"] > ul:not(.api-section-list),
+.sidebar-links li[class*="toctree-"].current > ul:not(.api-section-list) {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+}
+
+.sidebar-links .sidebar-toggle {
+    width: 1.4rem;
+    height: 1.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: transparent !important;
+    background: transparent !important;
+    color: inherit;
+    padding: 0;
+    cursor: pointer;
+}
+
+.sidebar-links .sidebar-toggle .sidebar-arrow {
+    width: 0.75rem;
+    height: 0.75rem;
+    transition: transform 0.2s ease;
+}
+
+.sidebar-links .sidebar-toggle.is-open .sidebar-arrow {
+    transform: rotate(90deg);
+}
+
+.sidebar-links .sidebar-toggle.no-children {
+    display: none;
+}
+
+body.sidebar-show-level2-toggles .sidebar-links .sidebar-toggle.no-children {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-links li[class*="toctree-"] > ul.collapsed {
+    display: none;
+}
+
+.sidebar-links .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Optional: hover/focus state aligns with accent color */
+.sidebar-links li > a:hover,
+.sidebar-links li > a:focus {
+    box-shadow: inset var(--sidebar-border-width) 0 0 var(--ou-accent);
+    
+}
+
+
+/* Make all links dark grey by default */
+a {
+    color: #333637 !important;
+}
+
+a:visited {
+    color: #333337 !important;
+}   
+
+/* Underline inline links within the main article content (skip header anchors/toctrees) */
+.content :is(p, li, dd, td, th, blockquote, figcaption) a:not(.headerlink):not(.toc-backref) {
+    text-decoration: underline;
+    text-decoration-color: var(--ou-accent);
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 0.75px;
+}
+
+/* Highlight api reference links from rst files */
+.content code.xref {
+    color: var(--ou-accent) !important;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+}
+
+.content code.xref:hover,
+.content code.xref:focus {
+    font-weight: 700;
+}
+
+.content h2 {
+    border-bottom: 1px solid transparent !important;
+}
+
+:where(.content) :where(h1) {
+    margin-top: 5rem;
+    margin-bottom: 0.4em;
+}
+
+:where(.content) :where(h2) {
+    margin-top: 2.6em;
+    margin-bottom: 0.4em;
+}
+
+:where(.content) :where(h3, h4, h5, h6) {
+    margin-top: 1.5em;
+    margin-bottom: 0.4em;
+}
+
+p.rubric {
+    margin-top: 1.5em !important;
+}
+
+/* GitHub button overlay for literalinclude blocks */
+.highlight {
+    position: relative;
+}
+
+.highlight .cp {
+    color: #815ba4 !important; /* Soft Purple */
+}
+
+.highlight .cpf {
+    color: #ef8556b8 !important; /* Soft Orange */
+}
+
+/* Give API signatures a subtle background panel */
+
+.sig-name.descname {
+    font-size: 1em;
+    font-weight: 700;
+}
+
+dt {
+    line-height: 21px;
+    margin-top: 1em;
+    font-weight: 700;
+    letter-spacing: .05px;
+}
+
+dt.sig {
+    background-color: #f3f4f6;
+    border-radius: 0;
+    padding: 0.6rem 0.9rem;
+    margin-top: 0.8rem;
+}
+
+dt.sig + dd {
+    margin-top: 0.5rem;
+    font-size: small;
+}
+
+.viewcode-link .pre {
+    color: var(--ou-accent) !important;
+}
+
+/* Only classes in Python API reference */
+dl.py:not(.attribute):not(.function):not(.property) > dt.sig.sig-object.py {
+    border-bottom: 2px solid var(--ou-accent);
+    padding-bottom: 0.4rem;
+}
+dl.py:not(.attribute):not(.function):not(.property) > dd {
+    background: var(--api-class-background); /*var(--api-class-background) SHOWS UP DIFFERENTLY RENDERED*/
+}
+
+/* Only py method in Python API reference */
+dl.py.class > dl.py.method {
+    background: var(--api-class-background);;
+}
+
+dl.py.method > dt.sig.sig-object.py {
+    background: var(--api-class-background) !important;  /*var(--api-class-background) SHOWS UP DIFFERENTLY RENDERED*/
+    border-bottom: 2px solid var(--ou-accent);
+    border-radius: 0;
+    padding-bottom: 0.4rem;
+}
+
+dl.py.method > dt {
+    background: var(--api-class-background) !important;
+    margin-top: 0.5rem;
+    padding: 0.1rem 0.9rem 0.6rem;
+}
+
+dl.py.property > dt.sig.sig-object.py {
+    border-bottom: 2px solid var(--ou-accent) !important;
+    border-radius: 0;
+    padding-bottom: 0.4rem;
+    background: #f3f4f6; /*var(--api-class-background) SHOWS UP DIFFERENTLY RENDERED*/
+}
+
+dl.py.attribute > dt.sig.sig-object.py {
+    background-color: #f3f4f6;  /*var(--api-class-background) SHOWS UP DIFFERENTLY RENDERED*/
+    border-radius: 0;
+}
+
+/* Only py functions in Python API reference */
+dl.py.function > dt.sig.sig-object.py {
+    border-bottom: 2px solid var(--ou-accent);
+    border-radius: 0;
+    padding-bottom: 0.4rem;
+    background: #f3f4f6;
+}
+
+dl.py.function > dd {
+    background: var(--api-class-background);
+    margin-top: 0.5rem;
+    padding: 0.1rem 0.9rem 0.6rem;
+}
+
+dl.cpp:not(.attribute):not(.function):not(.property) > dt.sig.sig-object.cpp {
+    border-bottom: 2px solid var(--ou-accent);
+    padding-bottom: 0.4rem;
+}
+
+.sig.sig-object.cpp span.w::after,
+.sig.sig-object.py span.w::after {
+    content: " ";
+}
+
+
+.highlight button.githubbtn {
+    position: absolute;
+    top: 0.3em;
+    right: 2.3em;
+    width: 1.7em;
+    height: 1.7em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.4em;
+    border: #1b1f2426 1px solid;
+    background-color: #f6f8fa;
+    color: var(--ou-accent);
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.3s, background-color 0.3s, border 0.3s;
+    cursor: pointer;
+}
+
+.highlight:hover button.githubbtn {
+    opacity: 1;
+}
+
+.highlight button.githubbtn:hover,
+.highlight button.githubbtn:focus {
+    background-color: rgb(235, 235, 235);
+    outline: none;
+}
+
+.highlight button.githubbtn:active {
+    background-color: rgb(187, 187, 187);
+}
+
+table.download-data-table {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    display: table;
+    width: auto;
+    max-width: 100%;
+}
+
+/* Ensure navbar links are white */
+header.navbar a,
+header.navbar a:visited {
+    color: var(--solid-white) !important;
+}
+
+header.navbar { 
+    height: 4rem !important;
+}
+
+/* Make all links have a shadow on hover in the content area and sidebar */
+a:hover,
+a:focus {
+    color: var(--ou-accent) !important;
+    font-weight: inherit !important;
+    text-shadow: 0.02em 0.04em 0.08em rgba(0, 0, 0, 0.25);
+}
+
+header.navbar a:focus,
+header.navbar a:hover {
+    color: var(--ou-accent) !important;
+    font-weight: inherit !important;
+    text-shadow: 0.02em 0.04em 0.08em rgba(0, 0, 0, 0.35);
+}
+
+a.headerlink::after {
+    content: none !important;
+    display: none !important;
+}
+
+.copy-link-toast {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: translate(-50%, -100%);
+    background: rgba(24, 24, 24, 0.9);
+    color: var(--solid-white);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.35rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0;
+    animation: copy-link-fade 2s ease-out forwards;
+}
+
+@keyframes copy-link-fade {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.body-header {
+    display: none !important;
+}
+
+hr {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-top: 0px solid var(--border-color);
+}
+
+.darkmode-switch {
+    display: none !important;
+}
+
+.content,
+.bd-content,
+.bd-article,
+.bd-article-container {
+    width: 100%;
+    max-width: var(--content-width) !important;
+    margin-left: var(--right-rail-width);
+    margin-right: auto;
+}
+
+header.navbar .logo img,
+header.navbar .logo {
+    height: 3rem !important;
+    max-height: 3rem !important;
+    margin-left: var(--navbar-logo-offset) !important;
+}
+
+
+.vp-sidebar {
+    font-size: 14px !important;
+    width: 18rem !important;
+    border-right: 1px solid var(--solid-white);
+    height: auto;
+}
+
+.vp-sidebar .searchbox {
+    padding: 1.3rem 1rem 0.75rem 1rem !important;
+    border-bottom: none !important;
+    /* Make searchbox sticky at top of sidebar */
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: var(--solid-white);
+    /* Add bottom border or shadow to separate from scrolling content */
+    border-bottom: 1px solid rgb(220 220 228);
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-version-switcher {
+    margin-left: var(--sidebar-version-switcher-margin-x);
+    margin-right: var(--sidebar-version-switcher-margin-x);
+    margin-bottom: 1rem;
+    padding-top: var(--layout-gutter);
+    border-top: 1px solid transparent;
+    position: sticky;
+    bottom: 0rem;
+    z-index: 10;
+    /* Allow menu to overflow upward */
+    overflow: visible;
+    margin-top: auto;
+}
+
+
+.sidebar-version-switcher .version-switcher {
+    width: 100%;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    font-size: 0.95rem;
+    padding: 0;
+    box-shadow: none;
+    position: relative;
+    overflow: visible;
+}
+
+.sidebar-version-switcher .version-switcher[open] {
+    background: var(--solid-white) !important;
+    height: auto;
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    /* Ensure solid background so text doesn't show through */
+    backdrop-filter: none;
+}
+
+.sidebar-version-switcher .version-switcher__current {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-weight: 600;
+    color: #1c2434;
+    position: relative;
+    /* Top border matching search input border color */
+    border-top: 2px solid rgb(220 220 228) !important;
+    background: var(--solid-white) !important;
+}
+
+.sidebar-version-switcher .version-switcher--label-only .version-switcher__current {
+    cursor: default;
+}
+
+.sidebar-version-switcher .version-switcher__current::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar-version-switcher .version-switcher__chevron {
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: transform 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+}
+
+.sidebar-version-switcher .version-switcher[open] .version-switcher__chevron {
+    transform: none;
+}
+
+.sidebar-version-switcher .version-switcher__chevron .sidebar-arrow {
+    width: 0.8rem;
+    height: 0.8rem;
+    transition: transform 0.15s ease;
+}
+
+.sidebar-version-switcher .version-switcher[open] .version-switcher__chevron .sidebar-arrow {
+    transform: rotate(90deg);
+}
+
+.sidebar-version-switcher .version-switcher__menu {
+    margin: 0;
+    padding: 0.6rem 0.9rem 0.9rem;
+    border: none;
+    background: var(--solid-white) !important;
+    border-radius: 0.25rem;
+    position: static;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    backdrop-filter: none;
+    opacity: 1;
+}
+
+.sidebar-version-switcher .version-switcher__menu dl {
+    margin: 0;
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+}
+
+.sidebar-version-switcher .version-switcher__menu dt {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: rgba(28, 36, 52, 0.7);
+    margin-bottom: 0.35rem;
+    width: 100%;
+    flex-basis: 100%;
+}
+
+.sidebar-version-switcher .version-switcher__menu dd {
+    margin: 0;
+    font-weight: 500;
+    display: inline-block;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.sidebar-version-switcher .version-switcher__menu dd a {
+    color: inherit;
+    text-decoration: none;
+    padding: 0.15rem 0.2rem;
+    display: inline-block;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.sidebar-version-switcher .version-switcher__menu dd.is-active a {
+    font-weight: 700;
+}
+
+.sidebar-version-switcher .version-switcher__menu dd a:hover,
+.sidebar-version-switcher .version-switcher__menu dd a:focus-visible {
+    text-decoration: underline;
+}
+
+/* Only show a divider beneath the search box on the API reference sections */
+html[data-page="cpp/api_cpp/index"] .vp-sidebar .searchbox,
+html[data-page="python/api_python/index"] .vp-sidebar .searchbox,
+html[data-page^="modules/"] .vp-sidebar .searchbox {
+    border-bottom: 1px solid #eaecef;
+}
+
+
+.vp-sidebar .toctree-l1 a.current,
+.vp-sidebar .toctree-l2 a.current {
+    border-left-color: transparent !important; 
+}
+
+.page-nav {
+    margin: 1rem 0 0rem;
+}
+
+/* Page layout for api reference html pages */
+body[data-page-name^="cpp/api_cpp/"] .page,
+body[data-page-name^="python/api_python/"] .page,
+body[data-page-name^="_modules/"] .page {
+    padding-top: 0rem !important;
+}
+
+body[data-page-name^="cpp/api_cpp/"] .sidebar-group .caption,
+body[data-page-name^="python/api_python/"] .sidebar-group .caption,
+body[data-page-name^="_modules/"] .sidebar-group .caption {
+    height: 0em !important;
+    margin-top: 0rem !important;
+    margin-bottom: 0rem !important;
+}
+
+.page-nav .inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.page-nav .inner ul.page-nav {
+    flex: 1 1 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--page-nav-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.page-nav .inner ul.page-nav li {
+    flex: 0 1 auto;
+    min-width: max-content;
+}
+
+.page-nav .inner ul.page-nav li.next {
+    margin-left: auto;
+}
+
+.page-nav .footer {
+    flex: 0 0 auto;
+    margin-left: auto;
+    text-align: right;
+}
+
+/* Mobile breakpoint: hamburger + mobile nav apply */
+@media (max-width: 1295px) {
+
+    .page-nav .inner ul.page-nav {
+        flex: 0 1 auto;
+        flex-wrap: nowrap;
+        justify-content: center;
+        gap: 1rem;
+    }
+
+    .page-nav .inner ul.page-nav a {
+        font-size: 0.88rem;
+        white-space: nowrap;
+    }
+}
+
+/* Doc tables span content width with clean separators */
+table.docutils {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.95rem;
+}
+
+tr {
+    /* border: 1px solid #b6b6b6; */
+    border-bottom: 1px solid #b6b6b6;
+    border-top: 1px solid #b6b6b6;
+}
+
+.align-center, .align-default {
+    text-align: left !important;
+}
+
+table.docutils caption {
+    caption-side: top;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    text-align: left !important;
+}
+
+table.docutils caption .caption-text {
+    display: inline-block;
+    text-align: left !important;
+}
+
+table.docutils th,
+table.docutils td {
+    padding: 0.75rem 1rem;
+    vertical-align: top;
+    border: none;
+}
+
+table.docutils thead th {
+    background-color: rgba(0, 0, 0, 0.03);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #b6b6b6;
+}
+
+table.docutils tbody tr {
+    border-bottom: 1px solid #b6b6b6 !important;
+}
+
+table.docutils tbody tr:last-child {
+    border-bottom: none;
+}
+
+table.docutils.download-data-table thead th:first-child,
+table.docutils.download-data-table tbody td:first-child {
+    width: 35%;
+}
+
+table.docutils.download-data-table thead th:nth-child(2),
+table.docutils.download-data-table tbody td:nth-child(2) {
+    width: 35%;
+}
+
+table.docutils.download-data-table thead th:nth-child(3),
+table.docutils.download-data-table tbody td:nth-child(3) {
+    width: 30%;
+}
+
+figure.align-center img, .figure.align-center img {
+    max-width: 100% !important;          /* prevent overflow */
+    width: 100% !important;              /* honor :width: 100% */
+}
+
+figure.align-center figcaption,
+.figure.align-center figcaption {
+    margin-top: 0.2rem;
+    font-size: 0.9rem;
+    line-height: 1.3;
+}
+
+figure.align-center figcaption > p,
+.figure.align-center figcaption > p {
+    margin-top: 0.2rem;
+}
+
+/* Hide the default Sphinx Press footer */
+.footer {
+    display: none !important;
+}
+
+/* Header shortcut links */
+header.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4rem !important;
+    z-index: 2000;
+    background: var(--ou-accent) !important;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+.sd-tab-set {
+    margin-top: 0rem;
+    margin-bottom: 0rem;
+}
+
+.content p {
+    line-height: 1.9rem !important;
+    margin-top: 1em;
+    margin-bottom: 0.3rem;
+}
+
+.content li {
+    line-height: 1.7rem !important;
+    margin: 0.3rem 0;
+}
+
+/* Reduce spacing between li elements in content ul.simple lists */
+.content ul.simple li:not(:last-child) {
+    margin-bottom: 0.1rem;
+}
+
+/* Keep original spacing for features index pages */
+body[data-page-name*="features/"][data-page-name*="/index"] .content ul.simple li:not(:last-child) {
+    margin-bottom: 0.3rem !important;
+}
+
+
+.content li > p {
+    line-height: 1.7rem !important;
+    margin-top: 0.3rem;
+}
+
+/* Keep original margin-top for features index pages */
+body[data-page-name*="features/"][data-page-name*="/index"] .content li > p {
+    margin-top: 1em; /* Original default margin-top */
+} 
+
+
+.sd-tab-content .highlight {
+    margin-top: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.sd-tab-content {
+    margin-top: 0.4rem;
+    margin-bottom: 0.4rem;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+}
+
+.github-link-header .github-link img {
+    height: 2.5em;
+    vertical-align: middle;
+}
+
+header.navbar .links {
+    top: 0.8rem !important
+}
+
+header.navbar .github-link-header {
+    display: flex;
+    align-items: center;
+    gap: 2.5rem;
+}
+
+header.navbar .github-link-header a {
+    display: inline-flex;
+    min-width: 9.5rem;          /* tweak to fit the longest label */
+    justify-content: center;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--solid-white) !important;
+    white-space: nowrap;
+    transition: color 0.15s ease;
+}
+
+header.navbar .github-link-header a span {
+    display: block;
+    text-align: center !important;
+    width: 100%;
+    transition: font-weight 0.15s ease;
+    font-size: 16px;
+}
+
+header.navbar .github-link-header a:hover span,
+header.navbar .github-link-header a:focus-visible span {
+    color: var(--solid-white) !important;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+header.navbar .github-link-header .nav-dropdown {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    min-width: 8.5rem;
+    align-items: center;
+    cursor: pointer;
+}
+
+header.navbar .github-link-header .nav-dropdown:focus-visible {
+    outline: 2px solid var(--solid-white);
+    outline-offset: 4px;
+}
+
+header.navbar .github-link-header .nav-dropdown-label {
+    display: inline-flex;
+    justify-content: center;
+    font-weight: 500;
+    color: var(--solid-white);
+    white-space: nowrap;
+    width: 100%;
+    font-size: 16px;
+}
+
+header.navbar .github-link-header .nav-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: column;
+    gap: 0.4rem;
+    background: var(--solid-white);
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    min-width: 18rem;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(10, 24, 51, 0.08);
+    z-index: 2100;
+}
+
+header.navbar .github-link-header .nav-dropdown:hover .nav-dropdown-menu,
+header.navbar .github-link-header .nav-dropdown:focus-within .nav-dropdown-menu {
+    display: flex;
+}
+
+header.navbar .github-link-header .nav-dropdown-menu a {
+    min-width: 100%;
+    justify-content: flex-start;
+    white-space: normal;
+    line-height: 1.4;
+    padding: 0.35rem 0;
+    color: #0b1833 !important;
+}
+
+header.navbar .github-link-header .nav-dropdown-menu a span {
+    text-align: left !important;
+    color: inherit !important;
+    font-size: 14px;
+}
+
+header.navbar .github-link-header .nav-dropdown-menu a:hover span,
+header.navbar .github-link-header .nav-dropdown-menu a:focus-visible span {
+    color: var(--ou-accent) !important;
+}
+
+header.navbar .github-link-header .nav-dropdown-menu a + a {
+    border-top: 1px solid rgba(13, 19, 60, 0.15);
+    margin-top: 0.35rem;
+    padding-top: 0.7rem;
+}
+
+
+/* Mobile: show hamburger, hide inline header links and show dropdown + GitHub icon. */
+@media (max-width: 1295px) {
+    header.navbar {
+        padding-left: 4rem !important;
+        gap: 0.75rem !important;
+    }
+
+    header.navbar .home-link .site-name {
+        max-width: calc(100vw - 9.4rem) !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    header.navbar .home-link {
+        margin-left: 0 !important;
+        min-width: 0;
+    }
+    header.navbar .links {
+        min-width: 0;
+        overflow: visible;
+    }
+    header.navbar .github-link-header a {
+        min-width: 0.5rem;
+    }
+    .github-link-header {
+        display: flex !important;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .github-link-header > a:not(.github-link),
+    .github-link-header > .nav-dropdown {
+        display: none !important;
+    }
+    .github-link-header .github-link {
+        order: 1;
+    }
+    .github-link-header .mobile-nav-dropdown {
+        order: 2;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        cursor: pointer;
+        position: relative;
+    }
+    .github-link-header .mobile-nav-dropdown:focus-visible {
+        outline: 2px solid var(--solid-white);
+        outline-offset: 4px;
+    }
+    .github-link-header .mobile-nav-dropdown-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--solid-white);
+    }
+    .github-link-header .mobile-nav-dropdown-label .icon {
+        color: inherit;
+        fill: currentColor;
+    }
+    .github-link-header .mobile-nav-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 0.6rem);
+        right: 0;
+        flex-direction: column;
+        gap: 0.4rem;
+        background: var(--ou-accent);
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        min-width: 18rem;
+        max-height: calc(100vh - 5rem);
+        overflow-y: auto;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        z-index: 2100;
+    }
+    .github-link-header .mobile-nav-dropdown:hover .mobile-nav-dropdown-menu,
+    .github-link-header .mobile-nav-dropdown:focus-within .mobile-nav-dropdown-menu {
+        display: flex;
+    }
+    .github-link-header .mobile-nav-dropdown-menu a {
+        min-width: 100%;
+        justify-content: flex-start;
+        white-space: normal;
+        line-height: 1.4;
+        padding: 0.35rem 0;
+        color: var(--solid-white) !important;
+    }
+    .github-link-header .mobile-nav-dropdown-menu a span {
+        text-align: left !important;
+        color: inherit !important;
+        font-size: 0.8rem;
+    }
+    .github-link-header .mobile-nav-dropdown-menu a:hover span,
+    .github-link-header .mobile-nav-dropdown-menu a:focus-visible span {
+        color: #c4b5fd !important;
+    }
+    .github-link-header .mobile-nav-dropdown-menu a + a {
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        margin-top: 0.35rem;
+        padding-top: 0.7rem;
+    }
+}
+
+/* Hide mobile dropdown on desktop */
+@media (min-width: 1296px) {
+    .github-link-header .mobile-nav-dropdown {
+        display: none !important;
+    }
+}
+
+.hidden-heading {
+    display: none;
+}
+
+
+.highlight pre {
+    border-radius: 0;
+}
+
+.sd-tab-set input:checked + .sd-tab-label {
+    color: var(--ou-accent);
+}
+
+.sd-tab-set>input:checked+label {
+    border-color: var(--ou-accent); 
+}
+
+.sd-tab-set label.sd-tab-label:hover,
+.sd-tab-set label.sd-tab-label:focus {
+    color: var(--ou-accent) !important;
+    font-weight: 700;
+}
+
+.content .admonition.note {
+    border-left: 4px solid #3725ce;
+}
+
+.content .admonition.note > .admonition-title {
+    color: var(--accentColor);
+}
+
+.admonition.important, .admonition.note {
+    background-color: #f4f4f4a3;
+
+}
+
+.content pre {
+    padding: .8rem .8rem;
+    font-size: .87em;
+    line-height: 21px;
+    letter-spacing: .05px;
+    background-color: #282a36 !important;
+}
+
+.doc-snippet > .highlight::before {
+    content: none;
+}
+
+.doc-snippet > .highlight {
+    position: relative;
+    padding-top: 0;
+}
+
+.scroll-snippet > .highlight {
+    max-height: none;
+    border-radius: var(--code-border-radius);
+}
+
+.content .doc-snippet.scroll-snippet > .highlight > pre {
+    display: block;
+    box-sizing: border-box;
+    max-height: var(--scroll-snippet-max-height);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.content .doc-snippet.import-scroll-snippet > .highlight > pre {
+    display: block;
+    box-sizing: border-box;
+    max-height: var(--import-scroll-snippet-max-height);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.nav-links.can-hide {
+    display: none;
+}
+
+/*** Right sidebar TOC ***/
+
+.right-sidebar {
+    width: min(320px, 24vw);
+    padding-left: var(--layout-gutter);
+    padding-right: var(--layout-gutter);
+    padding-top: 0.5rem;
+    position: sticky;
+    top: var(--righttoc-top);
+    align-self: flex-start;
+    border-left: 0px;
+}
+
+.right-toc {
+    font-size: 0.8rem !important;
+    padding-right: 0.5rem;
+    max-height: calc(100vh - var(--righttoc-top) - 6rem); /* viewport height - navbar height - extra padding to avoid jumpiness on end of page */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-top: 0.5rem;
+    scroll-padding-bottom: 0.5rem;
+}
+
+.right-toc .caption-text {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    display: block;
+    margin-bottom: 0.4rem;
+}
+
+.right-toc ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0 0 1rem 0;
+}
+
+.right-toc li {
+    margin: 0;
+    scroll-margin: 0.35rem 0;
+}
+
+.right-toc a {
+    color: #6b7280 !important;
+    text-decoration: none;
+    display: block;
+    padding: 0.3rem 0.1rem 0.3rem 0.7rem;
+    margin: auto;
+    border-left: 3px solid #d4d4d8;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    white-space: normal !important;
+    font-size: 0.8rem !important;
+}
+
+.right-toc a code,
+.right-toc a .pre {
+    white-space: normal !important;
+    word-break: break-word;
+    font-size: 0.8rem !important;
+}
+
+.right-toc a:visited {
+    color: #6b7280 !important;
+}
+
+.right-toc a:hover,
+.right-toc a:focus {
+    color: var(--ou-accent) !important;
+}
+
+.right-toc a.active {
+    color: var(--ou-accent) !important;
+    font-weight: 600;
+    background-color: var(--solid-white);
+    border-left-color: #3725ce;
+}
+
+.right-toc-subsections {
+    margin: 0.3rem 0 0.6rem 0.5rem;
+}
+
+.right-toc-subsections summary {
+    cursor: pointer;
+    font-size: 0.72rem;
+    color: #4b5563;
+    list-style: none;
+}
+
+.right-toc-subsections[open] summary {
+    color: var(--ou-accent);
+}
+
+.right-toc-subsections summary::-webkit-details-marker {
+    display: none;
+}
+
+.right-toc-subsections summary::before {
+    content: "▶";
+    display: inline-block;
+    margin-right: 0.35rem;
+    transition: transform 0.15s ease;
+}
+
+.right-toc-subsections[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.right-toc-subsections-list {
+    list-style: none;
+    padding-left: 0.4rem;
+    margin: 0.3rem 0 0 0;
+}
+
+.right-toc-subsections-list li a {
+    border-left: 2px solid #d1d5db;
+    padding-left: 0.6rem;
+    font-size: 0.72rem !important;
+    color: #6b7280 !important;
+}
+
+.headerlink--icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ou-accent);
+    width: 0.8em;
+    height: 0.8em;
+    margin-left: 0.35rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    font-size: 0;
+    visibility: hidden;
+}
+
+.headerlink--icon img,
+.headerlink--icon .copy-link-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+:where(h1, h2, h3, h4, h5, h6):hover > .headerlink--icon,
+:where(h1, h2, h3, h4, h5, h6):focus-within > .headerlink--icon,
+.headerlink--icon:hover,
+.headerlink--icon:focus {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* API language tabs */
+.subtitle-area {
+    padding-top: 4rem !important;
+    border-bottom: 1px solid rgba(240, 240, 240, .8);
+    box-shadow: 0px 3px 8px 0px rgba(60, 64, 67, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: transparent !important;
+    pointer-events: none;
+}
+
+div.parsed-literal {
+    color: var(--solid-white) !important;
+}
+
+pre.literal-block {
+    color: var(--solid-white) !important;
+}
+
+/* Keep copy button behavior consistent for parsed-literal blocks in tabs. */
+.sd-tab-content {
+    position: relative;
+}
+
+.sd-tab-content > pre.literal-block {
+    margin: 0;
+    padding-right: 2.4em;
+}
+
+.sd-tab-content > button.copybtn {
+    position: absolute;
+    top: 0.8em;
+    right: 0.3em;
+    opacity: 0;
+    z-index: 2;
+}
+
+.sd-tab-content:hover > button.copybtn,
+.sd-tab-content > button.copybtn.success,
+.sd-tab-content > button.copybtn:hover,
+.sd-tab-content > button.copybtn:focus,
+.sd-tab-content > button.copybtn:active {
+    opacity: 1;
+}
+
+.subtitle-inner {
+    max-width: var(--content-width);
+    margin-left: var(--subtitle-offset);
+    margin-right: auto;
+    padding: 0.75rem 1rem 0;
+    display: flex;
+    align-items: flex-end;
+    background: var(--solid-white) !important;
+    pointer-events: auto;
+}
+
+@media (max-width: 1400px) {
+    :root {
+        --subtitle-offset: calc(var(--sidebar-width-compact) + var(--subtitle-gap));
+    }
+}
+
+@media (max-width: 1295px) {
+    .subtitle-inner {
+        width: 100%;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0.75rem 1rem 0;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .api-language-tabs {
+        border-bottom: none;
+    }
+    /* Hide nav-links in the mobile sidebar drawer */
+    .vp-sidebar .nav-links {
+        display: none !important;
+    }
+}
+
+.api-language-tabs {
+    display: table;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: none;
+    overflow: hidden;
+    margin: 0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.api-language-tab {
+    display: table-cell;
+    padding: 0.65rem 1.75rem;
+    min-width: 9rem;
+    text-align: center;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: #475569;
+    background: #f8fafc;
+    border: none;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+div[class*=language-] {
+    border: none;
+    height: 2.75rem;
+}
+
+.api-language-tab.is-active {
+    background: var(--solid-white);
+    color: var(--ou-accent, #4b2ef8);
+    box-shadow: inset 0 -2px 0 var(--ou-accent);
+}
+
+.compat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8em;
+    height: 1.8em;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.35em;
+}
+.compat--yes {
+    color: #108f3d;
+}
+.compat--no  {
+    color: #8b2b2b;
+}
+
+/* Hide any toctree blocks in main content on the index page */
+.toctree-wrapper.is-index.compound {
+    display: none !important;
+}
+
+dl.field-list>dt:after {
+    content: "";
+}
+/* Ensure API section sidebar links never show the default highlight strip */
+.sidebar-links .api-section-list a {
+    border-left: none !important;
+    box-shadow: none !important;
+}
+
+figure.align-center figcaption, .figure.align-center figcaption {
+    font-size: 0.8rem !important;
+    text-align: center !important;
+}
+
+/* Deprecated list page: allow table to exceed the default content max-width */
+.content table.deprecated-list-table {
+    width: 100%;
+    max-width: none;
+    display: table;
+    overflow-x: auto;
+}

@@ -25,7 +25,7 @@ import shutil
               is_flag=True,
               help='Use system libraries instead of vcpkg.')
 @click.option('--threads',
-              default=os.cpu_count(),
+              default=None,
               help='Number of threads to use.')
 @click.option('--no-manifest-mode',
               default=False,
@@ -44,17 +44,16 @@ def infer_cpp_static_analysis(ctx, infer_bin, output_dir, cmake_bin,
 
     ctx.obj.build_options.run_vcpkg_initialized_check()
 
-    ctx.obj.build_libs.check_for_python_lib("pybind11")
+    ctx.obj.build_libs.check_for_python_libs(["nanobind"])
 
     ctx.obj.build_libs.check_for_tool(ctx.obj.build_options.cmake_bin)
     ctx.obj.build_libs.check_for_tool(infer_bin)
 
-    manifest_mode = False
     infer_commands_dir = os.path.join(ctx.obj.cmake_build_dir,
                                       "infer")
     compile_commands_json = os.path.join(infer_commands_dir,
                                          "compile_commands.json")
-    print(f"Manifest Mode: {manifest_mode}")
+    print(f"Manifest Mode: {ctx.obj.build_options.manifest_mode}")
     try:
         toolchain = None
         triplet = None

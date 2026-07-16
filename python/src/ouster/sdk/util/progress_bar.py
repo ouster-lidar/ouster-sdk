@@ -30,12 +30,17 @@ class ProgressBar:
         self._total = total
         self._iteration_time = 0
         self._alpha = alpha
+        self._last_progress = 0
         if len(unit):
             self._unit = f" {unit}/sec"
         else:
             self._unit = "/sec"
 
     def clear(self):
+        # only do this if we printed
+        if self._last_time is None:
+            return
+
         # \r = Go to the start of the line
         # \033[2K = Clear the entire line
         print("\r\033[2K", end="")
@@ -43,7 +48,9 @@ class ProgressBar:
     def update(self, progress, prefix="", suffix=""):
         now = time.monotonic()
         if self._last_time is not None:
-            dt = now - self._last_time
+            delta = max(1, progress - self._last_progress)
+            self._last_progress = progress
+            dt = (now - self._last_time) / delta
             if self._iteration_time == 0:
                 self._iteration_time = dt
             else:
@@ -51,13 +58,13 @@ class ProgressBar:
             # make sure we dont divide by zero or have negative
             if self._iteration_time <= 0:
                 self._iteration_time = 0.00001
-            scan_rate = 1.0 / self._iteration_time
-            rate = f"{scan_rate:>5.0f}"
+            frame_rate = 1.0 / self._iteration_time
+            rate = f"{frame_rate:>5.0f}"
             remaining = max(0, self._total - progress)
             if self._total == 0:
                 eta = ""
             else:
-                eta = f"{remaining / scan_rate:>4.0f} sec remaining"
+                eta = f"{remaining / frame_rate:>4.0f} sec remaining"
         else:
             rate = "?"
             eta = ""
@@ -85,7 +92,6 @@ class ProgressBar:
         """
         Called when exiting the 'with' block.
         """
-        # Clear the progress bar line
         self.clear()
 
         return None

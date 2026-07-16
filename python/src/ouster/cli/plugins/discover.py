@@ -314,7 +314,8 @@ def discover(ctx, output, timeout, continuous, http_timeout, interface, show_use
         click.secho("Sorry, ouster-cli cannot produce JSON output when running continuously.", fg='yellow', err=True)
         sys.exit(1)
     rethrow_exceptions = ctx.obj.get('TRACEBACK', False)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     if not interface:
         interface = zeroconf.InterfaceChoice.All
     logging.getLogger('zeroconf').propagate = False
@@ -331,4 +332,7 @@ def discover(ctx, output, timeout, continuous, http_timeout, interface, show_use
         loop.run_until_complete(runner.async_run())
     except KeyboardInterrupt:
         pass
-    loop.run_until_complete(runner.async_close())
+    finally:
+        loop.run_until_complete(runner.async_close())
+        loop.close()
+        asyncio.set_event_loop(None)

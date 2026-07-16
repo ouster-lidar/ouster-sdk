@@ -1,0 +1,8 @@
+{% if toc %}
+<div class="press-page-toc">
+  <div class="press-page-toc__title">{{ press_secondary_sidebar_title | default('On this page') }}</div>
+  <div class="press-page-toc__body">
+    {{ toc | safe }}
+  </div>
+</div>
+{% endif %}

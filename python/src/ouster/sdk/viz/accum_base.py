@@ -1,16 +1,16 @@
 from typing import List, Optional
 from ouster.sdk.viz import Cloud, PointViz
-from ouster.sdk.viz.model import LidarScanVizModel
+from ouster.sdk.viz.model import LidarFrameVizModel
 from ouster.sdk.viz.track import Track
 import ouster.sdk.core as core
-from ouster.sdk.core import ChanField, LidarScanSet
+from ouster.sdk.core import ChanField, FrameSet
 from ouster.sdk.viz.view_mode import (CloudMode, CloudPaletteItem, is_norm_reflectivity_mode)
 
 
 class AccumulatorBase:
-    """The base of any class used in LidarScanVizAccumulators that displays data accumulated from scans."""
-    def __init__(self, model: LidarScanVizModel, point_viz: PointViz, track: Track):
-        self._scan_num = 1
+    """The base of any class used in LidarFrameVizAccumulators that displays data accumulated from frames."""
+    def __init__(self, model: LidarFrameVizModel, point_viz: PointViz, track: Track):
+        self._frame_num = 1
         self._viz = point_viz
         self._model = model
         self._track = track
@@ -27,7 +27,7 @@ class AccumulatorBase:
 
         self._cloud_pt_size: float = 1.0
 
-        # scan poses track
+        # frame poses track
         self._cloud_track: Optional[Cloud] = None
 
     @property
@@ -66,12 +66,12 @@ class AccumulatorBase:
         npalettes = len(self._model._palettes._cloud_palettes)
         self._cloud_palette_ind = (self._cloud_palette_ind + direction +
                                    npalettes) % npalettes
-        # update internal states immediately so the OSD text of scans accum
-        # is switched already to a good state (needed for LidarScanViz osd
+        # update internal states immediately so the OSD text of frames accum
+        # is switched already to a good state (needed for LidarFrameViz osd
         # update)
         self._update_cloud_palette()
 
-    # TODO: likely refactor to de-duplicate logic (but not state) with LidarScanVizModel
+    # TODO: likely refactor to de-duplicate logic (but not state) with LidarFrameVizModel
     def _use_default_view_modes(self):
         """Try to set the image and cloud view modes to sensible defaults, depending on what
         fields have been discovered via _amend_view_modes_all.
@@ -84,32 +84,31 @@ class AccumulatorBase:
             return
 
         sorted_cloud_mode_names = self._model.sorted_cloud_mode_names()
-        if sorted_cloud_mode_names == ["RING"]:
+        if sorted_cloud_mode_names == ["RING", "SENSOR", "TIMESTAMP"]:
             return
 
         try:
-            preferred_fields = [ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2]
-            if ChanField.REFLECTIVITY2 not in self._model._known_fields:
-                preferred_fields[1] = ChanField.NEAR_IR
-            self._cloud_mode_ind = sorted_cloud_mode_names.index(preferred_fields[0])
+            if "RGB" in sorted_cloud_mode_names:
+                preferred_field = "RGB"
+            else:
+                preferred_field = ChanField.REFLECTIVITY
+            self._cloud_mode_ind = sorted_cloud_mode_names.index(preferred_field)
         except ValueError:
-            # handle a situation where no reflectivity or near ir channels are present
-            # which may happen with customized datasets
+            # handle a situation where no desired channels are present
             self._cloud_mode_ind = 0
 
         self._cloud_mode_name = sorted_cloud_mode_names[self._cloud_mode_ind]
         self._update_cloud_palette()
 
     def update(self,
-               scan: LidarScanSet,
-               scan_num: Optional[int] = None) -> None:
-        """Register the new scan and update the states of TRACK, ACCUM and MAP"""
-        self._scan: LidarScanSet = LidarScanSet([scan]) if isinstance(
-            scan, core.LidarScan) else scan
-        if scan_num is not None:
-            self._scan_num = scan_num
+               frame: FrameSet,
+               frame_num: Optional[int] = None) -> None:
+        """Register the new frame and update the states of TRACK, ACCUM and MAP"""
+        self._frame = frame
+        if frame_num is not None:
+            self._frame_num = frame_num
         else:
-            self._scan_num += 1
+            self._frame_num += 1
 
     def toggle_visibility(self, state: Optional[bool] = None):
         pass

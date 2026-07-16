@@ -3,7 +3,7 @@
  * All rights reserved.
  */
 
-#include "ouster/sensor_packet_source.h"
+#include "ouster/sensor/sensor_packet_source.h"
 
 #include <algorithm>
 #include <chrono>
@@ -24,22 +24,19 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/defaults.h"
-#include "ouster/impl/logging.h"
-#include "ouster/metadata.h"
-#include "ouster/sensor_scan_source.h"
+#include "ouster/core/defaults.h"
+#include "ouster/core/impl/logging.h"
+#include "ouster/core/metadata.h"
+#include "ouster/sensor/sensor_frame_set_source.h"
 
-using ouster::sdk::core::impl::Logger;
 using ouster::sdk::sensor::SensorHttp;
 using namespace ouster::sdk::core;
-
 namespace ouster {
 namespace sdk {
 namespace core {
-bool parse_and_validate_metadata(const jsoncons::json& json_data,
-                                 SensorInfo& sensor_info,
+bool parse_and_validate_metadata(const jsoncons::json& json_data, SensorInfo& sensor_info,
                                  ValidatorIssues& issues);
-}
+}  // namespace core
 namespace sensor {
 
 // External imports of internal methods
@@ -47,13 +44,12 @@ int32_t get_sock_port(SOCKET sock_fd);
 jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec);
 
 SOCKET mtp_data_socket(int port, const std::set<std::string>& udp_dest_hosts,
-                       const std::string& mtp_dest_host = "",
-                       bool reuse_ports = true);
-bool set_config(SensorHttp& sensor_http, const SensorConfig& config,
-                uint8_t config_flags, int timeout_sec);
+                       const std::string& mtp_dest_host = "", bool reuse_ports = true,
+                       uint32_t rcvbuf_size = 1024 * 1024);
+void set_config(SensorHttp& sensor_http, const SensorConfig& config, uint8_t config_flags,
+                int timeout_sec);
 
-void add_socket_to_groups(SOCKET sock_fd,
-                          const std::set<std::string>& udp_dest_hosts,
+void add_socket_to_groups(SOCKET sock_fd, const std::set<std::string>& udp_dest_hosts,
                           const std::string& mtp_dest_host = "") {
     // join to multicast groups
     for (const auto& udp_dest_host : udp_dest_hosts) {
@@ -65,15 +61,15 @@ void add_socket_to_groups(SOCKET sock_fd,
             mreq.imr_interface.s_addr = htonl(INADDR_ANY);
         }
 
-        if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-                       reinterpret_cast<char*>(&mreq), sizeof(mreq)) != 0) {
+        if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, reinterpret_cast<char*>(&mreq),
+                       sizeof(mreq)) != 0) {
             logger().warn("mtp setsockopt(): {}", impl::socket_get_error());
         }
     }
 }
 
-Sensor::Sensor(const std::string& hostname, const SensorConfig& config)
-    : hostname_(hostname), config_(config) {}
+Sensor::Sensor(std::string hostname, SensorConfig config)
+    : hostname_(std::move(hostname)), config_(std::move(config)) {}
 
 SensorInfo Sensor::fetch_metadata(int timeout) const {
     // TODO[tws] dedupe this method's logic with legacy iface
@@ -87,22 +83,18 @@ SensorInfo Sensor::fetch_metadata(int timeout) const {
         throw std::runtime_error(to_string(issues.critical));
     }
 
-    if (http_client_ptr->firmware_version() >=
-        ouster::sdk::core::Version{3, 2, 0}) {
+    if (http_client_ptr->firmware_version() >= ouster::sdk::core::Version{3, 2, 0}) {
         try {
-            auto zone_set_config_bytes =
-                http_client_ptr->get_zone_monitor_config_zip();
+            auto zone_set_config_bytes = http_client_ptr->get_zone_monitor_config_zip();
 
             // Load the zone set config from the zip bytes
-            result.zone_set =
-                std::move(ZoneSet(std::move(zone_set_config_bytes)));
+            result.zone_set = ZoneSet(zone_set_config_bytes);
         } catch (const std::runtime_error& e) {
             auto exception_msg = std::string(e.what());
             if (exception_msg.find("[404]") != std::string::npos) {
                 logger().info("No zone monitor config found.");
             } else {
-                throw std::runtime_error("Error parsing zone monitor config: " +
-                                         exception_msg);
+                throw std::runtime_error("Error parsing zone monitor config: " + exception_msg);
             }
         }
     }
@@ -113,17 +105,19 @@ SensorInfo Sensor::fetch_metadata(int timeout) const {
 std::shared_ptr<SensorHttp> Sensor::http_client() const {
     // construct the client if we haven't already
     if (!http_client_) {
-        http_client_ =
-            SensorHttp::create(hostname_, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
+        http_client_ = SensorHttp::create(hostname_, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
     }
     return http_client_;
 }
 
-SensorPacketSource::~SensorPacketSource() { close(); }
+SensorPacketSource::~SensorPacketSource() {
+    close();
+}
 
-static std::vector<Sensor> calculate_sensors(
-    const std::vector<std::string>& sources,
-    SensorPacketSourceOptions& options) {
+namespace {
+
+std::vector<Sensor> calculate_sensors(const std::vector<std::string>& sources,
+                                      SensorPacketSourceOptions& options) {
     std::vector<Sensor> sensors;
 
     // just to mark these as retrieved
@@ -142,8 +136,7 @@ static std::vector<Sensor> calculate_sensors(
         }
         // todo make it so I dont have to create this twice per sensor
         // could theoretically pass it into the Sensor constructor
-        auto http_client =
-            SensorHttp::create(hostname, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
+        auto http_client = SensorHttp::create(hostname, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
         auto orig_config = SensorConfig(http_client->get_config_params(true));
 
@@ -167,28 +160,23 @@ static std::vector<Sensor> calculate_sensors(
                 config = input_configs[i];
             }
             if (!no_auto_udp_dest) {
-                if (!orig_config.udp_dest ||
-                    !in_multicast(orig_config.udp_dest.value())) {
+                if (!orig_config.udp_dest || !in_multicast(orig_config.udp_dest.value())) {
                     try {
                         std::string dst = http_client->auto_detected_udp_dest(
-                            SHORT_HTTP_REQUEST_TIMEOUT_SECONDS,
-                            orig_config.udp_dest);
+                            SHORT_HTTP_REQUEST_TIMEOUT_SECONDS, orig_config.udp_dest);
                         if (dst != orig_config.udp_dest) {
                             printf(
                                 "Will change sensor's udp_dest from '%s' to "
                                 "automatically detected '%s'\n",
-                                orig_config.udp_dest.value_or("").c_str(),
-                                dst.c_str());
+                                orig_config.udp_dest.value_or("").c_str(), dst.c_str());
                             config.udp_dest = dst;
                         }
-                        if (!http_client->is_vlp() &&
-                            orig_config.udp_dest_zm.has_value() &&
+                        if (!http_client->is_vlp() && orig_config.udp_dest_zm.has_value() &&
                             orig_config.udp_dest_zm != dst) {
                             printf(
                                 "Will change sensor's udp_dest_zm from '%s' to "
                                 "automatically detected '%s'\n",
-                                orig_config.udp_dest_zm.value_or("").c_str(),
-                                dst.c_str());
+                                orig_config.udp_dest_zm.value_or("").c_str(), dst.c_str());
                             config.udp_dest_zm = dst;
                         }
                     } catch (std::runtime_error& ex) {
@@ -224,22 +212,18 @@ static std::vector<Sensor> calculate_sensors(
                        to_string(config.operating_mode.value()).c_str());
             }
 
-            if (config.udp_port_imu &&
-                orig_config.udp_port_imu != config.udp_port_imu) {
-                std::string port_name =
-                    config.udp_port_imu.value() == 0
-                        ? "ephemeral"
-                        : std::to_string(config.udp_port_imu.value());
+            if (config.udp_port_imu && orig_config.udp_port_imu != config.udp_port_imu) {
+                std::string port_name = config.udp_port_imu.value() == 0
+                                            ? "ephemeral"
+                                            : std::to_string(config.udp_port_imu.value());
                 printf("Will change sensor's IMU port from %i to %s\n",
                        orig_config.udp_port_imu.value(), port_name.c_str());
             }
 
-            if (config.udp_port_lidar &&
-                orig_config.udp_port_lidar != config.udp_port_lidar) {
-                std::string port_name =
-                    config.udp_port_lidar.value() == 0
-                        ? "ephemeral"
-                        : std::to_string(config.udp_port_lidar.value());
+            if (config.udp_port_lidar && orig_config.udp_port_lidar != config.udp_port_lidar) {
+                std::string port_name = config.udp_port_lidar.value() == 0
+                                            ? "ephemeral"
+                                            : std::to_string(config.udp_port_lidar.value());
                 printf("Will change sensor's lidar port from %i to %s\n",
                        orig_config.udp_port_lidar.value(), port_name.c_str());
             }
@@ -277,28 +261,24 @@ static std::vector<Sensor> calculate_sensors(
                     "reinitialization.");
             }
 
-            if (desired_lidar &&
-                orig_config.udp_port_lidar != desired_lidar.value()) {
-                throw std::runtime_error(
-                    "Sensor's lidar port " +
-                    std::to_string(orig_config.udp_port_lidar.value()) +
-                    " does "
-                    "not match provided lidar port but you have disallowed "
-                    "reinitialization. Drop -x to allow reinitialization or "
-                    "change your specified lidar_port to " +
-                    std::to_string(orig_config.udp_port_lidar.value()) + ".");
+            if (desired_lidar && orig_config.udp_port_lidar != desired_lidar.value()) {
+                throw std::runtime_error("Sensor's lidar port " +
+                                         std::to_string(orig_config.udp_port_lidar.value()) +
+                                         " does "
+                                         "not match provided lidar port but you have disallowed "
+                                         "reinitialization. Drop -x to allow reinitialization or "
+                                         "change your specified lidar_port to " +
+                                         std::to_string(orig_config.udp_port_lidar.value()) + ".");
             }
 
-            if (desired_imu &&
-                orig_config.udp_port_imu != desired_imu.value()) {
-                throw std::runtime_error(
-                    "Sensor's IMU port " +
-                    std::to_string(orig_config.udp_port_imu.value()) +
-                    " does "
-                    "not match provided IMU port but you have disallowed "
-                    "reinitialization. Drop -x to allow reinitialization or "
-                    "change your specified imu_port to " +
-                    std::to_string(orig_config.udp_port_imu.value()) + ".");
+            if (desired_imu && orig_config.udp_port_imu != desired_imu.value()) {
+                throw std::runtime_error("Sensor's IMU port " +
+                                         std::to_string(orig_config.udp_port_imu.value()) +
+                                         " does "
+                                         "not match provided IMU port but you have disallowed "
+                                         "reinitialization. Drop -x to allow reinitialization or "
+                                         "change your specified imu_port to " +
+                                         std::to_string(orig_config.udp_port_imu.value()) + ".");
             }
         }
 
@@ -306,53 +286,50 @@ static std::vector<Sensor> calculate_sensors(
     }
     return sensors;
 }
+
+}  // namespace
+
 SensorPacketSource::SensorPacketSource(
-    const std::string& source,
-    const std::function<void(SensorPacketSourceOptions&)>& options)
-    : SensorPacketSource(source,
-                         ouster::sdk::impl::get_packet_options(options)) {}
+    const std::string& source, const std::function<void(SensorPacketSourceOptions&)>& options)
+    : SensorPacketSource(source, ouster::sdk::impl::get_packet_options(options)) {}
 
 SensorPacketSource::SensorPacketSource(
     const std::vector<std::string>& source,
     const std::function<void(SensorPacketSourceOptions&)>& options)
-    : SensorPacketSource(source,
-                         ouster::sdk::impl::get_packet_options(options)) {}
+    : SensorPacketSource(source, ouster::sdk::impl::get_packet_options(options)) {}
 
-SensorPacketSource::SensorPacketSource(const std::string& source,
-                                       SensorPacketSourceOptions options)
-    : SensorPacketSource(std::vector<std::string>({source}), options) {}
+SensorPacketSource::SensorPacketSource(const std::string& sensor, SensorPacketSourceOptions options)
+    : SensorPacketSource(std::vector<std::string>({sensor}), std::move(options)) {}
 
 SensorPacketSource::SensorPacketSource(const std::vector<std::string>& sources,
                                        SensorPacketSourceOptions options)
-    : SensorPacketSource(
-          calculate_sensors(sources, options), options.sensor_info.retrieve(),
-          options.config_timeout.retrieve(), options.buffer_time_sec.retrieve(),
-          options.reuse_ports.retrieve()) {
-    iterator_timeout_ = options.timeout.retrieve();
-    populate_extrinsics(options.extrinsics_file.retrieve(),
-                        options.extrinsics.retrieve(), sensor_info_);
+    : SensorPacketSource(calculate_sensors(sources, options), options.sensor_info.retrieve(),
+                         options.config_timeout.retrieve(), options.buffer_time_sec.retrieve(),
+                         options.reuse_ports.retrieve(), options.rcvbuf_size.retrieve()) {
+    iterator_timeout_ =
+        options.timeout.retrieve();  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+    populate_extrinsics(options.extrinsics_file.retrieve(), options.extrinsics.retrieve(),
+                        sensor_info_);
 }
 
 SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
-                                       double timeout, double buffer_time)
-    : SensorPacketSource(sensors, {}, timeout, buffer_time) {}
+                                       double config_timeout_sec, double buffer_time_sec)
+    : SensorPacketSource(sensors, {}, config_timeout_sec, buffer_time_sec) {}
 
 SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
-                                       const std::vector<SensorInfo>& infos,
-                                       double config_timeout,
-                                       double buffer_time, bool reuse_ports) {
+                                       const std::vector<SensorInfo>& infos, double config_timeout,
+                                       double buffer_time, bool reuse_ports, uint32_t rcvbuf_size) {
     // if we need an ephemeral port, create it now
     int ephemeral_port = -1;
     for (const auto& sensor : sensors) {
         const auto& config = sensor.desired_config();
 
-        bool need_ephemeral_port = config.udp_port_lidar == 0 ||
-                                   config.udp_port_imu == 0 ||
-                                   config.udp_port_zm == 0;
+        bool need_ephemeral_port =
+            config.udp_port_lidar == 0 || config.udp_port_imu == 0 || config.udp_port_zm == 0;
 
         if (need_ephemeral_port) {
             // todo this probably needs to support multicast
-            SOCKET sock = mtp_data_socket(0, {}, "", reuse_ports);
+            SOCKET sock = mtp_data_socket(0, {}, "", reuse_ports, rcvbuf_size);
             if (sock == SOCKET_ERROR) {
                 close();
                 throw std::runtime_error("failed to obtain a UDP socket");
@@ -378,9 +355,8 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         // update with ports from config if > 0
         for (size_t i = 0; i < sensors.size(); i++) {
             const auto& config = sensors[i].desired_config();
-            bool need_ephemeral_port = config.udp_port_lidar == 0 ||
-                                       config.udp_port_imu == 0 ||
-                                       config.udp_port_zm == 0;
+            bool need_ephemeral_port =
+                config.udp_port_lidar == 0 || config.udp_port_imu == 0 || config.udp_port_zm == 0;
             if (need_ephemeral_port) {
                 throw std::invalid_argument(
                     "Cannot specify ephemeral ports when providing metadata to "
@@ -388,8 +364,7 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
                     sensors[i].hostname() + "'");
             }
             if ((config.udp_port_lidar &&
-                 config.udp_port_lidar !=
-                     sensor_info_[i]->config.udp_port_lidar) ||
+                 config.udp_port_lidar != sensor_info_[i]->config.udp_port_lidar) ||
                 (config.udp_port_imu &&
                  config.udp_port_imu != sensor_info_[i]->config.udp_port_imu)) {
                 throw std::invalid_argument(
@@ -401,9 +376,8 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
     } else {
         // configure sensors if necessary for the new ports
         SensorConfig empty_config;
-        for (size_t i = 0; i < sensors.size(); i++) {
-            const auto& sensor = sensors[i];
-            auto desired_config = sensors[i].desired_config();
+        for (const auto& sensor : sensors) {
+            auto desired_config = sensor.desired_config();
 
             if (desired_config.udp_port_lidar == 0) {
                 desired_config.udp_port_lidar = ephemeral_port;
@@ -416,20 +390,20 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
             }
 
             set_config(*sensor.http_client(), desired_config, 0 /*flags*/,
-                       config_timeout);
+                       static_cast<int>(config_timeout));
         }
 
         // fetch metadata
         // do this last so we dont wait N*reinit time to reconfigure lidars
-        for (size_t i = 0; i < sensors.size(); i++) {
+        for (const auto& sensor : sensors) {
             sensor_info_.emplace_back(
-                new SensorInfo(sensors[i].fetch_metadata(config_timeout)));
+                new SensorInfo(sensor.fetch_metadata(static_cast<int>(config_timeout))));
         }
     }
 
     // build a list of any multicast addresses we need to listen to
     std::set<std::string> multicast_addrs;
-    auto check_multicast_address = [&multicast_addrs](std::string addr) {
+    auto check_multicast_address = [&multicast_addrs](const std::string& addr) {
         if (in_multicast(addr)) {
             multicast_addrs.insert(addr);
         }
@@ -449,7 +423,7 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
     for (const auto& sensor : sensors) {
         // figure out addresses for sensors
         struct addrinfo hints;
-        struct addrinfo* result;
+        struct addrinfo* result = nullptr;
 
         // Set up the hints structure to specify the desired options (IPv4, TCP)
         memset(&hints, 0, sizeof(hints));
@@ -457,26 +431,23 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         hints.ai_socktype = SOCK_STREAM;  // TCP socket
 
         // Use getaddrinfo to resolve the address.
-        if (getaddrinfo(sensor.hostname().c_str(), nullptr, &hints, &result) !=
-            0) {
-            throw std::runtime_error("Could not resolve address '" +
-                                     sensor.hostname() + "' for sensor.");
+        if (getaddrinfo(sensor.hostname().c_str(), nullptr, &hints, &result) != 0) {
+            throw std::runtime_error("Could not resolve address '" + sensor.hostname() +
+                                     "' for sensor.");
         }
 
         // Find addresses
         bool found = false;
         for (auto rp = result; rp != nullptr; rp = rp->ai_next) {
             if (rp->ai_family == AF_INET6) {
-                struct sockaddr_in6* ipv6 =
-                    reinterpret_cast<struct sockaddr_in6*>(rp->ai_addr);
+                struct sockaddr_in6* ipv6 = reinterpret_cast<struct sockaddr_in6*>(rp->ai_addr);
                 Addr6 addr;
                 addr.sensor_index = sensor_index;
                 memcpy(addr.address, ipv6->sin6_addr.s6_addr, 16);
                 found = true;
                 addresses6_.push_back(addr);
             } else if (rp->ai_family == AF_INET) {
-                struct sockaddr_in* ipv4 =
-                    reinterpret_cast<struct sockaddr_in*>(rp->ai_addr);
+                struct sockaddr_in* ipv4 = reinterpret_cast<struct sockaddr_in*>(rp->ai_addr);
 
                 // ok, now make the ipv4 and ipv6 mapped version (in net
                 // ordering)
@@ -500,8 +471,8 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         sensor_index++;
         freeaddrinfo(result);
         if (!found) {
-            throw std::runtime_error("Could not find address for sensor '" +
-                                     sensor.hostname() + "'");
+            throw std::runtime_error("Could not find address for sensor '" + sensor.hostname() +
+                                     "'");
         }
     }
 
@@ -513,7 +484,11 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         if (info->config.udp_port_zm) {
             ports[info->config.udp_port_zm.value()] = true;
         }
-        formats_.push_back(std::make_shared<PacketFormat>(*info));
+        auto format_ptr = std::make_shared<PacketFormat>(*info);
+        formats_.push_back(format_ptr);
+        lidar_packets_.emplace_back(format_ptr);
+        imu_packets_.emplace_back(format_ptr);
+        zone_packets_.emplace_back(format_ptr);
     }
 
     // now open sockets
@@ -525,8 +500,7 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
             continue;  // not a valid port (this stream was disabled)
         }
         // just add every socket to the multicast group to simplify things
-        SOCKET sock =
-            mtp_data_socket(port.first, multicast_addrs, "", reuse_ports);
+        SOCKET sock = mtp_data_socket(port.first, multicast_addrs, "", reuse_ports, rcvbuf_size);
         if (sock == SOCKET_ERROR) {
             close();
             throw std::runtime_error("failed to obtain a UDP socket on port " +
@@ -551,11 +525,10 @@ void SensorPacketSource::start_buffer_thread(double buffer_time) {
     do_buffer_ = true;
     buffer_thread_ = std::thread([this, buffer_time]() {
         std::vector<uint8_t> data;
-        const uint64_t buffer_ns = buffer_time * 1000000000.0;
+        const uint64_t buffer_ns = static_cast<uint64_t>(buffer_time * 1000000000.0);
         while (do_buffer_) {
-            uint64_t timestamp;
-            InternalEvent internal_event =
-                get_packet_internal(data, timestamp, 0.01);
+            uint64_t timestamp = 0;
+            InternalEvent internal_event = get_packet_internal(data, timestamp, 0.01);
             if (internal_event.event_type == ClientEvent::POLL_TIMEOUT) {
                 continue;
             }
@@ -572,8 +545,7 @@ void SensorPacketSource::start_buffer_thread(double buffer_time) {
 
                 // Discard old buffered packets if our consumer couldn't keep up
                 uint64_t expiry_time = timestamp - buffer_ns;
-                while (!buffer_.empty() &&
-                       (buffer_.front().timestamp < expiry_time)) {
+                while (!buffer_.empty() && (buffer_.front().timestamp < expiry_time)) {
                     buffer_.pop_front();
                     dropped_packets_++;
                 }
@@ -612,14 +584,13 @@ size_t SensorPacketSource::buffer_size() {
     return 0;
 }
 
-static PacketType get_packet_type(const PacketFormat& format, uint8_t* buf,
-                                  size_t size) {
+namespace {
+
+PacketType get_packet_type(const PacketFormat& format, uint8_t* buf, size_t size) {
     // we could consider extra checks for ports here
-    if (format.udp_profile_lidar == UDPProfileLidar::LEGACY &&
-        size == format.lidar_packet_size) {
+    if (format.udp_profile_lidar == UDPProfileLidar::LEGACY && size == format.lidar_packet_size) {
         return PacketType::Lidar;
-    } else if (format.udp_profile_imu == UDPProfileIMU::LEGACY &&
-               size == format.imu_packet_size) {
+    } else if (format.udp_profile_imu == UDPProfileIMU::LEGACY && size == format.imu_packet_size) {
         return PacketType::Imu;
     }
 
@@ -636,16 +607,16 @@ static PacketType get_packet_type(const PacketFormat& format, uint8_t* buf,
     }
 }
 
+}  // namespace
+
 SensorPacketSource::InternalEvent SensorPacketSource::get_packet_internal(
     std::vector<uint8_t>& data, uint64_t& timestamp, double timeout_sec) {
     if (sockets_.empty()) {
         auto now = std::chrono::system_clock::now();
-        auto now_ts = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                          now.time_since_epoch())
-                          .count();
+        auto now_ts =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
         timestamp = now_ts;
-        return {-1, PacketType::Unknown,
-                ClientEvent::EXIT};  // someone called us while shut down
+        return {-1, PacketType::Unknown, ClientEvent::EXIT};  // someone called us while shut down
     }
     // setup poll
     SOCKET max_fd = 0;
@@ -658,15 +629,13 @@ SensorPacketSource::InternalEvent SensorPacketSource::get_packet_internal(
 
     // poll up to timeout for a new packet
     timeval time_value;
-    time_value.tv_sec = timeout_sec;
-    time_value.tv_usec = fmod(timeout_sec, 1.0) * 1000000.0;
+    time_value.tv_sec = static_cast<int64_t>(timeout_sec);
+    time_value.tv_usec = static_cast<int32_t>(fmod(timeout_sec, 1.0) * 1000000.0);
 
-    int ret = select(max_fd + 1, &fds, nullptr, nullptr,
-                     timeout_sec < 0 ? nullptr : &time_value);
+    int ret = select(max_fd + 1, &fds, nullptr, nullptr, timeout_sec < 0 ? nullptr : &time_value);
     auto now = std::chrono::system_clock::now();
-    timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    now.time_since_epoch())
-                    .count();
+    timestamp =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
     if (ret == 0) {
         return {-1, PacketType::Unknown, ClientEvent::POLL_TIMEOUT};
     } else if (ret < 0) {
@@ -681,9 +650,8 @@ SensorPacketSource::InternalEvent SensorPacketSource::get_packet_internal(
             continue;
         }
 
-        auto size =
-            recvfrom(sock, reinterpret_cast<char*>(data.data()), 65535, 0,
-                     reinterpret_cast<struct sockaddr*>(&from_addr), &addr_len);
+        auto size = recvfrom(sock, reinterpret_cast<char*>(data.data()), 65535, 0,
+                             reinterpret_cast<struct sockaddr*>(&from_addr), &addr_len);
         if (size <= 0) {
             continue;  // this is unexpected
         }
@@ -711,8 +679,7 @@ SensorPacketSource::InternalEvent SensorPacketSource::get_packet_internal(
             return {-1, PacketType::Unknown, ClientEvent::POLL_TIMEOUT};
         }
 
-        PacketType packet_type =
-            get_packet_type(*formats_[source], data.data(), size);
+        PacketType packet_type = get_packet_type(*formats_[source], data.data(), size);
 
         if (packet_type == PacketType::Unknown) {
             // The sensor returned an invalid packet size, say we got nothing
@@ -728,7 +695,7 @@ SensorPacketSource::InternalEvent SensorPacketSource::get_packet_internal(
 ClientEvent SensorPacketSource::get_packet(double timeout_sec) {
     // poll on all our sockets
     InternalEvent internal_event;
-    uint64_t timestamp;
+    uint64_t timestamp = 0;
     if (do_buffer_) {
         std::unique_lock<std::mutex> lock(buffer_mutex_);
         // if the buffer if empty, wait for a new event
@@ -749,8 +716,7 @@ ClientEvent SensorPacketSource::get_packet(double timeout_sec) {
         buffer_.pop_front();
         lock.unlock();  // unlock asap
     } else {
-        internal_event =
-            get_packet_internal(staging_buffer_, timestamp, timeout_sec);
+        internal_event = get_packet_internal(staging_buffer_, timestamp, timeout_sec);
     }
 
     ClientEvent rev;
@@ -758,18 +724,16 @@ ClientEvent SensorPacketSource::get_packet(double timeout_sec) {
     rev.type = internal_event.event_type;
     if (internal_event.event_type == ClientEvent::PACKET) {
         if (internal_event.packet_type == PacketType::Imu) {
-            rev.packet_ = &imu_packet_;
+            rev.packet_ = &imu_packets_[rev.source];
         } else if (internal_event.packet_type == PacketType::Lidar) {
-            rev.packet_ = &lidar_packet_;
+            rev.packet_ = &lidar_packets_[rev.source];
         } else if (internal_event.packet_type == PacketType::Zone) {
-            rev.packet_ = &zone_packet_;
+            rev.packet_ = &zone_packets_[rev.source];
         } else {
             // Should never happen, but who knows
-            throw std::runtime_error(
-                "SensorPacketSource received wrong packet type");
+            throw std::runtime_error("SensorPacketSource received wrong packet type");
         }
         rev.packet_->host_timestamp = timestamp;
-        rev.packet_->format = formats_[internal_event.source];
         std::swap(rev.packet_->buf, staging_buffer_);
     } else {
         rev.packet_ = nullptr;
@@ -782,8 +746,7 @@ uint64_t SensorPacketSource::dropped_packets() {
     return dropped_packets_;
 }
 
-const std::vector<std::shared_ptr<SensorInfo>>&
-SensorPacketSource::sensor_info() const {
+const std::vector<std::shared_ptr<SensorInfo>>& SensorPacketSource::sensor_info() const {
     return sensor_info_;
 }
 
@@ -805,7 +768,7 @@ class SensorPacketIteratorImpl : public core::PacketIteratorImpl {
 
     bool advance(size_t offset) override {
         int64_t last_time = get_time_ns();
-        int64_t timeout_ns = client_->iterator_timeout_ * 1e9;
+        int64_t timeout_ns = static_cast<int64_t>(client_->iterator_timeout_ * 1e9);
         double current_timeout_s = client_->iterator_timeout_;
         for (size_t i = 0; i < offset; i++) {
             // get packet can return spurriously if we got bad packets
@@ -822,18 +785,17 @@ class SensorPacketIteratorImpl : public core::PacketIteratorImpl {
                         }
                         // update timeout for timeout remaining
                         current_timeout_s =
-                            current_timeout_s - time_elapsed_ns / 1e9;
+                            current_timeout_s - static_cast<double>(time_elapsed_ns) / 1e9;
                     }
                 } else {
-                    throw std::runtime_error(
-                        "An error occurred while reading packets.");
+                    throw std::runtime_error("An error occurred while reading packets.");
                 }
                 // try getting a packet again
                 offset++;
                 continue;
             }
 
-            last_time = event.packet().host_timestamp;
+            last_time = static_cast<int64_t>(event.packet().host_timestamp);
             current_timeout_s = client_->iterator_timeout_;
             packet_ = std::pair<int, std::shared_ptr<Packet>>(
                 event.source,
@@ -842,16 +804,23 @@ class SensorPacketIteratorImpl : public core::PacketIteratorImpl {
         return false;
     }
 
-    std::pair<int, std::shared_ptr<Packet>> value() override { return packet_; }
+    std::pair<int, std::shared_ptr<Packet>> value() override {
+        return packet_;
+    }
 };
 
 core::PacketIterator SensorPacketSource::begin() const {
     return core::PacketIterator(
-        this,
-        new SensorPacketIteratorImpl(const_cast<SensorPacketSource*>(this)));
+        this, new SensorPacketIteratorImpl(const_cast<SensorPacketSource*>(this)));
 }
 
-bool SensorPacketSource::is_live() const { return true; }
+bool SensorPacketSource::is_live() const {
+    return true;
+}
+
+const std::vector<SOCKET>& SensorPacketSource::sockets() const {
+    return sockets_;
+}
 
 ClientEvent::ClientEvent() = default;
 

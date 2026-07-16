@@ -27,6 +27,7 @@ def run_apidoc(app):
         "-o", str(output_dir),
         str(python_src),
         str(python_src / "cli"),
+        str(python_src / "sdk" / "examples" / "viz_image_events.py"),
         "--force",
         "--separate",
         "--implicit-namespaces",

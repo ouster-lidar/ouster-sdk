@@ -7,12 +7,14 @@
 
 #include <Eigen/Core>
 
-#include "ouster/point_viz.h"
+#include "ouster/core/typedefs.h"
+#include "ouster/viz/point_viz.h"
 
 namespace ouster {
 namespace sdk {
 namespace viz {
 namespace impl {
+using core::Matrix4fR;
 
 inline double window_aspect(const WindowCtx& ctx) {
     return ctx.viewport_width / static_cast<double>(ctx.viewport_height);
@@ -21,9 +23,9 @@ inline double window_aspect(const WindowCtx& ctx) {
 struct CameraData {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    Eigen::Matrix4d proj;
-    Eigen::Matrix4d view;
-    Eigen::Matrix4d target;
+    core::Matrix4dR proj;
+    core::Matrix4dR view;
+    core::Matrix4dR target;
 };
 
 }  // namespace impl

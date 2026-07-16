@@ -1,0 +1,31 @@
+{
+  "key_frame_distance": 2.0,
+  "traj_translation_weight": 10.0,
+  "traj_rotation_weight": 10.0,
+   "constraints": [
+    {
+      "type": "POSE_TO_POSE",
+      "timestamp1": 1765338059263057992,
+      "timestamp2": 1765338723963851640,
+      "translation_weight": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "rotation_weight": 1.0
+    },
+    {
+      "type": "POINT_TO_POINT",
+      "translation_weights": [0.2, 0.2, 0.2],
+      "timestamp1": 1765338003762995576,
+      "row1": 27,
+      "col1": 1894,
+      "return_idx1": 1,
+      "timestamp2": 1765338746963563448,
+      "row2": 29,
+      "col2": 1221,
+      "return_idx2": 1
+    }
+  ]
+}
+

@@ -13,10 +13,10 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/types.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/buffer.h"
 #include "ouster/osf/metadata.h"
-#include "ouster/types.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -45,8 +45,8 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
      *                 ///< originator of the extrinsics information.
      */
     OUSTER_API_FUNCTION
-    explicit Extrinsics(const ouster::sdk::core::mat4d& extrinsics,
-                        uint32_t ref_meta_id = 0, const std::string& name = "");
+    explicit Extrinsics(ouster::sdk::core::mat4d extrinsics, uint32_t ref_meta_id = 0,
+                        std::string name = "");
 
     /**
      * Get the extrinsics matrix.
@@ -89,7 +89,7 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
      * @return The new Extrinsics cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer& buf);
 
     /**
      * Get the string representation for the Extrinsics object.
@@ -141,7 +141,9 @@ struct OUSTER_API_CLASS MetadataTraits<Extrinsics> {
      * @return The OSF type string "ouster/v1/os_sensor/Extrinsics".
      */
     OUSTER_API_FUNCTION
-    static const std::string type() { return "ouster/v1/os_sensor/Extrinsics"; }
+    static const std::string type() {
+        return "ouster/v1/os_sensor/Extrinsics";
+    }
 };
 
 }  // namespace osf

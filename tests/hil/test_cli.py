@@ -5,7 +5,7 @@ import os
 from click.testing import CliRunner
 
 from ouster.sdk import core, sensor
-from ouster.sdk.core import SensorHttp
+from ouster.sdk.sensor import SensorHttp
 
 import ouster.cli.core as cli_core
 from ouster.cli.core.cli_args import CliArgs

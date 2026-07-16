@@ -26,7 +26,10 @@ class Framebuffer {
     ~Framebuffer();
 
     void bind();
-    void read_pixels_into(std::vector<uint8_t>& buffer);
+    // Reads OpenGL framebuffer state; not logically const despite no member
+    // writes.
+    // NOLINTNEXTLINE(readability-make-member-function-const)
+    void read_pixels_into(std::vector<uint8_t>& buffer) const;
     void unbind();
 
     bool is_complete() const;

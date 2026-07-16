@@ -59,6 +59,7 @@ def cpp_build(ctx, package, cmake_bin, vcpkg_toolchain, vcpkg_triplet,
         manifest_mode=manifest_mode, use_system_libs=use_system_libs,
         coverage_flags=coverage_flags)
     ctx.obj.build_libs.check_for_tool(ctx.obj.build_options.cmake_bin)
+    ctx.obj.build_libs.check_native_build_tools()
     ctx.obj.build_options.run_vcpkg_initialized_check()
     if profile_build:
         ctx.obj.build_libs.check_for_tool("clang")
@@ -76,7 +77,6 @@ def cpp_build(ctx, package, cmake_bin, vcpkg_toolchain, vcpkg_triplet,
                   "-DBUILD_SENSOR=ON",
                   "-DBUILD_MAPPING=ON",
                   f"-DBUILD_EXAMPLES={examples_text}",
-                  f"-DRUN_CI_EXAMPLES={examples_text}",
                   f"-DRUN_HIL_EXAMPLES={hil_examples_text}"]
     if not no_tests and not package:
         cmake_args.append("-DOUSTER_EXTERNAL_TESTS=ON")
@@ -125,10 +125,9 @@ def cpp_build(ctx, package, cmake_bin, vcpkg_toolchain, vcpkg_triplet,
             ctx.obj.build_libs.perf_json_combine(perf_jsons, combined_file)
             print(f"Combined profile data at: {combined_file}")
             print("You can view the profile data using Chrome tracing: about:tracing")
-        if install_dir:
+        if install_dir or package:
             cmake.install(prefix=install_dir)
         if package:
-            cmake.install(prefix=install_dir)
             cmake.make_package(prefix=install_dir)
             ctx.obj.print_output_location("C++ SDK Binary Package")
         else:
@@ -247,8 +246,11 @@ def cpp_test(ctx, threads, test_dir_override,
 @click.option('--threads',
               default=None,
               help='Number of threads to use.')
+@click.option('--cmake-arg', 'extra_cmake_args', multiple=True,
+              help='Additional arguments forwarded to cmake configure step. '
+                   'Use multiple --cmake-arg entries for separate tokens.')
 def compile_commands(ctx, output, cmake_bin, vcpkg_toolchain, vcpkg_triplet,
-                     use_system_libs, no_manifest_mode, threads):
+                     use_system_libs, no_manifest_mode, threads, extra_cmake_args):
     """Generate compile_commands.json for C++ SDK."""
     manifest_mode = not no_manifest_mode
     ctx.obj.build_options.process_args(
@@ -256,7 +258,8 @@ def compile_commands(ctx, output, cmake_bin, vcpkg_toolchain, vcpkg_triplet,
         vcpkg_triplet=vcpkg_triplet, manifest_mode=manifest_mode,
         use_system_libs=use_system_libs, threads=threads)
     ctx.obj.build_libs.check_for_tool(ctx.obj.build_options.cmake_bin)
-    ctx.obj.build_libs.check_for_python_lib("pybind11")
+    ctx.obj.build_libs.check_native_build_tools()
+    ctx.obj.build_libs.check_for_python_libs(["nanobind"])
     ctx.obj.build_options.run_vcpkg_initialized_check()
 
     if output is None:
@@ -277,16 +280,17 @@ def compile_commands(ctx, output, cmake_bin, vcpkg_toolchain, vcpkg_triplet,
                                                      triplet=triplet,
                                                      env=ctx.obj.build_options.build_env,
                                                      cmake_path=ctx.obj.build_options.cmake_bin,
-                                                     manifest_mode=ctx.obj.build_options.manifest_mode)
+                                                     manifest_mode=ctx.obj.build_options.manifest_mode,
+                                                     cmake_args=list(extra_cmake_args))
     except Exception:
         print("Error generating compile_commands.json")
         raise RuntimeError("Please check the output for details.")
 
 
 def import_module(click_context):
-    click_context.build_group.add_command(cpp_build)
     click_context.test_group.add_command(cpp_test)
     click_context.build_group.add_command(compile_commands)
+    click_context.build_group.add_command(cpp_build)
 
 
 def finalize(click_context):

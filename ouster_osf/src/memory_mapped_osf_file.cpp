@@ -20,7 +20,9 @@ MemoryMappedOsfFile::MemoryMappedOsfFile(const std::string& filename)
     initialize_header_and_metadata();
 }
 
-MemoryMappedOsfFile::~MemoryMappedOsfFile() { close(); }
+MemoryMappedOsfFile::~MemoryMappedOsfFile() {
+    close();
+}
 
 void MemoryMappedOsfFile::close() {
     state_ = FileState::BAD;
@@ -33,8 +35,7 @@ void MemoryMappedOsfFile::close() {
     }
 }
 
-uint8_t* MemoryMappedOsfFile::buf_raw_ptr(OsfOffset& base_offset,
-                                          OsfOffset& offset) {
+uint8_t* MemoryMappedOsfFile::buf_raw_ptr(OsfOffset& base_offset, OsfOffset& offset) {
     if (!good()) {
         throw std::logic_error("bad osf file");
     }
@@ -69,8 +70,7 @@ MemoryMappedOsfFile::MemoryMappedOsfFile(MemoryMappedOsfFile&& other) noexcept
     other.state_ = FileState::BAD;
 }
 
-MemoryMappedOsfFile& MemoryMappedOsfFile::operator=(
-    MemoryMappedOsfFile&& other) noexcept {
+MemoryMappedOsfFile& MemoryMappedOsfFile::operator=(MemoryMappedOsfFile&& other) noexcept {
     OsfFile::operator=(std::move(other));
     if (this != &other) {
         close();

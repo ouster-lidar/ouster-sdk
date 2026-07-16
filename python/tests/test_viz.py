@@ -11,7 +11,7 @@ import numpy as np
 
 import random
 
-from ouster.sdk.core import ChanField, LidarScan, SensorInfo, LidarScanSet
+from ouster.sdk.core import ChanField, LidarFrame, SensorInfo, FrameSet
 
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
@@ -39,12 +39,9 @@ def point_viz() -> viz.PointViz:
                              window_width=640,
                              window_height=480)
 
-    weakself = weakref.ref(point_viz)
-
     def handle_keys(ctx, key, mods) -> bool:
-        self = weakself()
-        if self is not None and key == 256:  # ESC
-            self.running(False)
+        if point_viz is not None and key == 256:  # ESC
+            point_viz.running(False)
         return True
 
     point_viz.push_key_handler(handle_keys)
@@ -79,7 +76,7 @@ def test_point_viz_rgb_image(point_viz: viz.PointViz) -> None:
 
     label.set_text("Image RGB: set..image(mono), 2dim")
     image_data_mono = np.array(
-        [[0.1, 0.3, 0.7], [0.2, 0.4, 0.8], [0.3, 0.5, 0.9]], dtype=float)
+        [[0.1, 0.3, 0.7], [0.2, 0.4, 0.8], [0.3, 0.5, 0.9]], dtype=np.float32)
     img.set_image(image_data_mono)
     show_viz()
 
@@ -95,14 +92,14 @@ def test_point_viz_rgb_image(point_viz: viz.PointViz) -> None:
     image_data_rgb = np.array(
         [[[0, 0, 0], [1, 0, 0], [0, 1, 0]], [[1, 1, 0], [0, 0, 1], [1, 0, 1]],
          [[0, 1, 1], [1, 1, 1], [0, 0, 0]]],
-        dtype=float)
+        dtype=np.float32)
     img.set_image(image_data_rgb)
     show_viz()
 
     label.set_text(
         "Image RGB: set..image(rgba), 3dim, two right columns has 0.5 alpha")
     image_data_rgba = np.dstack(
-        (image_data_rgb, np.full((*image_data_rgb.shape[:2], 1), 0.5)))
+        (image_data_rgb, np.full((*image_data_rgb.shape[:2], 1), 0.5, dtype=np.float32)))
     image_data_rgba[:, 0, 3] = 1.0
     img.set_image(image_data_rgba)
     show_viz()
@@ -112,7 +109,7 @@ def test_point_viz_rgb_image(point_viz: viz.PointViz) -> None:
     )
     mask_data_rgba = np.array([[[0, 0, 1.0, 0.2], [0, 0, 1.0, 0.4]],
                                [[0, 0, 1.0, 0.6], [0, 0, 1.0, 0.8]]],
-                              dtype=float)
+                              dtype=np.float32)
     img.set_mask(mask_data_rgba)
     show_viz()
 
@@ -122,7 +119,7 @@ def test_point_viz_rgb_image(point_viz: viz.PointViz) -> None:
         (mask_data_rgba,
          np.array([[[1.0, 0, 0, 0.3], [1.0, 0, 0, 0.5], [1.0, 0, 0, 0.7]],
                    [[1.0, 0, 0, 0.3], [1.0, 0, 0, 0.5], [1.0, 0, 0, 0.7]]],
-                  dtype=float)))
+                  dtype=np.float32)))
     img.set_mask(mask_data_rgba)
     show_viz()
 
@@ -215,7 +212,7 @@ def test_point_viz_image_with_labels_aligned(point_viz: viz.PointViz) -> None:
     def add_image(im_data, xpos, ypos, hshift=0):
         img = viz.Image()
         img.set_position(*xpos, *ypos)
-        img.set_image(im_data)
+        img.set_image(im_data.astype(np.float32))
         img.set_hshift(hshift)
         point_viz.add(img)
 
@@ -359,6 +356,12 @@ def test_point_viz_cloud_unstructured(point_viz: viz.PointViz) -> None:
     thread = threading.Thread(target=animate)
     thread.start()
 
+    # reusing the cloud with another viz should throw
+    viz2 = viz.PointViz("reused")
+    with pytest.raises(RuntimeError):
+        viz2.add(cloud)
+    del viz2
+
     point_viz.run()
     quit.set()
     thread.join()
@@ -373,7 +376,7 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     points = np.random.rand(1024, 3).astype(np.float32) * 30 - 15
 
     # should be r, g, b from top to bottom
-    key = np.zeros(1024, dtype=float)
+    key = np.zeros(1024, dtype=np.float32)
 
     key[5.0 < points[:, 2]] = 0.2
     key[(-5.0 < points[:, 2]) & (points[:, 2] <= 5.0)] = 0.5
@@ -408,14 +411,14 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     # + set_mask(rgba) =====================================
     label.set_text("Cloud RGB: add set..mask() 1/3 of cloud "
                    "in RED with transparency")
-    ones = np.ones([1024, 1], dtype=float)
+    ones = np.ones([1024, 1], dtype=np.float32)
     mask_rgba = np.hstack((0.1 * ones, 0.1 * ones, 0.1 * ones, 0.5 * ones))
     mask_rgba[points[:, 0] > 5.0] = np.array([0.8, 0.1, 0.1, 0.8])
     cloud.set_mask(mask_rgba)
     show_viz()
 
     # remove mask
-    zeros = np.zeros([1024, 4], dtype=float)
+    zeros = np.zeros([1024, 4], dtype=np.float32)
     cloud.set_mask(zeros)
 
     # 2dim key, mono, (HxW) size ===========================
@@ -436,7 +439,7 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     label.set_text("Cloud RGB: RGB, set..key() 3dim, no mask, but key alpha "
                    "left")
     key_3dim_rgb = np.dstack(
-        (key, np.full(1024, 0.2, dtype=float), np.full(1024, 0.2, dtype=float)))
+        (key, np.full(1024, 0.2, dtype=np.float32), np.full(1024, 0.2, dtype=np.float32)))
     cloud.set_key(key_3dim_rgb)
     show_viz()
 
@@ -444,8 +447,8 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     label.set_text("Cloud RGB: RGBA, set..key() 3dim, no mask, key alpha "
                    "should be overwritten by key")
     key_3dim_rgba = np.dstack(
-        (np.full(1024, 0.1, dtype=float), np.full(1024, 1.0, dtype=float),
-         np.full(1024, 0.1, dtype=float), key))
+        (np.full(1024, 0.1, dtype=np.float32), np.full(1024, 1.0, dtype=np.float32),
+         np.full(1024, 0.1, dtype=np.float32), key))
     cloud.set_key(key_3dim_rgba)
     show_viz()
 
@@ -458,7 +461,7 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     big_key = big_points[0]
     big_points = big_points * 300 - 14
 
-    big_cloud.set_xyz(big_points.transpose())
+    big_cloud.set_xyz(np.ascontiguousarray(big_points.transpose()))
     big_cloud.set_key(big_key)
     point_viz.add(big_cloud)
     show_viz()
@@ -474,10 +477,10 @@ def test_point_viz_destruction() -> None:
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_scan_viz_destruction(meta: SensorInfo,
+def test_frame_viz_destruction(meta: SensorInfo,
                               point_viz: viz.PointViz) -> None:
-    """Check that LidarScan is destroyed deterministically."""
-    ls_viz = viz.LidarScanViz([meta], point_viz)
+    """Check that LidarFrameViz is destroyed deterministically."""
+    ls_viz = viz.LidarFrameViz([meta], point_viz)
     ref = weakref.ref(ls_viz)
 
     del ls_viz
@@ -486,7 +489,7 @@ def test_scan_viz_destruction(meta: SensorInfo,
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
 def test_viz_multiple_instances(meta: SensorInfo,
-                                scan: LidarScan) -> None:
+                                frame: LidarFrame) -> None:
     """Check that destructing a visualizer doesn't break other instances."""
     point_viz = viz.PointViz("Test Viz")
 
@@ -494,29 +497,29 @@ def test_viz_multiple_instances(meta: SensorInfo,
     point_viz2 = viz.PointViz("Test Viz2")
     del point_viz2
 
-    ls_viz = viz.LidarScanViz([meta], point_viz)
+    ls_viz = viz.LidarFrameViz([meta], point_viz)
 
-    ls_viz.update(LidarScanSet([scan]))
+    ls_viz.update(FrameSet([frame]))
     ls_viz.draw()
     point_viz.run()
 
 
-def test_scan_viz_smoke(meta: SensorInfo,
-                        scan: LidarScan) -> None:
-    """Smoke test LidarScan visualization."""
-    ls_viz = viz.LidarScanViz([meta])
+def test_frame_viz_smoke(meta: SensorInfo,
+                        frame: LidarFrame) -> None:
+    """Smoke test LidarFrame visualization."""
+    ls_viz = viz.LidarFrameViz([meta])
 
-    ls_viz.update(LidarScanSet([scan]))
+    ls_viz.update(FrameSet([frame]))
     ls_viz.draw()
     ls_viz.run()
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_scan_viz_extras(meta: SensorInfo,
-                         scan: LidarScan) -> None:
+def test_frame_viz_extras(meta: SensorInfo,
+                         frame: LidarFrame) -> None:
     """Check rendering of labels, cuboids, clouds and images together."""
     point_viz = viz.PointViz("Test Viz")
-    ls_viz = viz.LidarScanViz([meta], point_viz)
+    ls_viz = viz.LidarFrameViz([meta], point_viz)
 
     cube1 = viz.Cuboid(np.identity(4), (1.0, 0, 0))
 
@@ -534,14 +537,14 @@ def test_scan_viz_extras(meta: SensorInfo,
     point_viz.add(cube1)
     point_viz.add(cube2)
 
-    ls_viz.update(LidarScanSet([scan]))
+    ls_viz.update(FrameSet([frame]))
 
     point_viz.camera.dolly(150)
     ls_viz.draw()
     point_viz.run()
 
 
-class LidarScanVizWithCallbacks(viz.LidarScanViz):
+class LidarFrameVizWithCallbacks(viz.LidarFrameViz):
     """Add callbacks for pre-draw and post-draw"""
 
     def __init__(
@@ -550,11 +553,11 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
         viz: Optional[viz.PointViz] = None,
         pre_draw_callback: Optional[
             Callable[
-                [LidarScanSet],
-                LidarScanSet
+                [FrameSet],
+                FrameSet
             ]
         ] = None,
-        post_draw_callback: Optional[Callable[['LidarScanVizWithCallbacks'],
+        post_draw_callback: Optional[Callable[['LidarFrameVizWithCallbacks'],
                                               None]] = None
     ) -> None:
         super().__init__([meta], viz)
@@ -562,17 +565,17 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
         self._pre_draw_callback = pre_draw_callback
         self._post_draw_callback = post_draw_callback
 
-    def _draw(self) -> None:
+    def _draw(self, update_camera: bool = True) -> None:
         """Overriding the draw and setting pre/post callbacks"""
 
-        # pre draw callbacl takes LidarScan and returns LidarScan
+        # pre draw callbacl takes LidarFrame and returns LidarFrame
         if self._pre_draw_callback:
-            self._model.update(self._pre_draw_callback(self._scans))
+            self._model.update(self._pre_draw_callback(self._frame_set))
 
         # call original draw
-        super()._draw()
+        super()._draw(update_camera=update_camera)
 
-        # post draw callbacks takes LidarScanViz object so it can get access
+        # post draw callbacks takes LidarFrameViz object so it can get access
         # to _clouds and _images within it and set additional masks, colors, etc.
         if self._post_draw_callback:
             self._post_draw_callback(self)
@@ -580,7 +583,7 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
 def test_simple_viz_with_callbacks(meta: SensorInfo,
-                                   scan: LidarScan) -> None:
+                                   frame: LidarFrame) -> None:
     """Call the callback on pre/post draw example."""
 
     from copy import deepcopy
@@ -588,22 +591,22 @@ def test_simple_viz_with_callbacks(meta: SensorInfo,
     start_range = 1    # in meters
     num_steps = 100
 
-    # this can be any scan source (just a repeater as an example)
-    def repeated_scan() -> Iterable[LidarScanSet]:
+    # this can be any frame source (just a repeater as an example)
+    def repeated_frame_set() -> Iterable[FrameSet]:
         for i in range(num_steps):
-            scan.packet_timestamp[:] += 1000 * 1000 * 100
-            yield LidarScanSet([scan])
-    scans = repeated_scan()
+            frame.packet_timestamp[:] += 1000 * 1000 * 100
+            yield FrameSet([frame])
+    frame_sets = repeated_frame_set()
 
     point_viz = viz.PointViz("Test Viz")
 
-    scan_cnt = 0
+    frame_cnt = 0
 
-    def modify_scan(ls: Optional[LidarScan]) -> Optional[LidarScan]:
-        """Modify the range channel of a lidarscan if it exists, otherwise return None."""
+    def modify_frame(ls: Optional[LidarFrame]) -> Optional[LidarFrame]:
+        """Modify the range channel of a LidarFrame if it exists, otherwise return None."""
         if ls:
             nls = deepcopy(ls)
-            ratio = scan_cnt / num_steps
+            ratio = frame_cnt / num_steps
 
             # modifying range in some way
             rng = nls.field(ChanField.RANGE)
@@ -612,41 +615,41 @@ def test_simple_viz_with_callbacks(meta: SensorInfo,
             return nls
         return None
 
-    def pre_draw(scans: LidarScanSet) -> LidarScanSet:
-        nonlocal scan_cnt
-        scan_cnt += 1
+    def pre_draw(frame_set: FrameSet) -> FrameSet:
+        nonlocal frame_cnt
+        frame_cnt += 1
         # don't forget to return it back
-        return LidarScanSet([modify_scan(ls) for ls in scans])
+        return FrameSet([modify_frame(ls) for ls in frame_set])
 
-    def post_draw(scan_viz: LidarScanVizWithCallbacks) -> None:
-        # TWS: the original test only handled one scan but the new LidarScanViz is always multi.
-        # currently displayed LidarScan
-        ls = scan_viz._scans[0]
+    def post_draw(frame_viz: LidarFrameVizWithCallbacks) -> None:
+        # TWS: the original test only handled one frame but the new LidarFrameViz is always multi.
+        # currently displayed LidarFrame
+        ls = frame_viz._frame_set[0]
         assert ls is not None
-        ratio = scan_cnt / num_steps
-        img_mask = np.zeros((ls.h, ls.w, 4))
+        ratio = frame_cnt / num_steps
+        img_mask = np.zeros((ls.h, ls.w, 4), dtype=np.float32)
         col_idx = int(ls.w * ratio)
-        img_mask[:, col_idx - 5:col_idx + 5] = np.array([1.0, 0.3, 0.3, 1.0])
+        img_mask[:, col_idx - 5:col_idx + 5] = np.array([1.0, 0.3, 0.3, 1.0], dtype=np.float32)
 
         # there are 2 images - single return and second
         # can safely skip the second, but here we draw on both smth
-        for img in scan_viz._model._sensors[0]._images:
+        for img in frame_viz._model._sensors[0]._images:
             # set some mask
             img.set_mask(img_mask)
 
         # same for clouds, first and second return
-        for cloud in scan_viz._model._sensors[0]._clouds:
+        for cloud in frame_viz._model._sensors[0]._clouds:
             # set some mask
             cloud.set_mask(img_mask)
 
-    # regular LidarScanViz
-    # ls_viz = viz.LidarScanViz(meta, point_viz)
+    # regular LidarFrameViz
+    # ls_viz = viz.LidarFrameViz(meta, point_viz)
 
-    ls_viz = LidarScanVizWithCallbacks(meta,
+    ls_viz = LidarFrameVizWithCallbacks(meta,
                                        point_viz,
                                        pre_draw_callback=pre_draw,
                                        post_draw_callback=post_draw)
 
-    viz.SimpleViz([meta], _override_lidarscanviz=ls_viz, rate=1.0).run(scans)
+    viz.SimpleViz([meta], _override_lidar_frame_viz=ls_viz, rate=1.0).run(frame_sets)
 
     print("Done")

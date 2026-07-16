@@ -14,16 +14,15 @@
 #include <functional>
 #include <string>
 
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 namespace ouster {
 namespace sdk {
 namespace viz {
 
 struct GLFWContext {
-    explicit GLFWContext(const std::string& name, bool fix_aspect,
-                         int window_width, int window_height, bool maximized,
-                         bool fullscreen, bool borderless);
+    explicit GLFWContext(const std::string& name, bool fix_aspect, int window_width,
+                         int window_height, bool maximized, bool fullscreen, bool borderless);
 
     // manages glfw window pointer lifetime
     GLFWContext(const GLFWContext&) = delete;
@@ -39,17 +38,25 @@ struct GLFWContext {
     static void terminate();
 
     // manipulate glfwWindowShouldClose flag
-    bool running();
+    bool running() const;
+    // Mutates GLFW window state; not logically const despite no member writes.
+    // NOLINTNEXTLINE(readability-make-member-function-const)
     void running(bool);
 
+    // Mutates GLFW window state; not logically const despite no member writes.
+    // NOLINTNEXTLINE(readability-make-member-function-const)
     void visible(bool);
 
     static bool is_opengl_es();
+
+    static float ui_scale();
 
     GLFWwindow* window;
 
     // state set by GLFW callbacks
     WindowCtx window_context;
+
+    bool emulated_mbutton_down = false;
 
     std::function<void(const WindowCtx&, int, int)> key_handler;
     std::function<void(const WindowCtx&, int, int, int)> mouse_button_handler;

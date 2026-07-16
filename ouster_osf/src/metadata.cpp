@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "ouster/impl/logging.h"
+#include "ouster/core/impl/logging.h"
 #include "ouster/osf/buffer.h"
 #include "ouster/osf/impl/fb_utils.h"
 
@@ -22,37 +22,39 @@ namespace ouster {
 namespace sdk {
 namespace osf {
 
-void register_metadata_internal_error_function(std::string error) {
+void register_metadata_internal_error_function(const std::string& error) {
     logger().error(error);
 }
 
 std::string MetadataEntry::repr() const {
     auto buffer_data = this->buffer();
     std::stringstream string_stream;
-    string_stream
-        << "MetadataEntry: "
-        << ((!buffer_data.empty())
-                ? osf::to_string(
-                      buffer_data.data(),  // NOLINT(misc-include-cleaner)
-                      buffer_data.size(), 50)
-                : "<empty>");
+    string_stream << "MetadataEntry: "
+                  << ((!buffer_data.empty())
+                          ? osf::to_string(buffer_data.data(),  // NOLINT(misc-include-cleaner)
+                                           buffer_data.size(), 50)
+                          : "<empty>");
     return string_stream.str();
 };
 
 std::string MetadataEntry::to_string() const {
     std::stringstream string_stream;
     string_stream << "MetadataEntry: ["
-                  << "id = " << id() << ", type = " << type() << ", buffer = {"
-                  << this->repr() << "}"
+                  << "id = " << id() << ", type = " << type() << ", buffer = {" << this->repr()
+                  << "}"
                   << "]";
     return string_stream.str();
 }
 
-void MetadataEntry::set_id(uint32_t entry_id) { id_ = entry_id; }
-uint32_t MetadataEntry::id() const { return id_; }
+void MetadataEntry::set_id(uint32_t entry_id) {
+    id_ = entry_id;
+}
+uint32_t MetadataEntry::id() const {
+    return id_;
+}
 
-std::unique_ptr<MetadataEntry> MetadataEntry::from_buffer(
-    const OsfBuffer buf, const std::string type_str) {
+std::unique_ptr<MetadataEntry> MetadataEntry::from_buffer(const OsfBuffer& buf,
+                                                          const std::string& type_str) {
     auto& registry = MetadataEntry::get_registry();
     auto registered_type = registry.find(type_str);
     if (registered_type == registry.end()) {
@@ -67,15 +69,14 @@ std::unique_ptr<MetadataEntry> MetadataEntry::from_buffer(
     return metadata_entry;
 };
 
-std::map<std::string, MetadataEntry::from_buffer_func>&
-MetadataEntry::get_registry() {
+std::map<std::string, MetadataEntry::from_buffer_func>& MetadataEntry::get_registry() {
     static std::map<std::string, from_buffer_func> registry;
     return registry;
 }
 
-MetadataEntry::MetadataEntry(const OsfBuffer buf) : buf_{buf} {}
+MetadataEntry::MetadataEntry(const OsfBuffer& buf) : buf_{buf} {}
 
-MetadataEntryRef::MetadataEntryRef(const OsfBuffer buf) : MetadataEntry(buf) {
+MetadataEntryRef::MetadataEntryRef(const OsfBuffer& buf) : MetadataEntry(buf) {
     // NOLINTBEGIN(misc-include-cleaner)
     const impl::gen::MetadataEntry* meta_entry =
         reinterpret_cast<const impl::gen::MetadataEntry*>(buf_.data());
@@ -84,7 +85,9 @@ MetadataEntryRef::MetadataEntryRef(const OsfBuffer buf) : MetadataEntry(buf) {
     setId(meta_entry->id());
 }
 
-std::string MetadataEntryRef::type() const { return buf_type_; }
+std::string MetadataEntryRef::type() const {
+    return buf_type_;
+}
 
 std::string MetadataEntryRef::static_type() const {
     return metadata_type<MetadataEntryRef>();
@@ -122,7 +125,9 @@ void MetadataEntryRef::setId(uint32_t entry_id) {
     MetadataEntry::set_id(entry_id);
 }
 
-uint32_t MetadataStore::add(MetadataEntry&& entry) { return add(entry); }
+uint32_t MetadataStore::add(MetadataEntry&& entry) {
+    return add(entry);
+}
 
 uint32_t MetadataStore::add(MetadataEntry& entry) {
     if (entry.id() == 0) {
@@ -130,15 +135,13 @@ uint32_t MetadataStore::add(MetadataEntry& entry) {
         /// the Reader case
         assign_id(entry);
     } else if (metadata_entries_.find(entry.id()) != metadata_entries_.end()) {
-        logger().warn("WARNING: MetadataStore: ENTRY EXISTS! id = {}",
-                      entry.id());
+        logger().warn("WARNING: MetadataStore: ENTRY EXISTS! id = {}", entry.id());
         return entry.id();
     } else if (next_meta_id_ == entry.id()) {
         // Find next available next_meta_id_ so we avoid id collisions
         ++next_meta_id_;
         auto next_it = metadata_entries_.lower_bound(next_meta_id_);
-        while (next_it != metadata_entries_.end() &&
-               next_it->first == next_meta_id_) {
+        while (next_it != metadata_entries_.end() && next_it->first == next_meta_id_) {
             ++next_meta_id_;
             next_it = metadata_entries_.lower_bound(next_meta_id_);
         }
@@ -148,7 +151,9 @@ uint32_t MetadataStore::add(MetadataEntry& entry) {
     return entry.id();
 }
 
-size_t MetadataStore::size() const { return metadata_entries_.size(); }
+size_t MetadataStore::size() const {
+    return metadata_entries_.size();
+}
 
 const MetadataStore::MetadataEntriesMap& MetadataStore::entries() const {
     return metadata_entries_;

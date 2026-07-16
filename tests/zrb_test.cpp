@@ -1,7 +1,8 @@
-#include "ouster/zrb.h"
+#include "ouster/core/zrb.h"
 
 #include <gtest/gtest.h>
 
+#include <cstdio>
 #include <fstream>
 
 #include "util.h"
@@ -47,9 +48,8 @@ TEST(Zrb, from_file) {
     EXPECT_EQ(zrb.near_range_mm.cols(), 1024);
     EXPECT_EQ(zrb.near_range_mm.rows(), 128);
     EXPECT_EQ(zrb.serial_number, 122247000785ULL);
-    EXPECT_EQ(zrb.stl_hash,
-              ouster::sdk::core::Sha256("9cb392667efd9bb1dd2f02c138049243a6103b"
-                                        "4a0ef86574681c0641a195c7fd"));
+    EXPECT_EQ(zrb.stl_hash, ouster::sdk::core::Sha256("9cb392667efd9bb1dd2f02c138049243a6103b"
+                                                      "4a0ef86574681c0641a195c7fd"));
 }
 
 TEST(Zrb, equality) {
@@ -172,6 +172,7 @@ TEST(Zrb, load_default_stl_hash) {
     Zrb zrb_loaded(temp_zrb_path);
     // The STL hash should be set to nullopt if it is the default value
     EXPECT_EQ(zrb_loaded.stl_hash, nonstd::nullopt);
+    std::remove(temp_zrb_path.c_str());
 }
 
 TEST(Zrb, images_have_different_sizes) {
@@ -215,9 +216,7 @@ TEST(Zrb, overflow) {
                 zrb.blob();
             } catch (const std::logic_error& e) {
                 // Check that the exception message is as expected
-                EXPECT_STREQ(
-                    "Zrb::save: range value exceeds maximum encodable distance",
-                    e.what());
+                EXPECT_STREQ("Zrb::save: range value exceeds maximum encodable distance", e.what());
                 throw;
             }
         },

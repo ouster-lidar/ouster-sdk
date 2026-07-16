@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-#include "ouster/visibility.h"
+#include "ouster/core/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -121,8 +121,7 @@ int64_t append_binary_file(const std::string& append_to_file_name,
  * @return The number of bytes of the target file.
  */
 OUSTER_API_FUNCTION
-int64_t copy_file_trailing_bytes(const std::string& source_file,
-                                 const std::string& target_file,
+int64_t copy_file_trailing_bytes(const std::string& source_file, const std::string& target_file,
                                  uint64_t offset);
 }  // namespace osf
 }  // namespace sdk

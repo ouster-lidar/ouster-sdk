@@ -7,7 +7,7 @@ import socket
 import time
 from typing import (Iterable, Iterator, Optional, Tuple, Dict)  # noqa: F401
 
-from ouster.sdk.core import (LidarPacket, ImuPacket, Packet, PacketSource,  # noqa: F401
+from ouster.sdk.core import (LidarPacket, ImuPacket, ZonePacket, Packet, PacketSource,  # noqa: F401
                            SensorInfo, PacketValidationFailure)      # noqa: F401
 import ouster.sdk._bindings.pcap as _pcap
 import ouster.sdk._bindings.client as _client
@@ -81,6 +81,7 @@ def record(packets: Iterable[Packet],
            dst_ip: str = "127.0.0.1",
            lidar_port: int = 7502,
            imu_port: int = 7503,
+           zm_port: int = 7504,
            use_sll_encapsulation: bool = False) -> int:
     """Record a sequence of sensor packets to a pcap file.
 
@@ -109,6 +110,9 @@ def record(packets: Iterable[Packet],
             elif isinstance(packet, ImuPacket):
                 src_port = imu_port
                 dst_port = imu_port
+            elif isinstance(packet, ZonePacket):
+                src_port = zm_port
+                dst_port = zm_port
             else:
                 raise ValueError("Unexpected packet type")
 

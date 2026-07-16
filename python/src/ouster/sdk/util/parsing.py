@@ -3,14 +3,13 @@
 Doesn't rely on custom C++ extensions (just numpy). Provides writable
 view of packet data for testing and development.
 """
-from typing import (List, Optional, Any, cast)
+from typing import (List, Optional, Any, cast, Union)
 
 import numpy as np
 
 import ouster.sdk.core as core
-from ouster.sdk.core import Packet
-from ouster.sdk._bindings.client import PacketWriter
-from ouster.sdk._bindings.client import scan_to_packets as _scan_to_packets
+from ouster.sdk.core import LidarPacket, ZonePacket, ImuPacket, PacketFormat
+from ouster.sdk._bindings.client import frame_to_packets as _frame_to_packets
 
 
 def tohex(data: core.BufferT) -> str:
@@ -40,41 +39,41 @@ def tohex(data: core.BufferT) -> str:
         return "[]"
 
 
-def scan_to_packets(ls: core.LidarScan,
-                    info: core.SensorInfo) -> List[Packet]:
-    """Converts LidarScan to a lidar_packet buffers
+def frame_to_packets(lf: core.LidarFrame,
+                    info: core.SensorInfo) -> List[Union[LidarPacket, ZonePacket, ImuPacket]]:
+    """Converts LidarFrame to a lidar_packet buffers
 
     Args:
-        ls: LidarScan; if LidarScan has RAW_HEADERS field, packet headers
+        lf: LidarFrame; if LidarFrame has RAW_HEADERS field, packet headers
             are recreated to how they were in the original packets
-        info: metadata of the `ls` scan
+        info: metadata of the `lf` frame
 
     Returns:
-        A set of lidar packets that will produce the same LidarScan if passed
-        through the ScanBatcher again (less fields data)
+        A set of lidar packets that will produce the same LidarFrame if passed
+        through the FrameBatcher again (less fields data)
     """
-    return _scan_to_packets(ls, PacketWriter.from_info(info), info.init_id, int(info.sn))
+    return _frame_to_packets(lf, PacketFormat.from_info(info), info.init_id, int(info.sn))
 
 
-def packets_to_scan(
-        packets: List[Packet],
+def packets_to_frame(
+        packets: List[Union[LidarPacket, ZonePacket, ImuPacket]],
         info: core.SensorInfo,
         *,
-        fields: Optional[List[core.FieldType]] = None) -> core.LidarScan:
-    """Batch buffers that belongs to a single scan into a LidarScan object."""
+        fields: Optional[List[core.FieldType]] = None) -> core.LidarFrame:
+    """Batch buffers that belongs to a single frame into a LidarFrame object."""
     if fields is None:
-        ls = core.LidarScan(info)
+        lf = core.LidarFrame(info)
     else:
-        ls = core.LidarScan(info, fields)
-    batch = core.ScanBatcher(info)
+        lf = core.LidarFrame(info, fields)
+    batch = core.FrameBatcher(info)
     for packet in packets:
-        batch(packet, ls)
-    # scan finalisation is not necessary as scan is freshly created here
+        batch(packet, lf)
+    # frame finalisation is not necessary as frame is freshly created here
 
-    return ls
+    return lf
 
 
-def cut_raw32_words(ls: core.LidarScan) -> core.LidarScan:
+def cut_raw32_words(lf: core.LidarFrame) -> core.LidarFrame:
     cut_chans = [
         core.ChanField.RAW32_WORD1,
         core.ChanField.RAW32_WORD2,
@@ -88,5 +87,5 @@ def cut_raw32_words(ls: core.LidarScan) -> core.LidarScan:
     ]
 
     import ouster.sdk.osf as osf
-    new_fields = {c: ls.field(c).dtype for c in ls.fields if c not in cut_chans}
-    return osf.slice_and_cast(ls, new_fields)
+    new_fields = {c: lf.field(c).dtype for c in lf.fields if c not in cut_chans}
+    return osf.slice_and_cast(lf, new_fields)

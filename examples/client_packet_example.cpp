@@ -14,16 +14,17 @@
 #include <string>
 #include <vector>
 
-#include "ouster/client.h"
-#include "ouster/impl/build.h"
-#include "ouster/lidar_scan.h"
-#include "ouster/sensor_packet_source.h"
-#include "ouster/types.h"
-#include "ouster/xyzlut.h"
+#include "ouster/core/impl/build.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/types.h"
+#include "ouster/core/xyzlut.h"
+#include "ouster/sensor/client.h"
+#include "ouster/sensor/sensor_packet_source.h"
 
+// NOLINTNEXTLINE(google-build-using-namespace)
 using namespace ouster::sdk;
 
-const size_t N_SCANS = 5;
+const size_t N_FRAMES = 5;
 
 void fatal(const char* msg) {
     std::cerr << msg << std::endl;
@@ -32,8 +33,7 @@ void fatal(const char* msg) {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM
-                  << ")"
+        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM << ")"
                   << "\n\nUsage: client_example <sensor_hostname> "
                      "[<sensor_hostname>]..."
                   << std::endl;
@@ -71,35 +71,33 @@ int main(int argc, char* argv[]) {
         sensors.push_back(sensor);
         count.push_back(0);
     }
-
+    //! [doc-stag-frame-batching]
     sensor::SensorPacketSource client(sensors);
 
     std::cout << "Connection to sensors succeeded" << std::endl;
 
     // Since the client has fetched and cached the metadata, we can now print
     // info about each sensor and build objects necessary for batching.
-    std::vector<core::ScanBatcher> batch_to_scan;
-    std::vector<std::vector<core::LidarScan>> scans;
+    std::vector<core::FrameBatcher> batch_to_frame;
+    std::vector<std::vector<core::LidarFrame>> frames;
 
     std::vector<core::XYZLut> luts;
     for (const auto& info : client.sensor_info()) {
         size_t w = info->format.columns_per_frame;
         size_t h = info->format.pixels_per_column;
 
-        ouster::sdk::core::ColumnWindow column_window =
-            info->format.column_window;
+        ouster::sdk::core::ColumnWindow column_window = info->format.column_window;
 
         std::cout << "  Firmware version:  " << info->image_rev
                   << "\n  Serial number:     " << info->sn
-                  << "\n  Product line:      " << info->prod_line
-                  << "\n  Scan dimensions:   " << w << " x " << h
-                  << "\n  Column window:     [" << column_window.first << ", "
+                  << "\n  Product line:      " << info->prod_line << "\n  Frame dimensions:   " << w
+                  << " x " << h << "\n  Column window:     [" << column_window.first << ", "
                   << column_window.second << "]" << std::endl;
-        batch_to_scan.emplace_back(*info);
-        scans.emplace_back(N_SCANS, core::LidarScan{info});
+        batch_to_frame.emplace_back(*info);
+        frames.emplace_back(N_FRAMES, core::LidarFrame{info});
         // pre-compute a table for efficiently calculating point clouds from
         // range
-        luts.push_back(core::XYZLut(*info, true));
+        luts.emplace_back(*info, true);
     }
 
     /*
@@ -114,20 +112,20 @@ int main(int argc, char* argv[]) {
         auto event = client.get_packet(1.0);
         if (event.type == sensor::ClientEvent::PACKET) {
             if (event.packet().type() == core::PacketType::Lidar) {
-                auto& lidar_packet =
-                    static_cast<core::LidarPacket&>(event.packet());
-                if (count[event.source] == N_SCANS) {
+                // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+                // Safe: type verified above with event.packet().type() check
+                auto& lidar_packet = static_cast<core::LidarPacket&>(event.packet());
+                if (count[event.source] == N_FRAMES) {
                     continue;
                 }
-                //  batcher will return "true" when the current scan is complete
-                if (batch_to_scan[event.source](
-                        lidar_packet,
-                        scans[event.source][count[event.source]])) {
+                //  batcher will return "true" when the current frame is
+                //  complete
+                if (batch_to_frame[event.source].batch(lidar_packet,
+                                                       frames[event.source][count[event.source]])) {
                     // retry until we receive a full set of valid measurements
                     // (accounting for azimuth_window settings if any)
-                    if (scans[event.source][count[event.source]].complete(
-                            client.sensor_info()[event.source]
-                                ->format.column_window)) {
+                    if (frames[event.source][count[event.source]].complete(
+                            client.sensor_info()[event.source]->format.column_window)) {
                         count[event.source]++;
                     }
                 }
@@ -135,7 +133,7 @@ int main(int argc, char* argv[]) {
                 // got an IMU packet
             }
         }
-
+        //! [doc-etag-frame-batching]
         if (event.type == sensor::ClientEvent::ERR) {
             fatal("Sensor client returned error state!");
         }
@@ -144,11 +142,10 @@ int main(int argc, char* argv[]) {
             fatal("Sensor client returned poll timeout state!");
         }
 
-        // exit when we got all our scans
+        // exit when we got all our frames
         bool all = true;
-        for (size_t count_index = 0; count_index < count.size();
-             count_index++) {
-            if (count[count_index] != N_SCANS) {
+        for (const auto& cnt : count) {
+            if (cnt != N_FRAMES) {
                 all = false;
             }
         }
@@ -160,7 +157,7 @@ int main(int argc, char* argv[]) {
 
     /*
      * The example code includes functions for efficiently and accurately
-     * computing point clouds from range measurements. LidarScan data can
+     * computing point clouds from range measurements. LidarFrame data can
      * also be accessed directly using the Eigen[0] linear algebra library.
      *
      * [0] http://eigen.tuxfamily.org
@@ -168,33 +165,30 @@ int main(int argc, char* argv[]) {
     std::cout << "Computing point clouds... " << std::endl;
 
     std::vector<std::vector<core::PointCloudXYZd>> clouds;
-    clouds.resize(scans.size());
-    for (size_t i = 0; i < scans.size(); i++) {
-        for (const core::LidarScan& scan : scans[i]) {
+    clouds.resize(frames.size());
+    for (size_t i = 0; i < frames.size(); i++) {
+        for (const core::LidarFrame& frame : frames[i]) {
             // compute a point cloud using the lookup table
-            clouds[i].push_back(luts[i](scan));
+            clouds[i].push_back(luts[i](frame));
 
             // channel fields can be queried as well
             auto n_valid_first_returns =
-                (scan.field<uint32_t>(core::ChanField::RANGE) != 0).count();
+                (frame.field<uint32_t>(core::ChanField::RANGE) != 0).count();
 
-            // LidarScan also provides access to header information such as
+            // LidarFrame also provides access to header information such as
             // status and timestamp
-            auto status = scan.status();
+            auto status = frame.status();
             auto it = std::find_if(status.data(), status.data() + status.size(),
                                    [](const uint32_t status_val) {
                                        return (status_val & 0x01);
                                    });  // find first valid status
             if (it != status.data() + status.size()) {
                 auto ts_ms =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::nanoseconds(scan.timestamp()(
-                            it -
-                            status.data())));  // get corresponding timestamp
+                    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(
+                        frame.timestamp()(it - status.data())));  // get corresponding timestamp
 
-                std::cout << "  Frame no. " << scan.frame_id << " with "
-                          << n_valid_first_returns << " valid first returns at "
-                          << ts_ms.count() << " ms" << std::endl;
+                std::cout << "  Frame no. " << frame.frame_id << " with " << n_valid_first_returns
+                          << " valid first returns at " << ts_ms.count() << " ms" << std::endl;
             }
         }
     }
@@ -212,8 +206,7 @@ int main(int argc, char* argv[]) {
         file_base += std::to_string(i) + "_";
         int file_ind = 0;
         for (const core::PointCloudXYZd& cloud : clouds[i]) {
-            std::string filename =
-                file_base + std::to_string(file_ind++) + ".csv";
+            std::string filename = file_base + std::to_string(file_ind++) + ".csv";
             std::ofstream out;
             out.open(filename);
             out << std::fixed << std::setprecision(4);
@@ -222,8 +215,7 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < cloud.rows(); i++) {
                 auto xyz = cloud.row(i);
                 if (!xyz.isApproxToConstant(0.0)) {
-                    out << xyz(0) << ", " << xyz(1) << ", " << xyz(2)
-                        << std::endl;
+                    out << xyz(0) << ", " << xyz(1) << ", " << xyz(2) << std::endl;
                 }
             }
 

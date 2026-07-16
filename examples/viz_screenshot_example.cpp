@@ -12,15 +12,13 @@
 #include <random>
 #include <vector>
 
-#include "ouster/impl/build.h"
-#include "ouster/point_viz.h"
+#include "ouster/core/impl/build.h"
+#include "ouster/viz/point_viz.h"
 
 using namespace ouster::sdk;
-
 int main(int argc, char* /*unused*/[]) {
     if (argc != 1) {
-        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM
-                  << ")"
+        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM << ")"
                   << "\n\nUsage: viz_screenshot_example" << std::endl;
 
         return EXIT_FAILURE;
@@ -37,12 +35,10 @@ int main(int argc, char* /*unused*/[]) {
 
     // populate random coordinates and color indices
     std::vector<float> points(3 * cloud_size);
-    std::generate(points.begin(), points.end(),
-                  [&]() { return dis(random_engine); });
+    std::generate(points.begin(), points.end(), [&]() { return dis(random_engine); });
 
     std::vector<float> colors(cloud_size);
-    std::generate(colors.begin(), colors.end(),
-                  [&]() { return dis2(random_engine); });
+    std::generate(colors.begin(), colors.end(), [&]() { return dis2(random_engine); });
 
     // initialize visualizer and add keyboard/mouse callbacks
     viz::PointViz viz("Viz example");
@@ -60,22 +56,21 @@ int main(int argc, char* /*unused*/[]) {
     viz.update();
 
     // Add keyboard shortcuts for the screenshot and screen recording feature.
-    viz.push_key_handler(
-        [&](const auto& /*context*/, int ascii_value, int modifier) -> bool {
-            const double scale_factor = 2.0;
-            if (ascii_value == 88 && modifier == 0x0001) {  // SHIFT + X
-                auto file = viz.save_screenshot("", scale_factor);
-                std::cout << "Screenshot taken: " << file << std::endl;
+    viz.push_key_handler([&](const auto& /*context*/, int ascii_value, int modifier) -> bool {
+        const double scale_factor = 2.0;
+        if (ascii_value == 88 && modifier == 0x0001) {  // SHIFT + X
+            auto file = viz.save_screenshot("", scale_factor);
+            std::cout << "Screenshot taken: " << file << std::endl;
+        }
+        if (ascii_value == 90 && modifier == 0x0001) {  // SHIFT + Z
+            if (viz.toggle_screen_recording(scale_factor)) {
+                std::cout << "Screen recording STARTED" << std::endl;
+            } else {
+                std::cout << "Screen recording STOPPED" << std::endl;
             }
-            if (ascii_value == 90 && modifier == 0x0001) {  // SHIFT + Z
-                if (viz.toggle_screen_recording(scale_factor)) {
-                    std::cout << "Screen recording STARTED" << std::endl;
-                } else {
-                    std::cout << "Screen recording STOPPED" << std::endl;
-                }
-            }
-            return true;
-        });
+        }
+        return true;
+    });
 
     // run rendering loop. Will return when the window is closed
     std::cout << "Running rendering loop: press ESC to exit" << std::endl;

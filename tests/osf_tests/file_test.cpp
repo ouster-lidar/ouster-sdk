@@ -58,8 +58,7 @@ TEST_F(OsfFileTest, OpeningANonExistentFileThrows) {
 }
 
 TEST_F(OsfFileTest, OpenOsfFileNominally) {
-    auto path =
-        path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
+    auto path = path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
     for (auto& osf_file_ptr : get_files(path)) {
         auto& osf_file = *osf_file_ptr;
         EXPECT_TRUE(osf_file);
@@ -104,15 +103,13 @@ void testMoveSemantics(const std::string& path) {
 }
 
 TEST_F(OsfFileTest, OsfFileFullMoveSemantics) {
-    auto path =
-        path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
+    auto path = path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
     testMoveSemantics<StreamOsfFile>(path);
     testMoveSemantics<MemoryMappedOsfFile>(path);
 }
 
 TEST_F(OsfFileTest, OpenOsfFileWithStandardRead) {
-    auto path =
-        path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
+    auto path = path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
     for (auto& osf_file_ptr : get_files(path)) {
         auto& osf_file = *osf_file_ptr;
         EXPECT_TRUE(osf_file);

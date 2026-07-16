@@ -1,26 +1,26 @@
 import numpy as np
-from typing import Dict, Optional, List, Union
-from ouster.sdk.core import ChanField, LidarScanSet
+from typing import Dict, Optional, List, Union, cast
+from ouster.sdk.core import ChanField, FrameSet
 from ouster.sdk.core import dewarp
 from ouster.sdk._bindings.viz import Cloud, PointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
-from ouster.sdk.viz.model import LidarScanVizModel
+from ouster.sdk.viz.model import LidarFrameVizModel
 from ouster.sdk.viz.track import Track, TRACK_MAP_GROWTH_RATE
 from ouster.sdk.viz.view_mode import CloudPaletteItem
-from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
+from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
 
 MAP_INIT_POINTS_NUM: int = 10000
 
 
 class MapAccumulator(AccumulatorBase):
-    """Used by LidarScanVizAccumulators to display a point cloud that is produced by all scans in the source data."""
-    def __init__(self, model: LidarScanVizModel, point_viz: PointViz, track: Track, config:
-    LidarScanVizAccumulatorsConfig):
+    """Used by LidarFrameVizAccumulators to display a point cloud that is produced by all frames in the source data."""
+    def __init__(self, model: LidarFrameVizModel, point_viz: PointViz, track: Track, config:
+    LidarFrameVizAccumulatorsConfig):
 
         super().__init__(model, point_viz, track)
 
         # TODO[tws] consider refactoring or removing _map_enabled, either by making it an attribute of base or by
-        # using optional instances of MapAccumulator and ScansAccumulator to indicate
+        # using optional instances of MapAccumulator and FramesAccumulator to indicate
         # enabled status
         self._map_enabled = config._map_enabled
         self._accum_mode_map = self._map_enabled  # TODO[tws] kind of redundant
@@ -32,8 +32,7 @@ class MapAccumulator(AccumulatorBase):
         map_init_points_num = MAP_INIT_POINTS_NUM if self._map_enabled else 0
         map_init_points_num = min(self._map_max_points, map_init_points_num)
         self._map_xyz = np.zeros((map_init_points_num, 3),
-                                 dtype=np.float32,
-                                 order='F')
+                                 dtype=np.float32)
         # calculated color keys for every map point, indexed by cloud mode name
         self._map_keys: Dict[str, np.ndarray] = {}
         self._map_idx = 0
@@ -79,12 +78,13 @@ class MapAccumulator(AccumulatorBase):
                 self._map_max_points,
                 int((self._map_xyz.shape[0] + xyz_size) *
                     TRACK_MAP_GROWTH_RATE))
-            map_xyz = np.zeros((new_size, 3), dtype=np.float32, order='F')
+            map_xyz = np.zeros((new_size, 3), dtype=np.float32)
             map_xyz[:self._map_xyz.shape[0]] = self._map_xyz
             self._map_xyz = map_xyz
 
             for map_key_name, map_key in self._map_keys.items():
-                new_map_key = np.zeros(new_size, dtype=np.float32)
+                new_map_key = np.zeros(
+                    (new_size, *map_key.shape[1:]), dtype=map_key.dtype)
                 new_map_key[:map_key.shape[0]] = map_key
                 self._map_keys[map_key_name] = new_map_key
                 del map_key
@@ -105,20 +105,20 @@ class MapAccumulator(AccumulatorBase):
     def _update_map(self) -> None:
         """Update the map (MAP) data.
 
-        Extract the select ratio of random points from the current scan.
+        Extract the select ratio of random points from the current frame.
 
         The map size if bounded by ``map_max_points``, selected random points
         defined by ratio ``map_select_ratio``, flag that triggers the map
         overwrite from the beginning rather than randomly is
         ``map_overflow_from_start``.
         """
-        assert len(self._scan) == len(self._model._sensors)
-        for sensor, scan in zip(self._model._sensors, self._scan):
-            if scan is None:
+        assert len(self._frame) == len(self._model._sensors)
+        for sensor, frame in zip(self._model._sensors, self._frame):
+            if frame is None:
                 return
 
             # get random xyz points using map select ratio
-            range_field = scan.field(ChanField.RANGE)
+            range_field = frame.field(ChanField.RANGE)
             sel_flag = range_field != 0
             nzi, nzj = np.nonzero(sel_flag)
             nzc = np.random.choice(len(nzi),
@@ -126,7 +126,7 @@ class MapAccumulator(AccumulatorBase):
                                    replace=False)
             row_sel, col_sel = nzi[nzc], nzj[nzc]
             xyz = sensor._xyzlut(range_field)
-            xyz = dewarp(xyz, scan.pose)[row_sel, col_sel]
+            xyz = cast(np.ndarray, dewarp(xyz, frame.body_to_world))[row_sel, col_sel]
             xyz_num = xyz.shape[0]
 
             # TODO[tws] previously protected by "with self._lock" - do we still need this?
@@ -142,19 +142,20 @@ class MapAccumulator(AccumulatorBase):
             self._map_xyz[idxs] = xyz
 
             for mode in sensor._cloud_modes.values():
-                field_colors = mode._prepare_data(scan, return_num=0)
+                field_colors = mode._prepare_data(frame, return_num=0)
                 if field_colors is not None:
                     key = field_colors[row_sel, col_sel]
                     if mode.name not in self._map_keys:
-                        self._map_keys[mode.name] = np.zeros(self._map_xyz.shape[0], dtype=np.float32)
+                        self._map_keys[mode.name] = np.zeros(
+                            (self._map_xyz.shape[0], *key.shape[1:]), dtype=key.dtype)
                     self._map_keys[mode.name][idxs] = key
 
             self._map_idx += xyz_num
 
     def update(self,
-               scan: LidarScanSet,
-               scan_num: Optional[int] = None) -> None:
-        super().update(scan, scan_num)
+               frame: FrameSet,
+               frame_num: Optional[int] = None) -> None:
+        super().update(frame, frame_num)
         self._update_map()
 
     def _update_cloud_mode(self):

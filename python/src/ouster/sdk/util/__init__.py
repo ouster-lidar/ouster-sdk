@@ -9,7 +9,11 @@ This module provides generic utility functions and helpers for working with Oust
 from .metadata import resolve_metadata
 from .metadata import resolve_metadata_multi
 
-from .parsing import scan_to_packets        # type: ignore
+from .parsing import frame_to_packets        # type: ignore
+from ouster.sdk._deprecation import deprecated_alias
+# ``scan_to_packets`` was renamed to ``frame_to_packets``. Emit a deprecation
+# warning on use rather than aliasing it silently.
+deprecated_alias("scan_to_packets", "frame_to_packets", frame_to_packets, globals(), "1.0")
 
 from .extrinsics import img_aspect_ratio        # type: ignore
 

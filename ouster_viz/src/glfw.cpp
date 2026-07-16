@@ -11,15 +11,18 @@
 #include <string>
 
 #include "gltext.h"
-#include "ouster/point_viz.h"
-
-static bool is_opengl_es = false;
+#include "ouster/viz/point_viz.h"
 
 namespace ouster {
 namespace sdk {
 namespace viz {
 
 namespace {
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+bool g_is_opengl_es = false;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+float g_ui_scale = 1.0f;
 
 /*
  * Callback for glfw errors
@@ -31,8 +34,7 @@ void error_callback(int error, const char* description) {
 /*
  * Callback for keypress, runs during glfwPollEvents
  */
-void handle_key_press(GLFWwindow* window, int key, int /*scancode*/, int action,
-                      int mods) {
+void handle_key_press(GLFWwindow* window, int key, int /*scancode*/, int action, int mods) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         if (ctx->key_handler) {
@@ -44,8 +46,7 @@ void handle_key_press(GLFWwindow* window, int key, int /*scancode*/, int action,
 /*
  * Callback for resizing viewport (i.e. framebuffer)
  */
-void handle_framebuffer_resize(GLFWwindow* window, int fb_width,
-                               int fb_height) {
+void handle_framebuffer_resize(GLFWwindow* window, int fb_width, int fb_height) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     ctx->window_context.viewport_width = fb_width;
     ctx->window_context.viewport_height = fb_height;
@@ -59,8 +60,7 @@ void handle_framebuffer_resize(GLFWwindow* window, int fb_width,
 /*
  * Callback for resizing the window
  */
-void handle_window_resize(GLFWwindow* window, int window_width,
-                          int window_height) {
+void handle_window_resize(GLFWwindow* window, int window_width, int window_height) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     ctx->window_context.window_width = window_width;
     ctx->window_context.window_height = window_height;
@@ -75,8 +75,7 @@ void handle_window_resize(GLFWwindow* window, int window_width,
 /*
  * Callback for mouse press. Polled after each drawing.
  *
- * Keeps track of whether mouse is held down with lbutton_down member
- * variable
+ * Keeps track of whether mouse buttons are held down
  *
  * shift + left click is the same as middle click to support people with
  * very few mouse buttons
@@ -84,14 +83,30 @@ void handle_window_resize(GLFWwindow* window, int window_width,
 void handle_mouse_button(GLFWwindow* window, int button, int action, int mods) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     if (action == GLFW_PRESS) {
-        ctx->window_context.lbutton_down =
-            (button == GLFW_MOUSE_BUTTON_LEFT && mods == 0);
-        ctx->window_context.mbutton_down =
-            (button == GLFW_MOUSE_BUTTON_MIDDLE ||
-             (button == GLFW_MOUSE_BUTTON_LEFT && mods == GLFW_MOD_SHIFT));
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            if (mods == 0) {
+                ctx->window_context.lbutton_down = true;
+            } else if (mods == GLFW_MOD_SHIFT) {
+                ctx->window_context.mbutton_down = true;
+                ctx->emulated_mbutton_down = true;
+            }
+        } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+            ctx->window_context.mbutton_down = true;
+        } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            ctx->window_context.rbutton_down = true;
+        }
     } else if (action == GLFW_RELEASE) {
-        ctx->window_context.lbutton_down = false;
-        ctx->window_context.mbutton_down = false;
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            ctx->window_context.lbutton_down = false;
+            if (ctx->emulated_mbutton_down) {
+                ctx->emulated_mbutton_down = false;
+                ctx->window_context.mbutton_down = false;
+            }
+        } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+            ctx->window_context.mbutton_down = false;
+        } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            ctx->window_context.rbutton_down = false;
+        }
     }
 
     if (ctx->mouse_button_handler) {
@@ -141,18 +156,24 @@ void handle_cursor_enter(GLFWwindow* window, int entered) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     if (entered == 0) {
         ctx->window_context.lbutton_down = false;
+        ctx->window_context.rbutton_down = false;
         ctx->window_context.mbutton_down = false;
     }
 }
+
+#ifdef __APPLE__
+void handle_content_scale(GLFWwindow* /*window*/, float xscale, float /*yscale*/) {
+    g_ui_scale = xscale;
+}
+#endif
 
 }  // namespace
 
 /*
  * Initialize GLFW window
  */
-GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
-                         int window_width, int window_height, bool maximized,
-                         bool fullscreen, bool borderless) {
+GLFWContext::GLFWContext(const std::string& name, bool fix_aspect, int window_width,
+                         int window_height, bool maximized, bool fullscreen, bool borderless) {
     glfwSetErrorCallback(error_callback);
 
     // avoid chdir to resources dir on macos
@@ -178,18 +199,15 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     GLFWmonitor* monitor = fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
     // open a window and create its OpenGL context
-    window = glfwCreateWindow(window_width, window_height, name.c_str(),
-                              monitor, nullptr);
+    window = glfwCreateWindow(window_width, window_height, name.c_str(), monitor, nullptr);
 
     if (window == nullptr) {
-        std::cerr << "Failed to open OpenGL 3.3 context. Trying OpenGL ES 3.1"
-                  << std::endl;
+        std::cerr << "Failed to open OpenGL 3.3 context. Trying OpenGL ES 3.1" << std::endl;
         glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
-        window = glfwCreateWindow(window_width, window_height, name.c_str(),
-                                  monitor, nullptr);
-        ::is_opengl_es = (window != nullptr);
+        window = glfwCreateWindow(window_width, window_height, name.c_str(), monitor, nullptr);
+        g_is_opengl_es = (window != nullptr);
     }
     if (window == nullptr) {
         glfwTerminate();
@@ -204,8 +222,7 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
 
     std::cerr << "GL Renderer: " << glGetString(GL_RENDERER) << std::endl;
     std::cerr << "GL Version: " << glGetString(GL_VERSION)
-              << " (GLSL: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << ")"
-              << std::endl;
+              << " (GLSL: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << ")" << std::endl;
 
     // initialize text rendering
     if (gltInit() == GL_FALSE) {
@@ -213,6 +230,18 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
         glfwTerminate();
         throw std::runtime_error("Error initializing GLT");
     }
+
+#ifdef __APPLE__
+    // For now only listen to scale on mac to counteract it doing its own scaling
+    // If you enable this on other platforms the behaviors no longer match
+    // Perhaps we should reconsider GLFW_COCOA_RETINA_FRAMEBUFFER.
+    // get current scale
+    float xscale = 1.0f;
+    float yscale = 1.0f;
+    glfwGetWindowContentScale(window, &xscale, &yscale);
+    g_ui_scale = xscale;
+    glfwSetWindowContentScaleCallback(window, handle_content_scale);
+#endif
 
     // set up callbacks (run by glfwPollEvents)
     glfwSetFramebufferSizeCallback(window, handle_framebuffer_resize);
@@ -237,15 +266,15 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
 
     // initialize viewport size. Note: this is conceptually different than the
     // window size, and actually different on retina displays. See: glfw docs
-    int viewport_width;
-    int viewport_height;
+    int viewport_width = 0;
+    int viewport_height = 0;
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
 
     // set viewport for glText (in pixels)
     gltViewport(viewport_width, viewport_height);
 
-    int win_width;
-    int win_height;
+    int win_width = 0;
+    int win_height = 0;
     glfwGetWindowSize(window, &win_width, &win_height);
 
     // store window and viewport (i.e. framebuffer) sizes to the context
@@ -258,7 +287,9 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     glfwMakeContextCurrent(nullptr);
 }
 
-GLFWContext::~GLFWContext() { glfwDestroyWindow(window); }
+GLFWContext::~GLFWContext() {
+    glfwDestroyWindow(window);
+}
 
 void GLFWContext::terminate() {
     // TODO: can't terminate if we allow multiple instances
@@ -266,12 +297,18 @@ void GLFWContext::terminate() {
     glfwTerminate();
 }
 
-bool GLFWContext::running() { return glfwWindowShouldClose(window) == 0; }
+bool GLFWContext::running() const {
+    return glfwWindowShouldClose(window) == 0;
+}
 
+// Mutates GLFW window state; not logically const despite no member writes.
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void GLFWContext::running(bool state) {
     glfwSetWindowShouldClose(window, static_cast<int>(!state));
 }
 
+// Mutates GLFW window state; not logically const despite no member writes.
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void GLFWContext::visible(bool state) {
     if (state) {
         glfwShowWindow(window);
@@ -280,7 +317,13 @@ void GLFWContext::visible(bool state) {
     }
 }
 
-bool GLFWContext::is_opengl_es() { return ::is_opengl_es; }
+bool GLFWContext::is_opengl_es() {
+    return g_is_opengl_es;
+}
+
+float GLFWContext::ui_scale() {
+    return g_ui_scale;
+}
 
 }  // namespace viz
 }  // namespace sdk

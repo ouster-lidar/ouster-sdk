@@ -10,6 +10,7 @@ from ouster.sdk import core
 from ouster.sdk.examples import reference
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize("dtype", [
     np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16, np.int32,
     np.int64, np.float32, np.float64
@@ -71,36 +72,36 @@ def test_destagger_inverse(meta) -> None:
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_destagger_xyz(meta, scan) -> None:
+def test_destagger_xyz(meta, frame) -> None:
     """Check that we can destagger the output of xyz projection."""
     h = meta.format.pixels_per_column
     w = meta.format.columns_per_frame
-    xyz = core.XYZLut(meta)(scan)
+    xyz = core.XYZLut(meta)(frame)
 
     destaggered = core.destagger(meta, xyz)
     assert destaggered.shape == (h, w, 3)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_destagger_correct(meta, scan) -> None:
+def test_destagger_correct(meta, frame) -> None:
     """Compare core destagger function to reference implementation."""
 
     # get destaggered range field using reference implementation
     destagger_ref = reference.destagger(meta.format.pixel_shift_by_row,
-                                        scan.field(core.ChanField.RANGE))
+                                        frame.field(core.ChanField.RANGE))
 
     # obtain destaggered range field using core implemenation
     destagger_client = core.destagger(meta,
-                                      scan.field(core.ChanField.RANGE))
+                                      frame.field(core.ChanField.RANGE))
 
     assert np.array_equal(destagger_ref, destagger_client)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_destagger_correct_multi(meta, scan) -> None:
+def test_destagger_correct_multi(meta, frame) -> None:
     """Compare core destagger function to reference on stacked fields."""
 
-    near_ir = scan.field(core.ChanField.NEAR_IR)
+    near_ir = frame.field(core.ChanField.NEAR_IR)
     near_ir_stacked = np.repeat(near_ir[..., None], 5, axis=2)
 
     ref = reference.destagger(meta.format.pixel_shift_by_row, near_ir)

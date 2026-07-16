@@ -100,16 +100,16 @@ def test_azimuth_setting(hil_configured_sensor, hil_sensor_config,
     else:
         assert not expect_fail, "Configuration succeeded unexpectedly"
 
-    with closing(sensor.SensorScanSource(hil_configured_sensor)) as scans:
-        w = scans.sensor_info[0].format.columns_per_frame
+    with closing(sensor.SensorFrameSetSource(hil_configured_sensor)) as frame_sets:
+        w = frame_sets.sensor_info[0].format.columns_per_frame
 
-        col_window = scans.sensor_info[0].format.column_window
+        col_window = frame_sets.sensor_info[0].format.column_window
         logger.debug(f"Reported col_window: {col_window}")
 
         window_len = (col_window[1] - col_window[0] + w) % w + 1
         logger.debug(f"Expected valid columns: {window_len}")
 
-        ss = take(10, scans)
+        ss = take(10, frame_sets)
 
     for s, in ss:
         if not s.complete(col_window):

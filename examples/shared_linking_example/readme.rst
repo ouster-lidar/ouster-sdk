@@ -1,3 +1,6 @@
+Shared Linking example
+-----------------------
+
 This is a simple example on how to build a shared library and link a cpp project with the ouster_pcap
 library.
 

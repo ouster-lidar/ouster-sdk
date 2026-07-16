@@ -22,6 +22,7 @@ from ouster.sdk.pcap import PacketInfo
 import ouster.sdk._bindings.client as _client
 from tests.conftest import PCAPS_DATA_DIR, TESTS
 from tests.test_batching import _patch_frame_id  # type: ignore
+from tests.multi import Frames
 
 SLL_PROTO = 113
 ETH_PROTO = 1
@@ -45,14 +46,14 @@ def fake_packets(metadata: core.SensorInfo,
         if is_lidar:
             buf = bytearray(
                 getrandbits(8) for _ in range(pf.lidar_packet_size))
-            lpacket = core.LidarPacket(len(buf))
+            lpacket = core.LidarPacket(pf)
             lpacket.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
             if timestamped:
                 lpacket.host_timestamp = int(packet_ts * 1e9)
             yield lpacket
         else:
             buf = bytearray(getrandbits(8) for _ in range(pf.imu_packet_size))
-            ipacket = core.ImuPacket(len(buf))
+            ipacket = core.ImuPacket(pf)
             ipacket.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
             if timestamped:
                 ipacket.host_timestamp = int(packet_ts * 1e9)
@@ -88,14 +89,14 @@ def fake_packet_stream_with_frame_id(metadata: core.SensorInfo,
                     getrandbits(8) for _ in range(pf.lidar_packet_size))
                 set_init_id(buf, metadata.init_id)
                 set_prod_sn(buf, int(metadata.sn))
-                packet = core.LidarPacket(len(buf))
+                packet = core.LidarPacket(pf)
                 packet.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
                 assert packet.validate(metadata, pf) == PacketValidationFailure.NONE
                 _patch_frame_id(packet, frame_id_fn(frame))
                 yield packet
             else:
                 buf = bytearray(getrandbits(8) for _ in range(pf.imu_packet_size))
-                ipacket = core.ImuPacket(len(buf))
+                ipacket = core.ImuPacket(pf)
                 ipacket.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
                 assert ipacket.validate(metadata, pf) == PacketValidationFailure.NONE
                 yield ipacket
@@ -571,7 +572,7 @@ def test_indexed_pcap_reader_seek(tmpdir):
         assert packet_format.lidar_packet_size == reader.next_packet()
         assert reader.current_info().file_offset == reader.get_index().frame_indices[0][frame]
         assert reader.current_frame_id() == frame
-        assert reader.current_frame_id() == packet_format.frame_id(reader.current_data().tobytes())
+        assert reader.current_frame_id() == packet_format.frame_id(reader.current_data())
 
 
 def test_out_of_order_frames(tmpdir):
@@ -604,7 +605,7 @@ def test_out_of_order_frames(tmpdir):
         assert packet_format.lidar_packet_size == reader.next_packet()
         assert reader.current_info().file_offset == reader.get_index().frame_indices[0][frame]
         assert reader.current_frame_id() == (frame + 1) * 2
-        assert reader.current_frame_id() == packet_format.frame_id(reader.current_data().tobytes())
+        assert reader.current_frame_id() == packet_format.frame_id(reader.current_data())
 
 
 def test_current_data(fake_meta, tmpdir):
@@ -634,7 +635,7 @@ def test_current_data(fake_meta, tmpdir):
         info = reader.current_info()
         if info.dst_port == sensor_info.config.udp_port_lidar:
             packet_data = reader.current_data()
-            frame_ids.append(packet_format.frame_id(packet_data.tobytes()))
+            frame_ids.append(packet_format.frame_id(packet_data))
     assert frame_ids == [2, 1, 4, 3, 6, 5, 8, 7, 10, 9]
 
 
@@ -665,19 +666,19 @@ def test_legacy_reduced_json_data():
     pcap_file_path = path.join(PCAPS_DATA_DIR, 'OS-1-64_1024x10_fw20.pcap')
     metadata = core.SensorInfo(open(meta_file_path).read())
     packet_source = pcap.PcapPacketSource(pcap_file_path, sensor_info=[metadata])
-    scans = core.Scans(packet_source)
-    assert 1 == sum(1 for _ in scans)
+    frame_sets = Frames(packet_source)
+    assert 1 == sum(1 for _ in frame_sets)
 
 
 def test_packet_reassembly():
-    # make sure we get 1 valid packet/scan out of this file, ignoring the first fragment
+    # make sure we get 1 valid packet/frame out of this file, ignoring the first fragment
     meta_file_path = path.join(PCAPS_DATA_DIR, 'duplicate_id.json')
     pcap_file_path = path.join(PCAPS_DATA_DIR, 'duplicate_id.pcap')
     metadata = core.SensorInfo(open(meta_file_path).read())
     packet_source = pcap.PcapPacketSource(pcap_file_path, sensor_info=[metadata])
-    scans = core.Scans(packet_source)
+    frame_sets = Frames(packet_source)
     count = 0
-    for s, in scans:
+    for s, in frame_sets:
         count = count + 1
         assert s.frame_id == 1778
     assert count == 1

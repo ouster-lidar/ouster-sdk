@@ -12,7 +12,6 @@ from typing import Tuple
 
 from ouster.sdk import core, pcap
 
-from ouster.sdk.core import _utils
 import ouster.sdk.core._digest as digest
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -44,9 +43,9 @@ def genparams():
 
 @pytest.fixture(params=genparams())
 def ae_with_params(
-        request) -> Tuple[_utils.AutoExposure, Tuple[float, float, int]]:
+        request) -> Tuple[core.AutoExposure, Tuple[float, float, int]]:
     lo_percentile, hi_percentile, update_every = request.param
-    return (_utils.AutoExposure(lo_percentile, hi_percentile, update_every),
+    return (core.AutoExposure(lo_percentile, hi_percentile, update_every),
             (lo_percentile, hi_percentile, update_every))
 
 
@@ -89,7 +88,7 @@ def straight_line() -> np.ndarray:
 
 @pytest.fixture
 def stream_digest() -> digest.StreamDigest:
-    # load test scan and metadata
+    # load test frame and metadata
     digest_path = os.path.join(DATA_DIR, "OS-1-32-G_v2.1.1_1024x10_digest.json")
 
     with open(digest_path, 'r') as f:
@@ -104,18 +103,18 @@ def meta():
         return core.SensorInfo(f.read())
 
 @pytest.fixture
-def scan(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> core.LidarScan:
+def frame(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> core.LidarFrame:
     pcap_path = os.path.join(DATA_DIR, "OS-1-32-G_v2.1.1_1024x10.pcap")
 
-    with closing(pcap.PcapScanSource(pcap_path, sensor_info=[meta])) as source:
-        scan = next(iter(source))[0]
+    with closing(pcap.PcapFrameSetSource(pcap_path, sensor_info=[meta])) as source:
+        frame = next(iter(source))[0]
 
-    assert scan is not None
-    return scan
+    assert frame is not None
+    return frame
 
 
 def test_map_max_min(ae_with_params, normal_data_with_outliers, straight_line,
-                     scan):
+                     frame):
     """Test max and min values of AE
 
     All values should follow: 0 <= x <= 1"""
@@ -132,11 +131,11 @@ def test_map_max_min(ae_with_params, normal_data_with_outliers, straight_line,
     test_max_min(normal_data_with_outliers, auto_exposure)
     test_max_min(straight_line, auto_exposure)
     test_max_min(
-        scan.field(core.ChanField.NEAR_IR).astype(float), auto_exposure)
+        frame.field(core.ChanField.NEAR_IR).astype(float), auto_exposure)
 
 
 def test_map_zero(ae_with_params, normal_data_with_outliers, straight_line,
-                  scan):
+                  frame):
     """Test AE behavior for 0 values
 
     Should map 0 values to 0 no matter what"""
@@ -152,7 +151,7 @@ def test_map_zero(ae_with_params, normal_data_with_outliers, straight_line,
 
     test_zero(normal_data_with_outliers, auto_exposure)
     test_zero(straight_line, auto_exposure)
-    test_zero(scan.field(core.ChanField.RANGE).astype(float), auto_exposure)
+    test_zero(frame.field(core.ChanField.RANGE).astype(float), auto_exposure)
 
 
 def test_map_constant(ae_with_params):
@@ -269,8 +268,8 @@ def test_multiple_updates(ae_with_params, normal_params):
     lo_percentile, hi_percentile, update_every = params
     mean, stddev, rows, cols = normal_params
 
-    auto_exposure_copy = _utils.AutoExposure(lo_percentile, hi_percentile,
-                                             update_every)
+    auto_exposure_copy = core.AutoExposure(lo_percentile, hi_percentile,
+                                           update_every)
 
     key0 = outlierize_normal_data(mean, stddev, rows, cols)[0]
     key0_copy = np.array(key0)

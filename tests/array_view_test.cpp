@@ -3,13 +3,13 @@
  * All rights reserved.
  */
 
-#include "ouster/array_view.h"
+#include "ouster/core/array_view.h"
 
 #include <list>
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "ouster/impl/idx_range.h"
+#include "ouster/core/impl/idx_range.h"
 
 using namespace ouster::sdk::core;
 using namespace ouster::sdk::core::impl;
@@ -42,8 +42,7 @@ TEST(ArrayView_tests, args_restride_test) {
     EXPECT_EQ(new_shape[1], shape[3]);
 
     int32_t n_shape[3] = {0, 0, 0};
-    range_args_restride(shape, n_shape, idx_range{}, idx_range{}, idx_range{},
-                        15);
+    range_args_restride(shape, n_shape, idx_range{}, idx_range{}, idx_range{}, 15);
     EXPECT_EQ(n_shape[0], shape[0]);
     EXPECT_EQ(n_shape[1], shape[1]);
     EXPECT_EQ(n_shape[2], shape[2]);
@@ -82,8 +81,7 @@ TEST(ArrayView_tests, args_restride_vector_test) {
     EXPECT_EQ(new_shape[0], shape[0]);
     EXPECT_EQ(new_shape[1], shape[3]);
 
-    new_shape =
-        range_args_restride(shape, idx_range{}, idx_range{}, idx_range{}, 15);
+    new_shape = range_args_restride(shape, idx_range{}, idx_range{}, idx_range{}, 15);
     EXPECT_EQ(new_shape.size(), 3);
     EXPECT_EQ(new_shape[0], shape[0]);
     EXPECT_EQ(new_shape[1], shape[1]);
@@ -96,20 +94,15 @@ TEST(ArrayView_tests, args_reshape_test) {
     EXPECT_NO_THROW(range_args_reshape(shape, new_shape, idx_range{}, 0, 0));
     EXPECT_EQ(new_shape[0], shape[0]);
     EXPECT_EQ(new_shape[1], shape[3]);
-    EXPECT_NO_THROW(
-        range_args_reshape(shape, new_shape, idx_range{2, 3}, 0, 0));
+    EXPECT_NO_THROW(range_args_reshape(shape, new_shape, idx_range{2, 3}, 0, 0));
     EXPECT_EQ(new_shape[0], 1);
     EXPECT_EQ(new_shape[1], shape[3]);
-    EXPECT_NO_THROW(
-        range_args_reshape(shape, new_shape, idx_range{2, 8}, 0, 0));
+    EXPECT_NO_THROW(range_args_reshape(shape, new_shape, idx_range{2, 8}, 0, 0));
     EXPECT_EQ(new_shape[0], 6);
     EXPECT_EQ(new_shape[1], shape[3]);
-    EXPECT_THROW(range_args_reshape(shape, new_shape, idx_range{2, 2}, 0, 0),
-                 std::runtime_error);
-    EXPECT_THROW(range_args_reshape(shape, new_shape, idx_range{2, 1}, 0, 0),
-                 std::runtime_error);
-    EXPECT_THROW(range_args_reshape(shape, new_shape, idx_range{2, 11}, 0, 0),
-                 std::runtime_error);
+    EXPECT_THROW(range_args_reshape(shape, new_shape, idx_range{2, 2}, 0, 0), std::runtime_error);
+    EXPECT_THROW(range_args_reshape(shape, new_shape, idx_range{2, 1}, 0, 0), std::runtime_error);
+    EXPECT_THROW(range_args_reshape(shape, new_shape, idx_range{2, 11}, 0, 0), std::runtime_error);
 }
 
 TEST(ArrayView_tests, args_reshape_vector_test) {
@@ -119,22 +112,17 @@ TEST(ArrayView_tests, args_reshape_vector_test) {
     EXPECT_EQ(new_shape.size(), 2);
     EXPECT_EQ(new_shape[0], shape[0]);
     EXPECT_EQ(new_shape[1], shape[3]);
-    EXPECT_NO_THROW(new_shape =
-                        range_args_reshape(shape, idx_range{2, 3}, 0, 0));
+    EXPECT_NO_THROW(new_shape = range_args_reshape(shape, idx_range{2, 3}, 0, 0));
     EXPECT_EQ(new_shape.size(), 2);
     EXPECT_EQ(new_shape[0], 1);
     EXPECT_EQ(new_shape[1], shape[3]);
-    EXPECT_NO_THROW(new_shape =
-                        range_args_reshape(shape, idx_range{2, 8}, 0, 0));
+    EXPECT_NO_THROW(new_shape = range_args_reshape(shape, idx_range{2, 8}, 0, 0));
     EXPECT_EQ(new_shape.size(), 2);
     EXPECT_EQ(new_shape[0], 6);
     EXPECT_EQ(new_shape[1], shape[3]);
-    EXPECT_THROW(new_shape = range_args_reshape(shape, idx_range{2, 2}, 0, 0),
-                 std::runtime_error);
-    EXPECT_THROW(new_shape = range_args_reshape(shape, idx_range{2, 1}, 0, 0),
-                 std::runtime_error);
-    EXPECT_THROW(new_shape = range_args_reshape(shape, idx_range{2, 11}, 0, 0),
-                 std::runtime_error);
+    EXPECT_THROW(new_shape = range_args_reshape(shape, idx_range{2, 2}, 0, 0), std::runtime_error);
+    EXPECT_THROW(new_shape = range_args_reshape(shape, idx_range{2, 1}, 0, 0), std::runtime_error);
+    EXPECT_THROW(new_shape = range_args_reshape(shape, idx_range{2, 11}, 0, 0), std::runtime_error);
 }
 
 TEST(ArrayView_tests, constructor_test) {
@@ -287,8 +275,7 @@ TEST(ArrayView_tests, window_subview_test) {
     EXPECT_EQ(subview.strides[1], view.strides[1]);
 
     for (int y = 10; y < 20; ++y)
-        for (int x = 30; x < 45; ++x)
-            EXPECT_EQ(view(y, x), subview(y - 10, x - 30));
+        for (int x = 30; x < 45; ++x) EXPECT_EQ(view(y, x), subview(y - 10, x - 30));
 }
 
 TEST(ArrayView_tests, sparse_subview_test) {
@@ -366,8 +353,7 @@ TEST(ArrayView_tests, reshape_test) {
 
     EXPECT_THROW(view.reshape(3, 9, 12, 10), std::invalid_argument);
     EXPECT_THROW(view.reshape(3, 10), std::invalid_argument);
-    EXPECT_THROW(view.subview(keep(), 2).reshape(50, 2, 300),
-                 std::invalid_argument);
+    EXPECT_THROW(view.subview(keep(), 2).reshape(50, 2, 300), std::invalid_argument);
     EXPECT_NO_THROW(view.subview(2).reshape(100, 2, 300));
 
     {
@@ -379,24 +365,21 @@ TEST(ArrayView_tests, reshape_test) {
 
         int i = 0;
         for (size_t a = 0; a < reshaped.shape[0]; ++a)
-            for (size_t b = 0; b < reshaped.shape[1]; ++b)
-                EXPECT_EQ(reshaped(a, b), i++);
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) EXPECT_EQ(reshaped(a, b), i++);
     }
     {
         ConstArrayView2<int> reshaped = view.reshape(2, 100 * 100 * 300);
 
         int i = 0;
         for (size_t a = 0; a < reshaped.shape[0]; ++a)
-            for (size_t b = 0; b < reshaped.shape[1]; ++b)
-                EXPECT_EQ(reshaped(a, b), i++);
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) EXPECT_EQ(reshaped(a, b), i++);
     }
     {
         ConstArrayView2<int> reshaped = view.reshape(100 * 50, 4 * 300);
 
         int i = 0;
         for (size_t a = 0; a < reshaped.shape[0]; ++a)
-            for (size_t b = 0; b < reshaped.shape[1]; ++b)
-                EXPECT_EQ(reshaped(a, b), i++);
+            for (size_t b = 0; b < reshaped.shape[1]; ++b) EXPECT_EQ(reshaped(a, b), i++);
     }
     {
         ConstArrayView3<int> reshaped = view.reshape(200 * 10, 5, 2 * 300);
@@ -404,8 +387,7 @@ TEST(ArrayView_tests, reshape_test) {
         int i = 0;
         for (size_t a = 0; a < reshaped.shape[0]; ++a)
             for (size_t b = 0; b < reshaped.shape[1]; ++b)
-                for (size_t c = 0; c < reshaped.shape[2]; ++c)
-                    EXPECT_EQ(reshaped(a, b, c), i++);
+                for (size_t c = 0; c < reshaped.shape[2]; ++c) EXPECT_EQ(reshaped(a, b, c), i++);
     }
     {
         ConstArrayView4<int> reshaped = view.reshape(2, 50, 200, 300);

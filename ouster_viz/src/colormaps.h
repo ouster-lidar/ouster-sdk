@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <ouster/core/visibility.h>
+
 #include <cstddef>
 
 namespace ouster {
@@ -27,11 +29,23 @@ inline float** genPalette(const int n, const float from[3], const float to[3]) {
 #pragma warning(disable : 4305)
 #endif
 
+extern OUSTER_API_VAR const size_t DISTINCT_N = 36;
+extern OUSTER_API_VAR const float DISTINCT_PALETTE[DISTINCT_N][3] = {
+    {0.917, 0.005, 0.894}, {0.000, 1.000, 0.000}, {0.000, 0.500, 1.000}, {0.978, 0.556, 0.043},
+    {0.354, 0.415, 0.377}, {0.336, 0.974, 0.619}, {0.753, 0.008, 0.021}, {0.144, 0.008, 0.769},
+    {0.703, 0.526, 0.995}, {0.574, 0.876, 0.031}, {0.000, 0.500, 0.000}, {0.811, 0.771, 0.498},
+    {0.000, 1.000, 1.000}, {0.848, 0.294, 0.504}, {0.058, 0.735, 0.352}, {1.000, 1.000, 0.000},
+    {0.360, 0.018, 0.288}, {0.519, 0.205, 0.941}, {0.331, 0.724, 0.910}, {0.032, 0.335, 0.647},
+    {0.500, 0.500, 0.000}, {0.625, 0.989, 0.928}, {0.260, 0.242, 0.015}, {0.961, 0.322, 0.929},
+    {0.618, 0.024, 0.572}, {0.023, 0.628, 0.672}, {0.767, 0.306, 0.011}, {0.985, 0.024, 0.327},
+    {0.040, 0.196, 0.316}, {0.524, 0.663, 0.352}, {0.432, 0.455, 0.734}, {0.300, 0.947, 0.247},
+    {0.984, 0.726, 0.853}, {1.000, 1.000, 0.500}, {0.992, 0.535, 0.449}, {0.613, 0.993, 0.384}};
+
 // clang-format off
 // generated from:
 // https://daniel.lawrence.lu/public/colortransform/#0_2423_964_352_6_2624_1000_513_11_3248_1000_617_15_415_1000_774
-const size_t SPEZIA_N = 256;
-const float SPEZIA_PALETTE[SPEZIA_N][3] = {
+extern OUSTER_API_VAR const size_t SPEZIA_N = 256;
+extern OUSTER_API_VAR const float SPEZIA_PALETTE[SPEZIA_N][3] = {
     {0.0489092208, 0.3426569998, 0.5139042139},
     {0.048956722, 0.3439922929, 0.5173324943},
     {0.0489996932, 0.3453243077, 0.5207851529},
@@ -291,8 +305,8 @@ const float SPEZIA_PALETTE[SPEZIA_N][3] = {
 };
 
 
-const size_t SPEZIA_CAL_REF_N = 256;
-const float SPEZIA_CAL_REF_PALETTE[SPEZIA_CAL_REF_N][3] = {
+extern OUSTER_API_VAR const size_t SPEZIA_CAL_REF_N = 256;
+extern OUSTER_API_VAR const float SPEZIA_CAL_REF_PALETTE[SPEZIA_CAL_REF_N][3] = {
     {0.0489092208, 0.3426569998, 0.5139042139},
     {0.0490717851, 0.3479782045, 0.5277650356},
     {0.0491680056, 0.3545481861, 0.5456704497},
@@ -551,8 +565,8 @@ const float SPEZIA_CAL_REF_PALETTE[SPEZIA_CAL_REF_N][3] = {
     {1.0, 0.6758182049, 0.3921718895},
 };
 
-const size_t CALREF_N = 256;
-const float CALREF_PALETTE[CALREF_N][3] = {
+extern OUSTER_API_VAR const size_t CALREF_N = 256;
+extern OUSTER_API_VAR const float CALREF_PALETTE[CALREF_N][3] = {
     {0.37562745098039246f, 0.30080392156862746f, 0.6312941176470588f},
     {0.36862745098039246f, 0.30980392156862746f, 0.6352941176470588f},
     {0.3618608227604765f, 0.31856978085351784f, 0.6394463667820068f},
@@ -810,8 +824,8 @@ const float CALREF_PALETTE[CALREF_N][3] = {
     {0.6365244136870435f, 0.02268358323721642f, 0.2628219915417146f},
     {0.6280661284121491f, 0.013302575932333749f, 0.26082276047673913f}};
 
-const size_t GREY_N = 256;
-const float GREY_PALETTE[GREY_N][3] = {
+extern OUSTER_API_VAR const size_t GREY_N = 256;
+extern OUSTER_API_VAR const float GREY_PALETTE[GREY_N][3] = {
     {0.2, 0.2, 0.2},
     {0.20392156862745098, 0.20392156862745098, 0.20392156862745098},
     {0.20392156862745098, 0.20392156862745098, 0.20392156862745098},
@@ -1070,8 +1084,8 @@ const float GREY_PALETTE[GREY_N][3] = {
     {1.0, 1.0, 1.0},
 };
                                        
-const size_t GREY_CAL_REF_N = 256;
-const float GREY_CAL_REF_PALETTE[GREY_CAL_REF_N][3] = {
+extern OUSTER_API_VAR const size_t GREY_CAL_REF_N = 256;
+extern OUSTER_API_VAR const float GREY_CAL_REF_PALETTE[GREY_CAL_REF_N][3] = {
     {0.2, 0.2, 0.2},
     {0.21176470588235294, 0.21176470588235294, 0.21176470588235294},
     {0.22745098039215686, 0.22745098039215686, 0.22745098039215686},
@@ -1334,8 +1348,8 @@ const float GREY_CAL_REF_PALETTE[GREY_CAL_REF_N][3] = {
 
 // original colormaps licensed CC0f, public domain, no attribution needed:
 // https://github.com/BIDS/colormap/blob/master/LICENSE.txt
-const size_t VIRIDIS_N = 256;
-const float VIRIDIS_PALETTE[VIRIDIS_N][3] = {
+extern OUSTER_API_VAR const size_t VIRIDIS_N = 256;
+extern OUSTER_API_VAR const float VIRIDIS_PALETTE[VIRIDIS_N][3] = {
     {0.26700401f, 0.00487433f, 0.32941519f},
     {0.26851048f, 0.00960483f, 0.33542652f},
     {0.26994384f, 0.01462494f, 0.34137895f},
@@ -1593,8 +1607,8 @@ const float VIRIDIS_PALETTE[VIRIDIS_N][3] = {
     {0.98386829f, 0.90486726f, 0.13689671f},
     {0.99324789f, 0.90615657f, 0.1439362f}};
     
-const size_t VIRIDIS_CAL_REF_N = 256;
-const float VIRIDIS_CAL_REF_PALETTE[VIRIDIS_CAL_REF_N][3] = {
+extern OUSTER_API_VAR const size_t VIRIDIS_CAL_REF_N = 256;
+extern OUSTER_API_VAR const float VIRIDIS_CAL_REF_PALETTE[VIRIDIS_CAL_REF_N][3] = {
     {0.26700401, 0.00487433, 0.32941519},
     {0.27259384, 0.02556309, 0.35309303},
     {0.27794143, 0.05632444, 0.38119074},
@@ -1854,8 +1868,8 @@ const float VIRIDIS_CAL_REF_PALETTE[VIRIDIS_CAL_REF_N][3] = {
 };
 
 
-const size_t MAGMA_N = 256;
-const float MAGMA_PALETTE[MAGMA_N][3] = {
+extern OUSTER_API_VAR const size_t MAGMA_N = 256;
+extern OUSTER_API_VAR const float MAGMA_PALETTE[MAGMA_N][3] = {
     {0.232077, 0.059889, 0.437695},
     {0.238826, 0.059517, 0.443256},
     {0.238826, 0.059517, 0.443256},
@@ -2114,8 +2128,8 @@ const float MAGMA_PALETTE[MAGMA_N][3] = {
     {0.987053, 0.991438, 0.749504},
 };
     
-const size_t MAGMA_CAL_REF_N = 256;
-const float MAGMA_CAL_REF_PALETTE[MAGMA_CAL_REF_N][3] = {
+extern OUSTER_API_VAR const size_t MAGMA_CAL_REF_N = 256;
+extern OUSTER_API_VAR const float MAGMA_CAL_REF_PALETTE[MAGMA_CAL_REF_N][3] = {
     {0.232077, 0.059889, 0.437695},
     {0.25222, 0.059415, 0.453248},
     {0.278493, 0.061978, 0.46919},

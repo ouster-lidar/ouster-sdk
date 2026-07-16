@@ -1,4 +1,4 @@
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 #include <gtest/gtest.h>
 
@@ -39,8 +39,7 @@ TEST(PointViz, viewport_coordinates_to_image_pixel) {
     float img_data[w * h];
     img.set_image(w, h, img_data);
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
-    auto pixel =
-        img.viewport_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
+    auto pixel = img.viewport_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
     EXPECT_EQ(pixel.first, 0);
     EXPECT_EQ(pixel.second, 2);
 
@@ -48,13 +47,12 @@ TEST(PointViz, viewport_coordinates_to_image_pixel) {
     EXPECT_EQ(pixel.first, 0);
     EXPECT_EQ(pixel.second, 0);
 
-    pixel =
-        img.viewport_coordinates_to_image_pixel(ctx, ctx.window_width - 1, 0);
+    pixel = img.viewport_coordinates_to_image_pixel(ctx, ctx.window_width - 1, 0);
     EXPECT_EQ(pixel.first, 3);
     EXPECT_EQ(pixel.second, 0);
 
-    pixel = img.viewport_coordinates_to_image_pixel(ctx, ctx.window_width - 1,
-                                                    ctx.window_height - 1);
+    pixel =
+        img.viewport_coordinates_to_image_pixel(ctx, ctx.window_width - 1, ctx.window_height - 1);
     EXPECT_EQ(pixel.first, 3);
     EXPECT_EQ(pixel.second, 2);
 }
@@ -70,8 +68,7 @@ TEST(PointViz, image_pixel_to_viewport_coordinates) {
     float img_data[w * h];
     img.set_image(w, h, img_data);
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
-    auto pixel =
-        img.viewport_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
+    auto pixel = img.viewport_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
     EXPECT_EQ(pixel.first, 0);
     EXPECT_EQ(pixel.second, 2);
 
@@ -79,8 +76,7 @@ TEST(PointViz, image_pixel_to_viewport_coordinates) {
     EXPECT_FLOAT_EQ(pixel_size.first, 100);
     EXPECT_FLOAT_EQ(pixel_size.second, 100);
 
-    auto window_pixel =
-        img.image_pixel_to_viewport_coordinates(ctx, pixel.first, pixel.second);
+    auto window_pixel = img.image_pixel_to_viewport_coordinates(ctx, pixel.first, pixel.second);
     EXPECT_FLOAT_EQ(window_pixel.first, 50);
     EXPECT_FLOAT_EQ(window_pixel.second, 250);
 }

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable
 import os
 import subprocess
 import socket
@@ -9,19 +9,18 @@ import time
 import json
 import click
 from datetime import datetime, timezone
-from ouster.sdk.core import SensorInfo, OperatingMode, UDPProfileLidar, TimestampMode
-from ouster.sdk.zone_monitor import ZoneSetOutputFilter
+from ouster.sdk.core import SensorInfo, OperatingMode, UDPProfileLidar, TimestampMode, ZoneSetOutputFilter
 from ouster.sdk._bindings.client import PacketType
-from ouster.sdk.util.parsing import scan_to_packets
-from ouster.sdk.core.io_types import OusterIoType, io_type
+from ouster.sdk.util.parsing import frame_to_packets
+from ouster.sdk.core import OusterIoType, io_type
 from ouster.cli.plugins.source_util import (SourceCommandContext,
                                             SourceCommandType,
                                             source_multicommand)
 from ouster.cli.plugins.source import source  # type: ignore
 from ouster.sdk.pcap import PcapPacketSource
 from ouster.sdk.bag import BagPacketSource
-from ouster.sdk.osf import OsfScanSource
-from zeroconf import ServiceInfo, Zeroconf
+from ouster.sdk.osf import OsfFrameSetSource
+from zeroconf import ServiceInfo, Zeroconf, NonUniqueNameException
 from flask import Flask, request, jsonify, render_template
 
 
@@ -33,77 +32,80 @@ def ts_format(ts):
     return datetime.fromtimestamp(ts * 1e-9, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f %Z')
 
 
+def proxy_uri_normalizer(wsgi_app):
+    """Normalize absolute-form request URIs from HTTP-proxy clients.
+
+    The Ouster client reaches the sensor through an HTTP proxy (the replay
+    server itself), so it sends proxy-style requests whose target is an
+    absolute URI, e.g. ``GET http://127.0.0.1/api/v1/... HTTP/1.1``. Waitress
+    reduced that to the bare path in ``PATH_INFO``, but Hypercorn leaves the
+    full absolute URI there, which fails to match any Flask route (404). This
+    middleware rewrites ``PATH_INFO`` back to just the path component.
+    """
+    def _app(environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        for scheme in ("http://", "https://"):
+            if path.startswith(scheme):
+                authority_and_path = path[len(scheme):]
+                slash = authority_and_path.find("/")
+                environ["PATH_INFO"] = authority_and_path[slash:] if slash != -1 else "/"
+                break
+        return wsgi_app(environ, start_response)
+    return _app
+
+
 app = Flask(__name__)
 
 
-class SensorPacketSource():
-
-    def __init__(self, source_url, cycle):
-        self._source_url = source_url
-        self._loop = cycle
-        self._packet_source = self._init_pkt_src()
-
-    def _init_pkt_src(self):
-        from ouster.sdk._bindings.client import SensorPacketSource as SPS
-        return SPS([(self._source_url)])
-
-    @property
-    def sensor_info(self):
-        # HACK: quick prototype, store the value
-        # TODO: we need to enable this for other sources
-        from copy import deepcopy
-        out = deepcopy(self._packet_source.sensor_info)
-        out[0].config.udp_port_imu += 2
-        out[0].config.udp_port_lidar += 2
-        return out
-
-    def __iter__(self):
-        while True:
-            try:
-                for packet in self._packet_source:
-                    yield packet
-            except StopIteration:
-                if self._loop:
-                    self._packet_source = self._init_pkt_src()
-                else:
-                    break
-
-
 class OsfPacketSource():
-    """Converts OSF scans to packets."""
+    """Converts OSF frames to packets."""
     def __init__(self, source_url, soft_id_check):
         if soft_id_check:
             click.secho("soft_id_check is not supported for OSF sources, flag is ignored!",
                         fg='yellow')
         self._source_url = source_url
-        self._scan_source = self._init_pkt_src()
-
-    @property
-    def sensor_info(self):
-        return self._scan_source.sensor_info
-
-    def _init_pkt_src(self):
-        return OsfScanSource(self._source_url)
+        self._frame_set_source = OsfFrameSetSource(self._source_url)
+        self._sensor_info = self._frame_set_source.sensor_info
 
     def __iter__(self):
-        for scan, in self._scan_source:
-            packets = scan_to_packets(scan, self.sensor_info[0])
+        for frame, in self._frame_set_source:
+            if frame is None:
+                continue
+            packets = frame_to_packets(frame, self._sensor_info[0])
+            for packet in packets:
+                yield 0, packet
+
+
+class FrameToPacketSource():
+    """Converts frames to packets."""
+    def __init__(self, source, soft_id_check, sensor_info):
+        if soft_id_check:
+            click.secho("soft_id_check is not supported for chained sources, flag is ignored!",
+                        fg='yellow')
+        self._frame_set_source = source
+        self._sensor_info = sensor_info
+
+    def __iter__(self):
+        for frame, in self._frame_set_source:
+            if frame is None:
+                continue
+            packets = frame_to_packets(frame, self._sensor_info[0])
             for packet in packets:
                 yield 0, packet
 
 
 class PacketSourcePacer():
-
-    def __init__(self, packet_source_factory, rate, loop=False):
+    def __init__(self, packet_source_factory, rate, sensor_info, loop=False):
         self._packet_source_factory = packet_source_factory
         self._packet_source = packet_source_factory()
         self._rate = rate
         self._loop = loop
         self._restart_timestamp = None
+        self._sensor_info = sensor_info
 
     @property
     def sensor_info(self):
-        return self._packet_source.sensor_info
+        return self._sensor_info
 
     def _restart_source(self):
         """Restart the packet source and reset timing."""
@@ -124,46 +126,37 @@ class PacketSourcePacer():
             pcap_start_time = None
             real_start_time = None
 
-            try:
-                for _, packet in self._packet_source:
-                    if not started:
-                        started = True
-                        pcap_start_time = packet.host_timestamp
-                        real_start_time = time.perf_counter()
-                        # Yield the first packet immediately without delay
-                        yield packet
-                        continue
-
-                    # Calculate the arrival time based on packet timestamp and rate
-                    packet_time_offset = (packet.host_timestamp - pcap_start_time) * 1e-9
-                    arrival_time = real_start_time + (packet_time_offset / self._rate)
-
-                    # Sleep until real-time catches up with the packet time
-                    while True:
-                        current_time = time.perf_counter()
-                        sleep_duration = arrival_time - current_time
-                        if sleep_duration <= 0:
-                            break
-                        time.sleep(sleep_duration)
-
+            for _, packet in self._packet_source:
+                if not started:
+                    started = True
+                    pcap_start_time = packet.host_timestamp
+                    real_start_time = time.perf_counter()
+                    # Yield the first packet immediately without delay
                     yield packet
+                    continue
 
-                # If we reach here, the source has ended naturally
-                if self._loop:
-                    self._restart_source()
-                else:
-                    break
+                # Calculate the arrival time based on packet timestamp and rate
+                packet_time_offset = (packet.host_timestamp - pcap_start_time) * 1e-9
+                arrival_time = real_start_time + (packet_time_offset / self._rate)
 
-            except StopIteration:
-                # Handle explicit StopIteration from the source
-                if self._loop:
-                    self._restart_source()
-                else:
-                    break
+                # Sleep until real-time catches up with the packet time
+                while True:
+                    current_time = time.perf_counter()
+                    sleep_duration = arrival_time - current_time
+                    if sleep_duration <= 0:
+                        break
+                    time.sleep(sleep_duration)
+
+                yield packet
+
+            # If we reach here, the source has ended naturally
+            if self._loop:
+                self._restart_source()
+            else:
+                break
 
 
 io_type_handlers = {
-    OusterIoType.SENSOR: SensorPacketSource,    # TODO: maybe?
     OusterIoType.PCAP: PcapPacketSource,
     OusterIoType.OSF: OsfPacketSource,
     OusterIoType.BAG: BagPacketSource,
@@ -172,7 +165,6 @@ io_type_handlers = {
 
 
 class mDNSService:
-
     def __init__(self, sensor_info: SensorInfo):
         self._sensor_info = sensor_info
         service_type = "_roger._tcp.local."
@@ -194,7 +186,11 @@ class mDNSService:
             server="localhost"
         )
         self._zeroconf = Zeroconf(interfaces=self._active_addresses())
-        self.register()
+        try:
+            self.register()
+        except NonUniqueNameException:
+            print("WARNING: Unable to register mDNS as a device with"
+                  " this hostname already exists.")
 
     def _active_addresses(self):
         addresses = psutil.net_if_addrs()
@@ -236,7 +232,6 @@ class mDNSService:
 
 
 class HttpServer():
-
     def __init__(self, sensor, http_addr, http_port):
         self._sensor = sensor
         self._http_addr = http_addr
@@ -670,28 +665,65 @@ class HttpServer():
         self.start()
 
     def start(self):
-        self._service_status = {"status": 0}
+        service_exception = None
 
-        def serve_flask_app(http_addr, http_port, service_status):
-            from waitress import serve
+        def serve_flask_app(http_addr, http_port):
+            nonlocal service_exception
+
+            serve_method: Callable[[], None]
+            # Try various server backends failing back to the one built into flask
             try:
-                serve(app, host=http_addr, port=http_port)
-            except PermissionError:
-                click.secho("Permission error!",
-                            fg='red')
-                service_status['status'] = -1
+                from hypercorn.config import Config  # type: ignore
+                from hypercorn.asyncio import serve  # type: ignore
+                import asyncio
+
+                config = Config()
+                config.bind = [f"{http_addr}:{http_port}"]
+
+                async def _serve():
+                    # The server runs in a background (non-main) thread, so disable
+                    # Hypercorn's default signal-based shutdown (it can only install
+                    # signal handlers from the main thread) with a trigger that
+                    # never fires; the daemon thread is torn down with the process.
+                    await serve(proxy_uri_normalizer(app), config, mode="wsgi",
+                                shutdown_trigger=asyncio.Event().wait)
+
+                def real_serve():
+                    asyncio.run(_serve())
+
+                serve_method = real_serve
+            except ModuleNotFoundError:
+                try:
+                    from waitress import serve  # type: ignore
+
+                    def real_serve():
+                        serve(app, host=http_addr, port=http_port)
+
+                    serve_method = real_serve
+                except ModuleNotFoundError:
+                    click.secho("WARNING: Hypercorn and Waitress not found."
+                                " Falling back to Flask HTTP server.", fg='yellow')
+                    import logging
+                    logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
+                    def real_serve():
+                        app.run(host=http_addr, port=http_port)
+
+                    serve_method = real_serve
+
+            try:
+                serve_method()
             except Exception as e:
-                print("Unknown error: " + str(e))
-                service_status['status'] = -2
+                service_exception = e
 
         self._flask_thread = threading.Thread(target=serve_flask_app,
-                                              args=(self._http_addr, self._http_port, self._service_status,),
+                                              args=(self._http_addr, self._http_port),
                                               daemon=True)
 
         self._flask_thread.start()
         time.sleep(0.5)
-        if "status" in self._service_status and self._service_status["status"] != 0:
-            raise RuntimeError("http server failed to start")
+        if service_exception is not None:
+            raise service_exception
 
         print("http server started")
 
@@ -713,25 +745,29 @@ class HttpServer():
         print("http server stopped")
 
 
-class ScanSourceUdpReplay():
-
-    def __init__(self, source_url, http_addr, http_port, loop, rate, soft_id_check, lidar_port=-1,
+class FrameSetSourceUdpReplay():
+    def __init__(self, source, http_addr, http_port, loop, rate, soft_id_check, lidar_port=-1,
                  imu_port=-1, udp_dest="127.0.0.1", operating_mode="NORMAL", sensor_sn="",
-                 hide_diagnostics=False, zm_port=-1):
+                 hide_diagnostics=False, zm_port=-1, sensor_info=None):
 
-        source_type = io_type(source_url)
-        pkt_src_handler = io_type_handlers[source_type]
+        if not isinstance(source, str):
+            def packet_source_factory():
+                return FrameToPacketSource(source(), soft_id_check, sensor_info)
+        else:
+            source_type = io_type(source)
+            pkt_src_handler = io_type_handlers[source_type]
 
-        # Create a factory function that produces packet sources
-        def packet_source_factory():
-            return pkt_src_handler(source_url, soft_id_check=soft_id_check)
+            # Create a factory function that produces packet sources
+            def packet_source_factory():
+                return pkt_src_handler(source, soft_id_check=soft_id_check)
 
         self._packet_source = PacketSourcePacer(
-                                packet_source_factory,
-                                rate=rate,
-                                loop=loop)
+                                    packet_source_factory,
+                                    rate=rate,
+                                    loop=loop,
+                                    sensor_info=sensor_info)
 
-        self._sensor_info = self._packet_source.sensor_info[SENSOR_IDX]
+        self._sensor_info = sensor_info[SENSOR_IDX]
         # override ports before starting the HTTP server & DNS service
         if lidar_port != -1:
             self._sensor_info.config.udp_port_lidar = lidar_port
@@ -744,6 +780,7 @@ class ScanSourceUdpReplay():
         self._sensor_info.config.udp_dest_zm = udp_dest
         self._sensor_info.sn = int(sensor_sn) if sensor_sn != "" else self._sensor_info.sn
         self._sensor_info.config.operating_mode = OperatingMode.from_string(operating_mode)
+        self._sensor_info.status = "INITIALIZING"
 
         self._show_diagnostics = not hide_diagnostics
         self._first_diagnostics_message = True
@@ -779,6 +816,7 @@ class ScanSourceUdpReplay():
             try:
                 sock_lidar = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 sock_imu = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self._sensor_info.status = "RUNNING"
                 print("sockets initialized")
                 initialized = True
             except ConnectionRefusedError:
@@ -805,7 +843,7 @@ class ScanSourceUdpReplay():
             udp_port_imu = self._sensor_info.config.udp_port_imu
             udp_port_zm = self._sensor_info.config.udp_port_zm
 
-            if operating_mode == OperatingMode.OPERATING_NORMAL:
+            if operating_mode == OperatingMode.NORMAL:
                 if packet.type == PacketType.Lidar:
                     sock_lidar.sendto(
                         packet.buf, (udp_dest, udp_port_lidar))
@@ -933,27 +971,43 @@ def build_ouster_cli_sensor_replay_image(ouster_sdk: str):
 @click.option('--hide-diagnostics', is_flag=True, default=False, show_default=True,
               help="Hide diagnostic information.")
 @click.pass_context
-@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED)
+@source_multicommand(type=SourceCommandType.CONSUMER)
 def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: str, http_port: int,
                          lidar_port: Optional[int], imu_port: Optional[int],
                          loop: bool, rate: float, ouster_sdk: str, udp_dest: str,
                          operating_mode: str, sensor_sn: str, hide_diagnostics: bool) -> None:
     """
-    [BETA] Replay PCAP|BAG|OSF|MCAP as a Sensor
+    [BETA] Replay PCAP|OSF|BAG|MCAP as a Sensor
     """
 
     soft_id_check = ctx.source_options.get("soft_id_check", False)
 
     if not dockerize:
         try:
-            ScanSourceUdpReplay(ctx.source_uri, http_addr, http_port, loop, rate, soft_id_check, lidar_port, imu_port,
-                                udp_dest, operating_mode, sensor_sn, hide_diagnostics)
-        except RuntimeError:
+            assert ctx.frame_set_source is not None
+            sensor_info = ctx.frame_set_source.sensor_info
+            source = ctx.source_uri if len(ctx.invoked_command_names) == 1 else ctx.frame_set_iter
+            if "lidar_profile" in ctx.other_options:
+                profile = ctx.other_options["lidar_profile"]
+                for info in sensor_info:
+                    info.format.udp_profile_lidar = profile
+                    info.config.udp_profile_lidar = profile
+                source = ctx.frame_set_iter  # must do frames to packets to change lidar profile
+            if ctx.invoked_command_names[-1] != "sensor_replay":
+                click.secho("sensor_replay must be the last command in a chain", fg='red')
+                exit(1)
+            FrameSetSourceUdpReplay(source, http_addr, http_port, loop, rate, soft_id_check,
+                                lidar_port, imu_port,
+                                udp_dest, operating_mode, sensor_sn, hide_diagnostics,
+                                sensor_info=sensor_info)
+            exit(0)
+        except (PermissionError, OSError) as e:
+            print(e)
             click.secho("Failed to start the service, this is likely due trying to run with the default"
                         " http port (80) and not having the necessary permissions, to resolve this try"
                         " one of the following options:\n"
                         "1) set the --http-port to a value higher than 1024 in combination with one of the following:\n"
-                        "   a) (preferred) Set the environment varialbe 'http_proxy' to http://localhost:port (for port"
+                        "   a) (preferred) Set the environment variable 'http_proxy' to http://localhost:port (for port"
                         " use the same value you used as the http-port) then launch the client app.\n"
                         "   b) If the above option fail you can use a reverse proxy such as ngix or similar to re-route"
                         " the selected http-port value to port 80 and then launch the client app.\n"
@@ -962,6 +1016,7 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: 
                         " --dockerize  to the 'sensor_replay' command, follow the prompts to spin the service in a"
                         " container. Please note that this option isn't compatible with rootless docker mode.",
                         fg="yellow")
+            exit(-1)
         return
 
     if os.path.exists(ouster_sdk) and \

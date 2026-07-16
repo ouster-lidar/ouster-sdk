@@ -1,8 +1,8 @@
 from .conftest import MockPointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
-from ouster.sdk.core import SensorInfo, LidarMode, LidarScan, ChanField
-from ouster.sdk.viz.model import LidarScanVizModel
-from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
+from ouster.sdk.core import SensorInfo, LidarMode, LidarFrame, ChanField
+from ouster.sdk.viz.model import LidarFrameVizModel
+from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
 from ouster.sdk.viz.track import MultiTrack
 
 
@@ -16,19 +16,19 @@ def test_use_default_view_modes():
     for info in infos:
         info.image_rev = 'ousteros-image-prod-bootes-v3.0.1'  # needed for "is_norm_reflectivity_mode"
     viz = MockPointViz()
-    model = LidarScanVizModel(viz, infos, _img_aspect_ratio=0)
-    config = LidarScanVizAccumulatorsConfig(accum_max_num=2, accum_min_dist_num=2)
+    model = LidarFrameVizModel(viz, infos, _img_aspect_ratio=0)
+    config = LidarFrameVizAccumulatorsConfig(accum_max_num=2, accum_min_dist_num=2)
     track = MultiTrack(model, config)
     accum = AccumulatorBase(model, viz, track)
     assert accum.metadata == infos
     assert accum.active_cloud_mode == ''
     assert accum.get_palette(accum.active_cloud_mode).name == 'Cal. Ref'
 
-    # no cloud mode name is set initially and none are available until the first scan is read
+    # no cloud mode name is set initially and none are available until the first frame is read
     accum._use_default_view_modes()
     assert accum.active_cloud_mode == accum._cloud_mode_name == ''
 
-    model._amend_view_modes_all([LidarScan(1, 1) for _ in infos])
+    model._amend_view_modes_all([LidarFrame(info) for info in infos])
 
     accum._use_default_view_modes()
     assert accum.active_cloud_mode == ChanField.REFLECTIVITY
@@ -51,4 +51,4 @@ def test_use_default_view_modes():
     assert accum.active_cloud_mode == "RING"
 
     accum.cycle_cloud_mode()
-    assert accum.active_cloud_mode == ChanField.SIGNAL
+    assert accum.active_cloud_mode == "SENSOR"

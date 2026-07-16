@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "ouster/osf/lidarscan_encoder.h"
-#include "ouster/visibility.h"
+#include "ouster/core/visibility.h"
+#include "ouster/osf/lidarframe_encoder.h"
 
 namespace ouster {
 namespace sdk {
@@ -16,34 +16,34 @@ namespace osf {
 /**
  * @brief used to configure the osf::Writer class.
  *
- * Right now it only contains a shared ptr to a LidarScanEncoder,
+ * Right now it only contains a shared ptr to a LidarFrameEncoder,
  * but in the future it may contain other items to allow parts of the OSF
  * encoding to vary independently.
  */
 class OUSTER_API_CLASS Encoder {
    public:
     /**
-     * @brief Construct an Encoder with a given LidarScanEncoder.
+     * @brief Construct an Encoder with a given LidarFrameEncoder.
      *
-     * @param[in] lidar_scan_encoder Shared pointer to the scan encoder
+     * @param[in] lidar_frame_encoder Shared pointer to the frame encoder
      * instance.
      */
     OUSTER_API_FUNCTION
-    Encoder(const std::shared_ptr<LidarScanEncoder>& lidar_scan_encoder)
-        : lidar_scan_encoder_{lidar_scan_encoder} {}
+    Encoder(const std::shared_ptr<LidarFrameEncoder>& lidar_frame_encoder)
+        : lidar_frame_encoder_{lidar_frame_encoder} {}
 
     /**
-     * @brief Access the internal LidarScanEncoder instance.
+     * @brief Access the internal LidarFrameEncoder instance.
      *
-     * @return Reference to the LidarScanEncoder.
+     * @return Reference to the LidarFrameEncoder.
      */
     OUSTER_API_FUNCTION
-    LidarScanEncoder& lidar_scan_encoder() const {
-        return *lidar_scan_encoder_;
+    LidarFrameEncoder& lidar_frame_encoder() const {
+        return *lidar_frame_encoder_;
     }
 
    private:
-    std::shared_ptr<LidarScanEncoder> lidar_scan_encoder_;
+    std::shared_ptr<LidarFrameEncoder> lidar_frame_encoder_;
 };
 
 }  // namespace osf

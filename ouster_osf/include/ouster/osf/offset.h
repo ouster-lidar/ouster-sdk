@@ -13,7 +13,7 @@
 #include <ostream>
 #include <vector>
 
-#include "ouster/visibility.h"
+#include "ouster/core/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -86,12 +86,12 @@ class OUSTER_API_CLASS OsfOffset {
 
 /**
  * @brief Output stream operator for OsfOffset.
- * @param[in,out] os Output stream.
+ * @param[in,out] out_stream Output stream.
  * @param[in] offset The OsfOffset to output.
  * @return Reference to the output stream.
  */
 OUSTER_API_FUNCTION
-std::ostream& operator<<(std::ostream& os, const OsfOffset& offset);
+std::ostream& operator<<(std::ostream& out_stream, const OsfOffset& offset);
 
 }  // namespace osf
 }  // namespace sdk

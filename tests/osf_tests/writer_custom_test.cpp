@@ -24,7 +24,9 @@ class MyNewMetaInfo : public MetadataEntryHelper<MyNewMetaInfo> {
    public:
     explicit MyNewMetaInfo(const std::string& text) : text_(text) {}
 
-    const std::string& text() const { return text_; }
+    const std::string& text() const {
+        return text_;
+    }
 
     // Pack to byte array
     std::vector<uint8_t> buffer() const final {
@@ -32,13 +34,15 @@ class MyNewMetaInfo : public MetadataEntryHelper<MyNewMetaInfo> {
     }
 
     // UnPack from byte array
-    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf) {
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer& buf) {
         std::string s(buf.cbegin(), buf.cend());
         return std::make_unique<MyNewMetaInfo>(s);
     }
 
     // Custom view for nice to_string() output
-    std::string repr() const override { return "text: '" + text_ + "'"; }
+    std::string repr() const override {
+        return "text: '" + text_ + "'";
+    }
 
    private:
     std::string text_;
@@ -46,7 +50,9 @@ class MyNewMetaInfo : public MetadataEntryHelper<MyNewMetaInfo> {
 
 template <>
 struct MetadataTraits<MyNewMetaInfo> {
-    static const std::string type() { return "ouster/v1/MyNewSuperMetaInfo"; }
+    static const std::string type() {
+        return "ouster/v1/MyNewSuperMetaInfo";
+    }
 };
 
 // TODO[pb]: Define a StreamTagHelper for just dummy types/tags for use in
@@ -54,16 +60,19 @@ struct MetadataTraits<MyNewMetaInfo> {
 class YoStreamMeta : public MetadataEntryHelper<YoStreamMeta> {
    public:
     YoStreamMeta() {}
-    std::vector<uint8_t> buffer() const final { return {1, 2, 3}; };
-    static std::unique_ptr<MetadataEntry> from_buffer(
-        const OsfBuffer /*unused*/) {
+    std::vector<uint8_t> buffer() const final {
+        return {1, 2, 3};
+    };
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer& /*unused*/) {
         return std::make_unique<YoStreamMeta>();
     }
 };
 
 template <>
 struct MetadataTraits<YoStreamMeta> {
-    static const std::string type() { return "ouster/v1/YoStream"; }
+    static const std::string type() {
+        return "ouster/v1/YoStream";
+    }
 };
 
 // Message object of YoStream
@@ -85,11 +94,12 @@ class YoStream : public MessageStream<YoStreamMeta, yo> {
     }
 
     // Pack yo message into buffer
-    std::vector<uint8_t> make_msg(const obj_type& yo_obj) { return {yo_obj.a}; }
+    std::vector<uint8_t> make_msg(const obj_type& yo_obj) {
+        return {yo_obj.a};
+    }
 
     // UnPack yo message from buffer
-    static std::unique_ptr<obj_type> decode_msg(const MessageRef& msg,
-                                                const meta_type&,
+    static std::unique_ptr<obj_type> decode_msg(const MessageRef& msg, const meta_type&,
                                                 const MetadataStore&) {
         auto y = std::make_unique<yo>();
         const auto& buf = msg.buffer();

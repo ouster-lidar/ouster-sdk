@@ -16,7 +16,7 @@ message(STATUS "CPP Test Source: ${OUSTER_SDK_TEST_SOURCE}")
 set(osf_includes "")
 if(OUSTER_SDK_TEST_SOURCE STREQUAL "STATIC")
   set(LIB_TO_USE
-    OusterSDK::ouster_client
+    OusterSDK::ouster_core
     )
   if (BUILD_VIZ)
     list(APPEND LIB_TO_USE OusterSDK::ouster_viz)
@@ -91,7 +91,7 @@ find_package(Threads)
 if(MSVC)
   add_compile_options(/wd4996 /wd4189)
   # Ensure windows headers do not redefine min/max/trim macros
-  add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _USE_MATH_DEFINES)
+  add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _USE_MATH_DEFINES _ENABLE_EXTENDED_ALIGNED_STORAGE)
 else()
   add_compile_options(-Wno-deprecated-declarations -Wno-unknown-pragmas)
 endif()
@@ -103,16 +103,25 @@ function(ouster_internal_test target_name sources test_data)
     add_executable(${target_name} ${sources} test_utils.cpp)
     target_include_directories(${target_name}
     PRIVATE
-      ${CMAKE_CURRENT_LIST_DIR}/../ouster_client/src
+      ${CMAKE_CURRENT_LIST_DIR}/../ouster_core/src
       ${CMAKE_CURRENT_LIST_DIR}/../ouster_viz/src
       ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/sophus
-      ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/kiss-icp/cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../ouster_mapping/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/../ouster_core/include
     )
+    if(BUILD_MAPPING)
+      target_include_directories(${target_name}
+        PRIVATE
+          ${CMAKE_CURRENT_LIST_DIR}/../../thirdparty/robin-map/include)
+    endif()
     target_link_libraries(${target_name}
       PRIVATE
         ${LIB_TO_USE}
         GTest::gtest
         GTest::gtest_main)
+    if(BUILD_MAPPING AND TARGET tsl::robin_map)
+      target_link_libraries(${target_name} PRIVATE tsl::robin_map)
+    endif()
     CodeCoverageFunctionality(${target_name})
     add_test(
       NAME
@@ -169,21 +178,32 @@ if (BUILD_VIZ)
 ouster_internal_test(point_viz_indexed_test "point_viz_indexed_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_internal_test(zone_monitor_voxel_mesh_test "zone_monitor_voxel_mesh_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/zone_monitor/)
 endif()
-if (BUILD_PCAP AND BUILD_MAPPING)
-ouster_internal_test(slam_test "slam_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
+if (BUILD_MAPPING)
+ouster_internal_test(jacobian_inline_test "jacobian_inline_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/)
+ouster_internal_test(slam_test "slam_test.cpp" "")
+ouster_internal_test(voxel_hashmap_test "voxel_hashmap_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/)
+ouster_internal_test(voxel_downsample_test "voxel_downsample_test.cpp" "")
+endif()
+
+ouster_internal_test(sdk_version_test "sdk_version_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/)
+if(TARGET sdk_version_test)
+  if(DEFINED OUSTER_TOP_LEVEL AND OUSTER_TOP_LEVEL)
+    target_compile_definitions(sdk_version_test PRIVATE
+      "OUSTER_SDK_VERSION_EXPECTED=\"${OusterSDK_VERSION_STRING}\"")
+  endif()
 endif()
 
 ouster_test(bcompat_meta_json_test "bcompat_meta_json_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 ouster_test(beam_config_test "beam_config_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/zone_monitor/)
 ouster_test(metadata_test "metadata_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
-ouster_test(lidar_scan_test "lidar_scan_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
+ouster_test(lidar_frame_test "lidar_frame_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 ouster_test(metadata_errors_test "metadata_errors_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 if (BUILD_PCAP)
 ouster_test(pcap_test "pcap_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(profile_extension_test "profile_extension_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(fusa_profile_test "fusa_profile_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
-ouster_test(scan_batcher_test "scan_batcher_test.cpp;util.h" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
-ouster_test(packet_writer_test "packet_writer_test.cpp;util.h" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
+ouster_test(frame_batcher_test "frame_batcher_test.cpp;util.h" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
+ouster_test(packet_format_test "packet_format_test.cpp;util.h" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 if (BUILD_VIZ)
 ouster_test(point_viz_test "point_viz_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 endif()
@@ -195,6 +215,9 @@ ouster_test(parsing_benchmark_test "parsing_benchmark_test.cpp;util.h" "" ${CMAK
 endif()
 ouster_test(cartesian_test "cartesian_test.cpp;util.h" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(destagger_test "destagger_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
+ouster_test(interp_pose_test "interp_pose_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
+ouster_test(pose_test "pose_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/)
+ouster_test(object_util_test "object_util_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/)
 
 ouster_test(open_source_test "open_source_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/)
 if (TARGET open_source_test)
@@ -207,6 +230,13 @@ if (TARGET open_source_test)
   if (BUILD_OSF)
     target_compile_definitions(open_source_test PRIVATE OUSTER_OSF)
   endif()
+endif()
+
+if (BUILD_PERCEPTION)
+  ouster_test(perception_stub_test "perception_stub_test.cpp" "" "")
+  target_link_libraries(perception_stub_test PRIVATE
+    ouster_perception_headers
+    ouster_perception_stub)
 endif()
 
 # OSF TESTS
@@ -266,4 +296,10 @@ build_osf_test(meta_streaming_info_test osf_tests/meta_streaming_info_test.cpp)
 build_osf_test(buffer_offset_test osf_tests/buffer_offset_test.cpp)
 build_osf_internal_test(operations_test osf_tests/operations_test.cpp)
 build_osf_internal_test(png_tools_test osf_tests/png_tools_test.cpp)
+build_osf_internal_test(frame_set_source_test osf_tests/frame_set_source_test.cpp)
+build_osf_internal_test(reader_timestamp_idx_test
+  osf_tests/reader_timestamp_idx_test.cpp)
 endif()
+
+add_subdirectory(interactive)
+add_subdirectory(benchmarks)

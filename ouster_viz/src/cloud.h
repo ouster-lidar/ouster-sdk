@@ -9,7 +9,7 @@
 
 #include "camera.h"
 #include "glfw.h"
-#include "ouster/point_viz.h"
+#include "ouster/viz/point_viz.h"
 
 namespace ouster {
 namespace sdk {
@@ -26,33 +26,35 @@ struct CloudIds;
  * Manages opengl state for drawing a point cloud
  */
 class GLCloud {
-    // global gl state
-    static bool initialized;
-    static GLuint program_id;
-    static CloudIds cloud_ids;
-
    private:
-    /// @brief For initializing the VAO during construction
-    void initialize_vao();
-
     // per-object gl state
     GLuint vao_;
-    GLuint xyz_buffer_;
-    GLuint off_buffer_;
-    GLuint range_buffer_;
-    GLuint key_buffer_;
-    GLuint mask_buffer_;
-    GLuint trans_index_buffer_;
-    GLuint transform_texture_;
-    GLuint palette_texture_;
     GLfloat point_size_;
     bool mono_;
 
-    Eigen::Matrix4d map_pose_;
-    Eigen::Matrix4f extrinsic_;
+    size_t last_trans_index_key_ = 0;
+    std::shared_ptr<BufferReference> trans_index_buffer_;
+    std::shared_ptr<BufferReference> cached_mask_;
+
+    core::Matrix4dR map_pose_;
+    Matrix4fR extrinsic_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    struct GlobalState {
+        GLuint program_id;
+
+        GLint xyz_id, off_id, range_id, key_id, mask_id, model_id, proj_view_id, mono_id,
+            palette_id, transformation_id, trans_index_id;
+
+        GlobalState();
+        ~GlobalState();
+
+        // Make sure it cant be copied
+        GlobalState(const GlobalState&) = delete;
+        GlobalState& operator=(const GlobalState&) = delete;
+    };
 
     /*
      * Set up the Cloud. Most of these arguments should correspond to CloudSetup
@@ -64,15 +66,18 @@ class GLCloud {
     /*
      * Render the point cloud with the point of view of the Camera
      */
-    void draw(const WindowCtx& ctx, const CameraData& camera, Cloud& cloud);
+    void draw(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera,
+              Cloud& cloud);
 
-    static void initialize();
+    void draw_select(const GlobalState& state, const WindowCtx& ctx, const CameraData& camera,
+                     Cloud& cloud, uint32_t& start_index);
 
-    static void uninitialize();
-
-    static void beginDraw();
+    static void beginDraw(const GlobalState& state);
 
     static void endDraw();
+
+   private:
+    void update_buffers(const GlobalState& state, const CameraData& camera, Cloud& cloud);
 };
 
 }  // namespace impl

@@ -3,7 +3,7 @@
 #include <memory>
 #include <vector>
 
-#include "ouster/visibility.h"
+#include "ouster/core/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -93,8 +93,7 @@ class OUSTER_API_CLASS OsfBuffer {
      * @param[in] size The number of bytes.
      */
     OUSTER_API_FUNCTION
-    void load_data(const class OsfBuffer& base_buffer, uint64_t offset,
-                   uint64_t size);
+    void load_data(const class OsfBuffer& base_buffer, uint64_t offset, uint64_t size);
 
     /**
      * @brief Get a pointer to the underlying data.

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="700" height="200" viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,3 L0,6z" fill="#6B7280"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="200" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+
+  <!-- Source -->
+  <rect x="20" y="35" width="140" height="70" rx="6" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+  <text x="90" y="64" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">Source</text>
+  <text x="90" y="82" text-anchor="middle" font-size="9" fill="#64748B">Sensor / PCAP / OSF</text>
+
+  <!-- Arrow Source -> Point Cloud Matching -->
+  <line x1="164" y1="70" x2="216" y2="70" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Point Cloud Matching -->
+  <rect x="220" y="35" width="180" height="70" rx="6" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.5"/>
+  <text x="310" y="64" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">Point Cloud Matching</text>
+  <text x="310" y="82" text-anchor="middle" font-size="9" fill="#64748B">ICP alignment (KISS-ICP)</text>
+
+  <!-- Arrow Point Cloud Matching -> Pose Estimate -->
+  <line x1="404" y1="70" x2="456" y2="70" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Pose Estimate -->
+  <rect x="460" y="35" width="220" height="80" rx="6" fill="#FAF5FF" stroke="#A855F7" stroke-width="1.5"/>
+  <text x="570" y="56" text-anchor="middle" font-size="12" font-weight="600" fill="#6B21A8">Pose Estimate</text>
+  <text x="570" y="73" text-anchor="middle" font-size="9" fill="#64748B">6-DOF: X, Y, Z, Roll, Pitch, Yaw</text>
+  <text x="570" y="88" text-anchor="middle" font-size="9" fill="#64748B">Per-column SE(3) in LidarFrame.body_to_world</text>
+
+  <!-- Reference Map (below Point Cloud Matching) -->
+  <rect x="245" y="140" width="130" height="50" rx="6" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5"/>
+  <text x="310" y="161" text-anchor="middle" font-size="11" font-weight="600" fill="#92400E">Reference Map</text>
+  <text x="310" y="177" text-anchor="middle" font-size="9" fill="#64748B">PLY / PCD (read-only)</text>
+
+  <!-- Arrow Reference Map -> Point Cloud Matching (upward) -->
+  <line x1="310" y1="137" x2="310" y2="109" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

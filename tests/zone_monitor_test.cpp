@@ -2,16 +2,20 @@
  * Copyright (c) 2025, Ouster, Inc.
  * All rights reserved.
  */
-#include "ouster/zone_monitor.h"
+#include "ouster/core/zone_monitor.h"
 
 #include <gtest/gtest.h>
 
+#include <cstdio>
 #include <fstream>
+#include <jsoncons/json.hpp>
 
-#include "ouster/compat_ops.h"
-#include "ouster/stl.h"
-#include "ouster/zone.h"
-#include "ouster/zrb.h"
+#include "nonstd/optional.hpp"
+#include "ouster/core/compat_ops.h"
+#include "ouster/core/stl.h"
+#include "ouster/core/types.h"
+#include "ouster/core/zone.h"
+#include "ouster/core/zrb.h"
 #include "util.h"
 
 using ouster::sdk::core::Coord;
@@ -23,51 +27,82 @@ namespace ouster {
 namespace sdk {
 namespace core {
 
-TEST(ZoneSet, it_should_throw_if_no_sensor_to_body_transform) {
+TEST(ZoneSet, it_allows_missing_sensor_to_body_transform_when_serializing) {
     ZoneSet zone_set;
-    EXPECT_THROW(
-        {
-            try {
-                zone_set.to_zip_blob(ZoneSetOutputFilter::STL);
-            } catch (const std::logic_error& e) {
-                EXPECT_STREQ(e.what(),
-                             "ZoneSet: sensor_to_body_transform must be set.");
-                throw;
-            }
-        },
-        std::logic_error);
+    zone_set.power_on_live_ids = {0};
+    Zone zone{};
+    zone.point_count = 50;
+    zone.frame_count = 2;
+    zone.mode = Zone::ZoneMode::OCCUPANCY;
+    std::string data_dir = getenvs("DATA_DIR");
+    zone.stl = Stl(data_dir + "/0.stl");
+    zone.stl->coordinate_frame = Stl::CoordinateFrame::SENSOR;
+    zone_set.zones[0] = zone;
+
+    EXPECT_NO_THROW(zone_set.to_zip_blob(ZoneSetOutputFilter::STL));
+    auto metadata = jsoncons::json::parse(zone_set.to_json(ZoneSetOutputFilter::STL));
+    EXPECT_FALSE(metadata.contains("sensor_to_body_transform"));
 }
 
-TEST(ZoneSet, it_should_throw_if_no_sensor_to_body_transform_2) {
-    // Get the sensor info
+TEST(ZoneSet, it_parses_metadata_without_sensor_to_body_transform) {
+    std::string data_dir = getenvs("DATA_DIR");
+    ZoneSet zone_set;
+    zone_set.power_on_live_ids = {0};
+    Zone zone{};
+    zone.point_count = 50;
+    zone.frame_count = 2;
+    zone.mode = Zone::ZoneMode::OCCUPANCY;
+    zone.stl = Stl(data_dir + "/0.stl");
+    zone.stl->coordinate_frame = Stl::CoordinateFrame::SENSOR;
+    zone_set.zones[0] = zone;
+
+    auto zip = zone_set.to_zip_blob(ZoneSetOutputFilter::STL);
+    ZoneSet parsed(zip);
+    EXPECT_FALSE(parsed.sensor_to_body_transform.has_value());
+}
+
+TEST(ZoneSet, render_fails_for_body_frame_without_sensor_to_body_transform) {
     std::string data_dir = getenvs("DATA_DIR");
     std::string sensor_info_path = data_dir + "/785.json";
     auto sensor = ouster::sdk::core::metadata_from_json(sensor_info_path);
 
-    // Construct a ZoneSet with an STL zone but no sensor_to_body_transform
     ZoneSet zone_set;
     Zone zone{};
     zone.point_count = 100;
     zone.frame_count = 2;
     zone.mode = Zone::ZoneMode::OCCUPANCY;
-    std::string stl_path = data_dir + "/0.stl";
-    zone.stl = Stl(stl_path);
+    zone.stl = Stl(data_dir + "/0.stl");
     zone.stl->coordinate_frame = Stl::CoordinateFrame::BODY;
-    ASSERT_FALSE(zone.zrb);
     zone_set.zones[0] = zone;
 
-    // It should fail to render because sensor_to_body_transform is not set
     EXPECT_THROW(
         {
             try {
                 zone_set.render(sensor);
-            } catch (const std::logic_error& e) {
-                EXPECT_STREQ(e.what(),
-                             "BeamConfig: sensor_to_body_transform not set");
+            } catch (const std::runtime_error& e) {
+                EXPECT_STREQ(e.what(), "ZoneSet::render: zone 0 was out of sensor FOV.");
                 throw;
             }
         },
-        std::logic_error);
+        std::runtime_error);
+}
+
+TEST(ZoneSet, render_succeeds_for_sensor_frame_without_sensor_to_body_transform) {
+    std::string data_dir = getenvs("DATA_DIR");
+    std::string sensor_info_path = data_dir + "/785.json";
+    auto sensor = ouster::sdk::core::metadata_from_json(sensor_info_path);
+
+    ZoneSet zone_set;
+    Zone zone{};
+    zone.point_count = 100;
+    zone.frame_count = 10;
+    zone.mode = Zone::ZoneMode::OCCUPANCY;
+    zone.stl = Stl(data_dir + "/0.stl");
+    zone.stl->coordinate_frame = Stl::CoordinateFrame::SENSOR;
+    zone_set.zones[0] = zone;
+
+    EXPECT_NO_THROW(zone_set.render(sensor));
+    EXPECT_TRUE(zone_set.zones[0].zrb.has_value());
 }
 
 TEST(ZoneSet, render) {
@@ -78,8 +113,9 @@ TEST(ZoneSet, render) {
 
     // Construct a ZoneSet with an STL zone
     ZoneSet zone_set;
-    zone_set.sensor_to_body_transform = mat4d::Identity();
-    zone_set.sensor_to_body_transform(2, 3) = 1.0;
+    mat4d transform = mat4d::Identity();
+    transform(2, 3) = 1.0;
+    zone_set.sensor_to_body_transform = transform;
     Zone zone{};
     zone.point_count = 100;
     zone.frame_count = 10;
@@ -109,12 +145,12 @@ TEST(ZoneSet, render_out_of_fov) {
 
     // Construct a ZoneSet with an STL zone
     ZoneSet zone_set;
-    zone_set.sensor_to_body_transform = mat4d::Identity();
+    mat4d transform = mat4d::Identity();
 
     // Rotate 90 degrees around Y axis to point the zone away from the sensor
     Eigen::AngleAxisf rotation_y(M_PI / 2, Eigen::Vector3f::UnitY());
-    zone_set.sensor_to_body_transform.block<3, 3>(0, 0) =
-        rotation_y.toRotationMatrix().cast<double>();
+    transform.block<3, 3>(0, 0) = rotation_y.toRotationMatrix().cast<double>();
+    zone_set.sensor_to_body_transform = transform;
 
     Zone zone{};
     zone.point_count = 1;
@@ -133,8 +169,7 @@ TEST(ZoneSet, render_out_of_fov) {
             try {
                 zone_set.render(sensor);
             } catch (const std::runtime_error& e) {
-                EXPECT_STREQ(e.what(),
-                             "ZoneSet::render: zone 0 was out of sensor FOV.");
+                EXPECT_STREQ(e.what(), "ZoneSet::render: zone 0 was out of sensor FOV.");
                 throw;
             }
         },
@@ -149,10 +184,10 @@ ZoneSet test_zone_set() {
 
     ZoneSet zone_set;
     zone_set.power_on_live_ids = std::vector<uint32_t>{0, 1, 2, 3, 4, 5};
-    zone_set.sensor_to_body_transform = mat4d::Identity();
-    zone_set.sensor_to_body_transform(2, 3) =
-        1.0;  // add a translation to make sure we
-              // handle non-identity sensor_to_body_transform
+    mat4d transform = mat4d::Identity();
+    transform(2, 3) = 1.0;  // add a translation to make sure we
+                            // handle non-identity sensor_to_body_transform
+    zone_set.sensor_to_body_transform = transform;
     Zone zone0;
     zone0.point_count = 50;
     zone0.frame_count = 2;
@@ -173,15 +208,15 @@ ZoneSet test_zone_set() {
 }
 
 void zip_file_test(const ZoneSet& config) {
-    auto expected_default_active_zones =
-        std::vector<uint32_t>{0, 1, 2, 3, 4, 5};
+    auto expected_default_active_zones = std::vector<uint32_t>{0, 1, 2, 3, 4, 5};
     EXPECT_EQ(config.power_on_live_ids, expected_default_active_zones);
 
     mat4d mat = mat4d::Identity();
     mat(2, 3) = 1.0;  // This applies a translation (units in meters) to test
                       // that we render zones in the correct spot when
                       // sensor_to_body_transform aren't identity
-    EXPECT_EQ(config.sensor_to_body_transform, mat);
+    ASSERT_TRUE(config.sensor_to_body_transform.has_value());
+    EXPECT_EQ(*config.sensor_to_body_transform, mat);
 
     EXPECT_EQ(config.zones.size(), 2);
     EXPECT_EQ(config.zones.at(0).point_count, 50);
@@ -203,6 +238,7 @@ TEST(ZoneMonitorTests, from_zip_file_test) {
     config.save(cfg_path, ZoneSetOutputFilter::STL_AND_ZRB);
     ZoneSet config2 = ZoneSet(cfg_path);
     zip_file_test(config2);
+    std::remove(cfg_path.c_str());
 }
 
 TEST(ZoneMonitorTests, from_zip_file_invalid) {
@@ -229,8 +265,9 @@ TEST(ZoneMonitorTests, blob_test) {
     ZoneSet config;
 
     config.power_on_live_ids = std::vector<uint32_t>{0, 1, 2};
-    config.sensor_to_body_transform << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-        13, 14, 15, 16;
+    mat4d transform;
+    transform << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16;
+    config.sensor_to_body_transform = transform;
 
     config.zones[0] = Zone();
     config.zones[0].point_count = 50;
@@ -260,21 +297,17 @@ TEST(ZoneMonitorTests, blob_test) {
         EXPECT_EQ(cfg2.zones[i].point_count, config.zones[i].point_count);
         EXPECT_EQ(cfg2.zones[i].frame_count, config.zones[i].frame_count);
         EXPECT_EQ(cfg2.zones[i].mode, config.zones[i].mode);
-        EXPECT_EQ(cfg2.zones[i].stl->coordinate_frame,
-                  config.zones[i].stl->coordinate_frame);
+        EXPECT_EQ(cfg2.zones[i].stl->coordinate_frame, config.zones[i].stl->coordinate_frame);
 
-        EXPECT_EQ(cfg2.zones[i].stl->blob().size(),
-                  config.zones[i].stl->blob().size());
-        EXPECT_EQ(cfg2.zones[i].stl->hash().str(),
-                  config.zones[i].stl->hash().str());
+        EXPECT_EQ(cfg2.zones[i].stl->blob().size(), config.zones[i].stl->blob().size());
+        EXPECT_EQ(cfg2.zones[i].stl->hash().str(), config.zones[i].stl->hash().str());
         EXPECT_EQ(cfg2.zones[i].stl->blob(), config.zones[i].stl->blob());
 
         EXPECT_FALSE(cfg2.zones[i].zrb);
     }
 }
 
-TEST(ZoneSet,
-     it_parses_the_coordinate_frame_field_if_the_zone_set_is_stl_type) {
+TEST(ZoneSet, it_parses_the_coordinate_frame_field_if_the_zone_set_is_stl_type) {
     // Get the sensor info
     std::string data_dir = getenvs("DATA_DIR");
     std::string sensor_info_path = data_dir + "/785.json";
@@ -292,8 +325,7 @@ TEST(ZoneSet,
     auto blob = config.to_zip_blob(ZoneSetOutputFilter::STL_AND_ZRB);
     ZoneSet cfg2 = ZoneSet(blob);
     ASSERT_TRUE(cfg2.zones[0].stl.has_value());
-    EXPECT_EQ(cfg2.zones[0].stl->coordinate_frame,
-              Stl::CoordinateFrame::SENSOR);
+    EXPECT_EQ(cfg2.zones[0].stl->coordinate_frame, Stl::CoordinateFrame::SENSOR);
 }
 
 TEST(ZoneSet, point_cloud_sanity_check_when_saving_zrbs) {
@@ -314,10 +346,9 @@ TEST(ZoneSet, point_cloud_sanity_check_when_saving_zrbs) {
             try {
                 zone_set.to_zip_blob(ZoneSetOutputFilter::STL_AND_ZRB);
             } catch (const std::logic_error& e) {
-                EXPECT_STREQ(
-                    e.what(),
-                    "ZoneSet: Zone 0 failed invariant check: Zone: ZRB far "
-                    "range image has fewer nonzero pixels than point_count");
+                EXPECT_STREQ(e.what(),
+                             "ZoneSet: Zone 0 failed invariant check: Zone: ZRB far "
+                             "range image has fewer nonzero pixels than point_count");
                 throw;
             }
         },
@@ -336,7 +367,9 @@ TEST(ZoneSet, inequality) {
     config2.power_on_live_ids.push_back(6);
     EXPECT_NE(config1, config2);
     config2 = config1;
-    config2.sensor_to_body_transform(0, 0) += 0.1;
+    auto modified_sensor_to_body = *config1.sensor_to_body_transform;
+    modified_sensor_to_body(0, 0) += 0.1;
+    config2.sensor_to_body_transform = modified_sensor_to_body;
     EXPECT_NE(config1, config2);
     config2 = config1;
     config2.zones[0].point_count += 1;
@@ -389,9 +422,7 @@ TEST(ZoneSet, all_zrbs_must_have_the_same_resolution) {
             try {
                 zone_set.to_zip_blob(ZoneSetOutputFilter::ZRB);
             } catch (const std::logic_error& e) {
-                EXPECT_STREQ(
-                    e.what(),
-                    "ZoneSet: all ZRBs must have the same resolution.");
+                EXPECT_STREQ(e.what(), "ZoneSet: all ZRBs must have the same resolution.");
                 throw;
             }
         },

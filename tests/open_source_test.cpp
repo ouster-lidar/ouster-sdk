@@ -3,21 +3,21 @@
  * All rights reserved.
  */
 
-#include "ouster/open_source.h"
+#include "ouster/core/open_source.h"
 
 #include "gtest/gtest.h"
 #include "util.h"
 
 #ifdef OUSTER_SENSOR
-#include "ouster/sensor_scan_source.h"
+#include "ouster/sensor/sensor_frame_set_source.h"
 #endif
 
 #ifdef OUSTER_PCAP
-#include "ouster/pcap_scan_source.h"
+#include "ouster/pcap/pcap_frame_set_source.h"
 #endif
 
 #ifdef OUSTER_OSF
-#include "ouster/osf/osf_scan_source.h"
+#include "ouster/osf/osf_frame_set_source.h"
 #endif
 
 /**
@@ -40,8 +40,7 @@ TEST(OpenSourceTest, test_open_source_builders_availability) {
 #endif
 
 #ifdef OUSTER_OSF
-    std::string osf_file =
-        data_dir + "/osfs/OS-0-128_v3.0.1_1024x10_20241017_141645.osf";
+    std::string osf_file = data_dir + "/osfs/OS-0-128_v3.0.1_1024x10_20241017_141645.osf";
     EXPECT_NO_THROW(ouster::sdk::open_source(osf_file));
 #endif
 }

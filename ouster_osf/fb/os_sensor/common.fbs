@@ -24,7 +24,8 @@ enum FIELD_CLASS:int64 {
     PIXEL_FIELD = 1,
     COLUMN_FIELD = 2,
     PACKET_FIELD = 3,
-    SCAN_FIELD = 4
+    SCAN_FIELD = 4,
+    COLLATION_FIELD = 5
 }
 
 table Field {
@@ -34,4 +35,33 @@ table Field {
     field_class:FIELD_CLASS;
     data:[uint8];
     bytes:uint64;
+}
+
+table Property {
+    name:string;
+    data:string;
+}
+
+table Pose {
+    position:[double];
+    rotation:[double];
+}
+
+table Object {
+    id:uint32;
+    creation_ts:uint64;
+    class_id:uint32;
+    class_confidence:float;
+    object_to_body:Pose;
+    body_to_world:Pose;
+    velocity:[float];
+    dimensions:[float];
+    properties:[Property];
+    timestamp:uint64;
+    primary_sensor_sn:uint64 (deprecated);
+}
+
+table ObjectList {
+    name:string;
+    objects:[Object];
 }

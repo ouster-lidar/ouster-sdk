@@ -63,11 +63,9 @@ namespace Internals {
 
 static const std::chrono::microseconds fragment_timeout(2000000);
 
-IPv4Stream2::IPv4Stream2()
-    : received_size_(), total_size_(), received_end_(false) {}
+IPv4Stream2::IPv4Stream2() : received_size_(), total_size_(), received_end_(false) {}
 
-void IPv4Stream2::add_fragment(const std::chrono::microseconds& timestamp,
-                               IP* ip) {
+void IPv4Stream2::add_fragment(const std::chrono::microseconds& timestamp, IP* ip) {
     // handle timeout
     if (!fragments_.empty()) {
         if ((timestamp - last_timestamp_) > fragment_timeout) {
@@ -118,8 +116,7 @@ bool IPv4Stream2::is_complete() const {
     return fragments_.begin()->offset() == 0;
 }
 
-static Tins::PDU* pdu_from_flag2(Constants::IP::e flag, const uint8_t* buffer,
-                                 uint32_t size,
+static Tins::PDU* pdu_from_flag2(Constants::IP::e flag, const uint8_t* buffer, uint32_t size,
                                  bool rawpdu_on_no_match = true) {
     switch (flag) {
         case Constants::IP::PROTO_IPIP:
@@ -152,21 +149,21 @@ PDU* IPv4Stream2::allocate_pdu() const {
     buffer.reserve(total_size_);
     // Check if we actually have all the data we need. Otherwise return nullptr;
     size_t expected = 0;
-    for (fragments_type::const_iterator it = fragments_.begin();
-         it != fragments_.end(); ++it) {
+    for (fragments_type::const_iterator it = fragments_.begin(); it != fragments_.end(); ++it) {
         if (expected != it->offset()) {
             return nullptr;
         }
         expected = it->offset() + it->payload().size();
         buffer.insert(buffer.end(), it->payload().begin(), it->payload().end());
     }
-    return pdu_from_flag2(
-        static_cast<Constants::IP::e>(first_fragment_.protocol()),
-        buffer.empty() ? nullptr : buffer.data(),
-        static_cast<uint32_t>(buffer.size()));
+    return pdu_from_flag2(static_cast<Constants::IP::e>(first_fragment_.protocol()),
+                          buffer.empty() ? nullptr : buffer.data(),
+                          static_cast<uint32_t>(buffer.size()));
 }
 
-const IP& IPv4Stream2::first_fragment() const { return first_fragment_; }
+const IP& IPv4Stream2::first_fragment() const {
+    return first_fragment_;
+}
 
 uint16_t IPv4Stream2::extract_offset(const IP* ip) {
     return ip->fragment_offset() * 8;
@@ -178,8 +175,8 @@ IPv4Reassembler2::IPv4Reassembler2() = default;
 
 IPv4Reassembler2::IPv4Reassembler2(OverlappingTechnique /*technique*/) {}
 
-IPv4Reassembler2::PacketStatus IPv4Reassembler2::process(
-    const std::chrono::microseconds& timestamp, PDU& pdu) {
+IPv4Reassembler2::PacketStatus IPv4Reassembler2::process(const std::chrono::microseconds& timestamp,
+                                                         PDU& pdu) {
     IP* ip = pdu.find_pdu<IP>();
     if ((ip != nullptr) && (ip->inner_pdu() != nullptr)) {
         // There's fragmentation
@@ -226,12 +223,11 @@ IPv4Reassembler2::PacketStatus IPv4Reassembler2::process(
 }
 
 IPv4Reassembler2::key_type IPv4Reassembler2::make_key(const IP* ip) const {
-    return make_pair(ip->id(),
-                     make_address_pair(ip->src_addr(), ip->dst_addr()));
+    return make_pair(ip->id(), make_address_pair(ip->src_addr(), ip->dst_addr()));
 }
 
-IPv4Reassembler2::address_pair IPv4Reassembler2::make_address_pair(
-    IPv4Address addr1, IPv4Address addr2) const {
+IPv4Reassembler2::address_pair IPv4Reassembler2::make_address_pair(IPv4Address addr1,
+                                                                   IPv4Address addr2) const {
     if (addr1 < addr2) {
         return make_pair(addr1, addr2);
     } else {

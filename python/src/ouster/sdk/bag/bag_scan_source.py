@@ -1,107 +1,14 @@
-from typing import Iterator, List, Optional, Union
-import numpy as np
+"""
+Copyright (c) 2024, Ouster, Inc.
+All rights reserved.
 
-from ouster.sdk.core import LidarScan, LidarScanSet
-from ouster.sdk.core import SensorInfo, ScanBatcher
-from ouster.sdk.util import resolve_field_types  # type: ignore
-from .bag_packet_source import BagPacketSource
-
-from ouster.sdk._bindings.client import ScanSource
-
-
-class BagScanSource(ScanSource):
-    """Implements ScanSource protocol for pcap files with multiple sensors."""
-
-    _source: BagPacketSource
-
-    def __init__(
-        self,
-        file_path: Union[str, List[str]],
-        *,
-        extrinsics_file: Optional[str] = None,
-        raw_headers: bool = False,
-        raw_fields: bool = False,
-        soft_id_check: bool = False,
-        meta: Optional[List[str]] = None,
-        field_names: Optional[List[str]] = None,
-        extrinsics: List[np.ndarray] = [],
-        **kwargs
-    ) -> None:
-        """
-        Args:
-            file_path: OSF filename as scans source
-            raw_headers: if True, include raw headers in decoded LidarScans
-            raw_fields: if True, include raw fields in decoded LidarScans
-            soft_id_check: if True, don't skip packets on init_id/serial_num mismatch
-            meta: optional list of metadata files to load, if not provided metadata
-                is loaded from the bag instead
-            field_names: list of fields to decode into a LidarScan, if not provided
-                decodes all default fields
-        """
-        ScanSource.__init__(self)
-
-        # initialize the attribute so close works correctly if we fail out
-        self._source = None  # type: ignore
-        try:
-            self._source = BagPacketSource(file_path, soft_id_check=soft_id_check,
-                                           meta=meta, extrinsics_file=extrinsics_file,
-                                           extrinsics=extrinsics)
-        except Exception:
-            self._source = None  # type: ignore
-            raise
-
-        # generate the field types per sensor with flags/raw_fields if specified
-        self._field_types = resolve_field_types(self._source.sensor_info,
-                                          raw_headers=raw_headers,
-                                          raw_fields=raw_fields,
-                                          field_names=field_names)
-
-    @property
-    def is_live(self) -> bool:
-        return False
-
-    @property
-    def sensor_info(self) -> List[SensorInfo]:
-        return self._source.sensor_info
-
-    @property
-    def id_error_count(self) -> int:
-        return self._source.id_error_count  # type: ignore
-
-    @property
-    def size_error_count(self) -> int:
-        return self._source.size_error_count  # type: ignore
-
-    def __length_hint__(self):
-        return self._source.__length_hint__()
-
-    def __iter__(self) -> Iterator[LidarScanSet]:
-        batchers = []
-        scans: List[Optional[LidarScan]] = []
-        for m in self.sensor_info:
-            batchers.append(ScanBatcher(m))
-            scans.append(None)
-        for idx, packet in self._source:
-            scan = scans[idx]
-            if not scan:
-                scan = LidarScan(self._source.sensor_info[idx], self._field_types[idx])
-                scans[idx] = scan
-            if batchers[idx](packet, scan):
-                yield LidarScanSet([scan])
-                scans[idx] = None
-        # yield any remaining scans
-        # todo maybe do this in time order
-        for idx, scan in enumerate(scans):
-            if scan is not None:
-                # dont output scans that got no packets
-                if batchers[idx].batched_packets() == 0:
-                    scans[idx] = None
-                    continue
-                yield LidarScanSet([scan])
-                scans[idx] = None
-
-    def close(self):
-        return
-
-    def __len__(self) -> int:
-        raise TypeError("len is not supported on non-indexed source")
+Deprecated module. Use ouster.sdk.bag.bag_frame_set_source instead.
+"""
+from ouster.sdk._deprecation import warn_deprecated
+warn_deprecated(
+    "ouster.sdk.bag.bag_scan_source is deprecated. "
+    "Use ouster.sdk.bag.bag_frame_set_source instead. "
+    "The last supported version for this will be 1.0.",
+    stacklevel=2
+)
+from ouster.sdk.bag.bag_frame_set_source import *  # noqa: F401, F403, E402

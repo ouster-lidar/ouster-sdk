@@ -19,7 +19,7 @@ additional_python_flake8_dirs = []
               help='Output file for flake8 results.')
 def flake8(ctx, config, output_file):
     """Run python flake8 linter."""
-    ctx.obj.build_libs.check_for_python_lib("flake8")
+    ctx.obj.build_libs.check_for_python_libs(["flake8"])
 
     if config is None:
         config = os.path.join(ctx.obj.sdk_dir, "python", ".flake8")
@@ -29,7 +29,9 @@ def flake8(ctx, config, output_file):
         args.extend(["--format=junit-xml", "--output-file", output_file])
     args.extend([os.path.join(ctx.obj.sdk_dir, "python", "src"),
                  os.path.join(ctx.obj.sdk_dir, "python", "tests"),
-                 os.path.join(ctx.obj.sdk_dir, "scripts")])
+                 os.path.join(ctx.obj.sdk_dir, "scripts"),
+                 os.path.join(ctx.obj.sdk_dir, "docs", "_ext"),
+                 os.path.join(ctx.obj.sdk_dir, "docs", "conf.py")])
     args.extend(additional_python_flake8_dirs)
 
     print("Running flake8 with args: ", args)
@@ -49,15 +51,16 @@ def flake8(ctx, config, output_file):
               help='Output file for flake8 results.')
 def mypy(ctx, output_file):
     """Run python mypy linter."""
-    ctx.obj.build_libs.check_for_python_lib("mypy")
+    ctx.obj.build_libs.check_for_python_libs(["mypy"])
 
     args = [sys.executable, "-m", "mypy", "--install-types", "--non-interactive"]
     if output_file is not None:
-        args.extend(["--junit-xml", output_file])
+        args.extend(["--junit-xml", os.path.abspath(output_file)])
     args.extend([os.path.join(ctx.obj.sdk_dir, "python", "src"),
                  os.path.join(ctx.obj.sdk_dir, "python", "tests"),
                  os.path.join(ctx.obj.sdk_dir, "tests", "integration"),
-                 os.path.join(ctx.obj.sdk_dir, "tests", "hil")])
+                 os.path.join(ctx.obj.sdk_dir, "tests", "hil"),
+                 os.path.join(ctx.obj.sdk_dir, "docs")])
 
     run = ctx.obj.build_libs.RunCommand(tty=True)
     try:
@@ -73,7 +76,7 @@ def mypy(ctx, output_file):
 @click.pass_context
 def mypy_stubs(ctx):
     """Run python mypy stub linter."""
-    ctx.obj.build_libs.check_for_python_lib("mypy")
+    ctx.obj.build_libs.check_for_python_libs(["mypy"])
 
     args = [sys.executable, "-m", "mypy.stubtest", "ouster.sdk._bindings", "--concise"]
 
@@ -129,7 +132,7 @@ def files_to_check_fn(sdk_dir):
 
     files_to_check = []
     for rel_path in get_source_files(sdk_dir):
-        if rel_path in tracked_files and not any([fnmatch.fnmatch(rel_path, x) for x in excluded]):
+        if rel_path in tracked_files and not any([fnmatch.fnmatch(str(rel_path), x) for x in excluded]):
             files_to_check.append(rel_path)
 
     return files_to_check
@@ -178,15 +181,17 @@ def clang_format(ctx, clang_format_bin, fix, threads):
 
     def task(item):
         args = [clang_format_bin, '-style=file']
-        if not fix or not fix_confirmed:
+        if fix and fix_confirmed:
+            args.append("-i")
+        else:
             args.extend(["--Werror", "--dry-run"])
-        args.extend(["-i", item])
+        args.append(item)
         # TODO: look at using RunCommand class
         result = subprocess.run(args,
                                 text=True,
                                 cwd=ctx.obj.sdk_dir,
                                 stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT,).stdout
+                                stderr=subprocess.STDOUT).stdout
         if "error" in result:
             return (item, result)
         else:

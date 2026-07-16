@@ -16,21 +16,19 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/client.h"
-#include "ouster/impl/build.h"
-#include "ouster/lidar_scan.h"
-#include "ouster/sensor_scan_source.h"
-#include "ouster/types.h"
-#include "ouster/xyzlut.h"
+#include "ouster/core/impl/build.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/types.h"
+#include "ouster/core/xyzlut.h"
+#include "ouster/sensor/client.h"
+#include "ouster/sensor/sensor_frame_set_source.h"
 
 using namespace ouster::sdk;
-
-const size_t N_SCANS = 5;
+const size_t N_FRAMES = 5;
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM
-                  << ")"
+        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM << ")"
                   << "\n\nUsage: client_example <sensor_hostname> "
                      "[<sensor_hostname>]..."
                   << std::endl;
@@ -43,9 +41,9 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Ouster client example " << SDK_VERSION << std::endl;
     /*
-     * The SensorScanSource is the high level client for working with Ouster
+     * The SensorFrameSetSource is the high level client for working with Ouster
      * sensors. It is used to connect to sensors, configure them and batch
-     * LidarScans from them.
+     * LidarFrames from them.
      *
      * It supports unicast, multicast and multiple sensors on the same ports.
      */
@@ -72,7 +70,7 @@ int main(int argc, char* argv[]) {
     // and wait for them to initialize.
     // After this, the source immediately begins collecting data in the
     // background
-    sensor::SensorScanSource source(sensors);
+    sensor::SensorFrameSetSource source(sensors);
 
     std::cout << "Connection to sensors succeeded" << std::endl;
 
@@ -89,22 +87,20 @@ int main(int argc, char* argv[]) {
 
         std::cout << "  Firmware version:  " << info->image_rev
                   << "\n  Serial number:     " << info->sn
-                  << "\n  Product line:      " << info->prod_line
-                  << "\n  Scan dimensions:   " << w << " x " << h
-                  << "\n  Column window:     [" << column_window.first << ", "
+                  << "\n  Product line:      " << info->prod_line << "\n  Frame dimensions:   " << w
+                  << " x " << h << "\n  Column window:     [" << column_window.first << ", "
                   << column_window.second << "]" << std::endl;
 
         // Pre-compute a table for efficiently calculating point clouds from
         // range
-        luts.push_back(core::XYZLut(
-            *info, true /* if extrinsics should be used or not */));
+        luts.emplace_back(*info, true /* if extrinsics should be used or not */);
     }
 
-    std::cout << "Capturing scans... ";
+    std::cout << "Capturing frames... ";
 
     /*
      * The example code includes functions for efficiently and accurately
-     * computing point clouds from range measurements. LidarScan data can
+     * computing point clouds from range measurements. LidarFrame data can
      * also be accessed directly using the Eigen[0] linear algebra library.
      *
      * [0] http://eigen.tuxfamily.org
@@ -112,45 +108,42 @@ int main(int argc, char* argv[]) {
 
     int file_ind = 0;
     std::string file_base{"cloud_"};
-    // Loop until we get at least the desired number of scans from each sensor
+    // Loop until we get at least the desired number of frames from each sensor
     while (true) {
-        std::pair<int, std::unique_ptr<core::LidarScan>> result =
-            source.get_scan();
+        std::pair<int, std::unique_ptr<core::LidarFrame>> result = source.get_frame();
 
-        auto& scan = *result.second;
+        auto& frame = *result.second;
         auto index = result.first;
 
-        // grab scans until we get N from each sensor
+        // grab frames until we get N from each sensor
         if (!result.second) {
             continue;
         }
 
         // Now process the cloud and save it
         // First compute a point cloud using the lookup table
-        auto cloud = luts[index](scan);
+        auto cloud = luts[index](frame);
 
         // channel fields can be queried as well
-        auto n_valid_first_returns =
-            (scan.field<uint32_t>(core::ChanField::RANGE) != 0).count();
+        auto n_valid_first_returns = (frame.field<uint32_t>(core::ChanField::RANGE) != 0).count();
 
-        // LidarScan also provides access to header information such as
+        // LidarFrame also provides access to header information such as
         // status and timestamp
-        auto status = scan.status();
+        auto status = frame.status();
         auto it = std::find_if(status.data(), status.data() + status.size(),
                                [](const uint32_t status_val) {
                                    return (status_val & 0x01);
                                });  // find first valid status
         if (it != status.data() + status.size()) {
-            auto ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::nanoseconds(scan.timestamp()(
-                    it - status.data())));  // get corresponding timestamp
+            auto ts_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(
+                    frame.timestamp()(it - status.data())));  // get corresponding timestamp
 
-            std::cout << "  Frame no. " << scan.frame_id << " with "
-                      << n_valid_first_returns << " valid first returns at "
-                      << ts_ms.count() << " ms" << std::endl;
+            std::cout << "  Frame no. " << frame.frame_id << " with " << n_valid_first_returns
+                      << " valid first returns at " << ts_ms.count() << " ms" << std::endl;
         }
 
-        // Finally save the scan
+        // Finally save the frame
         std::string filename = file_base + std::to_string(file_ind++) + ".csv";
         std::ofstream out;
         out.open(filename);
@@ -167,12 +160,11 @@ int main(int argc, char* argv[]) {
         out.close();
         std::cout << "  Wrote " << filename << std::endl;
 
-        // Increment our count of that scan and check if we got all 5
+        // Increment our count of that frame and check if we got all 5
         count[index]++;
         bool all = true;
-        for (size_t count_index = 0; count_index < count.size();
-             count_index++) {
-            if (count[count_index] != N_SCANS) {
+        for (const auto& cnt : count) {
+            if (cnt != N_FRAMES) {
                 all = false;
             }
         }

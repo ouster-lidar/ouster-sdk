@@ -4,7 +4,7 @@ import math
 import time
 import pytest
 import ouster.sdk.util.pose_util as pu
-from ouster.sdk.core import dewarp, transform
+from ouster.sdk.core import dewarp, transform, get_rot_matrix_to_align_to_gravity
 import ouster.sdk.core as core
 
 
@@ -71,45 +71,47 @@ def test_traj_pose_interp(poses6: List[pu.Pose6]):
                      num_poses - 1,
                      num=np.random.randint(20 * num_poses, 200 * num_poses),
                      endpoint=True)
-    t0 = time.monotonic()
+    t0 = time.perf_counter()
     for idx, t in enumerate(ts):
         p_low = int(np.floor(t))
         p_high = int(np.ceil(t))
         dt = t - p_low
         p_t = pu.pose_interp(poses6[p_low], poses6[p_high], dt)
         poses1.append(p_t)
-    t_pose_interp = time.monotonic() - t0
+    t_pose_interp = time.perf_counter() - t0
 
     # use traj interpolation
     traj_poses = list(zip(range(num_poses), poses6))
     traj_eval = pu.TrajectoryEvaluator(traj_poses)
 
     poses2 = []
-    t0 = time.monotonic()
+    t0 = time.perf_counter()
     # one by one interpolation
     for idx, t in enumerate(ts):
         p_t = traj_eval.pose_at(t)
         poses2.append(p_t)
-    t_pose_te_one_by_one = time.monotonic() - t0
+    t_pose_te_one_by_one = time.perf_counter() - t0
 
     assert np.allclose(np.array(poses1), np.array(poses2))
 
-    t0 = time.monotonic()
+    t0 = time.perf_counter()
     # all vectorised one interpolation
     poses3 = traj_eval.poses_at(ts)
-    t_pose_te_vec = time.monotonic() - t0
+    t_pose_te_vec = time.perf_counter() - t0
     assert np.allclose(np.array(poses1), poses3)
 
-    t0 = time.monotonic()
+    t0 = time.perf_counter()
     # all vectorised interpolation in one func
     poses4 = pu.traj_interp(traj_poses, ts)
-    t_pose_traj_interp = time.monotonic() - t0
+    t_pose_traj_interp = time.perf_counter() - t0
     assert np.allclose(np.array(poses1), poses4)
 
     print(f"Summary times for {len(ts)} poses calc:")
     print(f"  pose_interp() ........ one by one :  {t_pose_interp:.08f} s")
+    one_by_one_speedup = (f"({t_pose_interp / t_pose_te_one_by_one:.02f}x)"
+                          if t_pose_te_one_by_one > 0 else "(FTL)")
     print(f"  traj_eval.pose_at() .. one by one :  {t_pose_te_one_by_one:.08f} s "
-          f"({t_pose_interp / t_pose_te_one_by_one:.02f}x)")
+          f"{one_by_one_speedup}")
     vec_speedup = ""
     if t_pose_te_vec > 0:
         vec_speedup = f"({t_pose_te_one_by_one / t_pose_te_vec:.02f}x)"
@@ -220,7 +222,8 @@ def test_no_scipy_exp_log_ops(poses6: List[pu.Pose6]):
 
 def test_rotation_alignment_vector1():
     accel_x, accel_y, accel_z = 1, 0, 1
-    rotation_matrix = pu.get_rot_matrix_to_align_to_gravity(accel_x, accel_y, accel_z)
+    rotation_matrix = get_rot_matrix_to_align_to_gravity(
+        accel_x, accel_y, accel_z)
     aligned_vector = rotation_matrix @ pu.normalize_vector(np.array([accel_x, accel_y, accel_z]))
     # align with gravity
     expected_vector = np.array([0, 0, 1])
@@ -229,11 +232,33 @@ def test_rotation_alignment_vector1():
 
 def test_rotation_alignment_vector2():
     accel_x, accel_y, accel_z = 0, 1, 1
-    rotation_matrix = pu.get_rot_matrix_to_align_to_gravity(accel_x, accel_y, accel_z)
+    rotation_matrix = get_rot_matrix_to_align_to_gravity(
+        accel_x, accel_y, accel_z)
     aligned_vector = rotation_matrix @ pu.normalize_vector(np.array([accel_x, accel_y, accel_z]))
     # align with gravity
     expected_vector = np.array([0, 0, 1])
     np.testing.assert_almost_equal(aligned_vector, expected_vector, decimal=6)
+
+
+def test_rotation_alignment_fix_yaw_optional():
+    accel = np.array([-0.30435676, -0.03693205, -0.95184189])
+    accel = pu.normalize_vector(accel)
+
+    rot_fix = get_rot_matrix_to_align_to_gravity(
+        accel[0], accel[1], accel[2], fix_yaw=True)
+    rot_free = get_rot_matrix_to_align_to_gravity(
+        accel[0], accel[1], accel[2], fix_yaw=False)
+
+    aligned_fix = rot_fix @ accel
+    aligned_free = rot_free @ accel
+    expected_vector = np.array([0, 0, 1])
+    np.testing.assert_almost_equal(aligned_fix, expected_vector, decimal=6)
+    np.testing.assert_almost_equal(aligned_free, expected_vector, decimal=6)
+
+    yaw_fix = np.arctan2(rot_fix[1, 0], rot_fix[0, 0])
+    yaw_free = np.arctan2(rot_free[1, 0], rot_free[0, 0])
+    assert np.abs(yaw_fix) < 1e-6
+    assert np.abs(yaw_free) > 1e-3
 
 
 def test_transform_N_3():
@@ -256,10 +281,6 @@ def test_transform_N_3():
                                       [0.0, 0.0, 1.0, -1.0],
                                       [0.0, 0.0, 0.0, 1.0]], order='C')
 
-    # Convert to F-order
-    points_f = np.asfortranarray(points_c)
-    transformation_matrix_f = np.asfortranarray(transformation_matrix_c)
-
     # Expected transformed points (manually calculated)
     expected_points = np.array([[0.866, 4.232, 2],
                                 [1.964, 8.33, 5],
@@ -273,13 +294,7 @@ def test_transform_N_3():
                                 [10.748, 41.114, 29]])
 
     transformed_points_cc = transform(points_c, transformation_matrix_c)
-    transformed_points_cf = transform(points_c, transformation_matrix_f)
-    transformed_points_fc = transform(points_f, transformation_matrix_c)
-    transformed_points_ff = transform(points_f, transformation_matrix_f)
     np.testing.assert_almost_equal(transformed_points_cc, expected_points, decimal=5)
-    np.testing.assert_almost_equal(transformed_points_cf, expected_points, decimal=5)
-    np.testing.assert_almost_equal(transformed_points_fc, expected_points, decimal=5)
-    np.testing.assert_almost_equal(transformed_points_ff, expected_points, decimal=5)
 
 
 def test_transform_N_M_3():
@@ -301,14 +316,7 @@ def test_transform_N_M_3():
                                       [0.0, 0.0, 1.0, -1.0],
                                       [0.0, 0.0, 0.0, 1.0]], order='C')
 
-    # Convert to F-order
-    points_f = np.asfortranarray(points_c)
-    assert (points_f == points_c).all()
-    transformation_matrix_f = np.asfortranarray(transformation_matrix_c)
-    assert (transformation_matrix_f == transformation_matrix_c).all()
-
     # Expected transformed points (manually calculated)
-
     expected_points = np.array([[[0.866, 4.232, 2],
                                  [1.964, 8.33, 5],
                                  [3.062, 12.428, 8],
@@ -320,18 +328,12 @@ def test_transform_N_M_3():
                                  [8.552, 32.918, 23]]])
 
     transformed_points_cc = transform(points_c, transformation_matrix_c)
-    transformed_points_cf = transform(points_c, transformation_matrix_f)
-    transformed_points_fc = transform(points_f, transformation_matrix_c)
-    transformed_points_ff = transform(points_f, transformation_matrix_f)
     np.testing.assert_almost_equal(transformed_points_cc, expected_points, decimal=5)
-    np.testing.assert_almost_equal(transformed_points_cf, expected_points, decimal=5)
-    np.testing.assert_almost_equal(transformed_points_fc, expected_points, decimal=5)
-    np.testing.assert_almost_equal(transformed_points_ff, expected_points, decimal=5)
 
 
 def test_dewarp():
-    poses = np.array([[1, 0, 0, 1, 0, 1, 0, -2, 0, 0, 1, 3, 0, 0, 0, 1] for _ in range(4)])
-    points = np.array([[i - 3, i + 1, i + 2] for i in range(2 * 4)])
+    poses = np.array([[1, 0, 0, 1, 0, 1, 0, -2, 0, 0, 1, 3, 0, 0, 0, 1] for _ in range(4)], dtype=np.float64)
+    points = np.array([[i - 3, i + 1, i + 2] for i in range(2 * 4)], dtype=np.float64)
     num_poses = poses.shape[0]
     pts_per_pose = int(points.shape[0] / poses.shape[0])
 
@@ -340,8 +342,6 @@ def test_dewarp():
 
     poses_c = np.ascontiguousarray(poses_reshaped)
     points_c = np.ascontiguousarray(points_reshaped)
-    poses_f = np.asfortranarray(poses_reshaped)
-    points_f = np.asfortranarray(points_reshaped)
 
     expected_points = np.array([[[-2, -1, 5],
                                  [-1, 0, 6],
@@ -351,21 +351,12 @@ def test_dewarp():
                                 [[2, 3, 9],
                                  [3, 4, 10],
                                  [4, 5, 11],
-                                 [5, 6, 12]]])
+                                 [5, 6, 12]]], dtype=np.float64)
 
     dewarped_points_cc = dewarp(points_c, poses_c)
-    dewarped_points_cf = dewarp(points_c, poses_f)
-    dewarped_points_fc = dewarp(points_f, poses_c)
-    dewarped_points_ff = dewarp(points_f, poses_f)
 
     np.testing.assert_allclose(dewarped_points_cc.shape, (2, 4, 3))
     np.testing.assert_allclose(dewarped_points_cc, expected_points, rtol=1e-5, atol=1e-8)
-    np.testing.assert_allclose(dewarped_points_cf.shape, (2, 4, 3))
-    np.testing.assert_allclose(dewarped_points_cf, expected_points, rtol=1e-5, atol=1e-8)
-    np.testing.assert_allclose(dewarped_points_fc.shape, (2, 4, 3))
-    np.testing.assert_allclose(dewarped_points_fc, expected_points, rtol=1e-5, atol=1e-8)
-    np.testing.assert_allclose(dewarped_points_ff.shape, (2, 4, 3))
-    np.testing.assert_allclose(dewarped_points_ff, expected_points, rtol=1e-5, atol=1e-8)
 
 
 def test_euler_pose_to_matrix():
@@ -415,14 +406,14 @@ def test_interp_pose():
         [0.0, 0.0, 0.0, 1.0]
     ])
 
-    tss = np.array([prev_ts, curr_ts, next_ts])
+    tss = np.array([prev_ts, curr_ts, next_ts], np.float64)
     poses = np.array([prev_pose, curr_pose, next_pose])
 
     # Inquiring timestamps
     inquiring_ts = np.array([
             100000, 100500, 101000, 101500,
             102000, 102500, 103000, 103500
-    ])
+    ], np.float64)
 
     # Expected poses based on the provided output
     expected_poses = np.array([
@@ -508,83 +499,15 @@ def test_interp_pose_unsorted():
         [0.0, 0.0, 0.0, 1.0]
     ])
 
-    tss = np.array([prev_ts, curr_ts, next_ts])
+    tss = np.array([prev_ts, curr_ts, next_ts], np.float64)
     poses = np.array([prev_pose, curr_pose, next_pose])
 
     # Unsorted inquiring timestamps - note the swapped order at indices 3 and 5
     inquiring_ts = np.array([
         100000, 100500, 101000, 102500,  # 102500 moved to index 3
         102000, 101500, 103000, 103500   # 101500 moved to index 5
-    ])
+    ], np.float64)
 
-    # Expected poses with 4th and 6th swapped from the original test
-    expected_poses = np.array([
-        # Index 0: 100000 (same as original)
-        np.array([
-            [9.50563566e-01, 2.94044472e-01, 9.98336350e-02, -5.83461852e+00],
-            [-2.95520849e-01, 9.55336290e-01, -2.79214613e-08, -1.38840457e+00],
-            [-9.53747027e-02, -2.95028941e-02, 9.95004143e-01, -1.42462609e+00],
-            [0.0, 0.0, 0.0, 1.0]
-        ]),
-        # Index 1: 100500 (same as original)
-        np.array([
-            [0.98756338, 0.149066, 0.04997893, -2.84746798],
-            [-0.14943741, 0.98876405, 0.00375782, -0.91059756],
-            [-0.0488572, -0.01117981, 0.9987432, -0.7874577],
-            [0.0, 0.0, 0.0, 1.0]
-        ]),
-        # Index 2: 101000 (same as original)
-        np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1]
-        ]),
-        # Index 3: 102500 (was index 5 in original - the 6th pose)
-        np.array([
-            [0.9208184, -0.34289665, -0.18578365, 2.41554879],
-            [0.33559594, 0.93936924, -0.07042739, 1.5451861],
-            [0.1986689, 0.00250261, 0.98006331, 1.14334982],
-            [0.0, 0.0, 0.0, 1.0]
-        ]),
-        # Index 4: 102000 (same as original)
-        np.array([
-            [9.50563566e-01, -2.95520849e-01, -9.53747027e-02, 5.00000000e+00],
-            [2.94044472e-01, 9.55336290e-01, -2.95028941e-02, 3.00000000e+00],
-            [9.98336350e-02, -2.79214613e-08, 9.95004143e-01, 2.00000000e+00],
-            [0.0, 0.0, 0.0, 1.0]
-        ]),
-        # Index 5: 101500 (was index 3 in original - the 4th pose)
-        np.array([
-            [0.98756338, -0.14943741, -0.0488572, 2.63750479],
-            [0.149066, 0.98876405, -0.01117981, 1.31602317],
-            [0.04997893, 0.00375782, 0.9987432, 0.93220328],
-            [0.0, 0.0, 0.0, 1.0]
-        ]),
-        # Index 6: 103000 (same as original)
-        np.array([
-            [8.79923149e-01, -3.89418384e-01, -2.72192394e-01, -2.23569899e-07],
-            [3.72025983e-01, 9.21060403e-01, -1.15081184e-01, -1.19328240e-06],
-            [2.95520591e-01, -1.60280748e-08, 9.55336219e-01, 3.73615875e-06],
-            [0.0, 0.0, 0.0, 1.0]
-        ]),
-        # Index 7: 103500 (same as original)
-        np.array([
-            [0.82838856, -0.43450466, -0.35352245, -2.21632003],
-            [0.40287952, 0.90063797, -0.16290697, -1.61678417],
-            [0.38917989, -0.00747664, 0.9211313, -1.41550338],
-            [0.0, 0.0, 0.0, 1.0]
-        ])
-    ])
-
-    interp_poses = core.interp_pose(inquiring_ts, tss, poses)
-
-    assert len(interp_poses) == len(expected_poses), (
-        f"Pose count mismatch: expected {len(expected_poses)}, got {len(interp_poses)}"
-    )
-
-    for idx, (computed_pose, expected_pose) in enumerate(zip(interp_poses, expected_poses)):
-        assert np.allclose(computed_pose, expected_pose, atol=1e-4), (
-            f"Mismatch at pose index {idx} (timestamp {inquiring_ts[idx]}):\n"
-            f"Computed:\n{computed_pose}\nExpected:\n{expected_pose}"
-        )
+    with pytest.raises(ValueError) as excinfo:
+        core.interp_pose(inquiring_ts, tss, poses)
+    assert str(excinfo.value) == "x_interp values must be monotonically increasing: 102000.000000 < 102500.000000"

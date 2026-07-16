@@ -1,3 +1,5 @@
+:tocdepth: 2
+
 ================================
 Migration from 0.14.0 to 0.15.0
 ================================
@@ -88,7 +90,7 @@ If you prefer to explicitly select a single sensor by index, use ``single(sensor
     for scan in source.single(sensor_idx):
         ...
 
-Refer to the :ref:`python quickstart <iterating-over-scans>` for more information.
+Refer to :doc:`/features/consumption/frame_set_sources` for more information.
 
 
 Removal of ``PacketMultiSource``

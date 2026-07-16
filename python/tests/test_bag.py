@@ -16,7 +16,7 @@ from ouster.sdk import open_source
 from ouster.sdk.core import LidarPacket, ImuPacket
 from tests.conftest import BAGS_DATA_DIR
 
-from ouster.sdk.bag import BagPacketSource, BagScanSource
+from ouster.sdk.bag import BagPacketSource, BagFrameSetSource
 
 
 class set_directory(object):
@@ -53,7 +53,7 @@ def test_bag_convert(tmp_path, test_bag_file):
         assert len(files) == 1
 
         # now verify it has all messages
-        src = BagScanSource("test.bag")
+        src = BagFrameSetSource("test.bag")
 
         c = 0
         for s, in src:
@@ -86,7 +86,7 @@ def test_bag_save(test_bag_file, tmp_path):
         assert len(files) == 1
 
         # now verify it has all messages
-        src = BagScanSource("test.bag")
+        src = BagFrameSetSource("test.bag")
 
         c = 0
         for s, in src:
@@ -120,7 +120,7 @@ def test_bag_open(test_bag_file):
 
     src.close()
 
-    src = BagScanSource(test_bag_file)
+    src = BagFrameSetSource(test_bag_file)
 
     c = 0
     for s, in src:

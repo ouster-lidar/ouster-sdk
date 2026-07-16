@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="680" height="280" viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
+    </marker>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1a73e8"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34a853"/>
+    </marker>
+    <filter id="sh" x="-2%" y="-2%" width="104%" height="108%">
+      <feDropShadow dx="1" dy="1" stdDeviation="1.5" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="680" height="280" fill="#fafafa" rx="6"/>
+
+  <!-- ===== SLAM (top row) ===== -->
+  <text x="340" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#1a73e8" letter-spacing="1.5">SLAM</text>
+
+  <!-- Sensor -->
+  <rect x="20" y="44" width="110" height="56" rx="5" fill="#1a73e8" opacity="0.12" stroke="#1a73e8" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="75" y="69" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#1a73e8">FrameSet</text>
+  <text x="75" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#999">unknown environment</text>
+
+  <line x1="134" y1="72" x2="158" y2="72" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+
+  <!-- SlamEngine -->
+  <rect x="162" y="44" width="120" height="56" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.4" filter="url(#sh)"/>
+  <text x="222" y="69" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#1a73e8">SlamEngine</text>
+  <text x="222" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#777">builds map + pose</text>
+
+  <line x1="286" y1="72" x2="320" y2="72" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+
+  <!-- Map output -->
+  <rect x="324" y="44" width="100" height="56" rx="5" fill="#1a73e8" opacity="0.12" stroke="#1a73e8" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="374" y="65" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#1a73e8">Map (PLY)</text>
+  <text x="374" y="81" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#555">+ Trajectory</text>
+  <text x="374" y="93" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#999">growing each frame</text>
+
+  <!-- Feedback loop arrow (map updates) -->
+  <path d="M 374 102 L 374 118 L 222 118 L 222 104" fill="none" stroke="#1a73e8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+  <text x="298" y="130" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#1a73e8">map updated each frame</text>
+
+  <!-- ===== Divider ===== -->
+  <line x1="30" y1="148" x2="650" y2="148" stroke="#e0e0e0" stroke-width="1"/>
+
+  <!-- ===== Localization (bottom row) ===== -->
+  <text x="340" y="170" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#34a853" letter-spacing="1.5">LOCALIZATION</text>
+
+  <!-- Static Map (left, feeds into engine) -->
+  <rect x="20" y="184" width="100" height="56" rx="5" fill="#f9ab00" opacity="0.12" stroke="#f9ab00" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="70" y="209" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#b47b00">Static Map</text>
+  <text x="70" y="225" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#555">PLY / PCD</text>
+
+  <!-- Dashed arrow from SLAM map to static map -->
+  <path d="M 374 102 L 374 140 L 70 140 L 70 182" fill="none" stroke="#888" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="470" y="144" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#888">exported from SLAM</text>
+
+  <line x1="124" y1="212" x2="158" y2="212" stroke="#34a853" stroke-width="1.6" marker-end="url(#arr-green)"/>
+
+  <!-- LocalizationEngine -->
+  <rect x="162" y="184" width="140" height="56" rx="5" fill="#fff" stroke="#34a853" stroke-width="1.4" filter="url(#sh)"/>
+  <text x="232" y="206" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#34a853">LocalizationEngine</text>
+  <text x="232" y="222" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#777">pose only (fixed map)</text>
+
+  <!-- Live frames input (from above into engine) -->
+  <rect x="345" y="184" width="110" height="56" rx="5" fill="#34a853" opacity="0.12" stroke="#34a853" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="400" y="209" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#34a853">FrameSet</text>
+  <text x="400" y="225" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#999">unknown environment</text>
+
+  <line x1="343" y1="212" x2="306" y2="212" stroke="#34a853" stroke-width="1.6" marker-end="url(#arr-green)"/>
+
+  <!-- Output: Poses -->
+  <rect x="520" y="184" width="140" height="56" rx="5" fill="#34a853" opacity="0.12" stroke="#34a853" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="590" y="206" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#34a853">Per-Column Poses</text>
+  <text x="590" y="224" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#555">SE(3) → W</text>
+
+  <!-- Arrow engine→output -->
+  <path d="M 232 242 L 232 260 L 590 260 L 590 244" fill="none" stroke="#34a853" stroke-width="1.6" marker-end="url(#arr-green)"/>
+
+  <!-- No feedback (contrast with SLAM) -->
+  <text x="590" y="272" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#34a853">map never modified</text>
+</svg>

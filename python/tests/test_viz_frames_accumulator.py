@@ -1,0 +1,54 @@
+from .conftest import MockPointViz
+from ouster.sdk.core import SensorInfo, LidarMode, LidarFrame, ChanField
+from ouster.sdk.viz.model import LidarFrameVizModel
+from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
+from ouster.sdk.viz.track import MultiTrack
+from ouster.sdk.viz.frames_accumulator import FramesAccumulator
+from ouster.sdk.viz.view_mode import ReflMode
+
+
+def test_toggle_visibility():
+    """It should add/remove the Clouds used to render
+    the track and key frames depending on visibility."""
+    infos = [
+        SensorInfo.from_default(LidarMode._2048x10),
+        SensorInfo.from_default(LidarMode._2048x10)
+    ]
+    viz = MockPointViz()
+    model = LidarFrameVizModel(viz, infos, _img_aspect_ratio=0)
+    config = LidarFrameVizAccumulatorsConfig(accum_max_num=2, accum_min_dist_num=2)
+    track = MultiTrack(model, config)
+    viz = MockPointViz()
+    accum = FramesAccumulator(model, viz, track)
+
+    # must have view modes updated before anything can be added to the viz
+    accum._cloud_mode_name = ChanField.REFLECTIVITY
+    model._sensors[0]._cloud_modes[ChanField.REFLECTIVITY] = ReflMode()
+    model._sensors[1]._cloud_modes[ChanField.REFLECTIVITY] = ReflMode()
+
+    assert len(viz.items) == 0  # no key frames yet
+    assert accum.accum_visible  # visible by default
+
+    accum.toggle_visibility()
+    assert not accum.accum_visible
+
+    # add some frames
+    frames = [LidarFrame(info) for info in infos]
+    track.update(frames)
+    accum.update(frames)
+
+    accum.toggle_visibility()
+    assert accum.accum_visible
+
+    # TODO[tws] improve this test and its assertions
+    # there should be a cloud for each key frame
+    assert len(viz.items) == len(infos)
+
+    # Disabling/enabling sensors removes/adds their clouds to the viz
+    model._sensors[0]._enabled = False
+    accum.update(frames)
+    assert len(viz.items) == len(infos) - 1
+
+    model._sensors[0]._enabled = True
+    accum.update(frames)
+    assert len(viz.items) == len(infos)

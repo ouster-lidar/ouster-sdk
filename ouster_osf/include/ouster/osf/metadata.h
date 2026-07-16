@@ -18,9 +18,9 @@
 #include <type_traits>
 #include <vector>
 
+#include "ouster/core/visibility.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/buffer.h"
-#include "ouster/visibility.h"
 
 /// @todo fix api docs in this file
 /// @todo add equality operators
@@ -45,7 +45,9 @@ struct MetadataTraits {
      *
      * @returns nullptr
      */
-    static const std::string type() { return nullptr; }
+    static const std::string type() {
+        return nullptr;
+    }
 };
 
 /**
@@ -102,8 +104,7 @@ class OUSTER_API_CLASS MetadataEntry {
     /**
      * Function type to recover metadata object from buffer.
      */
-    using from_buffer_func =
-        std::unique_ptr<MetadataEntry> (*)(const OsfBuffer buf);
+    using from_buffer_func = std::unique_ptr<MetadataEntry> (*)(const OsfBuffer& buf);
 
     /**
      * @return Type of the metadata, used to identify the object type in
@@ -148,8 +149,8 @@ class OUSTER_API_CLASS MetadataEntry {
      * @return A new object of the derived type cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(
-        const OsfBuffer buf, const std::string type_str);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer& buf,
+                                                      const std::string& type_str);
 
     /**
      * String representation of the internal metadata object, used in
@@ -178,17 +179,6 @@ class OUSTER_API_CLASS MetadataEntry {
      */
     OUSTER_API_FUNCTION
     void set_id(uint32_t id);
-
-    /**
-     * @deprecated Use set_id() instead.
-     * @param[in] id Deprecated.
-     */
-    OUSTER_DIAGNOSTIC_PUSH
-    OUSTER_DIAGNOSTIC_IGNORE_UNUSED
-    OUSTER_DEPRECATED_MSG(set_id, OUSTER_DEPRECATED_LAST_SUPPORTED_0_16)
-    OUSTER_API_FUNCTION
-    void setId(uint32_t id) { set_id(id); }
-    OUSTER_DIAGNOSTIC_POP
 
     /**
      * Unique id used inside the flatbuffer metadata store to refer to
@@ -250,7 +240,7 @@ class OUSTER_API_CLASS MetadataEntry {
     virtual ~MetadataEntry() = default;
 
    protected:
-    MetadataEntry(const OsfBuffer buf);
+    MetadataEntry(const OsfBuffer& buf);
 
     MetadataEntry() = default;
 
@@ -278,8 +268,7 @@ class OUSTER_API_CLASS MetadataEntry {
  * @return The MetadataBase cast as a MetadataDerived pointer.
  */
 template <typename MetadataDerived, typename MetadataBase>
-std::shared_ptr<MetadataDerived> metadata_pointer_as(
-    const std::shared_ptr<MetadataBase>& m) {
+std::shared_ptr<MetadataDerived> metadata_pointer_as(const std::shared_ptr<MetadataBase>& m) {
     if (m->type() != metadata_type<MetadataDerived>()) {
         return nullptr;
     }
@@ -300,7 +289,7 @@ std::shared_ptr<MetadataDerived> metadata_pointer_as(
  * @param[in] error The error message to log.
  */
 OUSTER_API_FUNCTION
-void register_metadata_internal_error_function(std::string error);
+void register_metadata_internal_error_function(const std::string& error);
 
 /**
  * Registrar class helper to add static from_buffer() function of the concrete
@@ -437,8 +426,7 @@ const bool RegisterMetadata<MetadataDerived>::REGISTERED =
  * @tparam DerivedMetadataEntry The derived Metadata Entry type.
  */
 template <typename DerivedMetadataEntry>
-class MetadataEntryHelper : public MetadataEntry,
-                            RegisterMetadata<DerivedMetadataEntry> {
+class MetadataEntryHelper : public MetadataEntry, RegisterMetadata<DerivedMetadataEntry> {
    public:
     /**
      * Return the metadata type string for the specific derived class.
@@ -489,7 +477,7 @@ class OUSTER_API_CLASS MetadataEntryRef : public MetadataEntry {
      * @param[in] buf The buffer to create the MetadataEntryRef from.
      */
     OUSTER_API_FUNCTION
-    explicit MetadataEntryRef(const OsfBuffer buf);
+    explicit MetadataEntryRef(const OsfBuffer& buf);
 
     /**
      * Return the type of the MetadataEntry.
@@ -558,7 +546,9 @@ struct OUSTER_API_CLASS MetadataTraits<MetadataEntryRef> {
      * @return The type string "impl/MetadataEntryRef".
      */
     OUSTER_API_FUNCTION
-    static const std::string type() { return "impl/MetadataEntryRef"; }
+    static const std::string type() {
+        return "impl/MetadataEntryRef";
+    }
 };
 
 /**
@@ -573,8 +563,7 @@ class OUSTER_API_CLASS MetadataStore {
     /**
      * Metadata id to MetadataEntry map.
      */
-    using MetadataEntriesMap =
-        std::map<uint32_t, std::shared_ptr<MetadataEntry>>;
+    using MetadataEntriesMap = std::map<uint32_t, std::shared_ptr<MetadataEntry>>;
 
    public:
     /**
@@ -734,10 +723,8 @@ class OUSTER_API_CLASS MetadataStore {
  */
 template <typename StreamMeta, typename ObjectType>
 struct MessageStream {
-    using obj_type =
-        ObjectType;  ///< Type of the objects in the stream (e.g., LidarScan).
-    using meta_type =
-        StreamMeta;  ///< Type of the stream's associated metadata.
+    using obj_type = ObjectType;   ///< Type of the objects in the stream (e.g., LidarFrame).
+    using meta_type = StreamMeta;  ///< Type of the stream's associated metadata.
 };
 
 }  // namespace osf

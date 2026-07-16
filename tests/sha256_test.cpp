@@ -1,4 +1,4 @@
-#include "ouster/sha256.h"
+#include "ouster/core/sha256.h"
 
 #include <gtest/gtest.h>
 
@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "ouster/vector_streambuf.h"
+#include "ouster/core/impl/vector_streambuf.h"
 #include "test_utils.h"
 #include "util.h"
 
@@ -16,9 +16,7 @@ using ouster::sdk::core::VectorStreamBuf;
 TEST(Sha256, hash_empty) {
     Sha256 empty_hash = Sha256::hash_blobs({});
     // Expected value derived by running "echo -n '' | sha256sum"
-    EXPECT_EQ(
-        empty_hash.str(),
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    EXPECT_EQ(empty_hash.str(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 }
 
 TEST(Sha256, hash_nonexistent_file) {
@@ -26,9 +24,7 @@ TEST(Sha256, hash_nonexistent_file) {
     ASSERT_FALSE(file_stream.is_open());
     auto hash = Sha256::hash_file({file_stream, 0});
     // Expected value is the same as hashing empty input
-    EXPECT_EQ(
-        hash.str(),
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    EXPECT_EQ(hash.str(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 }
 
 TEST(Sha256, hash_file_and_blobs) {

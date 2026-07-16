@@ -16,11 +16,11 @@ from ouster.sdk import core
 import ouster.sdk.pcap as pcap
 from ouster.sdk.util import resolve_metadata
 import ouster.sdk.util.pose_util as pu
-from ouster.sdk.viz.model import LidarScanVizModel
-from ouster.sdk.core import dewarp, LidarScanSet
+from ouster.sdk.viz.model import LidarFrameVizModel
+from ouster.sdk.core import dewarp, FrameSet
 
-from ouster.sdk.viz.accumulators import LidarScanVizAccumulators
-from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
+from ouster.sdk.viz.accumulators import LidarFrameVizAccumulators
+from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
 
 try:
     from scipy.spatial.transform import Rotation as R
@@ -324,17 +324,17 @@ def test_viz_util_traj_eval_kitti(kitti_poses_file, point_viz: viz.PointViz) -> 
 
 
 @pytest.mark.parametrize("use_dewarp", [True, False])
-def test_viz_util_traj_eval_scans_poses(test_data_dir,
+def test_viz_util_traj_eval_frames_poses(test_data_dir,
                                         point_viz: viz.PointViz,
                                         use_dewarp: bool) -> None:
-    """Test to draw 3 scans with poses."""
+    """Test to draw 3 frames with poses."""
     pcap_file = str(test_data_dir / "pcaps" /
                     "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
 
     poses_file = str(test_data_dir / "pcaps" /
                      "OS-1-128_v2.3.0_1024x10_lb_n3_poses_kitti.txt")
 
-    # load one pose per scan
+    # load one pose per frame
     poses = pu.load_kitti_poses(poses_file)
 
     # make time indexed poses starting from 0.5
@@ -342,33 +342,33 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
     traj_eval = pu.TrajectoryEvaluator(traj_poses, time_bounds=1.0)
 
     meta = core.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
-    scans = pcap.PcapScanSource(pcap_file, sensor_info=[meta])
+    frame_sets = pcap.PcapFrameSetSource(pcap_file, sensor_info=[meta])
 
     # used for use_dewarp option
     xyzlut = core.XYZLut(meta)
 
-    for idx, scanl in enumerate(scans):
-        for scan in scanl:
-            if scan is None:
+    for idx, frame_set in enumerate(frame_sets):
+        for frame in frame_set:
+            if frame is None:
                 continue
-            # make scan indexed column timestamps
-            idx_ts = idx + np.linspace(0, 1.0, scan.w, endpoint=False)
-            traj_eval(scan, col_ts=idx_ts)
-            key = scan.field(core.ChanField.REFLECTIVITY)
-            key = key / np.amax(key)
+            # make frame indexed column timestamps
+            idx_ts = idx + np.linspace(0, 1.0, frame.w, endpoint=False)
+            traj_eval(frame, col_ts=idx_ts)
+            key = frame.field(core.ChanField.REFLECTIVITY)
+            key = (key / np.amax(key)).astype(np.float32)
             if use_dewarp:
-                cloud_scan = viz.Cloud(scan.h * scan.w)
-                xyz = xyzlut(scan.field(core.ChanField.RANGE))
+                cloud_frame = viz.Cloud(frame.h * frame.w)
+                xyz = xyzlut(frame.field(core.ChanField.RANGE))
                 # TODO hao: remove the input_row_major
-                xyz = dewarp(xyz, scan.pose)
-                cloud_scan.set_xyz(xyz)
-                cloud_scan.set_key(key)
+                xyz = dewarp(xyz, frame.body_to_world)
+                cloud_frame.set_xyz(xyz.astype(np.float32))
+                cloud_frame.set_key(key)
             else:
-                cloud_scan = viz.Cloud(meta)
-                cloud_scan.set_range(scan.field(core.ChanField.RANGE))
-                cloud_scan.set_column_poses(scan.pose)
-                cloud_scan.set_key(key)
-            point_viz.add(cloud_scan)
+                cloud_frame = viz.Cloud(meta)
+                cloud_frame.set_range(frame.field(core.ChanField.RANGE))
+                cloud_frame.set_column_poses(frame.body_to_world.astype(np.float32))
+                cloud_frame.set_key(key)
+            point_viz.add(cloud_frame)
 
     point_viz.update()
 
@@ -391,7 +391,7 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
 
     total_traj_t = 2
 
-    # some camera movement along 3 scan point cloud
+    # some camera movement along 3 frame point cloud
     cam_traj_eval = pu.TrajectoryEvaluator([
         (0, np.array([0, 0, 0, -15, 0, 0])),
         (total_traj_t, np.array([0, 0, - math.pi / 12, 1, 0, 0]))
@@ -412,12 +412,12 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
          period=period_t,
          total=total_t,
          title=f"Trajectory Interpolation: move along the path (kitti poses) "
-         f"with scans. Dewarp: {'YES' if use_dewarp else 'NO'}")
+         f"with frames. Dewarp: {'YES' if use_dewarp else 'NO'}")
 
 
-def test_viz_util_scans_accum_poses(test_data_dir,
+def test_viz_util_frames_accum_poses(test_data_dir,
                                     point_viz: viz.PointViz) -> None:
-    """Test to draw 3 scans with poses using LidarScanVizAccumulators."""
+    """Test to draw 3 frames with poses using LidarFrameVizAccumulators."""
     pcap_file = str(test_data_dir / "pcaps" /
                     "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
 
@@ -425,9 +425,9 @@ def test_viz_util_scans_accum_poses(test_data_dir,
                      "OS-1-128_v2.3.0_1024x10_lb_n3_poses_kitti.txt")
 
     meta = core.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
-    scans = pcap.PcapScanSource(pcap_file, sensor_info=[meta])
-    scans_w_poses = pu.pose_scans_from_kitti(scans, poses_file)
-    model = LidarScanVizModel(point_viz, metas=[meta], _img_aspect_ratio=0)
+    frame_sets = pcap.PcapFrameSetSource(pcap_file, sensor_info=[meta])
+    frame_sets_w_poses = pu.pose_frames_from_kitti(frame_sets, poses_file)
+    model = LidarFrameVizModel(point_viz, metas=[meta], _img_aspect_ratio=0)
 
     viz.AxisWithLabel(point_viz,
                       pose=np.eye(4),
@@ -437,28 +437,28 @@ def test_viz_util_scans_accum_poses(test_data_dir,
                       label_scale=1,
                       enabled=True)
 
-    accumulator_config = LidarScanVizAccumulatorsConfig(
+    accumulator_config = LidarFrameVizAccumulatorsConfig(
         accum_max_num=10,
         accum_min_dist_num=1,
         map_enabled=True,
         map_select_ratio=0.5
     )
-    scans_acc = LidarScanVizAccumulators(
+    frames_acc = LidarFrameVizAccumulators(
         model,
         point_viz,
         accumulator_config,
-        threading.Lock()
+        threading.RLock()
     )
 
-    for scan in scans_w_poses:
-        scans_acc.update(LidarScanSet([scan]))
-        model._amend_view_modes_all(LidarScanSet([scan]))
+    for frame in frame_sets_w_poses:
+        frames_acc.update(FrameSet([frame]))
+        model._amend_view_modes_all(FrameSet([frame]))
 
-    scans_acc.draw(update=True)
+    frames_acc.draw(update=True)
 
     total_traj_t = 2
 
-    # some camera movement along 3 scan point cloud
+    # some camera movement along 3 frame point cloud
     cam_traj_eval = pu.TrajectoryEvaluator([
         (0, np.array([0, 0, 0, -15, 0, 0])),
         (total_traj_t, np.array([0, 0, - math.pi / 12, 1, 0, 0]))
@@ -478,32 +478,33 @@ def test_viz_util_scans_accum_poses(test_data_dir,
          on_update,
          period=period_t,
          total=total_t,
-         title="LidarScanVizAccumulators as scan viz.")
+         title="LidarFrameVizAccumulators as frame viz.")
 
 
-def test_ls_show(test_data_dir) -> None:
-    """Verify ls_show method work as expected."""
+def test_lf_show(test_data_dir) -> None:
+    """Verify lf_show method work as expected."""
     from ouster.sdk import open_source
-    from ouster.sdk.viz import ls_show
+    from ouster.sdk.viz import lf_show
     pcap_file = str(test_data_dir / "pcaps" /
                     "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
     h = open_source(pcap_file, index=True)
-    # test single lidarscan
+    # test single LidarFrame
     a = h[0][0]     # type: ignore
-    ls_show(a)
+    assert a is not None
+    lf_show(a)
 
-    # test a list of lidarscan
+    # test a list of LidarFrame
     b = h[0]        # type: ignore
-    ls_show(b)
+    lf_show(b)
 
-    # test a list of lidarscan
+    # test a list of LidarFrame
     c = [h[0][0], h[1][0]]  # type: ignore
-    ls_show(c)
+    lf_show(c)
 
-    # test list of lists of lidarscans
+    # test list of lists of LidarFrames
     d = [[h[0][0], h[1][0]], [h[1][0], h[2][0]]]    # type: ignore
-    ls_show(d)
+    lf_show(d)
 
     # test a slice
     e = h[0:3]      # type: ignore
-    ls_show(e)
+    lf_show(e)

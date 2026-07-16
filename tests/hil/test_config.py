@@ -105,9 +105,9 @@ def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
 
     logger.debug(f"Sleeping for {reinit_time} seconds after reinit..")
     time.sleep(reinit_time)
-    logger.debug("Attempting to read scans")
-    with closing(sensor.SensorScanSource(hil_sensor_hostname, no_auto_udp_dest=True)) as scans:
-        take(10, scans)
+    logger.debug("Attempting to read frames")
+    with closing(sensor.SensorFrameSetSource(hil_sensor_hostname, no_auto_udp_dest=True)) as frame_sets:
+        take(10, frame_sets)
 
     cfg1 = sensor.get_config(hil_sensor_hostname)
     logger.debug(f"Sanity check new config (New UDP dest: {cfg1.udp_dest})")

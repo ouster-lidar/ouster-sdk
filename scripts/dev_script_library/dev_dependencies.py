@@ -1,5 +1,4 @@
 import click
-import sys
 import os
 import shutil
 
@@ -12,7 +11,7 @@ def detect_package_manager():
     elif shutil.which("yum"):
         return "yum"
     elif shutil.which("dnf"):
-        return "yum"
+        return "dnf"
     elif shutil.which("pacman"):
         return "pacman"
     elif shutil.which("zypper"):
@@ -40,11 +39,12 @@ def enable_local_vcpkg(ctx, reinit):
 
 def install_vcpkg_package_requirements_apt(ctx):
     packages = [
-        "git", "build-essential", "cmake",
+        "git", "build-essential", "cmake", "ninja-build",
         "curl", "zip", "unzip", "tar",
         "pkg-config", "libxcursor-dev",
         "libxinerama-dev", "libgl1-mesa-dev",
-        "xorg-dev", "bison", "flex", "flufl.lock"
+        "xorg-dev", "bison", "flex",
+        "m4", "autoconf", "autoconf-archive", "automake", "libtool",
     ]
     run = ctx.obj.build_libs.RunCommand(tty=True)
     run.run_command("apt-get", "update")
@@ -55,14 +55,15 @@ def install_vcpkg_package_requirements_apt(ctx):
 
 def install_vcpkg_package_requirements_brew(ctx):
     packages = [
-        'curl', 'git', 'cmake', 'pkg-config', "flufl.lock"
+        'curl', 'git', 'cmake', 'pkg-config',
+        'm4', 'bison', 'flex',
+        'autoconf', 'autoconf-archive', 'automake', 'libtool',
     ]
     run = ctx.obj.build_libs.RunCommand(tty=True)
     run.run_command("brew", "update")
     args = ["brew", "install"]
     args.extend(packages)
     run.run_command(*args)
-    pass
 
 
 @click.command()
@@ -70,33 +71,56 @@ def install_vcpkg_package_requirements_brew(ctx):
 def install_vcpkg_package_requirements(ctx):
     """Install local vcpkg dependencies."""
     if os.name == "nt":
-        print("No vcpkg depenendencies required.\n")
-        sys.exit(0)
+        print("No vcpkg dependencies required.\n")
+        return
+    pm = detect_package_manager()
+    if pm == "apt":
+        install_vcpkg_package_requirements_apt(ctx)
+    elif pm == "brew":
+        install_vcpkg_package_requirements_brew(ctx)
     else:
-        pm = detect_package_manager()
-        if pm == "apt":
-            install_vcpkg_package_requirements_apt(ctx)
-        elif pm == "brew":
-            install_vcpkg_package_requirements_brew(ctx)
-        else:
-            print("No vcpkg depenendencies required.\n")
-            sys.exit(0)
+        print("No vcpkg dependencies required.\n")
 
 
 def install_doxygen_linux(ctx, version="1.11.0"):
+    import tempfile
+    import urllib.request
+    import hashlib
+
+    known_sha256 = {
+        "1.11.0": "db68ca22b43c3d7efd15351329db5af9146ab1ac7eaccd61a894fe36612da8fb",
+    }
+
     url = f"https://www.doxygen.nl/files/doxygen-{version}.linux.bin.tar.gz"
-    tarball = f"doxygen-{version}.linux.bin.tar.gz"
+    tarball_name = f"doxygen-{version}.linux.bin.tar.gz"
     run = ctx.obj.build_libs.RunCommand(tty=True)
-    run.run_command("wget", url)
-    run.run_command("tar", "-zxf", tarball)
-    # Find doxygen* directory
-    dirs = [d for d in os.listdir(".") if d.startswith("doxygen") and os.path.isdir(d)]
-    if not dirs:
-        raise RuntimeError("Doxygen directory not found after extraction.")
-    doxygen_dir = dirs[0]
-    run.run_command("make", cwd=doxygen_dir)
-    run.run_command("make", "install", cwd=doxygen_dir)
-    run.run_command("ln", "-sf", "/usr/local/bin/doxygen", "/usr/bin/doxygen")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tarball_path = os.path.join(tmpdir, tarball_name)
+        print(f"Downloading doxygen {version} from {url}...")
+        opener = urllib.request.build_opener()
+        opener.addheaders = [('User-Agent', 'Wget/1.21.1')]
+        urllib.request.install_opener(opener)
+
+        urllib.request.urlretrieve(url, tarball_path)
+
+        if version in known_sha256:
+            sha256 = hashlib.sha256(open(tarball_path, "rb").read()).hexdigest()
+            if sha256 != known_sha256[version]:
+                raise RuntimeError(
+                    f"SHA-256 mismatch for {tarball_name}: "
+                    f"expected {known_sha256[version]}, got {sha256}")
+            print("Checksum verified.")
+
+        run.run_command("tar", "-zxf", tarball_path, "-C", tmpdir)
+        dirs = [os.path.join(tmpdir, d) for d in os.listdir(tmpdir)
+                if d.startswith("doxygen") and os.path.isdir(os.path.join(tmpdir, d))]
+        if not dirs:
+            raise RuntimeError("Doxygen directory not found after extraction.")
+        doxygen_dir = dirs[0]
+        run.run_command("make", cwd=doxygen_dir)
+        run.run_command("make", "install", cwd=doxygen_dir)
+        run.run_command("ln", "-sf", "/usr/local/bin/doxygen", "/usr/bin/doxygen")
 
 
 def install_system_packages_apt(ctx, doxygen=False, clangformat=False):
@@ -106,11 +130,13 @@ def install_system_packages_apt(ctx, doxygen=False, clangformat=False):
         'git', 'build-essential', 'cmake',
         'zlib1g-dev', 'libglfw3-dev',
         'libpng-dev', 'libflatbuffers-dev',
-        'libtbb-dev', 'robin-map-dev',
-        'libceres-dev', 'libzstd-dev',
+        'libtbb-dev', 'libceres-dev', 'libzstd-dev',
         'libzip-dev', 'libssl-dev',
-        'libgtest-dev'
+        'libgtest-dev', "m4", "autoconf",
+        "automake"
     ]
+    if os.path.isdir(ctx.obj.sdk_private_dir):
+        packages.extend(['libboost-dev', 'libcgal-dev'])
     if doxygen:
         packages.append('graphviz')
         install_doxygen_linux(ctx)
@@ -129,9 +155,11 @@ def install_system_packages_brew(ctx, doxygen=False, clangformat=False):
         'curl', 'git', 'cmake', 'zlib',
         'glfw', 'libpng', 'flatbuffers',
         'tbb', 'ceres-solver', 'zstd',
-        'robin-map', 'libzip', 'openssl@3',
+        'libzip', 'openssl@3',
         'googletest'
     ]
+    if os.path.isdir(ctx.obj.sdk_private_dir):
+        packages.extend(['boost', 'cgal'])
     if doxygen:
         packages.append('doxygen')
     if clangformat:
@@ -152,19 +180,18 @@ def install_system_packages_brew(ctx, doxygen=False, clangformat=False):
 def install_system_packages(ctx, doxygen, clangformat):
     """Install system packages for your platform."""
     if os.name == "nt":
-        print("Windows is detected, no binary system package manager is supported. "
-              "Please use dev.py utils enable-local-vcpkg for this distribution/OS.\n")
-        sys.exit(1)
+        raise click.ClickException(
+            "Windows is detected, no binary system package manager is supported. "
+            "Please use dev.py utils enable-local-vcpkg for this distribution/OS.")
+    pm = detect_package_manager()
+    if pm == "apt":
+        install_system_packages_apt(ctx, doxygen, clangformat)
+    elif pm == "brew":
+        install_system_packages_brew(ctx, doxygen, clangformat)
     else:
-        pm = detect_package_manager()
-        if pm == "apt":
-            install_system_packages_apt(ctx, doxygen, clangformat)
-        elif pm == "brew":
-            install_system_packages_brew(ctx, doxygen, clangformat)
-        else:
-            print(f"ERROR: This distribution/OS is not officially supported. ({pm})\n"
-                  "Please use dev.py utils enable-local-vcpkg for this distribution/OS.\n")
-            sys.exit(1)
+        raise click.ClickException(
+            f"This distribution/OS is not officially supported. ({pm})\n"
+            "Please use dev.py utils enable-local-vcpkg for this distribution/OS.")
 
 
 def import_module(click_context):

@@ -11,6 +11,7 @@ INSTALL_CMD=(uv pip install --python "${PYTHON}")
 "${INSTALL_CMD[@]}" -U pip pybind11 mypy flake8 flake8-formatter-junit-xml wheel pytest
 
 SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+export OUSTER_SDK_PATH="${OUSTER_SDK_PATH:-$(dirname $SCRIPT_DIR)}"
 pushd $SCRIPT_DIR
 DEPS=$(python3 -- <<EOF
 import setup

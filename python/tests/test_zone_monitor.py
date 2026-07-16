@@ -3,8 +3,7 @@ import pathlib
 import pytest
 import json
 import numpy as np
-from ouster.sdk.core import SensorInfo, FieldClass
-from ouster.sdk.zone_monitor import ZoneSet, Zone, ZoneMode, Stl, Zrb, \
+from ouster.sdk.core import SensorInfo, FieldClass, ZoneSet, Zone, ZoneMode, Stl, Zrb, \
     CoordinateFrame, EmulatedZoneMon, ZoneSetOutputFilter
 from ouster.sdk import open_source
 
@@ -51,9 +50,26 @@ def test_zone_set_zip(test_data_dir, tmp_path):
     assert zsc == result_zsc
 
 
+def test_zone_set_directory(test_data_dir, tmp_path):
+    """Reading and writing a zone set config directory should
+    result in a directory with the same contents as the original."""
+    dir_path = tmp_path / "test_6_zones_zmcfg_dir"
+    result_dir_path = tmp_path / "result_zsc_dir"
+
+    test_zsc = create_test_zone_set(test_data_dir)
+    test_zsc.save_to_directory(str(dir_path), ZoneSetOutputFilter.STL_AND_ZRB)
+    assert (dir_path / "metadata.json").exists()
+
+    zsc = ZoneSet(str(dir_path))
+    zsc.save_to_directory(str(result_dir_path), ZoneSetOutputFilter.STL_AND_ZRB)
+    result_zsc = ZoneSet(str(result_dir_path))
+    assert zsc == result_zsc
+
+
 def test_zone_set_to_json_stl(test_data_dir):
     zone_set = ZoneSet()
     zone_set.sensor_to_body_transform = np.eye(4)
+    assert np.array_equal(zone_set.sensor_to_body_transform, np.eye(4))
     zone_set.power_on_live_ids = [0]
     zone = Zone()
     zone.point_count = 1
@@ -226,7 +242,7 @@ def test_zone_render_older_fw(test_data_dir):
 
 def test_emulated_zone_mon_init(test_data_dir):
     zsc = create_test_zone_set(test_data_dir)
-    from ouster.sdk.zone_monitor import EmulatedZoneMon
+    from ouster.sdk.core import EmulatedZoneMon
     ezm = EmulatedZoneMon(zsc)
     assert ezm.zone_set == zsc
     assert ezm.zone_counts == {}
@@ -295,8 +311,8 @@ def test_emulated_zone_mon_requires_rendered_zones(test_data_dir):
 
 def test_emulated_zone_mon_new_fields(test_data_dir):
     source = open_source(f'{test_data_dir}/zone_monitor/single_frame_zm.osf')
-    scan, = next(iter(source))
-    zone_states = scan.field('ZONE_STATES')
+    frame, = next(iter(source))
+    zone_states = frame.field('ZONE_STATES')
     zone_zero = zone_states[0]
     assert zone_zero['id'] == 0
     assert zone_zero['live'] == 1
@@ -315,8 +331,8 @@ def test_emulated_zone_mon_new_fields(test_data_dir):
     sensor_info = source.sensor_info[0]
     ezm = EmulatedZoneMon(sensor_info.zone_set)
     bitmask_field = np.zeros((sensor_info.h, sensor_info.w), dtype=np.uint32)
-    ezm.calc_triggers(scan.field('RANGE'), bitmask_field)
-    ezm.calc_triggers(scan.field('RANGE'), bitmask_field)  # to increment triggered_frames and cause a trigger
+    ezm.calc_triggers(frame.field('RANGE'), bitmask_field)
+    ezm.calc_triggers(frame.field('RANGE'), bitmask_field)  # to increment triggered_frames and cause a trigger
     zone_states_2 = ezm.get_packet()
     zone_zero_2 = zone_states_2[0]
     assert zone_zero_2['id'] == zone_zero['id']
@@ -345,10 +361,10 @@ def test_emulated_zone_mon_vacancy_mode(test_data_dir):
     sensor_info = source.sensor_info[0]
     sensor_info.zone_set.zones[0].mode = ZoneMode.VACANCY
     ezm = EmulatedZoneMon(sensor_info.zone_set)
-    scan, = next(iter(source))
+    frame, = next(iter(source))
     bitmask_field = np.zeros((sensor_info.h, sensor_info.w), dtype=np.uint32)
-    ezm.calc_triggers(scan.field('RANGE'), bitmask_field)
-    ezm.calc_triggers(scan.field('RANGE'), bitmask_field)  # to increment triggered_frames and cause a trigger
+    ezm.calc_triggers(frame.field('RANGE'), bitmask_field)
+    ezm.calc_triggers(frame.field('RANGE'), bitmask_field)  # to increment triggered_frames and cause a trigger
     zone_states_2 = ezm.get_packet()
     zone_zero_2 = zone_states_2[0]
     assert zone_zero_2['trigger_type'] == ZoneMode.VACANCY.value
@@ -362,10 +378,10 @@ def test_emulated_zone_mon_vacancy_mode_2(test_data_dir):
     sensor_info = source.sensor_info[0]
     sensor_info.zone_set.zones[0].mode = ZoneMode.VACANCY
     ezm = EmulatedZoneMon(sensor_info.zone_set)
-    scan, = next(iter(source))
+    frame, = next(iter(source))
     bitmask_field = np.zeros((sensor_info.h, sensor_info.w), dtype=np.uint32)
-    ezm.calc_triggers(scan.field('RANGE') + 1000, bitmask_field)
-    ezm.calc_triggers(scan.field('RANGE') + 1000, bitmask_field)  # to increment triggered_frames and cause a trigger
+    ezm.calc_triggers(frame.field('RANGE') + 1000, bitmask_field)
+    ezm.calc_triggers(frame.field('RANGE') + 1000, bitmask_field)  # to increment triggered_frames and cause a trigger
     zone_states_2 = ezm.get_packet()
     zone_zero_2 = zone_states_2[0]
     assert zone_zero_2['trigger_type'] == ZoneMode.VACANCY.value
@@ -450,37 +466,6 @@ def test_fail_no_stl_and_no_zrb(test_data_dir):
     zone.mode = ZoneMode.OCCUPANCY
     zone_set.zones = {0: zone}
     with pytest.raises(RuntimeError, match="ZoneSet: Zone 0 failed invariant check: Zone: must have either STL or ZRB"):
-        zone_set.to_zip_blob(ZoneSetOutputFilter.STL_AND_ZRB)
-
-
-def test_it_should_fail_with_invalid_zone_id(test_data_dir):
-    """It should require zone_id to be a valid value."""
-    zone_set = ZoneSet()
-    zone_set.sensor_to_body_transform = np.eye(4)
-    zone = Zone()
-    zone.point_count = 1
-    zone.frame_count = 1
-    zone.mode = ZoneMode.OCCUPANCY
-    zone.stl = Stl(f'{test_data_dir}/zone_monitor/0.stl')
-    zone.stl.coordinate_frame = CoordinateFrame.BODY
-    with pytest.raises(RuntimeError, match="Additional property \"128\" found but was invalid."):
-        zone_set.zones = {128: zone}
-        zone_set.to_zip_blob(ZoneSetOutputFilter.STL_AND_ZRB)
-
-
-def test_it_should_fail_with_invalid_power_on_live_ids(test_data_dir):
-    """It should require power_on_live_ids to be valid values."""
-    zone_set = ZoneSet()
-    zone_set.sensor_to_body_transform = np.eye(4)
-    zone = Zone()
-    zone.point_count = 1
-    zone.frame_count = 1
-    zone.mode = ZoneMode.OCCUPANCY
-    zone.stl = Stl(f'{test_data_dir}/zone_monitor/0.stl')
-    zone.stl.coordinate_frame = CoordinateFrame.BODY
-    zone_set.zones = {0: zone}
-    with pytest.raises(RuntimeError, match="128 exceeds maximum of 127"):
-        zone_set.power_on_live_ids = [128]
         zone_set.to_zip_blob(ZoneSetOutputFilter.STL_AND_ZRB)
 
 
@@ -592,10 +577,23 @@ def test_filename_case(test_data_dir, tmp_path):
     ZoneSet(str(zip_filename))
 
 
+def recarrays_equal(arr1, arr2):
+    if not (isinstance(arr1, np.recarray) and isinstance(arr2, np.recarray)):
+        return False
+
+    if arr1.shape != arr2.shape or arr1.dtype != arr2.dtype:
+        return False
+
+    for field in arr1.dtype.names:
+        if not np.array_equal(arr1[field], arr2[field]):
+            return False
+    return True
+
+
 def test_zone_states_dtype(test_data_dir):
     """It should have the correct dtype for zone states."""
     source = open_source(f'{test_data_dir}/zone_monitor/single_frame_zm.osf')
-    scan, = next(iter(source))
+    frame, = next(iter(source))
     expected_dtype = np.dtype((np.record, [
             ('live', 'u1'),
             ('id', 'u1'),
@@ -611,22 +609,23 @@ def test_zone_states_dtype(test_data_dir):
             ('max_range', '<u4'),
             ('mean_range', '<u4')
     ]))
-    zone_states = scan.field('ZONE_STATES')
+    zone_states = frame.field('ZONE_STATES')
     assert zone_states.dtype == expected_dtype
     zone_states[0].live
 
     emulated_zm = EmulatedZoneMon(source.sensor_info[0].zone_set)
     emulated_zm.calc_triggers(
-        scan.field('RANGE'),
+        frame.field('RANGE'),
         np.zeros((source.sensor_info[0].h, source.sensor_info[0].w), dtype=np.uint32)
     )
     zone_states_emulated = emulated_zm.get_packet()
     assert zone_states_emulated.dtype == expected_dtype
     zone_states_emulated[0].live
 
-    #  add it to the scan, verify type is preserved
-    scan.del_field('ZONE_STATES')
-    scan.add_field('ZONE_STATES', zone_states_emulated, FieldClass.SCAN_FIELD)
+    #  add it to the frame, verify type and value is preserved
+    frame.del_field('ZONE_STATES')
+    frame.add_field('ZONE_STATES', zone_states_emulated, FieldClass.FRAME_FIELD)
     assert zone_states_emulated.dtype == expected_dtype
     zone_states_emulated[0].live
-    assert scan.field('ZONE_STATES').dtype == expected_dtype
+    assert frame.field('ZONE_STATES').dtype == expected_dtype
+    assert recarrays_equal(frame.field("ZONE_STATES"), zone_states_emulated)

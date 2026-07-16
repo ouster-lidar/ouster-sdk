@@ -3,12 +3,10 @@
 #include <memory>
 #include <thread>
 
-#include "ouster/mesh.h"
-#include "ouster/point_viz.h"
-#include "ouster/typedefs.h"
+#include "ouster/core/mesh.h"
+#include "ouster/viz/point_viz.h"
 
 using namespace ouster::sdk;
-
 constexpr float M_2PI = 2.0f * M_PI;
 
 int main(int argc, char* argv[]) {
@@ -29,8 +27,7 @@ int main(int argc, char* argv[]) {
     viz::add_default_controls(viz);
 
     // Add the mesh to the viz and update the viz state
-    auto mesh_ptr = std::make_shared<viz::Mesh>(
-        std::move(viz::Mesh::from_simple_mesh(mesh)));
+    auto mesh_ptr = std::make_shared<viz::Mesh>(viz::Mesh::from_simple_mesh(mesh));
     viz.add(mesh_ptr);
 
     // Make the window visible
@@ -38,9 +35,8 @@ int main(int argc, char* argv[]) {
 
     auto start = std::chrono::steady_clock::now();
     while (viz.running()) {
-        auto time_since_start = std::chrono::duration<float>(
-                                    std::chrono::steady_clock::now() - start)
-                                    .count();
+        auto time_since_start =
+            std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
         while (time_since_start > M_2PI) {
             time_since_start -= M_2PI;
         }
@@ -51,13 +47,12 @@ int main(int argc, char* argv[]) {
         rotation(0, 1) = -sin(time_since_start);
         rotation(1, 0) = sin(time_since_start);
         rotation(1, 1) = cos(time_since_start);
-        mesh_ptr->set_transform(core::mat4d_to_array(rotation));
+        mesh_ptr->set_transform(rotation);
 
         // Cycle through colors
-        mesh_ptr->set_edge_rgba(
-            {(std::sin(time_since_start) + 1.0f) / 2.0f,
-             (std::sin(time_since_start / 2.0f) + 1.0f) / 2.0f,
-             (std::cos(time_since_start) + 1.0f) / 2.0f, 1.0f});
+        mesh_ptr->set_edge_rgba({(std::sin(time_since_start) + 1.0f) / 2.0f,
+                                 (std::sin(time_since_start / 2.0f) + 1.0f) / 2.0f,
+                                 (std::cos(time_since_start) + 1.0f) / 2.0f, 1.0f});
 
         // Update the viz and run one iteration of the event loop
         viz.update();

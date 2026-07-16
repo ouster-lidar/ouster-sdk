@@ -19,7 +19,7 @@ def test_open_source_empty_source_url():
 def test_open_source_unsupported_source_type():
     """It raises a NotImplementedError if the source type is not supported."""
     with tempfile.NamedTemporaryFile(suffix='.csv') as f:
-        with pytest.raises(SourceURLException, match="Could not open scan source. Unhandled source type CSV."):
+        with pytest.raises(SourceURLException, match="Could not open frame set source. Unhandled source type CSV."):
             open_source(f.name)
 
 
@@ -34,19 +34,19 @@ def test_open_source_unhandled_source_type():
     """It raises a RuntimeError if the source type is unhandled."""
     with tempfile.NamedTemporaryFile(suffix='.txt') as f:
         with pytest.raises(SourceURLException, match=escape("Could not detect IO type from file"
-                " extension. Expecting one of .osf, .pcap, .bag, .mcap, .csv, .png, .ply, .pcd, .stl or .las")):
+                " extension. Expecting one of .osf, .pcap, .bag, .mcap, .csv, .png, .ply, .pcd, .stl, .las or .laz.")):
             open_source(f.name)
 
 
 def test_open_source_meta_not_supported():
     """It raises a RuntimeError if the meta keyword is provided to an unsupported source type."""
     file_path = os.path.join(OSFS_DATA_DIR, "OS-1-128_v2.3.0_1024x10_lb_n3.osf")
-    with pytest.raises(SourceURLException, match="Parameter 'meta' not supported by OsfScanSource."):
+    with pytest.raises(SourceURLException, match="Parameter 'meta' not supported by OsfFrameSetSource."):
         open_source(file_path, meta=['fake_meta.json'])
 
 
 def test_open_source_meta_pcap():
-    """Providing the meta parameter to open source should override the metadata files used by the PcapScanSource."""
+    """Providing the meta parameter to open source should override the metadata files used by the PcapFrameSetSource."""
     pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'VLI-16-one-packet.pcap')
     json_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
 
@@ -93,14 +93,17 @@ def test_open_source_field_names_osf() -> None:
         assert got_msg
 
 
-def test_unindexed_scans_num() -> None:
+def test_unindexed_frames_num() -> None:
     """It should return a list of None when index=False (which is the default.)"""
     file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
 
     src = open_source(file_path, index=False)
-    with pytest.raises(RuntimeError, match="Cannot perform 'scans_num' on an unindexed source."
-            " Specify the index parameter as true when creating the source to produce an index."):
-        assert src.scans_num == [None]
+    with pytest.raises(
+            RuntimeError,
+            match=("Cannot perform 'frames_num' on an unindexed source\\. "
+                   "Specify the index parameter as true when creating the source "
+                   "to produce an index\\.")):
+        assert src.frames_num == [None]
 
 
 def test_unindexed_len() -> None:
@@ -108,7 +111,7 @@ def test_unindexed_len() -> None:
     file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
 
     src = open_source(file_path, index=False)
-    with pytest.raises(TypeError, match="Cannot get the length of an unindexed scan source."):
+    with pytest.raises(TypeError, match="Cannot get the length of an unindexed frame set source."):
         len(src)
 
 
@@ -116,9 +119,9 @@ def test_raw_fields() -> None:
     file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
 
     src = open_source(file_path, raw_fields=True)
-    scan = next(iter(src))[0]
-    assert scan is not None
-    ft_names = [ft.name for ft in scan.field_types]
+    frame = next(iter(src))[0]
+    assert frame is not None
+    ft_names = [ft.name for ft in frame.field_types]
     assert "RAW32_WORD1" in ft_names
 
 
@@ -126,9 +129,9 @@ def test_raw_headers() -> None:
     file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
 
     src = open_source(file_path, raw_headers=True)
-    scan = next(iter(src))[0]
-    assert scan is not None
-    ft_names = [ft.name for ft in scan.field_types]
+    frame = next(iter(src))[0]
+    assert frame is not None
+    ft_names = [ft.name for ft in frame.field_types]
     assert "RAW_HEADERS" in ft_names
 
 
@@ -159,35 +162,35 @@ def test_source_no_lidar() -> None:
     file_path = os.path.join(PCAPS_DATA_DIR, 'imu_zm_no_lidar.pcap')
 
     src = open_source(file_path)
-    scan = next(iter(src))[0]
-    assert scan is not None
-    ft_names = [ft.name for ft in scan.field_types]
+    frame = next(iter(src))[0]
+    assert frame is not None
+    ft_names = [ft.name for ft in frame.field_types]
     assert "IMU_PACKET_TIMESTAMP" in ft_names
     assert "ZONE_PACKET_TIMESTAMP" in ft_names
     # assert none are pixel fields
-    for ft in scan.field_types:
+    for ft in frame.field_types:
         assert ft.field_class != FieldClass.PIXEL_FIELD
 
     # also assert that we see 0 lidar packets per frame
-    assert scan.sensor_info.format.lidar_packets_per_frame() == 0
+    assert frame.sensor_info.format.lidar_packets_per_frame() == 0
 
 
 def test_open_source_collating_osf() -> None:
     file_path = os.path.join(OSFS_DATA_DIR, "OS-1-128_v2.3.0_1024x10_lb_n3.osf")
 
     input_src = open_source(str(file_path))
-    scans = [scan[0] for scan in input_src]
-    assert len(scans) == 3
+    frames = [fs[0] for fs in input_src]
+    assert len(frames) == 3
     info = input_src.sensor_info[0]
     input_src.close()
 
-    scans[0].packet_timestamp[:] = 100  # type: ignore
-    scans[1].packet_timestamp[:] = 200  # type: ignore
-    scans[2].packet_timestamp[:] = 300  # type: ignore
+    frames[0].packet_timestamp[:] = 100  # type: ignore
+    frames[1].packet_timestamp[:] = 200  # type: ignore
+    frames[2].packet_timestamp[:] = 300  # type: ignore
 
-    from ouster.sdk.core import LidarScanSet
+    from ouster.sdk.core import FrameSet
 
-    collation = LidarScanSet([scans[0], scans[1], None])
+    collation = FrameSet([frames[0], frames[1], None])
     field = collation.add_field("my_field", np.float32, (100, 100))
     field[:] = 3.1415
 
@@ -209,11 +212,11 @@ def test_open_source_collating_osf() -> None:
         assert collation_out == collation
         src_collated.close()
 
-        # check we get single scan if asked to not collate
+        # check we get single frame if asked to not collate
         src_non_collated = open_source(f.name, False)
         assert len(src_non_collated) == 2
-        scans_out = next(iter(src_non_collated))
-        assert len(scans_out) == 1
+        frames_out = next(iter(src_non_collated))
+        assert len(frames_out) == 1
 
     finally:
         try:

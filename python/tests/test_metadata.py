@@ -16,7 +16,6 @@ from tests.conftest import METADATA_DATA_DIR
 
 
 @pytest.mark.parametrize("mode, string", [
-    (core.TimestampMode.UNSPECIFIED, "UNKNOWN"),
     (core.TimestampMode.TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"),
     (core.TimestampMode.TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"),
     (core.TimestampMode.TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"),
@@ -31,10 +30,8 @@ def test_timestamp_mode(mode, string) -> None:
 def test_timestamp_mode_misc() -> None:
     """Check some misc properties of timestamp modes."""
     assert len(
-        core.TimestampMode.__members__) == 4, "Don't forget to update tests!"
-    core.TimestampMode.from_string(
-        "foo") == core.TimestampMode.UNSPECIFIED
-    core.TimestampMode(0) == core.TimestampMode.UNSPECIFIED
+        core.TimestampMode.__members__) == 3, "Don't forget to update tests!"
+    assert core.TimestampMode.from_string("foo") is None
 
 
 def test_lidar_mode_misc() -> None:
@@ -88,7 +85,7 @@ def test_read_info(meta: core.SensorInfo) -> None:
     beam_to_lidar_transform[0, 3] = meta.lidar_origin_to_beam_origin_mm
     assert numpy.array_equal(meta.beam_to_lidar_transform, beam_to_lidar_transform)
 
-    assert numpy.array_equal(meta.extrinsic, numpy.identity(4))
+    assert numpy.array_equal(meta.sensor_to_body, numpy.identity(4))
     assert meta.init_id == 0
     assert meta.config.udp_port_lidar is None
     assert meta.config.udp_port_imu is None
@@ -112,6 +109,14 @@ def test_read_info(meta: core.SensorInfo) -> None:
     assert product_info.beam_count == 32
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+def test_lidar_profile_from_string(meta: core.SensorInfo) -> None:
+    from_string = core.UDPProfileLidar.from_string("OFF")
+    assert from_string is not None
+    meta.format.udp_profile_lidar = from_string
+    assert meta.format.udp_profile_lidar == core.UDPProfileLidar.OFF
+
+
 def test_write_info(meta: core.SensorInfo) -> None:
     """Check modifying metadata."""
     meta.sn = 0
@@ -122,15 +127,15 @@ def test_write_info(meta: core.SensorInfo) -> None:
     meta.format.pixels_per_column = 0
     meta.format.column_window = (0, 0)
     meta.format.pixel_shift_by_row = []
-    meta.format.udp_profile_lidar = core.UDPProfileLidar(0)
-    meta.format.udp_profile_imu = core.UDPProfileIMU(0)
-    meta.format.header_type = core.HeaderType(0)
+    meta.format.udp_profile_lidar = core.UDPProfileLidar.UNKNOWN
+    meta.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
+    meta.format.header_type = core.HeaderType.FUSA
     meta.format.fps = 0
     meta.beam_azimuth_angles = []
     meta.beam_altitude_angles = []
     meta.imu_to_sensor_transform = numpy.zeros((4, 4))
     meta.lidar_to_sensor_transform = numpy.zeros((4, 4))
-    meta.extrinsic = numpy.zeros((4, 4))
+    meta.sensor_to_body = numpy.zeros((4, 4))
     meta.lidar_origin_to_beam_origin_mm = 0.0
     meta.beam_to_lidar_transform = numpy.zeros((4, 4))
     meta.init_id = 0
@@ -144,11 +149,17 @@ def test_write_info(meta: core.SensorInfo) -> None:
     meta.config.udp_port_lidar = None
     meta.config.udp_port_imu = None
     meta.config.lidar_mode = None
+    meta.client_version = ""
 
-    assert meta == core.SensorInfo()
-    assert meta.has_fields_equal(core.SensorInfo())
-    core.SensorInfo().to_json_string()
-    assert meta.to_json_string() == core.SensorInfo().to_json_string()
+    # give some sane defaults to core.SensorInfo() (no invalid enums)
+    compared = core.SensorInfo()
+    compared.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
+    compared.format.header_type = core.HeaderType.FUSA
+
+    assert meta == compared
+    assert meta.has_fields_equal(compared)
+    compared.to_json_string()
+    assert meta.to_json_string() == compared.to_json_string()
 
     with pytest.raises(TypeError):
         meta.config.lidar_mode = 1  # type: ignore
@@ -157,7 +168,7 @@ def test_write_info(meta: core.SensorInfo) -> None:
     with pytest.raises(TypeError):
         meta.lidar_to_sensor_transform = numpy.zeros((3, 4))
     with pytest.raises(TypeError):
-        meta.extrinsic = numpy.zeros(16)
+        meta.sensor_to_body = numpy.zeros(16)
     with pytest.raises(TypeError):
         meta.beam_altitude_angles = 1  # type: ignore
     with pytest.raises(TypeError):
@@ -205,11 +216,11 @@ def test_extrinsics(meta: core.SensorInfo) -> None:
     copy = numpy.eye(4)
     copy[0, 0] = 5
     copy[1, 0] = 3
-    meta.extrinsic = copy
+    meta.sensor_to_body = copy
 
     meta2 = core.SensorInfo(meta.to_json_string())
 
-    assert (meta2.extrinsic == meta.extrinsic).all()
+    assert (meta2.sensor_to_body == meta.sensor_to_body).all()
 
 
 def test_parse_info() -> None:
@@ -245,7 +256,7 @@ def test_parse_info() -> None:
     # row-major order. Numpy also uses row-major storage order.
     assert numpy.array_equal(info.lidar_to_sensor_transform,
                              numpy.array(range(16)).reshape(4, 4))
-    assert numpy.array_equal(info.extrinsic, numpy.identity(4))
+    assert numpy.array_equal(info.sensor_to_body, numpy.identity(4))
 
 
 def test_info_length() -> None:
@@ -254,7 +265,7 @@ def test_info_length() -> None:
     info_attributes = inspect.getmembers(core.SensorInfo, lambda a: not inspect.isroutine(a))
     info_properties = [a for a in info_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(info_properties) == 22, "Don't forget to update tests and the sensor_info == operator!"
+    assert len(info_properties) == 28, "Don't forget to update tests and the sensor_info == operator!"
 
 
 def test_equality_format() -> None:
@@ -341,12 +352,26 @@ def test_zone_monitoring_enabled():
     assert sensor_info_new.format.zone_monitoring_enabled is True
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+def test_angle_mutability(meta: core.SensorInfo) -> None:
+    """Make sure angle related properties are mutable"""
+    meta.beam_altitude_angles[1] = 10000.0
+    assert meta.beam_altitude_angles[1] == 10000.0
+
+    meta.beam_azimuth_angles[1] = 10000.0
+    assert meta.beam_azimuth_angles[1] == 10000.0
+
+    meta.format.pixel_shift_by_row[1] = 10000
+    assert meta.format.pixel_shift_by_row[1] == 10000
+
+
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_extrinsic_mutability(meta: core.SensorInfo) -> None:
-    """Check that extrinsic is mutable and can be set to a new value."""
+    """Check that sensor_to_body is mutable and can be set to a new value."""
     new_extrinsic = numpy.eye(4)
     new_extrinsic[0, 3] = 1.0
-    meta.extrinsic = new_extrinsic
-    assert (meta.extrinsic == new_extrinsic).all()
+    meta.sensor_to_body = new_extrinsic
+    assert (meta.sensor_to_body == new_extrinsic).all()
 
-    meta.extrinsic[0, 3] = 2.0
-    assert meta.extrinsic[0, 3] == 2.0
+    meta.sensor_to_body[0, 3] = 2.0
+    assert meta.sensor_to_body[0, 3] == 2.0

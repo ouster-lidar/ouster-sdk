@@ -9,24 +9,25 @@
 
 #include "common.h"
 #include "osf_test.h"
-#include "ouster/lidar_scan.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/types.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/meta_extrinsics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/reader.h"
-#include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/osf/stream_lidar_frame.h"
 #include "ouster/osf/writer.h"
-#include "ouster/types.h"
 
 namespace ouster {
 namespace sdk {
 namespace osf {
 namespace {
 
-using ouster::sdk::core::LidarScan;
+using ouster::sdk::core::FrameSet;
+using ouster::sdk::core::LidarFrame;
 using ouster::sdk::core::SensorInfo;
-using ouster::sdk::osf::get_random_lidar_scan;
+using ouster::sdk::osf::get_random_lidar_frame;
 
 class WriterV2Test : public osf::OsfTestWithDataAndFiles {};
 
@@ -41,19 +42,19 @@ TEST_F(WriterV2Test, WriterV2AccessorTest) {
         std::vector<SensorInfo> info_compare = {info};
         Writer writer(output_osf_filename, info, {}, chunk_size);
         EXPECT_EQ(writer.chunk_size(), chunk_size);
-        EXPECT_EQ(writer.sensor_info_count(), 1);
+        EXPECT_EQ(writer.sensor_info().size(), 1);
         EXPECT_EQ(writer.filename(), output_osf_filename);
         EXPECT_EQ(writer.sensor_info(), info_compare);
-        EXPECT_EQ(writer.sensor_info(0), info);
+        EXPECT_EQ(writer.sensor_info()[0], info);
     }
     {
         std::vector<SensorInfo> info_compare = {info, info2};
         Writer writer(output_osf_filename, info_compare, {}, chunk_size);
-        EXPECT_EQ(writer.sensor_info_count(), 2);
+        EXPECT_EQ(writer.sensor_info().size(), 2);
 
         EXPECT_EQ(writer.sensor_info(), info_compare);
-        EXPECT_EQ(writer.sensor_info(0), info);
-        EXPECT_EQ(writer.sensor_info(1), info2);
+        EXPECT_EQ(writer.sensor_info()[0], info);
+        EXPECT_EQ(writer.sensor_info()[1], info2);
     }
 }
 
@@ -66,7 +67,7 @@ TEST_F(WriterV2Test, WriterV2BoundingTest) {
 
     bool caught = false;
     try {
-        LidarScan one = get_random_lidar_scan(info);
+        LidarFrame one = get_random_lidar_frame(info);
         writer.save(1, one);
     } catch (const std::logic_error& e) {
         EXPECT_EQ(std::string(e.what()), "ERROR: Bad Stream ID");
@@ -77,12 +78,12 @@ TEST_F(WriterV2Test, WriterV2BoundingTest) {
     EXPECT_TRUE(caught);
     caught = false;
     try {
-        LidarScan one = get_random_lidar_scan(info);
-        LidarScan two = get_random_lidar_scan(info);
-        writer.save({one, two});
+        auto one = std::make_shared<LidarFrame>(get_random_lidar_frame(info));
+        auto two = std::make_shared<LidarFrame>(get_random_lidar_frame(info));
+        writer.save(FrameSet({one, two}));
     } catch (const std::logic_error& e) {
         EXPECT_EQ(std::string(e.what()),
-                  "ERROR: Scans passed in to writer "
+                  "ERROR: Frames passed in to writer "
                   "does not match number of sensor infos");
         caught = true;
     } catch (...) {
@@ -95,15 +96,15 @@ TEST_F(WriterV2Test, WriterV2CloseTest) {
     std::string output_osf_filename = tmp_file("WriterV2CloseTest.osf");
     const auto info = core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
-    LidarScan ls = get_random_lidar_scan(info);
+    auto ls = std::make_shared<LidarFrame>(get_random_lidar_frame(info));
     Writer writer(output_osf_filename, info);
-    writer.save(0, ls);
+    writer.save(0, *ls);
     EXPECT_FALSE(writer.is_closed());
     writer.close();
     EXPECT_TRUE(writer.is_closed());
     bool caught = false;
     try {
-        writer.save({ls});
+        writer.save(FrameSet({ls}));
     } catch (const std::logic_error& e) {
         EXPECT_EQ(std::string(e.what()), "ERROR: Writer is closed");
         caught = true;
@@ -113,14 +114,14 @@ TEST_F(WriterV2Test, WriterV2CloseTest) {
     EXPECT_TRUE(caught);
 }
 
-void test_single_file(std::string& output_osf_filename, LidarScan& ls) {
+void test_single_file(std::string& output_osf_filename, LidarFrame& ls) {
     Reader reader(output_osf_filename);
-    auto lsm = reader.meta_store().get<LidarScanStreamMeta>();
+    auto lsm = reader.meta_store().get<LidarFrameStreamMeta>();
     auto messages = reader.messages({lsm->id()});
     auto msg_it = messages.begin();
     EXPECT_NE(msg_it, messages.end());
 
-    auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
+    auto ls_recovered = msg_it->decode_msg<LidarFrameStream>();
 
     EXPECT_TRUE(ls_recovered);
     EXPECT_EQ(*ls_recovered, ls);
@@ -132,7 +133,7 @@ TEST_F(WriterV2Test, WriterV2SingleIndexedTest) {
     std::string output_osf_filename = tmp_file("WriterV2SingleIndexedTest.osf");
     const auto info = core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
-    LidarScan ls = get_random_lidar_scan(info);
+    LidarFrame ls = get_random_lidar_frame(info);
     {
         Writer writer(output_osf_filename, info);
         writer.save(0, ls);
@@ -144,20 +145,20 @@ TEST_F(WriterV2Test, WriterV2SingleVectorTest) {
     std::string output_osf_filename = tmp_file("WriterV2SingleVectorTest.osf");
     const auto info = core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
-    LidarScan ls = get_random_lidar_scan(info);
+    auto ls = std::make_shared<LidarFrame>(get_random_lidar_frame(info));
     {
         Writer writer(output_osf_filename, info);
-        writer.save({ls});
+        writer.save(FrameSet({ls}));
     }
-    test_single_file(output_osf_filename, ls);
+    test_single_file(output_osf_filename, *ls);
 }
 
-void test_multi_file(std::string& output_osf_filename, LidarScan& ls,
-                     LidarScan& ls2) {
+void test_multi_file(std::string& output_osf_filename, LidarFrame& ls, LidarFrame& ls2,
+                     uint32_t id1) {
     bool got_1 = false;
     bool got_2 = false;
     Reader reader(output_osf_filename);
-    auto streams = reader.meta_store().find<LidarScanStreamMeta>();
+    auto streams = reader.meta_store().find<LidarFrameStreamMeta>();
     std::vector<uint32_t> ids;
     for (auto& stream : streams) {
         ids.push_back(stream.first);
@@ -166,9 +167,9 @@ void test_multi_file(std::string& output_osf_filename, LidarScan& ls,
     auto msg_it = lidar_messages.begin();
     EXPECT_NE(msg_it, lidar_messages.end());
     msg_it->id();
-    auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
+    auto ls_recovered = msg_it->decode_msg<LidarFrameStream>();
     EXPECT_TRUE(ls_recovered);
-    if (msg_it->id() == 3) {
+    if (msg_it->id() == id1) {
         got_1 = true;
         EXPECT_EQ(*ls_recovered, ls);
     } else {
@@ -176,9 +177,9 @@ void test_multi_file(std::string& output_osf_filename, LidarScan& ls,
         EXPECT_EQ(*ls_recovered, ls2);
     }
     EXPECT_NE(++msg_it, lidar_messages.end());
-    auto ls_recovered2 = msg_it->decode_msg<LidarScanStream>();
+    auto ls_recovered2 = msg_it->decode_msg<LidarFrameStream>();
     EXPECT_TRUE(ls_recovered2);
-    if (msg_it->id() == 3) {
+    if (msg_it->id() == id1) {
         got_1 = true;
         EXPECT_EQ(*ls_recovered2, ls);
     } else {
@@ -197,14 +198,14 @@ TEST_F(WriterV2Test, WriterV2MultiIndexedTest) {
     const auto info2 = core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-0-128-U1_v2.3.0_1024x10.json"));
 
-    LidarScan ls = get_random_lidar_scan(info);
-    LidarScan ls2 = get_random_lidar_scan(info2);
+    LidarFrame ls = get_random_lidar_frame(info);
+    LidarFrame ls2 = get_random_lidar_frame(info2);
     {
         Writer writer(output_osf_filename, {info, info2});
         writer.save(0, ls);
         writer.save(1, ls2);
     }
-    test_multi_file(output_osf_filename, ls, ls2);
+    test_multi_file(output_osf_filename, ls, ls2, 3);
 }
 
 TEST_F(WriterV2Test, WriterV2MultiVectorTest) {
@@ -214,13 +215,13 @@ TEST_F(WriterV2Test, WriterV2MultiVectorTest) {
     const auto info2 = core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-0-128-U1_v2.3.0_1024x10.json"));
 
-    LidarScan ls = get_random_lidar_scan(info);
-    LidarScan ls2 = get_random_lidar_scan(info2);
+    auto ls = std::make_shared<LidarFrame>(get_random_lidar_frame(info));
+    auto ls2 = std::make_shared<LidarFrame>(get_random_lidar_frame(info2));
     {
         Writer writer(output_osf_filename, {info, info2});
-        writer.save({ls, ls2});
+        writer.save(FrameSet({ls, ls2}));
     }
-    test_multi_file(output_osf_filename, ls, ls2);
+    test_multi_file(output_osf_filename, *ls, *ls2, 4);
 }
 }  // namespace
 }  // namespace osf

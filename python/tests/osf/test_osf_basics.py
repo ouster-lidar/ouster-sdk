@@ -12,8 +12,9 @@ from ouster.sdk import open_source, SourceURLException
 
 import ouster.sdk._bindings.osf as osf
 import ouster.sdk.core as core
-from ouster.sdk.core import ChanField, FieldType, LidarMode, LidarScan, SensorInfo, Severity, init_logger, LidarScanSet
-from ouster.sdk._bindings.osf import LidarScanStream, Encoder, PngLidarScanEncoder
+from ouster.sdk.core import ChanField, FieldType, LidarMode, LidarFrame, SensorInfo, Severity, init_logger, FrameSet
+from ouster.sdk._bindings.osf import LidarFrameStream, Encoder, PngLidarFrameEncoder
+from ouster.sdk.osf import OsfDropFrameError
 
 
 @pytest.fixture
@@ -29,8 +30,8 @@ def input_info(test_data_dir):
     return core.SensorInfo(data)
 
 
-# Test that we can save a subset of scan fields and that it errors
-# if you try and save a scan missing fields in the metadata
+# Test that we can save a subset of frame fields and that it errors
+# if you try and save a frame missing fields in the metadata
 def test_writer_quick(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
     save_fields = [
@@ -40,18 +41,18 @@ def test_writer_quick(tmp_path, input_info):
 
     error_fields = [core.FieldType(core.ChanField.RANGE, np.uint32)]
     with osf.Writer(str(file_name), input_info, save_fields) as writer:
-        scan = core.LidarScan(128, 1024)
-        scan.field(core.ChanField.REFLECTIVITY)[:] = 123
-        scan.field(core.ChanField.RANGE)[:] = 5
+        frame = core.LidarFrame(input_info)
+        frame.field(core.ChanField.REFLECTIVITY)[:] = 123
+        frame.field(core.ChanField.RANGE)[:] = 5
 
-        writer.save(0, scan)
+        writer.save(0, frame)
 
-        # also try saving an scan with missing fields
-        scan2 = core.LidarScan(128, 1024, error_fields)
-        scan2.field(core.ChanField.RANGE)[:] = 6
+        # also try saving an frame with missing fields
+        frame2 = core.LidarFrame(input_info, error_fields)
+        frame2.field(core.ChanField.RANGE)[:] = 6
 
         with pytest.raises(ValueError):
-            writer.save(0, scan2)
+            writer.save(0, frame2)
 
         writer.close()
 
@@ -60,7 +61,7 @@ def test_writer_quick(tmp_path, input_info):
 
     messages = [it for it in res_reader.messages()]
     for msg in messages:
-        if msg.of(LidarScanStream):
+        if msg.of(LidarFrameStream):
             ls = msg.decode()
             if ls:
                 # validate that it only has the channels we added
@@ -77,13 +78,13 @@ def test_writer_partial_load(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
 
     with osf.Writer(str(file_name), input_info) as writer:
-        scan = core.LidarScan(128, 1024)
-        scan.field(core.ChanField.REFLECTIVITY)[:] = 123
-        scan.field(core.ChanField.RANGE)[:] = 5
-        scan.add_field("test", np.ones((128, 1024, 1)), core.FieldClass.SCAN_FIELD)
-        scan.add_field("test2", np.ones((128, 1024, 1)), core.FieldClass.SCAN_FIELD)
+        frame = core.LidarFrame(input_info)
+        frame.field(core.ChanField.REFLECTIVITY)[:] = 123
+        frame.field(core.ChanField.RANGE)[:] = 5
+        frame.add_field("test", np.ones((128, 1024, 1)), core.FieldClass.FRAME_FIELD)
+        frame.add_field("test2", np.ones((128, 1024, 1)), core.FieldClass.FRAME_FIELD)
 
-        writer.save(0, scan)
+        writer.save(0, frame)
 
         writer.close()
 
@@ -94,7 +95,7 @@ def test_writer_partial_load(tmp_path, input_info):
 
     messages = [it for it in res_reader.messages()]
     for msg in messages:
-        if msg.of(LidarScanStream):
+        if msg.of(LidarFrameStream):
             with pytest.raises(RuntimeError):
                 msg.decode(["apples"])
             ls = msg.decode(["RANGE", "test"])
@@ -112,75 +113,76 @@ def test_writer_partial_load(tmp_path, input_info):
 
 def writer_output_handler(writer, output_osf_file, info):
     assert writer.filename() == str(output_osf_file)
-    assert writer.sensor_info_count() == 1
-    assert info == writer.sensor_info(0)
+    assert len(writer.sensor_info()) == 1
     assert info == writer.sensor_info()[0]
 
-    scan1 = core.LidarScan(128, 1024)
-    assert scan1 is not None
-    scan1.status[:] = 0x1
-    scan1.field(core.ChanField.REFLECTIVITY)[:] = 100
+    frame1 = core.LidarFrame(info)
+    assert frame1 is not None
+    frame1.status[:] = 0x1
+    frame1.packet_timestamp[:] = 1
+    frame1.field(core.ChanField.REFLECTIVITY)[:] = 100
 
-    scan2 = core.LidarScan(128, 1024)
-    assert scan2 is not None
-    scan2.status[:] = 0x1
-    scan2.field(core.ChanField.REFLECTIVITY)[:] = 200
+    frame2 = core.LidarFrame(info)
+    assert frame2 is not None
+    frame2.status[:] = 0x1
+    frame2.packet_timestamp[:] = 1
+    frame2.field(core.ChanField.REFLECTIVITY)[:] = 200
 
-    writer.save(0, scan1)
-    writer.save([scan2])
+    writer.save(0, frame1)
+    writer.save(FrameSet([frame2]))
 
-    return (scan1, scan2)
+    return (frame1, frame2)
 
 
-def writer_input_handler(scan1, scan2, output_osf_file):
-    assert scan1 is not None
-    assert scan2 is not None
-    assert scan1 != scan2
+def writer_input_handler(frame1, frame2, output_osf_file):
+    assert frame1 is not None
+    assert frame2 is not None
+    assert frame1 != frame2
 
     assert output_osf_file.exists()
     res_reader = osf.Reader(str(output_osf_file))
 
     messages = [it for it in res_reader.messages()]
-    assert len(messages) == 3  # 2 plus the sensor info message
+    assert len(messages) == 4  # 2 plus the sensor info message and collation
 
-    read_scans = []
+    read_frames = []
     for msg in messages:
-        scan = msg.decode()
-        if scan is not None:
-            read_scans.append(scan)
+        frame = msg.decode()
+        if frame is not None:
+            read_frames.append(frame)
 
-    assert read_scans[0] != read_scans[1]
+    assert read_frames[0] != read_frames[1]
 
-    assert read_scans[0] == scan1
-    assert read_scans[1] == scan2
+    assert read_frames[0] == frame1
+    assert read_frames[1] == frame2
 
 
 def test_osf_basic_writer(tmp_path, input_info):
     output_osf_file = tmp_path / "out_basic.osf"
 
     writer = osf.Writer(str(output_osf_file), input_info)
-    scan1, scan2 = writer_output_handler(writer, output_osf_file, input_info)
-    assert scan1 is not None
-    assert scan2 is not None
+    frame1, frame2 = writer_output_handler(writer, output_osf_file, input_info)
+    assert frame1 is not None
+    assert frame2 is not None
 
     assert not writer.is_closed()
     writer.close()
     assert writer.is_closed()
 
-    assert scan1 is not None
-    assert scan2 is not None
+    assert frame1 is not None
+    assert frame2 is not None
 
-    writer_input_handler(scan1, scan2, output_osf_file)
+    writer_input_handler(frame1, frame2, output_osf_file)
 
 
 def test_osf_with_writer(tmp_path, input_info):
     output_osf_file = tmp_path / "out_with.osf"
 
     with osf.Writer(str(output_osf_file), input_info) as writer:
-        scan1, scan2 = writer_output_handler(
+        frame1, frame2 = writer_output_handler(
             writer, output_osf_file, input_info)
 
-    writer_input_handler(scan1, scan2, output_osf_file)
+    writer_input_handler(frame1, frame2, output_osf_file)
 
 
 def test_osf_save_message(tmp_path, input_osf_file):
@@ -188,7 +190,7 @@ def test_osf_save_message(tmp_path, input_osf_file):
 
     reader = osf.Reader(str(input_osf_file))
     lidar_meta = reader.meta_store.get(osf.LidarSensor)
-    lidar_stream_meta = reader.meta_store.get(osf.LidarScanStream)
+    lidar_stream_meta = reader.meta_store.get(osf.LidarFrameStream)
 
     writer = osf.Writer(str(output_osf_file))
     writer.set_metadata_id(reader.metadata_id)
@@ -208,7 +210,7 @@ def test_osf_save_message(tmp_path, input_osf_file):
     # we are doing here
     total_ls_cnt = 0
     for msg in reader.messages():
-        # pass LidarScan messages as is to a writer
+        # pass LidarFrame messages as is to a writer
         if msg.id == lidar_stream_meta.id:
             total_ls_cnt += 1
             writer.save_message(lidar_stream_id, msg.ts, msg.ts, msg.buffer, "")
@@ -255,11 +257,11 @@ def test_osf_messages(input_osf_file):
     # reading messages within start_ts, end_ts range
     assert ilen(reader.messages(991587364520, 991687315250)) == 2
 
-    lidar_stream = reader.meta_store.get(osf.LidarScanStream)
-    # reading messages of af first LidarScanStream
+    lidar_stream = reader.meta_store.get(osf.LidarFrameStream)
+    # reading messages of af first LidarFrameStream
     assert ilen(reader.messages([lidar_stream.id])) == 3
 
-    # reading messages of af first LidarScanStream between start_ts, end_ts range
+    # reading messages of af first LidarFrameStream between start_ts, end_ts range
     assert ilen(reader.messages([lidar_stream.id], 991587364520,
                                 991787323080)) == 3
 
@@ -347,7 +349,7 @@ def test_minor_version_warning(test_data_dir):
         test_data_dir / 'osfs' / 'single_scan_minor_version.osf',
         Severity.OUSTER_WARNING,
         'The OSF file was created with schema version 2.9999.0, '
-        'but this reader only supports up to 2.1. Continuing to read using '
+        'but this reader only supports up to 2.2. Continuing to read using '
         'best-effort compatibility mode. Some fields introduced in newer '
         'versions may be ignored or unrecognized. For full '
         'feature support, consider updating to the latest '
@@ -364,20 +366,20 @@ def _get_file_hash(file_name):
 
 
 def test_save_adding_pixel_fields_later(tmp_path, input_osf_file):
-    """validate that adding non-scan fields after start is illegal"""
+    """validate that adding non-frame fields after start is illegal"""
     src = open_source(str(input_osf_file))
 
     test_path = str(os.path.join(tmp_path, "test.osf"))
     writer = osf.Writer(test_path, src.sensor_info)
 
-    for idx, scans in enumerate(src):
-        scan = scans[0]
+    for idx, frame_sets in enumerate(src):
+        frame = frame_sets[0]
         if idx % 2 == 1:
-            scan.add_field("pixel_field", np.uint8)
+            frame.add_field("pixel_field", np.uint8)
             with pytest.raises(ValueError, match="added after"):
-                writer.save(0, scan)
+                writer.save(0, frame)
         else:
-            writer.save(0, scan)
+            writer.save(0, frame)
     writer.close()
 
     # make sure we only saved the 2
@@ -386,20 +388,20 @@ def test_save_adding_pixel_fields_later(tmp_path, input_osf_file):
 
 
 def test_save_removing_pixel_fields_later(tmp_path, input_osf_file):
-    """validate that removing non-scan fields after start is illegal"""
+    """validate that removing non-frame fields after start is illegal"""
     src = open_source(str(input_osf_file))
 
     test_path = str(os.path.join(tmp_path, "test.osf"))
     writer = osf.Writer(test_path, src.sensor_info)
 
-    for idx, scans in enumerate(src):
-        scan = scans[0]
+    for idx, frame_sets in enumerate(src):
+        frame = frame_sets[0]
         if idx % 2 == 0:
-            scan.add_field("pixel_field", np.uint8)
-            writer.save(0, scan)
+            frame.add_field("pixel_field", np.uint8)
+            writer.save(0, frame)
         else:
             with pytest.raises(ValueError, match="is missing"):
-                writer.save(0, scan)
+                writer.save(0, frame)
 
     writer.close()
 
@@ -408,50 +410,50 @@ def test_save_removing_pixel_fields_later(tmp_path, input_osf_file):
     assert len(src) == 2
 
 
-def test_save_adding_scan_fields_later(tmp_path, input_osf_file):
-    """validate that you can add scan fields later when saving"""
+def test_save_adding_frame_fields_later(tmp_path, input_osf_file):
+    """validate that you can add frame fields later when saving"""
     src = open_source(str(input_osf_file))
 
     test_path = str(os.path.join(tmp_path, "test.osf"))
     writer = osf.Writer(test_path, src.sensor_info)
 
-    for idx, scans in enumerate(src):
-        scan = scans[0]
+    for idx, frame_sets in enumerate(src):
+        frame = frame_sets[0]
         if idx % 2 == 1:
-            scan.add_field("scan_field", np.array([8]), core.FieldClass.SCAN_FIELD)
+            frame.add_field("frame_field", np.array([8]), core.FieldClass.FRAME_FIELD)
 
-        writer.save(0, scan)
+        writer.save(0, frame)
     writer.close()
 
     src = open_source(test_path)
     assert len(src) == 3
-    for idx, scans in enumerate(src):
-        scan = scans[0]
+    for idx, frame_sets in enumerate(src):
+        frame = frame_sets[0]
         if idx % 2 == 1:
-            assert "scan_field" in [f.name for f in scan.field_types]
+            assert "frame_field" in [f.name for f in frame.field_types]
 
 
-def test_save_removing_scan_fields_later(tmp_path, input_osf_file):
-    """validate that you can remove scan fields later when saving"""
+def test_save_removing_frame_fields_later(tmp_path, input_osf_file):
+    """validate that you can remove frame fields later when saving"""
     src = open_source(str(input_osf_file))
 
     test_path = str(os.path.join(tmp_path, "test.osf"))
     writer = osf.Writer(test_path, src.sensor_info)
 
-    for idx, scans in enumerate(src):
-        scan = scans[0]
+    for idx, frame_sets in enumerate(src):
+        frame = frame_sets[0]
         if idx % 2 == 0:
-            scan.add_field("scan_field", np.array([8]), core.FieldClass.SCAN_FIELD)
+            frame.add_field("frame_field", np.array([8]), core.FieldClass.FRAME_FIELD)
 
-        writer.save(0, scan)
+        writer.save(0, frame)
     writer.close()
 
     src = open_source(test_path)
     assert len(src) == 3
-    for idx, scans in enumerate(src):
-        scan = scans[0]
+    for idx, frame_sets in enumerate(src):
+        frame = frame_sets[0]
         if idx % 2 == 0:
-            assert "scan_field" in [f.name for f in scan.field_types]
+            assert "frame_field" in [f.name for f in frame.field_types]
 
 
 def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
@@ -491,10 +493,10 @@ def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
     assert metadata1 == metadata3
 
 
-def test_full_custom_scan(tmp_path):
+def test_full_custom_frame(tmp_path):
     sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x10)
     w, h = sensor_info.format.columns_per_frame, sensor_info.format.pixels_per_column
-    ls = core.LidarScan(h, w, [])
+    ls = core.LidarFrame(sensor_info, [])
     ls.add_field("floats", np.ones((h, w), np.float64))
     ls.add_field("ints", np.ones((h, w), np.uint8))
 
@@ -505,19 +507,19 @@ def test_full_custom_scan(tmp_path):
     writer.close()
 
     src = open_source(test_path)
-    scan = src[0][0]
-    assert scan.fields == ["floats", "ints"]
+    frame = src[0][0]
+    assert frame.fields == ["floats", "ints"]
 
 
 def test_osf_empty_field(tmp_path):
     sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x10)
-    ls = core.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
-    ls.add_field("temperature", np.array([1.2353]), core.FieldClass.SCAN_FIELD)
-    ls.add_field("q", np.ones((128, 1024, 0)), core.FieldClass.SCAN_FIELD)
+    ls = core.LidarFrame(sensor_info)
+    ls.add_field("temperature", np.array([1.2353]), core.FieldClass.FRAME_FIELD)
+    ls.add_field("q", np.ones((128, 1024, 0)), core.FieldClass.FRAME_FIELD)
 
-    ls2 = core.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
-    ls2.add_field("temperature", np.array([], np.float64), core.FieldClass.SCAN_FIELD)
-    ls2.add_field("q", np.ones((128, 1024, 1)), core.FieldClass.SCAN_FIELD)
+    ls2 = core.LidarFrame(sensor_info)
+    ls2.add_field("temperature", np.array([], np.float64), core.FieldClass.FRAME_FIELD)
+    ls2.add_field("q", np.ones((128, 1024, 1)), core.FieldClass.FRAME_FIELD)
 
     test_path = os.path.join(tmp_path, "test.osf")
     writer = osf.Writer(test_path, [sensor_info])
@@ -536,44 +538,44 @@ def test_osf_empty_field(tmp_path):
 
 def test_osf_persists_alerts_thermal_and_shot_limiting_fields(tmp_path) -> None:
     sensor_info = SensorInfo.from_default(core.LidarMode._1024x10)
-    scan = LidarScan(sensor_info.h, sensor_info.w)
-    scan.alert_flags[:] = range(len(scan.alert_flags))
-    scan.frame_status = 0xabcdef0011223344
-    scan.shutdown_countdown = 0xab
-    scan.shot_limiting_countdown = 0xcd
+    frame = LidarFrame(sensor_info)
+    frame.alert_flags[:] = range(len(frame.alert_flags))
+    frame.frame_status = 0xabcdef0011223344
+    frame.shutdown_countdown = 0xab
+    frame.shot_limiting_countdown = 0xcd
     test_path = os.path.join(tmp_path, "test.osf")
     with osf.Writer(test_path, [sensor_info]) as writer:
-        writer.save(0, scan)
+        writer.save(0, frame)
     src = open_source(test_path)
-    read_scan = next(iter(src))[0]
-    assert read_scan is not None
-    assert np.array_equal(read_scan.alert_flags, scan.alert_flags)
-    assert read_scan.frame_status == scan.frame_status
-    assert read_scan.shutdown_countdown == scan.shutdown_countdown
-    assert read_scan.shot_limiting_countdown == scan.shot_limiting_countdown
+    read_frame = next(iter(src))[0]
+    assert read_frame is not None
+    assert np.array_equal(read_frame.alert_flags, frame.alert_flags)
+    assert read_frame.frame_status == frame.frame_status
+    assert read_frame.shutdown_countdown == frame.shutdown_countdown
+    assert read_frame.shot_limiting_countdown == frame.shot_limiting_countdown
 
 
 def test_osf_slice_and_cast() -> None:
     sensor_info = SensorInfo.from_default(LidarMode._1024x10)
-    scan = LidarScan(sensor_info.h, sensor_info.w)
-    scan.alert_flags[:] = range(len(scan.alert_flags))
-    scan.frame_status = 0xabcdef0011223344
-    scan.shutdown_countdown = 0xab
-    scan.shot_limiting_countdown = 0xcd
+    frame = LidarFrame(sensor_info)
+    frame.alert_flags[:] = range(len(frame.alert_flags))
+    frame.frame_status = 0xabcdef0011223344
+    frame.shutdown_countdown = 0xab
+    frame.shot_limiting_countdown = 0xcd
 
     # an assumption
-    assert scan.field(ChanField.RANGE).dtype == np.uint32
-    scan.field(ChanField.RANGE)[:] = 0xffffff01
+    assert frame.field(ChanField.RANGE).dtype == np.uint32
+    frame.field(ChanField.RANGE)[:] = 0xffffff01
 
-    sliced_scan = osf.slice_and_cast(scan, [FieldType(core.ChanField.RANGE, np.uint8)])
-    assert np.array_equal(sliced_scan.alert_flags, scan.alert_flags)
-    assert sliced_scan.shutdown_countdown == scan.shutdown_countdown
-    assert sliced_scan.shot_limiting_countdown == scan.shot_limiting_countdown
-    assert sliced_scan.frame_status == scan.frame_status
-    assert sliced_scan.fields == [ChanField.RANGE]
+    sliced_frame = osf.slice_and_cast(frame, [FieldType(core.ChanField.RANGE, np.uint8)])
+    assert np.array_equal(sliced_frame.alert_flags, frame.alert_flags)
+    assert sliced_frame.shutdown_countdown == frame.shutdown_countdown
+    assert sliced_frame.shot_limiting_countdown == frame.shot_limiting_countdown
+    assert sliced_frame.frame_status == frame.frame_status
+    assert sliced_frame.fields == [ChanField.RANGE]
 
-    casted_range_field = sliced_scan.field(ChanField.RANGE)
-    assert casted_range_field.shape == scan.field(ChanField.RANGE).shape
+    casted_range_field = sliced_frame.field(ChanField.RANGE)
+    assert casted_range_field.shape == frame.field(ChanField.RANGE).shape
     assert casted_range_field.dtype == np.uint8
 
     # IMPORTANT: casting may be narrowing without warning or error!
@@ -583,9 +585,9 @@ def test_osf_slice_and_cast() -> None:
 
 def get_size_for_compression_amount(tmp_path, input_info, compression_amount) -> int:
     file_name = tmp_path / "test.osf"
-    with osf.Writer(str(file_name), input_info, [], 0, Encoder(PngLidarScanEncoder(compression_amount))) as writer:
-        scan = core.LidarScan(128, 1024)
-        writer.save(0, scan)
+    with osf.Writer(str(file_name), input_info, [], 0, Encoder(PngLidarFrameEncoder(compression_amount))) as writer:
+        frame = core.LidarFrame(input_info)
+        writer.save(0, frame)
         writer.close()
         return os.path.getsize(file_name)
 
@@ -602,23 +604,23 @@ def test_async_writer_exception(tmp_path, input_info) -> None:
     thread."""
     file_name = tmp_path / "test.osf"
     assert len(input_info.format.pixel_shift_by_row) == 128
-    with osf.AsyncWriter(str(file_name), [input_info], [], 0, Encoder(PngLidarScanEncoder(4))) as writer:
-        scan = core.LidarScan(4, 1024)  # scan size doesn't match sensor info
-        future = writer.save(0, scan)
+    with osf.AsyncWriter(str(file_name), [input_info], [], 0, Encoder(PngLidarFrameEncoder(4))) as writer:
+        frame = core.LidarFrame(4, 1024, [], 16)  # frame size doesn't match sensor info
+        future = writer.save(0, frame)
         with pytest.raises(ValueError, match=escape(
-            "lidar scan size (1024, 4) does not match the sensor info resolution (1024, 128)")
+            "lidar frame size (1024, 4) does not match the sensor info resolution (1024, 128)")
         ):
             future.get()
 
 
-def test_writer_enforces_lidarscan_correct_size(tmp_path, input_info):
+def test_writer_enforces_lidar_frame_correct_size(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
     with osf.Writer(str(file_name), [input_info]) as w:
-        scan = core.LidarScan(128, 128)  # scan size is wrong
+        frame = core.LidarFrame(128, 128, [], 16)  # frame size is wrong
         with pytest.raises(ValueError, match=escape(
-            "lidar scan size (128, 128) does not match the sensor info resolution (1024, 128)")
+            "lidar frame size (128, 128) does not match the sensor info resolution (1024, 128)")
         ):
-            w.save(0, scan)
+            w.save(0, frame)
 
 
 def async_writer_destruction_helper(tmp_path):
@@ -650,32 +652,62 @@ def test_error_handler_open_source(test_data_dir):
         open_source(str(osf_file), error_handler=error_handler)
 
 
-def test_writer_save_with_none_scan(test_data_dir, tmp_path):
-    """It should allow saving None scans to represent dropped scans."""
+def test_writer_save_with_none_frame(test_data_dir, tmp_path):
+    """It should allow saving None frame_set to represent dropped frame_set."""
     input_osf_file = test_data_dir / "osfs" / "OS-1-128_v2.3.0_1024x10_lb_n3.osf"
     src = open_source(str(input_osf_file))
 
     test_path = str(os.path.join(tmp_path, "test.osf"))
     writer = osf.Writer(test_path, [src.sensor_info[0], src.sensor_info[0]])
 
-    for scans in src:
-        scan = scans[0]
-        scan.packet_timestamp[:] = 1
-        scans_in = [scan, None]
-        scan_set = LidarScanSet(scans_in)
-        writer.save(scan_set)
+    for frame_sets in src:
+        frame = frame_sets[0]
+        frame.packet_timestamp[:] = 1
+        frames_in = [frame, None]
+        frame_set = FrameSet(frames_in)
+        writer.save(frame_set)
 
 
-def test_reader_with_none_scan_2(test_data_dir, tmp_path):
-    """It should allow saving None scans to represent dropped scans."""
+def test_writer_drop_frame_error(test_data_dir, tmp_path):
+    """It should throw the correct error when timestamps are decreasing or zero in a set"""
     input_osf_file = test_data_dir / "osfs" / "OS-1-128_v2.3.0_1024x10_lb_n3.osf"
     src = open_source(str(input_osf_file))
 
     test_path = str(os.path.join(tmp_path, "test.osf"))
-    writer = osf.Writer(test_path, [src.sensor_info[0], src.sensor_info[0]])
+    writer = osf.Writer(test_path, [src.sensor_info[0]])
 
-    for scans in src:
-        scan = scans[0]
-        scan.packet_timestamp[:] = 1
-        scans_in = [scan, None]
-        writer.save(scans_in)
+    frame_set = next(iter(src))
+
+    writer.save(0, frame_set[0], 100)
+
+    frame_set[0].packet_timestamp[:] = 50
+    with pytest.raises(OsfDropFrameError, match="decreasing"):
+        writer.save(0, frame_set[0])
+
+    with pytest.raises(OsfDropFrameError, match="decreasing"):
+        writer.save(FrameSet(frame_set))
+
+    frame_set[0].packet_timestamp[:] = 0
+    with pytest.raises(OsfDropFrameError, match="no valid"):
+        writer.save(FrameSet(frame_set))
+
+
+def test_async_writer_drop_frame_err(tmp_path, input_info) -> None:
+    """Saving with illegal timestamps should throw immediately rather than asyncronously."""
+    file_name = tmp_path / "test.osf"
+    with osf.AsyncWriter(str(file_name), [input_info]) as writer:
+        frame = core.LidarFrame(input_info)
+        frame.status[:] = 1
+        frame.packet_timestamp[:] = 100
+        writer.save(0, frame)
+
+        frame.packet_timestamp[:] = 99
+        with pytest.raises(OsfDropFrameError, match="decreasing"):
+            writer.save(0, frame)
+
+        with pytest.raises(OsfDropFrameError, match="decreasing"):
+            writer.save(FrameSet([frame]))
+
+        frame.packet_timestamp[:] = 0
+        with pytest.raises(OsfDropFrameError, match="no valid"):
+            writer.save(FrameSet([frame]))

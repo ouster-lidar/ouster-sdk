@@ -1,4 +1,4 @@
-#include "ouster/vector_streambuf.h"
+#include "ouster/core/impl/vector_streambuf.h"
 
 #include <gtest/gtest.h>
 

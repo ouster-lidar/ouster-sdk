@@ -3,17 +3,19 @@ import atexit
 import click
 import os
 import time
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 import numpy as np
 from typing import (cast, Dict, Union, Tuple, List, Iterator, Iterable, Optional, Set)
 from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
-from ouster.sdk.core import (UDPProfileLidar, LidarScan, ChanField, XYZLut,
+from ouster.sdk.core import (LidarFrame, FrameSet, ChanField, XYZLut,
                              destagger, SensorInfo, LidarPacket, ImuPacket,
-                             PacketSource, ZonePacket, UDPProfileIMU)
+                             PacketSource, ZonePacket, UDPProfileIMU, FieldClass)
 from ouster.sdk import osf, open_packet_source
-from ouster.sdk.core.io_types import (io_type_from_extension, OusterIoType)
-from ouster.sdk.util import scan_to_packets  # type: ignore
+from ouster.sdk.core import (io_type_from_extension, OusterIoType)
+from ouster.sdk.osf import OsfDropFrameError
+from ouster.sdk.util import frame_to_packets  # type: ignore
 from ouster.sdk.pcap.pcap import MTU_SIZE
 import ouster.sdk._bindings.pcap as _pcap
 from .source_util import (SourceCommandContext,
@@ -92,11 +94,11 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
                      overwrite: bool, split: Optional[int], **kwargs) -> None:
     """Save source as a PCAP"""
-    if ctx.scan_iter is None or ctx.scan_source is None:
+    if ctx.frame_set_iter is None or ctx.frame_set_source is None:
         raise RuntimeError("unexpected condition")
 
-    ctx.scan_iter = save_pcap_impl(ctx.scan_iter, filename, prefix, dir, False,
-                                   overwrite, ctx.scan_source.sensor_info, split=split)
+    ctx.frame_set_iter = save_pcap_impl(ctx.frame_set_iter, filename, prefix, dir, False,
+                                   overwrite, ctx.frame_set_source.sensor_info, split=split)
 
 
 @click.command(context_settings=dict(
@@ -107,7 +109,7 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
 @click.option('-c', '--continue-anyways', is_flag=True, default=False, help="Continue saving "
-              "scans after an error is encountered, dropping bad data if necessary.")
+              "frames after an error is encountered, dropping bad data if necessary.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option("--ts", default='packet', help="Timestamp to use for indexing.", type=click.Choice(['packet', 'lidar']))
 @click.option("--compression-level", default=1, help="Specifies the level of compression for OSF files. Higher values "
@@ -124,8 +126,11 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                     overwrite: bool, ts: str, continue_anyways: bool, compression_level: int,
                     png: bool, legacy: bool, split: Optional[int], **kwargs) -> None:
     """Save source as an OSF"""
-    scans = ctx.scan_iter
-    info = ctx.scan_source.sensor_info  # type: ignore
+    from ouster.sdk.core import FrameSetSourceMetadataSet
+    if ctx.frame_set_source is None:
+        raise RuntimeError("Internal error: expected frame source to be set in context")
+    frames = ctx.frame_set_iter
+    info = ctx.frame_set_source.sensor_info
 
     # Automatic file naming
     filename = determine_filename(filename=filename, info=info[0], extension=".osf", prefix=prefix, dir=dir)
@@ -141,17 +146,27 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     # Initialize osf writer
     # --legacy implies PNG compression
     if png or legacy:
-        encoder = osf.Encoder(osf.PngLidarScanEncoder(compression_level))
+        encoder = osf.Encoder(osf.PngLidarFrameEncoder(compression_level))
     else:
-        encoder = osf.Encoder(osf.ZPngLidarScanEncoder(compression_level))
+        encoder = osf.Encoder(osf.ZPngLidarFrameEncoder(compression_level))
 
     osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
 
-    wrote_scans = False
-    dropped_scans = 0
-    last_ts = [0] * len(info)
+    # Copy any original frame source metadata entries to the new file
+    metadata_copy = FrameSetSourceMetadataSet()
+    for key in ctx.frame_set_source.metadata_keys():
+        metadata_copy[key] = ctx.frame_set_source.metadata(key)
+    osf_writer.save(metadata_copy)
+
+    wrote_frames = False
+    dropped_frames = 0
     file_number = 1
     dropped_fields: Set[str] = set()
+
+    use_packet_timestamps = (ts == "packet")
+    if not use_packet_timestamps:
+        print("WARNING: Saving OSF with lidar timestamps. This option should only be used"
+              " to salvage legacy osf recordings with missing packet timestamps.")
 
     # returns false if we should stop recording
     need_split = False
@@ -159,89 +174,114 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     # Standard numeric dtype kinds supported by older SDK versions (0.12-0.15)
     LEGACY_DTYPE_KINDS = ("u", "i", "f")  # unsigned int, signed int, float
 
-    def write_osf(scan: LidarScan, index: int):
-        nonlocal wrote_scans, last_ts, dropped_scans, osf_writer, filename, file_number, need_split
+    future_queue: deque = deque()
+
+    def write_osf(frames: FrameSet):
+        nonlocal wrote_frames, dropped_frames, osf_writer, filename, file_number, need_split
+
+        # `save --legacy` is for backwards compatibility with SDK 0.12-0.15.
+        # Older versions only support standard numeric ChanFieldTypes (UINT*, INT*, FLOAT*).
+        # Drop fields with newer types like CHAR (kind 'S') or ZONE_STATE (kind 'V').
         if legacy:
-            # `save --legacy` is for backwards compatibility with SDK 0.12-0.15.
-            # Older versions only support standard numeric ChanFieldTypes (UINT*, INT*, FLOAT*).
-            # Drop fields with newer types like CHAR (kind 'S') or ZONE_STATE (kind 'V').
-            for ft in scan.field_types:
-                if np.dtype(ft.element_type).kind in LEGACY_DTYPE_KINDS:
+            for frame in frames:
+                if frame is None:
                     continue
 
-                name = ft.name
-                if scan.has_field(name):
-                    scan.del_field(name)
-                    dropped_fields.add(name)
+                for ft in frame.field_types:
+                    if np.dtype(ft.element_type).kind in LEGACY_DTYPE_KINDS:
+                        continue
 
-        # Set OSF timestamp to the timestamp of the first valid column
-        scan_ts = scan.get_first_valid_packet_timestamp() if ts == "packet" \
-            else scan.get_first_valid_column_timestamp()
-        if scan_ts:
-            if scan_ts < last_ts[index]:
-                if continue_anyways:
-                    dropped_scans = dropped_scans + 1
-                    return True
+                    name = ft.name
+                    if frame.has_field(name):
+                        frame.del_field(name)
+                        dropped_fields.add(name)
+
+        if need_split:
+            need_split = False
+            osf_writer.close()
+            filename = originalfilename.replace(".osf", "") + f"-{file_number}.osf"
+            print(f"Splitting into {filename}")
+
+            if os.path.isfile(filename) and not overwrite:
+                click.echo(_file_exists_error(filename))
+                exit(1)
+            file_number += 1
+            osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
+
+        try:
+            if use_packet_timestamps:
+                if ctx.save_collations:
+                    future_queue.append(osf_writer.save(frames))
                 else:
-                    print("WARNING: Stopped saving because scan timestamps jumped backwards which is "
-                          "not supported by OSF. Try with `-c` to drop these scans and continue "
-                          "anyways.")
-                    osf_writer.close()
-                    return False
-            wrote_scans = True
+                    for idx, frame in enumerate(frames):
+                        if frame is not None:
+                            future_queue.append(osf_writer.save(idx, frame))
+                wrote_frames = True
+            else:
+                # handling lidar timestamps manually
+                for index, frame in enumerate(frames):
+                    if frame is None:
+                        continue
+                    else:
+                        try:
+                            ts = frame.timestamp[frame.get_first_valid_column()]
+                        except RuntimeError:
+                            if continue_anyways:
+                                dropped_frames = dropped_frames + 1
+                                continue
+                            raise OsfDropFrameError(
+                                "Frame has no valid columns") from None
+                        if ts == 0:
+                            if continue_anyways:
+                                dropped_frames = dropped_frames + 1
+                            else:
+                                raise OsfDropFrameError("Lidar timestamps are zero")
+                        else:
+                            future_queue.append(osf_writer.save(index, frame, ts))
+                            wrote_frames = True
 
-            if need_split:
-                need_split = False
+            # check the future queue for any exceptions while saving
+            while len(future_queue):
+                item = future_queue[0]
+                if not item.done():
+                    break
+                future_queue.popleft()
+                item.get()
+        except OsfDropFrameError as ex:
+            if continue_anyways:
+                dropped_frames = dropped_frames + 1
+            else:
                 osf_writer.close()
-                filename = originalfilename.replace(".osf", "") + f"-{file_number}.osf"
-                print(f"Splitting into {filename}")
+                # delete the file if no frames were saved
+                if not wrote_frames:
+                    os.remove(filename)
+                print("ERROR: Cannot save frames because of the following error:")
+                print(str(ex))
+                print("Try with `--ts lidar` instead or `-c` to continue anyways.")
+                return False
 
-                if os.path.isfile(filename) and not overwrite:
-                    click.echo(_file_exists_error(filename))
-                    exit(1)
-                file_number += 1
-                osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
-
-            osf_writer.save(index, scan, scan_ts)
-            last_ts[index] = scan_ts
-
-            if split is not None:
-                if os.path.getsize(filename) / 1000000 > split:
-                    need_split = True
-        else:
-            # by default fail out
-            if not continue_anyways:
-                osf_writer.close()
-                os.remove(filename)
-                print("ERROR: Cannot save scans because they are missing packet timestamps."
-                      " Try with `--ts lidar` instead or `-c` to continue anyways.")
-                raise ValueError("Bad timestamps")
-            dropped_scans = dropped_scans + 1
+        if split is not None:
+            if os.path.getsize(filename) / 1000000 > split:
+                need_split = True
         return True
 
     saved = False
 
     def save_iter():
+        nonlocal saved
         try:
             # only save the first loop
-            nonlocal saved
             if saved:
-                for s in scans():
+                for s in frames():
                     yield s
                 return
-            stop = False
-            for s in scans():
-                for index, scan in enumerate(s):
-                    if scan is None:
-                        continue
-                    if not stop:
-                        if not write_osf(scan, index):
-                            stop = True
+            for s in frames():
+                if not write_osf(s):
+                    ctx.terminate_evt.set()
+                    return
                 yield s
         except (KeyboardInterrupt):
             pass
-        except (ValueError):
-            ctx.terminate_evt.set()
         finally:
             saved = True
             osf_writer.close()
@@ -251,18 +291,18 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                     f"(--legacy): fields={sorted(dropped_fields)}"
                 )
 
-    ctx.scan_iter = save_iter  # type: ignore
+    ctx.frame_set_iter = save_iter  # type: ignore
 
     def handle_termination():
         osf_writer.close()
-        if dropped_scans > 0:
+        if dropped_frames > 0:
             if ts == "lidar":
-                click.echo(f"WARNING: Dropped {dropped_scans} scans because missing or decreasing timestamps.")
+                click.echo(f"WARNING: Dropped {dropped_frames} frames because missing or decreasing timestamps.")
             else:
-                click.echo(f"WARNING: Dropped {dropped_scans} scans because missing or decreasing "
+                click.echo(f"WARNING: Dropped {dropped_frames} frames because missing or decreasing "
                            "packet timestamps. Try with `--ts lidar` instead.")
-        if not wrote_scans:
-            click.echo("WARNING: No scans saved.")
+        if not wrote_frames:
+            click.echo("WARNING: No frames saved.")
     atexit.register(handle_termination)
 
 
@@ -278,34 +318,36 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_csv(ctx: SourceCommandContext, prefix: str,
                     dir: str, filename: str, overwrite: bool, **kwargs) -> None:
-    """Save source as one CSV file per LidarScan."""
-    ctx.scan_iter = source_to_csv_iter(ctx.scan_iter, ctx.scan_source.sensor_info,  # type: ignore
+    """Save source as one CSV file per LidarFrame."""
+    ctx.frame_set_iter = source_to_csv_iter(ctx.frame_set_iter, ctx.frame_set_source.sensor_info,  # type: ignore
                                        prefix=prefix, dir=dir, filename=filename,
                                        overwrite=overwrite)
 
 
 # [doc-stag-pcap-to-csv]
-def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: List[SensorInfo],
+def source_to_csv_iter(frame_set_iter: Iterator[FrameSet], infos: List[SensorInfo],
                        prefix: str = "", dir: str = "", overwrite: bool = True,
-                       filename: str = "") -> Iterable[List[Optional[LidarScan]]]:
-    """Create a CSV saving iterator from a LidarScan iterator
+                       filename: str = "") -> Iterable[FrameSet]:
+    """Create a CSV saving iterator from a LidarFrame iterator
 
     The number of saved lines per csv file is always H x W, which corresponds to
-    a full 2D image representation of a lidar scan.
+    a full 2D image representation of a lidar frame.
+
+    Pixel fields with shape (H, W) are exported as one column each. Multi-channel
+    pixel fields (e.g. with shape (H, W, 3)) are exported with one column per
+    channel: field_R, field_G, field_B.
 
     Each line in a csv file is (for DUAL profile):
 
-        TIMESTAMP (ns), RANGE (mm), RANGE2 (mm), SIGNAL (photons),
-            SIGNAL2 (photons), REFLECTIVITY (%), REFLECTIVITY2 (%),
-            NEAR_IR (photons), X (m), Y (m), Z (m), X2 (m), Y2 (m), Z2(m),
-            MEASUREMENT_ID, ROW, COLUMN
+        TIMESTAMP (ns), ROW, DESTAGGERED IMAGE COLUMN, MEASUREMENT_ID,
+        B_ATTENUATED, B_CLEAR, G_ATTENUATED, G_CLEAR, NEAR_IR (photons),
+        RANGE (mm), RANGE2 (mm), SIGNAL (photons),
+        SIGNAL2 (photons), REFLECTIVITY (%), REFLECTIVITY2 (%),
+        R_ATTENUATED, R_CLEAR, NEAR_IR (photons),
+        field_R, field_G, field_B, X (m), Y (m), Z (m), X2 (m), Y2 (m), Z2(m)
     """
-
-    dual_formats = [UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL,
-                    UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_RGB16_DUAL,
-                    UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL]
     for info in infos:
-        if info.format.udp_profile_lidar in dual_formats:
+        if info.num_returns > 1:
             print("Note: You've selected to convert a dual returns pcap to CSV. Each row "
                   "will represent a single pixel, so that both returns for that pixel will "
                   "be on a single row. As this is an example we provide for getting "
@@ -326,20 +368,42 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
     create_directories_if_missing(filenames[0])
 
     # Construct csv header and data format
-    def get_fields_info(scan: LidarScan) -> Tuple[str, List[str]]:
+    def get_fields_info(frame: LidarFrame) -> Tuple[str, List[str]]:
         field_names = 'TIMESTAMP (ns), ROW, DESTAGGERED IMAGE COLUMN, MEASUREMENT_ID'
         field_fmts = ['%d'] * 4
-        dual = ChanField.RANGE2 in scan.fields
-        for chan_field in scan.fields:
-            field_names += f', {chan_field}'
-            if chan_field in [ChanField.RANGE, ChanField.RANGE2]:
-                field_names += ' (mm)'
-            if chan_field in [ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2]:
-                field_names += ' (%)'
-            if chan_field in [ChanField.SIGNAL, ChanField.SIGNAL2,
-                    ChanField.NEAR_IR]:
-                field_names += ' (photons)'
-            field_fmts.append('%d')
+        dual = ChanField.RANGE2 in frame.fields
+        for chan_field in frame.fields:
+            if frame.field_class(chan_field) != FieldClass.PIXEL_FIELD:
+                continue
+            arr = frame.field(chan_field)
+            ndim = arr.ndim
+            pixel_fmt = '%.4f' if np.issubdtype(arr.dtype, np.floating) else '%d'
+            if ndim == 2:
+                field_names += f', {chan_field}'
+                if chan_field in [ChanField.RANGE, ChanField.RANGE2]:
+                    field_names += ' (mm)'
+                if chan_field in [ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2]:
+                    field_names += ' (%)'
+                if chan_field in [ChanField.SIGNAL, ChanField.SIGNAL2,
+                        ChanField.NEAR_IR]:
+                    field_names += ' (photons)'
+                field_fmts.append(pixel_fmt)
+            elif ndim == 3:
+                n_channels = arr.shape[2]
+                if n_channels == 1:
+                    suffixes: Tuple[str, ...] = ('',)
+                elif n_channels == 3:
+                    if chan_field in [ChanField.NORMALS, ChanField.NORMALS2]:
+                        suffixes = ('_X', '_Y', '_Z')
+                    else:
+                        suffixes = ('_R', '_G', '_B')
+                else:
+                    suffixes = tuple(f'_{i}' for i in range(n_channels))
+                for suf in suffixes:
+                    field_names += f', {chan_field}{suf}'
+                    field_fmts.append(pixel_fmt)
+            else:
+                continue
         field_names += ', X1 (m), Y1 (m), Z1 (m)'
         field_fmts.extend(3 * ['%.4f'])
         if dual:
@@ -355,7 +419,7 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
     row_layer = []
     column_layer_staggered = []
     for info in infos:
-        xyzlut.append(XYZLut(info))
+        xyzlut.append(XYZLut(info, False))
 
         row_layer.append(np.fromfunction(lambda i, j: i,
                 (info.format.pixels_per_column,
@@ -369,28 +433,42 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
     saved = False
 
     def save_iter():
-        nonlocal field_names, field_fmts, saved
+        nonlocal saved
         try:
             if saved:
-                for scan in scan_iter():
-                    yield scan
+                for frame in frame_set_iter():
+                    yield frame
                 return
-            for idx, scans in enumerate(scan_iter()):
-                for lidar_idx, scan in enumerate(scans):
-                    if scan is None:
+            for idx, frames in enumerate(frame_set_iter()):
+                for lidar_idx, frame in enumerate(frames):
+                    if frame is None:
                         continue
 
                     # Initialize the field names for csv header
                     if lidar_idx not in field_names or lidar_idx not in field_fmts:
-                        field_names[lidar_idx], field_fmts[lidar_idx] = get_fields_info(scan)
+                        field_names[lidar_idx], field_fmts[lidar_idx] = get_fields_info(frame)
 
                     # Copy per-column timestamps and measurement_ids for each beam
-                    timestamps = np.tile(scan.timestamp, (scan.h, 1))
-                    measurement_ids = np.tile(scan.measurement_id, (scan.h, 1))
+                    timestamps = np.tile(frame.timestamp, (frame.h, 1))
+                    measurement_ids = np.tile(frame.measurement_id, (frame.h, 1))
+
+                    # Keep only per-pixel fields for CSV stacking.
+                    csv_fields = [field for field in frame.fields
+                                 if frame.field_class(field) == FieldClass.PIXEL_FIELD]
 
                     # Grab channel data
-                    fields_values = [scan.field(ch) for ch in scan.fields]
+                    fields_values = []
+                    for ch in csv_fields:
+                        arr = frame.field(ch)
+                        if arr.ndim == 2:
+                            fields_values.append(arr)
+                        elif arr.ndim == 3:
+                            for c in range(arr.shape[2]):
+                                fields_values.append(arr[:, :, c])
+                        else:
+                            continue
 
+                    lidar_frame = frame
                     frame = np.dstack((timestamps, row_layer[lidar_idx], column_layer_staggered[lidar_idx],
                         measurement_ids, *fields_values))
 
@@ -398,11 +476,11 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
                     frame = destagger(info, frame)
 
                     # Destagger XYZ separately since it has a different type
-                    xyz = xyzlut[lidar_idx](scan.field(ChanField.RANGE))
+                    xyz = xyzlut[lidar_idx](lidar_frame.field(ChanField.RANGE))
                     xyz_destaggered = destagger(info, xyz)
 
-                    if ChanField.RANGE2 in scan.fields:
-                        xyz2 = xyzlut[lidar_idx](scan.field(ChanField.RANGE2))
+                    if ChanField.RANGE2 in csv_fields:
+                        xyz2 = xyzlut[lidar_idx](lidar_frame.field(ChanField.RANGE2))
                         xyz2_destaggered = destagger(info, xyz2)
 
                         # Get all data as one H x W x num fields int64 array for savetxt()
@@ -416,8 +494,8 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
                     frame_colmajor = np.swapaxes(frame, 0, 1)
 
                     # Write csv out to file
-                    csv_path = f"{filenames[lidar_idx]}_{idx}.csv"
-                    print(f'write frame index #{idx}, to file: {csv_path}')
+                    csv_path = f"{filenames[lidar_idx]}_s{lidar_idx}_{idx}.csv"
+                    print(f'write frame index #{idx} sensor_idx #{lidar_idx}, to file: {csv_path}')
 
                     if os.path.isfile(csv_path) and not overwrite:
                         print(_file_exists_error(csv_path))
@@ -431,7 +509,7 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
                             delimiter=',',
                             header=header)
 
-                yield scan
+                yield frame
         except (KeyboardInterrupt, StopIteration):
             pass
         finally:
@@ -453,10 +531,10 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_png(ctx: SourceCommandContext, prefix: str, dir: str,
                     filename: str, overwrite: bool, **kwargs) -> None:
-    """Save scan source as a series of png files per LidarScan per field (represented as 8-bit)."""
+    """Save frame source as a series of png files per LidarFrame per field (represented as 8-bit)."""
     from PIL import Image
     from ouster.sdk.core.data import destagger
-    scan_iter = ctx.scan_iter
+    frame_set_iter = ctx.frame_set_iter
     filename_no_ext = os.path.splitext(filename)[0]
 
     def normalize(image):
@@ -466,8 +544,8 @@ def source_save_png(ctx: SourceCommandContext, prefix: str, dir: str,
             return np.zeros_like(image)
         return (image - min_val) / (max_val - min_val)
 
-    def compose_path(scan: LidarScan, dir: str, prefix: str, field_name: str) -> str:
-        output_path = f"{scan.sensor_info.sn}_{scan.frame_id}_{field_name}.png"
+    def compose_path(frame: LidarFrame, dir: str, prefix: str, field_name: str) -> str:
+        output_path = f"{frame.sensor_info.sn}_{frame.frame_id}_{field_name}.png"
         if filename_no_ext:
             output_path = f"{filename_no_ext}_{output_path}"
         if prefix:
@@ -476,26 +554,29 @@ def source_save_png(ctx: SourceCommandContext, prefix: str, dir: str,
             output_path = os.path.join(dir, output_path)
         return output_path
 
-    def save_field(scan: LidarScan, f: str):
-        field_data = scan.field(f)
-        img = destagger(scan.sensor_info, field_data)
-        img = (normalize(img) * (2**8 - 1)).astype(np.uint8)
+    def save_field(frame: LidarFrame, f: str):
+        field_data = frame.field(f)
+        img = destagger(frame.sensor_info, field_data)
+        img = normalize(img) * (2**8 - 1)
+        img = np.nan_to_num(img, nan=0)
+        img = img.astype(np.uint8)
         pil_img = Image.fromarray(img)
-        output_path = output_path = compose_path(scan, dir, prefix, f)
+        output_path = compose_path(frame, dir, prefix, f)
+        create_directories_if_missing(output_path)
         if os.path.isfile(output_path) and not overwrite:
             print(_file_exists_error(output_path))
             exit(1)
         pil_img.save(output_path)
 
     def png_save_iter():
-        for scans in scan_iter():
-            for scan in scans:
-                if scan:
-                    for f in scan.fields:
-                        save_field(scan, f)
-            yield scans
+        for frames in frame_set_iter():
+            for frame in frames:
+                if frame:
+                    for f in frame.fields:
+                        save_field(frame, f)
+            yield frames
 
-    ctx.scan_iter = png_save_iter    # type: ignore
+    ctx.frame_set_iter = png_save_iter    # type: ignore
 
 
 # Determines the filename to use
@@ -539,16 +620,16 @@ def create_directories_if_missing(filename: str):
 def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
                     overwrite: bool, ros2: bool, split: Optional[int], **kwargs) -> None:
     """Save source as a packet rosbag."""
-    if ctx.scan_iter is None or ctx.scan_source is None:
+    if ctx.frame_set_iter is None or ctx.frame_set_source is None:
         raise RuntimeError("unexpected condition")
 
-    ctx.scan_iter = _source_to_bag_iter(ctx.scan_iter, raw=False, split=split,
+    ctx.frame_set_iter = _source_to_bag_iter(ctx.frame_set_iter, raw=False, split=split,
                                         prefix=prefix, dir=dir, filename=filename,
-                                        overwrite=overwrite, metadata=ctx.scan_source.sensor_info,
+                                        overwrite=overwrite, metadata=ctx.frame_set_source.sensor_info,
                                         ros2=ros2)
 
 
-def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSource],
+def save_pcap_impl(source: Union[Iterable[FrameSet], PacketSource],
                    filename, prefix, dir, raw, overwrite, metadata, duration = None, split = None):
     # Automatic file naming
     filename = determine_filename(filename=filename, info=metadata[0], extension=".pcap", prefix=prefix, dir=dir)
@@ -589,7 +670,6 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
                             "127.0.0.1", port, port, packet.buf, ts)
 
     def check_split():
-        nonlocal pcap_filename
         if split is not None:
             if os.path.getsize(pcap_filename) / 1000000 > split:
                 return True
@@ -643,22 +723,22 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
                 break
 
         def save_iter():
+            nonlocal pcap_record_handle
             try:
                 # only save the first loop
-                nonlocal pcap_record_handle
                 if pcap_record_handle is None:
                     for c in source():
                         yield c
                     return
                 should_split = False
                 for c in source():
-                    for idx, scan in enumerate(c):
-                        if scan is not None:
+                    for idx, frame in enumerate(c):
+                        if frame is not None:
                             if should_split:
                                 do_split()
                                 should_split = False
 
-                            packets = scan_to_packets(scan, metadata[idx])
+                            packets = frame_to_packets(frame, metadata[idx])
                             for packet in packets:
                                 if isinstance(packet, LidarPacket):
                                     save_packet(idx, packet, metadata[idx].config.udp_port_lidar)
@@ -667,7 +747,7 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
                                 elif isinstance(packet, ZonePacket):
                                     save_packet(idx, packet, metadata[idx].config.udp_port_zm)
 
-                            # only split after saving a whole scan to prevent a scan
+                            # only split after saving a whole frame to prevent a frame
                             # ending up between two files
                             should_split = check_split()
                     yield c

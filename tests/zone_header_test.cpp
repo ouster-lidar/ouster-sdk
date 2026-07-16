@@ -4,7 +4,7 @@
 
 #include <array>
 
-#include "ouster/zrb.h"
+#include "ouster/core/zrb.h"
 
 using ouster::sdk::core::CacheRenderMetadata;
 using ouster::sdk::core::SerialNumber;
@@ -32,12 +32,9 @@ TEST(CacheRenderMetadata, throw_if_transforms_not_set) {
         {
             try {
                 ouster::sdk::core::CacheRenderMetadata metadata(
-                    zrb, valid_col_mask,
-                    ouster::sdk::core::serial_number_from_int(123456789));
+                    zrb, valid_col_mask, ouster::sdk::core::serial_number_from_int(123456789));
             } catch (const std::logic_error& e) {
-                EXPECT_STREQ(
-                    "CacheRenderMetadata: beam_to_lidar_transform not set",
-                    e.what());
+                EXPECT_STREQ("CacheRenderMetadata: beam_to_lidar_transform not set", e.what());
                 throw;
             }
         },
@@ -47,12 +44,9 @@ TEST(CacheRenderMetadata, throw_if_transforms_not_set) {
         {
             try {
                 ouster::sdk::core::CacheRenderMetadata metadata(
-                    zrb, valid_col_mask,
-                    ouster::sdk::core::serial_number_from_int(123456789));
+                    zrb, valid_col_mask, ouster::sdk::core::serial_number_from_int(123456789));
             } catch (const std::logic_error& e) {
-                EXPECT_STREQ(
-                    "CacheRenderMetadata: lidar_to_sensor_transform not set",
-                    e.what());
+                EXPECT_STREQ("CacheRenderMetadata: lidar_to_sensor_transform not set", e.what());
                 throw;
             }
         },
@@ -62,12 +56,9 @@ TEST(CacheRenderMetadata, throw_if_transforms_not_set) {
         {
             try {
                 ouster::sdk::core::CacheRenderMetadata metadata(
-                    zrb, valid_col_mask,
-                    ouster::sdk::core::serial_number_from_int(123456789));
+                    zrb, valid_col_mask, ouster::sdk::core::serial_number_from_int(123456789));
             } catch (const std::logic_error& e) {
-                EXPECT_STREQ(
-                    "CacheRenderMetadata: sensor_to_body_transform not set",
-                    e.what());
+                EXPECT_STREQ("CacheRenderMetadata: sensor_to_body_transform not set", e.what());
                 throw;
             }
         },

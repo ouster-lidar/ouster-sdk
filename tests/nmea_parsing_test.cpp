@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-#include "ouster/types.h"
+#include "ouster/core/types.h"
 
 using namespace ouster::sdk::core;
 

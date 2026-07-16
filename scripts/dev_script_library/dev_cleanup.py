@@ -1,6 +1,7 @@
 import click
 import os
-import shutil
+
+import build_libs
 
 
 additional_build_cleanup_dirs = []
@@ -11,9 +12,9 @@ additional_artifact_cleanup_dirs = []
 @click.pass_context
 def build_cleanup(ctx):
     """Cleanup Build Directories."""
-    shutil.rmtree(ctx.obj.sdk_build_dir, ignore_errors=True)
+    build_libs.rmtree_readonly(ctx.obj.sdk_build_dir)
     for item in additional_build_cleanup_dirs:
-        shutil.rmtree(item, ignore_errors=True)
+        build_libs.rmtree_readonly(item)
 
 
 @click.command(name="all")
@@ -23,22 +24,23 @@ def all_cleanup(ctx):
     directories_to_clean = [
         # Build directories
         ctx.obj.sdk_build_dir,
-        # Artifact directories
+        # Use private attributes directly to avoid the property side-effect
+        # of creating these directories just to delete them.
         ctx.obj._sdk_artifact_dir,
-        ctx.obj._dev_persistant_dir,
+        ctx.obj._dev_persistent_dir,
     ]
     print("Cleaning up directories created by context...")
     for directory in directories_to_clean:
         if os.path.exists(directory):
             print(f"Removing: {directory}")
-            shutil.rmtree(directory, ignore_errors=True)
+            build_libs.rmtree_readonly(directory)
         else:
             print(f"Skipping (doesn't exist): {directory}")
     # Clean additional directories
     for item in additional_build_cleanup_dirs + additional_artifact_cleanup_dirs:
         if os.path.exists(item):
             print(f"Removing additional: {item}")
-            shutil.rmtree(item, ignore_errors=True)
+            build_libs.rmtree_readonly(item)
     print("Cleanup complete!")
 
 
@@ -46,9 +48,11 @@ def all_cleanup(ctx):
 @click.pass_context
 def artifacts_cleanup(ctx):
     """Cleanup Artifacts Directories."""
-    shutil.rmtree(ctx.obj.sdk_artifact_dir, ignore_errors=True)
+    # Use private attribute directly to avoid the property side-effect of
+    # creating the directory just to delete it.
+    build_libs.rmtree_readonly(ctx.obj._sdk_artifact_dir)
     for item in additional_artifact_cleanup_dirs:
-        shutil.rmtree(item, ignore_errors=True)
+        build_libs.rmtree_readonly(item)
 
 
 def import_module(click_context):

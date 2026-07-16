@@ -17,8 +17,8 @@ from ouster.sdk import core
 
 
 def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
-             scan: core.LidarScan) -> np.ndarray:
-    """Computes a point cloud from a scan as numpy array.
+             frame: core.LidarFrame) -> np.ndarray:
+    """Computes a point cloud from a frame as numpy array.
 
     This is a reference implementation that follows the calculations from
     `Section X`_ of the Software User Manual exactly. Output is a point cloud in
@@ -26,8 +26,8 @@ def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
     coordinates in meters.
 
     Args:
-        metadata: Sensor metadata associated with the scan
-        scan: A frame of lidar data
+        metadata: Sensor metadata associated with the frame
+        frame: A frame of lidar data
 
     Returns:
         A H x W x 3 array of point coordinates
@@ -36,18 +36,18 @@ def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
     """
 
     # use homogeneous coordinates for convenient transformation
-    xyz = np.zeros((scan.w * scan.h, 4))
+    xyz = np.zeros((frame.w * frame.h, 4))
 
     # iterate over each measurement channel/row and measurement block/column
-    for u, v in product(range(scan.h), range(scan.w)):
+    for u, v in product(range(frame.h), range(frame.w)):
 
-        r = scan.field(core.ChanField.RANGE)[u, v]
+        r = frame.field(core.ChanField.RANGE)[u, v]
         n = sqrt(metadata.beam_to_lidar_transform[0, 3]**2 + metadata.beam_to_lidar_transform[2, 3]**2)
 
-        # scans are always a full frame, so the measurement id is also the index
-        assert scan.measurement_id[v] == v
+        # frames are always a full frame, so the measurement id is also the index
+        assert frame.measurement_id[v] == v
 
-        theta_encoder = 2.0 * pi * (1.0 - v / scan.w)
+        theta_encoder = 2.0 * pi * (1.0 - v / frame.w)
         theta_azimuth = -2.0 * pi * (metadata.beam_azimuth_angles[u] / 360.0)
         phi = 2.0 * pi * (metadata.beam_altitude_angles[u] / 360.0)
 
@@ -62,17 +62,17 @@ def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
                           theta_azimuth) * cos(phi) + metadata.beam_to_lidar_transform[0, 3] * sin(theta_encoder)
         z = (r - n) * sin(phi) + metadata.beam_to_lidar_transform[2, 3]
 
-        # insert into xyz; point order is row-major to match input scan
-        xyz[u * scan.w + v] = [x, y, z, 1]
+        # insert into xyz; point order is row-major to match input frame
+        xyz[u * frame.w + v] = [x, y, z, 1]
 
     # transform from lidar to sensor frame and scale to meters from millimeters
     xyz_sensor = xyz @ metadata.lidar_to_sensor_transform.T
-    return xyz_sensor[:, :3].reshape(scan.h, scan.w, 3) * 0.001
+    return xyz_sensor[:, :3].reshape(frame.h, frame.w, 3) * 0.001
 
 
 def xyz_proj_origin_to_origin_mm(metadata: core.SensorInfo,
-             scan: core.LidarScan) -> np.ndarray:
-    """Computes a point cloud from a scan as numpy array
+             frame: core.LidarFrame) -> np.ndarray:
+    """Computes a point cloud from a frame as numpy array
 
     This is the old reference implementation that follows the calculations from
     `Section 3.1.2`_ of the FW 2.0 Software User Manual exactly for OS-0, OS-1,
@@ -80,8 +80,8 @@ def xyz_proj_origin_to_origin_mm(metadata: core.SensorInfo,
     points arranged in column-major order, with coordinates in meters.
 
     Args:
-        metadata: Sensor metadata associated with the scan
-        scan: A frame of lidar data
+        metadata: Sensor metadata associated with the frame
+        frame: A frame of lidar data
 
     Returns:
         A H x W x 3 array of point coordinates
@@ -90,22 +90,22 @@ def xyz_proj_origin_to_origin_mm(metadata: core.SensorInfo,
     """
 
     # use homogeneous coordinates for convenient transformation
-    xyz = np.zeros((scan.w * scan.h, 4))
+    xyz = np.zeros((frame.w * frame.h, 4))
 
     # return 0s since this method is not valid for OS-DOME
     if "OS-DOME" in metadata.prod_line:
         return xyz
 
     # iterate over each measurement channel/row and measurement block/column
-    for u, v in product(range(scan.h), range(scan.w)):
+    for u, v in product(range(frame.h), range(frame.w)):
 
-        r = scan.field(core.ChanField.RANGE)[u, v]
+        r = frame.field(core.ChanField.RANGE)[u, v]
         n = metadata.lidar_origin_to_beam_origin_mm
 
-        # scans are always a full frame, so the measurement id is also the index
-        assert scan.measurement_id[v] == v
+        # frames are always a full frame, so the measurement id is also the index
+        assert frame.measurement_id[v] == v
 
-        theta_encoder = 2.0 * pi * (1.0 - v / scan.w)
+        theta_encoder = 2.0 * pi * (1.0 - v / frame.w)
         theta_azimuth = -2.0 * pi * (metadata.beam_azimuth_angles[u] / 360.0)
         phi = 2.0 * pi * (metadata.beam_altitude_angles[u] / 360.0)
 
@@ -120,12 +120,12 @@ def xyz_proj_origin_to_origin_mm(metadata: core.SensorInfo,
                           theta_azimuth) * cos(phi) + n * sin(theta_encoder)
         z = (r - n) * sin(phi)
 
-        # insert into xyz; point order is row-major to match input scan
-        xyz[u * scan.w + v] = [x, y, z, 1]
+        # insert into xyz; point order is row-major to match input frame
+        xyz[u * frame.w + v] = [x, y, z, 1]
 
     # transform from lidar to sensor frame and scale to meters from millimeters
     xyz_sensor = xyz @ metadata.lidar_to_sensor_transform.T
-    return xyz_sensor[:, :3].reshape(scan.h, scan.w, 3) * 0.001
+    return xyz_sensor[:, :3].reshape(frame.h, frame.w, 3) * 0.001
 
 
 def destagger(pixel_shift_by_row: List[int], field: np.ndarray) -> np.ndarray:

@@ -14,7 +14,7 @@
 #include <iostream>
 #include <string>
 
-#include "ouster/impl/logging.h"
+#include "ouster/core/impl/logging.h"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -46,9 +46,9 @@ namespace {
 //  Note: caller must use LocalFree() on the returned LPCTSTR buffer.
 LPCTSTR ErrorMessage(DWORD error) {
     LPVOID lpMsgBuf;
-    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                       FORMAT_MESSAGE_IGNORE_INSERTS,
-                   NULL, error, NULL, (LPTSTR)&lpMsgBuf, 0, NULL);
+    FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, error, NULL, (LPTSTR)&lpMsgBuf, 0, NULL);
     return ((LPCTSTR)lpMsgBuf);
 }
 
@@ -72,8 +72,7 @@ std::string LastErrorMessageStr() {
 #endif
 
 void file_size_exception(const std::string& path) {
-    throw std::runtime_error("Couldn't read " + path +
-                             ": couldn't determine file size.");
+    throw std::runtime_error("Couldn't read " + path + ": couldn't determine file size.");
 }
 
 bool is_file_sep(char character) {
@@ -189,8 +188,7 @@ bool make_tmp_dir(std::string& tmp_path) {
     // TODO[pb]: Check that it works on Mac OS and especially that
     // temp files are cleaned correctly and don't feel up the CI machine ...
     std::array<char, 25> tmpdir = {"/tmp/ouster-test.XXXXXX"};
-    if (::mkdtemp(static_cast<char*>(tmpdir.data())) ==
-        nullptr) {  // NOLINT(misc-include-cleaner)
+    if (::mkdtemp(static_cast<char*>(tmpdir.data())) == nullptr) {  // NOLINT(misc-include-cleaner)
         logger().error("ERROR: Can't create temp dir.");
         return false;
     };
@@ -218,8 +216,7 @@ bool get_env_var(const std::string& name, std::string& value) {
 #ifdef _WIN32
     const unsigned int BUFSIZE = 4096;
     char var_value[BUFSIZE];
-    unsigned int ret_val =
-        GetEnvironmentVariableA(name.c_str(), var_value, BUFSIZE);
+    unsigned int ret_val = GetEnvironmentVariableA(name.c_str(), var_value, BUFSIZE);
     if (ret_val != 0 && ret_val < BUFSIZE) {
         value.assign(var_value);
         return true;
@@ -229,8 +226,7 @@ bool get_env_var(const std::string& name, std::string& value) {
 #else
     // No good way to make the get env thread-safe in C++11, so
     // using std::getenv here.
-    char* var_value =
-        std::getenv(name.c_str());  // NOLINT(concurrency-mt-unsafe)
+    char* var_value = std::getenv(name.c_str());  // NOLINT(concurrency-mt-unsafe)
     if (var_value != nullptr) {
         value = var_value;
         return true;
@@ -263,8 +259,7 @@ uint64_t file_size(const std::string& path) {
 #ifdef _WIN32
     LARGE_INTEGER fsize;
     WIN32_FILE_ATTRIBUTE_DATA file_attr_data;
-    if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard,
-                              &file_attr_data) ||
+    if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &file_attr_data) ||
         file_attr_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
         file_size_exception(path);
     }
@@ -283,19 +278,16 @@ uint64_t file_size(const std::string& path) {
 /// File mapping open (read-only operations)
 uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
 #ifdef _WIN32
-    HANDLE file = CreateFileA(
-        path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+    HANDLE file = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
         return nullptr;
     }
-    HANDLE file_map =
-        CreateFileMappingA(file, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    HANDLE file_map = CreateFileMappingA(file, nullptr, PAGE_READONLY, 0, 0, nullptr);
     memmap_handle = reinterpret_cast<uintptr_t>(file_map);
     if (file_map == nullptr) {
         CloseHandle(file);
-        throw std::runtime_error("CreateFileMappingA " + path + ": " +
-                                 get_last_error());
+        throw std::runtime_error("CreateFileMappingA " + path + ": " + get_last_error());
     }
 
     uint8_t* buffer_pointer =
@@ -317,10 +309,9 @@ uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
         throw std::runtime_error("open " + path + ": " + get_last_error());
     }
 
-    void* map_osf_file =
-        mmap(nullptr, file_size(path), PROT_READ, MAP_SHARED, fd, 0);
+    void* map_osf_file = mmap(nullptr, file_size(path), PROT_READ, MAP_SHARED, fd, 0);
+    ::close(fd);
     if (map_osf_file == MAP_FAILED) {
-        ::close(fd);
         throw std::runtime_error("mmap " + path + ": " + get_last_error());
     }
     return static_cast<uint8_t*>(map_osf_file);
@@ -328,8 +319,7 @@ uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
 }
 
 /// File mapping close
-bool mmap_close(uint8_t* file_buf, const uint64_t file_size,
-                uintptr_t memmap_handle) {
+bool mmap_close(uint8_t* file_buf, const uint64_t file_size, uintptr_t memmap_handle) {
     if (file_buf == nullptr || file_size == 0) {
         return false;
     }
@@ -387,12 +377,10 @@ int64_t append_binary_file(const std::string& append_to_file_name,
             append_to_file_stream << append_from_file_stream.rdbuf();
             saved_size = append_to_file_stream.tellg();
         } else {
-            logger().error("ERROR: Failed to open {} for appending",
-                           append_to_file_name);
+            logger().error("ERROR: Failed to open {} for appending", append_to_file_name);
         }
     } else {
-        logger().error("ERROR: Failed to open {} for appending",
-                       append_to_file_name);
+        logger().error("ERROR: Failed to open {} for appending", append_to_file_name);
     }
 
     if (append_to_file_stream.is_open()) {
@@ -405,8 +393,7 @@ int64_t append_binary_file(const std::string& append_to_file_name,
     return saved_size;
 }
 
-int64_t copy_file_trailing_bytes(const std::string& source_file,
-                                 const std::string& target_file,
+int64_t copy_file_trailing_bytes(const std::string& source_file, const std::string& target_file,
                                  uint64_t offset) {
     uint64_t actual_file_size = file_size(source_file);
     if (actual_file_size < offset) {

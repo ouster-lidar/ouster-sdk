@@ -13,10 +13,10 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/types.h"
+#include "ouster/core/visibility.h"
 #include "ouster/osf/buffer.h"
 #include "ouster/osf/metadata.h"
-#include "ouster/types.h"
-#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sdk {
@@ -36,10 +36,11 @@ class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
 
    public:
     /**
-     * @param[in] si Initialize the LidarSensor with a sensor_info object.
+     * @param[in] sensor_info Initialize the LidarSensor with a sensor_info
+     * object.
      */
     OUSTER_API_FUNCTION
-    explicit LidarSensor(const sensor_info& si);
+    explicit LidarSensor(const sensor_info& sensor_info);
 
     /**
      * @param[in] sensor_metadata Initialize the LidarSensor with a json string
@@ -82,7 +83,7 @@ class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
      * @return The new LidarSensor cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer& buf);
 
     /**
      * Get the string representation for the LidarSensor object.

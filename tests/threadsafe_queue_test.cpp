@@ -3,7 +3,7 @@
  * All rights reserved.
  */
 
-#include "ouster/impl/threadsafe_queue.h"
+#include "ouster/core/impl/threadsafe_queue.h"
 
 #include <gtest/gtest.h>
 

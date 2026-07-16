@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html {% if language is not none %} lang="{{ language }}"{% endif %}>
+  <head>
+    <script>document.documentElement.classList.add('page-loading');</script>
+    <meta charset="{{ encoding }}">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    {{- metatags }}
+    {%- block htmltitle %}
+      <title>{{ title|striptags|e }}{{ titlesuffix }}</title>
+    {%- endblock %}
+    {# <meta name="description" content="{{ description }}"> #}
+    {%- block css %}
+      {%- for css in css_files %}
+        {%- if css|attr("rel") %}
+          <link rel="{{ css.rel }}" href="{{ pathto(css.filename, 1) }}" type="text/css"{% if css.title is not none %} title="{{ css.title }}"{% endif %} />
+        {%- else %}
+          <link rel="stylesheet" href="{{ pathto(css, 1) }}" type="text/css" />
+      {%- endif %}
+    {%- endfor %}
+    {%- endblock %}
+
+    {%- block scripts %}
+      {# FIXME: use link-preload #}
+      <!-- sphinx script_files -->
+      {%- for scriptfile in script_files %}
+        {{ js_tag(scriptfile) }}
+      {%- endfor %}
+
+      {# press js #}
+      <!-- bundled in js (rollup iife) -->
+      <!-- <script src="{{ pathto('_static/theme-vendors.js', 1)}}"></script> -->
+      <script src="{{ pathto('_static/theme.js', 1)}}" defer></script>
+    {%- endblock %}
+    {%- if pageurl %}
+      <link rel="canonical" href="{{ pageurl }}" />
+    {%- endif %}
+    {%- if favicon_url %}
+      <link rel="shortcut icon" href="{{ pathto(favicon_url, 1) }}"/>
+    {%- elif favicon %}
+      <link rel="shortcut icon" href="{{ pathto('_static/' + favicon, 1) }}"/>
+    {%- endif %}
+
+    {%- include "util/linktags.html" %}
+    {%- block extrahead %} {% endblock %}
+  </head>
+
+  <body data-page-name="{{ pagename }}">
+    <div id="app">
+    <div class="theme-container" :class="pageClasses">
+    {%- block container %}
+      {%- block header %}{%- include "util/navbar.html" %}{% endblock %}
+      {% block subtitle %}
+        {%- include "util/subtitle.html" %}
+      {% endblock %}
+
+      {# close sidebar when clicked out of it #}
+      <div class="sidebar-mask" @click="toggleSidebar(false)">
+      </div>
+
+      {%- block sidebar %}
+        <sidebar @toggle-sidebar="toggleSidebar">
+          {# sidebar navlinks displayed only on mobile #}
+          <navlinks>
+            {% block side_links %}
+              {%- include "util/navlinks.html" %}
+              {%- include "util/extlinks.html" %}
+            {% endblock %}
+          </navlinks>
+          {%- if sidebars != None %}
+            {%- for sidebartemplate in sidebars %}
+              {%- include sidebartemplate %}
+            {%- endfor %}
+          {%- endif %}
+          {%- if release %}
+          <div class="sidebar-version-switcher">
+            {%- include "version-switcher.html" %}
+          </div>
+          {%- endif %}
+        </sidebar>
+      {%- endblock %}
+      <page>
+        {%- block document %}
+          {% block body_header %}
+            {%- include "util/bodyheader.html" %}
+          {% endblock body_header %}
+          {% set is_api_page = pagename.startswith('python/api_python/') or pagename.startswith('cpp/api_cpp/') %}
+          {% set show_right_sidebar = not is_api_page %}
+          <div class="content-with-rail">
+            <div class="content" role="main" v-pre>
+              {% block body %}{% endblock %}
+
+              {%- if prev or next %}
+              <div class="page-nav">
+                <div class="inner">
+                  {%- include "util/pagenav.html" %}
+                </div>
+              </div>
+              {%- endif %}
+              {%- block footer %}
+                {%- include "util/footer.html" %}
+              {%- endblock footer %}
+            </div>
+            {% if show_right_sidebar %}
+            <aside class="right-sidebar">
+                {# use toctree (global), not localtoc, so we get real L3/L4 entries #}
+                {%- include "util/righttoc.html" -%}
+            </aside>
+            {% endif %}
+          </div>
+        {%- endblock %}
+      </page>      
+
+    {%- endblock container %}
+    </div></div>
+    {% block footer_scripts %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('a.headerlink').forEach(function (link) {
+        link.classList.add('headerlink--icon');
+        if (!link.querySelector('img')) {
+          const img = document.createElement('img');
+          img.setAttribute('src', '{{ pathto("_static/copy-link.svg", 1) }}');
+          img.setAttribute('alt', 'Permalink');
+          img.setAttribute('width', '16');
+          img.setAttribute('height', '16');
+          img.setAttribute('loading', 'lazy');
+          link.innerHTML = '';
+          link.appendChild(img);
+        }
+      });
+    });
+    </script>
+    {% if pagename.startswith('_modules/') %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.sidebar-toggle').forEach(function (button) {
+        if (button.getAttribute('aria-expanded') === 'false') {
+          button.click();
+        }
+      });
+    });
+    </script>
+    {% endif %}
+    {% endblock %}
+  </body>
+</html>

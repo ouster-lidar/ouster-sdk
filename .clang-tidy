@@ -244,7 +244,6 @@ Checks: '
   clang-analyzer-webkit.UncountedLambdaCapturesChecker,
   concurrency-mt-unsafe,
   concurrency-thread-canceltype-asynchronous,
-  cppcoreguidelines-avoid-c-arrays,
   cppcoreguidelines-avoid-capturing-lambda-coroutines,
   cppcoreguidelines-avoid-const-or-ref-data-members,
   cppcoreguidelines-avoid-do-while,
@@ -265,9 +264,7 @@ Checks: '
   cppcoreguidelines-noexcept-destructor,
   cppcoreguidelines-noexcept-move-operations,
   cppcoreguidelines-noexcept-swap,
-  cppcoreguidelines-owning-memory,
   cppcoreguidelines-prefer-member-initializer,
-  cppcoreguidelines-pro-bounds-array-to-pointer-decay,
   cppcoreguidelines-pro-bounds-constant-array-index,
   cppcoreguidelines-pro-type-const-cast,
   cppcoreguidelines-pro-type-cstyle-cast,
@@ -282,7 +279,6 @@ Checks: '
   darwin-dispatch-once-nonstatic,
   google-build-explicit-make-pair,
   google-build-namespaces,
-  google-build-using-namespace,
   google-default-arguments,
   google-explicit-constructor,
   google-global-names-in-headers,
@@ -293,7 +289,6 @@ Checks: '
   google-readability-avoid-underscore-in-googletest-name,
   google-readability-casting,
   google-readability-function-size,
-  google-readability-namespace-comments,
   google-runtime-int,
   google-runtime-operator,
   google-upgrade-googletest-case,
@@ -410,7 +405,6 @@ Checks: '
   readability-container-contains,
   readability-container-data-pointer,
   readability-container-size-empty,
-  readability-convert-member-functions-to-static,
   readability-delete-null-pointer,
   readability-duplicate-include,
   readability-enum-initial-value,
@@ -420,8 +414,6 @@ Checks: '
   readability-identifier-naming,
   readability-implicit-bool-conversion,
   readability-inconsistent-declaration-parameter-name,
-  readability-isolate-declaration,
-  readability-make-member-function-const,
   readability-math-missing-parentheses,
   readability-misleading-indentation,
   readability-misplaced-array-index,
@@ -459,11 +451,11 @@ CheckOptions:
   - key:   readability-identifier-naming.VariableCase
     value: lower_case
   - key:   readability-identifier-length.IgnoredVariableNames
-    value: 'i|j|k|w|h|x|y|z|it|ip|fd'
+    value: 'i|j|k|w|h|x|y|z|it|ip|fd|r|g|b'
   - key:   readability-identifier-length.IgnoredLoopCounterNames
     value: 'i|j|k|w|h|x|y|z|it|ip|fd|u|v'
   - key:   readability-identifier-length.IgnoredParameterNames
-    value: 'a|b|w|h|x|y|z|ip|fd'
+    value: 'a|b|w|h|x|y|z|ip|fd|r|g|b'
   - key:   performance-unnecessary-value-param.AllowedTypes
     value: 'Eigen::Ref|sync_ptr'
   - key:   readability-identifier-naming.MemberCase

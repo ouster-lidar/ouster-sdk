@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "ouster/sensor_scan_source.h"
-#include "ouster/types.h"
+#include "ouster/core/types.h"
+#include "ouster/sensor/sensor_frame_set_source.h"
 
 const std::string test_string = "TEST STRING HERE";
 

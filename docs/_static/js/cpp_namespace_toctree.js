@@ -13,7 +13,7 @@
       ];
   
       const links = document.querySelectorAll(
-        ".wy-menu-vertical a, .toctree-wrapper a"
+        ".sidebar-links a, .wy-menu-vertical a, .toctree-wrapper a"
       );
       links.forEach(link => {
         if (link.dataset.cppNavClean === "1") return;

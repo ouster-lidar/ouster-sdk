@@ -46,7 +46,7 @@ def test_osf_save_extrinsics(tmp_path, sensor_metadata):
 
 
 def test_osf_read_old_extrinsics(tmp_path, sensor_metadata):
-    """OsfScanSource's SensorInfo (from the metadata attribute)
+    """OsfFrameSetSource's SensorInfo (from the metadata attribute)
     should include extrinsics loaded from the osf metadata store."""
 
     # write an OSF with some extrinsics
@@ -66,6 +66,6 @@ def test_osf_read_old_extrinsics(tmp_path, sensor_metadata):
     writer.add_metadata(osf.Extrinsics(ext_mat, lidar_id, "test_calibrated"))
     writer.close()
 
-    # get an OsfScanSource from open_source
+    # get an OsfFrameSetSource from open_source
     src = open_source(str(output_osf_file))
-    assert (ext_mat == src.sensor_info[0].extrinsic).all()
+    assert (ext_mat == src.sensor_info[0].sensor_to_body).all()

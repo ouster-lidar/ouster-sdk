@@ -2,6 +2,7 @@ ARG BASE="ubuntu:22.04"
 FROM ${BASE}
 ARG APT_PROXY=""
 ARG APT_MIRROR=""
+ARG APT_MIRROR_SECURITY=""
 
 ENV WORKSPACE=/root
 
@@ -12,6 +13,11 @@ RUN /bin/sh -c "if ! [ -z \"$APT_PROXY\" ]; then \
 
 RUN /bin/sh -c "if ! [ -z \"$APT_MIRROR\" ]; then \
         sed -i \"s|http://archive.ubuntu.com/ubuntu|$APT_MIRROR|g\" /etc/apt/sources.list; \
+    fi"
+
+RUN /bin/sh -c "if ! [ -z \"$APT_MIRROR_SECURITY\" ]; then \
+        sed -i \"s|http://security.ubuntu.com/ubuntu|$APT_MIRROR_SECURITY|g\" /etc/apt/sources.list; \
+    elif ! [ -z \"$APT_MIRROR\" ]; then \
         sed -i \"s|http://security.ubuntu.com/ubuntu|$APT_MIRROR|g\" /etc/apt/sources.list; \
     fi"
 

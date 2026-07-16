@@ -13,13 +13,20 @@ class AutoApiDocsGenerator:
     def __init__(self, app):
         self.app = app
         self.log = configure_logger("ouster.docs.autoapidocsgenerator")
-        
+
     def build_sphinx(self):
+        if self.app.config.ouster_no_python_api:
+            self.log.info("Skipping apidoc and pybind processing (ouster_no_python_api)")
+            return
+        self.log.info("Running sphinx-apidoc for Python API RST generation")
         run_apidoc(self.app)
+        self.log.info("Running RST processor (pybind sections, merge/sort)")
         RstProcessor(self.app).process_all()
+        self.log.info("Python API RST generation complete")
 
     def cleanup(self, exception=None):
-        cleanup_doxygen(self.app, exception)
+        if not self.app.config.ouster_no_cpp_api:
+            cleanup_doxygen(self.app, exception)
 
 
 def setup(app):
@@ -29,6 +36,8 @@ def setup(app):
     orchestrator = AutoApiDocsGenerator(app)
 
     def on_config_inited(_app, _config):
+        if _app.config.ouster_no_cpp_api:
+            return
         run_doxygen(_app)
 
     def on_builder_inited(_app):

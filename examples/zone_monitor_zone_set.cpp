@@ -13,19 +13,22 @@
 #include <vector>
 
 #include "cxxopts.hpp"
-#include "ouster/client.h"
-#include "ouster/open_source.h"
-#include "ouster/sensor_http.h"
-#include "ouster/sensor_scan_source.h"
-#include "ouster/types.h"
-#include "ouster/version.h"
-#include "ouster/zone_monitor.h"
+#include "ouster/core/open_source.h"
+#include "ouster/core/types.h"
+#include "ouster/core/version.h"
+#include "ouster/core/zone_monitor.h"
+#include "ouster/sensor/client.h"
+#include "ouster/sensor/sensor_frame_set_source.h"
+#include "ouster/sensor/sensor_http.h"
 
-using namespace ouster::sdk;  // NOLINT(google-build-using-namespace)
+// NOLINTBEGIN(google-build-using-namespace)
+// [doc-stag-stl-imports]
+using namespace ouster::sdk;
+// [doc-etag-stl-imports]
+// NOLINTEND(google-build-using-namespace)
 
 // Creates a ZoneSet from STL files.
-void create_stl_zone_set(const std::string& data_dir,
-                         const std::string& zip_path,
+void create_stl_zone_set(const std::string& data_dir, const std::string& zip_path,
                          const core::SensorInfo& /*sensor_info*/) {
     // [doc-stag-stl-zone-set]
     // Define a zone from STL file
@@ -61,9 +64,9 @@ void create_stl_zone_set(const std::string& data_dir,
 }
 
 // Creates a ZoneSet from ZRB files.
-void create_zrb_zone_set(const std::string& data_dir,
-                         const std::string& zip_path,
+void create_zrb_zone_set(const std::string& data_dir, const std::string& zip_path,
                          const core::SensorInfo& sensor_info) {
+    // clang-format off
     // [doc-stag-zrb-zone-set]
     core::mat4d sensor_to_body_transform = core::mat4d::Identity();
 
@@ -108,11 +111,11 @@ void create_zrb_zone_set(const std::string& data_dir,
     // Write out the zone set to a zip file
     zone_set.save(zip_path, core::ZoneSetOutputFilter::ZRB);
     // [doc-etag-zrb-zone-set]
+    // clang-format on
 }
 
 // Uploads the zone set to the sensor.
-void upload(const core::ZoneSet& zone_set,
-            core::ZoneSetOutputFilter output_filter,
+void upload(const core::ZoneSet& zone_set, core::ZoneSetOutputFilter output_filter,
             const std::string& sensor_hostname) {
     // [doc-stag-upload-zone-set]
     auto http = sensor::SensorHttp::create(sensor_hostname);
@@ -126,10 +129,9 @@ void upload(const core::ZoneSet& zone_set,
 }
 
 int main(int argc, char* argv[]) {  // NOLINT(bugprone-exception-escape)
-    cxxopts::Options options(
-        "zone_monitor_example",
-        "Ouster SDK Zone Monitor example. This example demonstrates how to "
-        "create and upload zone configurations to a sensor.");
+    cxxopts::Options options("zone_monitor_example",
+                             "Ouster SDK Zone Monitor example. This example demonstrates how to "
+                             "create and upload zone configurations to a sensor.");
 
     // clang-format off
     options.add_options()
@@ -155,15 +157,13 @@ int main(int argc, char* argv[]) {  // NOLINT(bugprone-exception-escape)
         const auto zone_set_type = result["zone_set_type"].as<std::string>();
         const auto data_dir = result["data_dir"].as<std::string>();
         const auto zip_path = result["zip_path"].as<std::string>();
-        const auto sensor_hostname =
-            result["sensor_hostname"].as<std::string>();
+        const auto sensor_hostname = result["sensor_hostname"].as<std::string>();
         const bool no_auto_udp_dest = result["no-auto-udp-dest"].as<bool>();
         const bool do_upload = result["upload"].as<bool>();
 
-        auto source =
-            open_source(sensor_hostname, [&](ScanSourceOptions& options) {
-                options.no_auto_udp_dest = no_auto_udp_dest;
-            });
+        auto source = open_source(sensor_hostname, [&](FrameSetSourceOptions& options) {
+            options.no_auto_udp_dest = no_auto_udp_dest;
+        });
         auto sensor_info = source.sensor_info()[0];
 
         core::ZoneSetOutputFilter output_filter{};
@@ -174,8 +174,8 @@ int main(int argc, char* argv[]) {  // NOLINT(bugprone-exception-escape)
             create_zrb_zone_set(data_dir, zip_path, *sensor_info);
             output_filter = core::ZoneSetOutputFilter::ZRB;
         } else {
-            std::cerr << "Invalid zone_set_type: " << zone_set_type
-                      << ". Must be 'STL' or 'ZRB'." << std::endl;
+            std::cerr << "Invalid zone_set_type: " << zone_set_type << ". Must be 'STL' or 'ZRB'."
+                      << std::endl;
             return EXIT_FAILURE;
         }
 

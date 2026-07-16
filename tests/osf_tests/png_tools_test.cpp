@@ -17,11 +17,11 @@
 
 #include "common.h"
 #include "osf_test.h"
-#include "ouster/impl/logging.h"
-#include "ouster/lidar_scan.h"
+#include "ouster/core/impl/logging.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/types.h"
 #include "ouster/osf/basics.h"
-#include "ouster/osf/png_lidarscan_encoder.h"
-#include "ouster/types.h"
+#include "ouster/osf/png_lidarframe_encoder.h"
 
 namespace ouster {
 namespace sdk {
@@ -37,11 +37,11 @@ class OsfPngToolsTest : public OsfTestWithDataAndFiles {};
 
 using ouster::sdk::core::ChanFieldType;
 using ouster::sdk::core::Field;
+using ouster::sdk::core::LidarFrame;
 using ouster::sdk::core::LidarMode;
-using ouster::sdk::core::LidarScan;
 using ouster::sdk::core::SensorInfo;
 
-size_t field_size(LidarScan& ls, const std::string& f) {
+size_t field_size(LidarFrame& ls, const std::string& f) {
     switch (ls.field_type(f).element_type) {
         case ChanFieldType::UINT8:
             return ls.field<uint8_t>(f).size();
@@ -61,12 +61,12 @@ size_t field_size(LidarScan& ls, const std::string& f) {
     }
 }
 
-// Check that we can make lidar scan and have fields with expected value inside
-TEST_F(OsfPngToolsTest, MakesLidarScan) {
+// Check that we can make lidar frame and have fields with expected value inside
+TEST_F(OsfPngToolsTest, MakesLidarFrame) {
     const SensorInfo si = ouster::sdk::core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
 
-    LidarScan ls = get_random_lidar_scan(si);
+    LidarFrame ls = get_random_lidar_frame(si);
 
     const auto n = si.format.columns_per_frame * si.format.pixels_per_column;
 
@@ -80,7 +80,7 @@ TEST_F(OsfPngToolsTest, MakesLidarScan) {
 
 #ifndef OUSTER_OSF_NO_THREADING
 
-TEST_F(OsfPngToolsTest, scanDecodeFields) {
+TEST_F(OsfPngToolsTest, frameDecodeFields) {
     // it should propagate the exception
     // if destagger throws std::invalid_argument
 
@@ -90,23 +90,23 @@ TEST_F(OsfPngToolsTest, scanDecodeFields) {
 
     // assert precondition
     ASSERT_EQ(si.format.pixel_shift_by_row.size(), 128);
-    std::string output_osf_filename = tmp_file("scan_decode_fields_test.osf");
+    std::string output_osf_filename = tmp_file("frame_decode_fields_test.osf");
 
-    // create a lidar scan that's the wrong size
+    // create a lidar frame that's the wrong size
     int w = 32;
     int h = 32;
-    auto scan = ouster::sdk::core::LidarScan(w, h);
-    auto field_types = scan.field_types();
+    auto frame = ouster::sdk::core::LidarFrame(h, w);
+    auto field_types = frame.field_types();
     std::vector<int> shift_by_row;
     EXPECT_THROW(
         {
             try {
                 Writer writer(output_osf_filename, si);
-                writer.save(0, scan);
+                writer.save(0, frame);
                 writer.close();
             } catch (std::invalid_argument& e) {
                 ASSERT_STREQ(e.what(),
-                             "lidar scan size (32, 32) does not match the "
+                             "lidar frame size (32, 32) does not match the "
                              "sensor info resolution (1024, 128)");
                 throw;
             }
@@ -118,11 +118,11 @@ TEST_F(OsfPngToolsTest, scanDecodeFields) {
 
 TEST(OsfFieldEncodeTest, field_encode_decode_test) {
     auto test_field_encoding = [](const ouster::sdk::core::Field& f) {
-        ScanChannelData compressed;
-        PngLidarScanEncoder encoder(4);
+        FrameChannelData compressed;
+        PngLidarFrameEncoder encoder(4);
         EXPECT_NO_THROW({ compressed = encoder.encode_field(f); });
-        Field decoded(f.desc());
-        ouster::sdk::osf::impl::EncodedScanChannelData compressed_data;
+        Field decoded(f.desc(), ouster::sdk::core::FieldClass::FRAME_FIELD);
+        ouster::sdk::osf::impl::EncodedFrameChannelData compressed_data;
         compressed_data.data_internal = compressed.data();
         compressed_data.size_internal = compressed.size();
         EXPECT_NO_THROW({ impl::decode_field(decoded, compressed_data); });
@@ -143,8 +143,7 @@ TEST(OsfFieldEncodeTest, field_encode_decode_test) {
     test_field_encoding(randomized_field<double>(gen, nd_d, {4096}));
 
     std::uniform_int_distribution<uint32_t> ud_u32{0, 4096};
-    test_field_encoding(
-        randomized_field<uint32_t>(gen, ud_u32, {128, 1024, 3}));
+    test_field_encoding(randomized_field<uint32_t>(gen, ud_u32, {128, 1024, 3}));
     test_field_encoding(randomized_field<uint32_t>(gen, ud_u32, {128, 1024}));
     test_field_encoding(randomized_field<uint32_t>(gen, ud_u32, {4096}));
 

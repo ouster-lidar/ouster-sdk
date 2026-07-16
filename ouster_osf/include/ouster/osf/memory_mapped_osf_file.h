@@ -78,7 +78,9 @@ class OUSTER_API_CLASS MemoryMappedOsfFile : public OsfFile {
      * @return The size of the OSF file in bytes.
      */
     OUSTER_API_FUNCTION
-    uint64_t size() const override { return size_; }
+    uint64_t size() const override {
+        return size_;
+    }
 
    private:
     OUSTER_API_FUNCTION

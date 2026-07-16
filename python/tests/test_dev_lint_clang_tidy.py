@@ -504,6 +504,55 @@ class TestGetChangedFiles(unittest.TestCase):
         changed_files = dev_lint_clang_tidy._get_changed_files([])
         self.assertEqual(changed_files, [])
 
+    @patch('os.path.exists', return_value=True)
+    def test_new_file_uses_b_path_not_a_path(self, mock_exists):
+        """Regression: newly-added files have a_path=None; must use b_path so
+        their warnings are not silently dropped by the CI gate."""
+        mock_diff = MagicMock()
+        mock_diff.a_path = None          # new file — no 'a' side
+        mock_diff.b_path = "added.cpp"   # new file path lives in b_path
+
+        changed_files = dev_lint_clang_tidy._get_changed_files([mock_diff])
+
+        self.assertIn("added.cpp", changed_files,
+                      "New file (a_path=None) must be included via b_path")
+
+    @patch('os.path.exists', return_value=True)
+    def test_deleted_file_excluded(self, mock_exists):
+        """Regression: deleted files have b_path=None and must be excluded so
+        we do not try to analyse a file that no longer exists."""
+        mock_diff = MagicMock()
+        mock_diff.a_path = "deleted.cpp"
+        mock_diff.b_path = None          # deleted — no 'b' side
+
+        changed_files = dev_lint_clang_tidy._get_changed_files([mock_diff])
+
+        self.assertEqual(changed_files, [],
+                         "Deleted file (b_path=None) must be excluded")
+
+    def test_new_file_warnings_detected_by_ci_gate(self):
+        """Regression: a clang-tidy warning on a newly-added file must be
+        caught by check_for_new_warnings_in_diff.  Previously the gate used
+        a_path (None for new files) as the dict key, causing all warnings in
+        new files to be silently skipped."""
+        entry = dev_lint_clang_tidy.AbstractClangTidy.ClangTidyEntry(
+            "new_file.cpp", "10", "1", "Warning", "some warning", "some.check",
+            False)
+
+        mock_diff = Mock()
+        mock_diff.a_path = None           # new file — no 'a' side
+        mock_diff.b_path = "new_file.cpp"
+        mock_diff.a_blob = None
+        mock_diff.b_blob = Mock()
+
+        with patch('dev_lint_clang_tidy.get_added_line_numbers',
+                   return_value=[10]):
+            result = dev_lint_clang_tidy.check_for_new_warnings_in_diff(
+                [entry], [mock_diff])
+
+        self.assertFalse(result,
+                         "Warning in a newly-added file must be caught as new")
+
 
 if __name__ == '__main__':
     unittest.main()
