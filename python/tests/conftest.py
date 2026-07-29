@@ -17,7 +17,8 @@ from ouster.sdk.viz import Cloud
 # Workaround for Click CliRunner bug (pallets/click#824, fixed in Click 8.3.2
 # via PR #3139). _NamedTextIOWrapper.close() closes the BytesIO buffer it
 # wraps, causing "ValueError: I/O operation on closed file" when background
-# threads outlive cli.main(). Remove this once Click >= 8.3.2 is available.
+# threads outlive cli.main(). Remove this once Click >= 8.3.2 is the minimum
+# supported version.
 if hasattr(_ct, "_NamedTextIOWrapper"):
     _ct._NamedTextIOWrapper.close = lambda self: None  # type: ignore[assignment]
 
