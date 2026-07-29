@@ -2151,9 +2151,12 @@ class SourceMultiCommand(click.Group):
         # group in Context.protected_args, click >= 8.2 renamed that attribute
         # to Context._protected_args and deprecated the public one. Look both
         # up directly to avoid the deprecation warning.
-        pending_args = (click_ctx.__dict__.get("protected_args")
-                        or click_ctx.__dict__.get("_protected_args")
-                        or click_ctx.args)
+        if "protected_args" in click_ctx.__dict__:
+            pending_args = click_ctx.__dict__["protected_args"]
+        elif "_protected_args" in click_ctx.__dict__:
+            pending_args = click_ctx.__dict__["_protected_args"]
+        else:
+            pending_args = click_ctx.args
         if not pending_args:
             print(self.get_help(click_ctx))
             return
