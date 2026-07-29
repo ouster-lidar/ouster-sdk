@@ -319,12 +319,12 @@ def sensor_live_zones(ctx: SourceCommandContext, click_ctx: click.core.Context, 
         raise click.ClickException(str(e))
 
 
-source.commands[OusterIoType.SENSOR]['config'] = sensor_config
-source.commands[OusterIoType.SENSOR]['userdata'] = sensor_userdata
-source.commands[OusterIoType.SENSOR]['metadata'] = sensor_metadata
-source.commands[OusterIoType.SENSOR]['sensor_info'] = sensor_sensor_info
-source.commands[OusterIoType.SENSOR]['network'] = sensor_network
-source.commands[OusterIoType.SENSOR]['diagnostics'] = sensor_diagnostics
-source.commands[OusterIoType.SENSOR]['restart'] = sensor_restart
-source.commands[OusterIoType.SENSOR]['firmware'] = sensor_firmware
-source.commands[OusterIoType.SENSOR]['live_zones'] = sensor_live_zones
+source.source_commands[OusterIoType.SENSOR]['config'] = sensor_config
+source.source_commands[OusterIoType.SENSOR]['userdata'] = sensor_userdata
+source.source_commands[OusterIoType.SENSOR]['metadata'] = sensor_metadata
+source.source_commands[OusterIoType.SENSOR]['sensor_info'] = sensor_sensor_info
+source.source_commands[OusterIoType.SENSOR]['network'] = sensor_network
+source.source_commands[OusterIoType.SENSOR]['diagnostics'] = sensor_diagnostics
+source.source_commands[OusterIoType.SENSOR]['restart'] = sensor_restart
+source.source_commands[OusterIoType.SENSOR]['firmware'] = sensor_firmware
+source.source_commands[OusterIoType.SENSOR]['live_zones'] = sensor_live_zones

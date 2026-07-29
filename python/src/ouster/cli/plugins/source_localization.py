@@ -64,4 +64,4 @@ def source_localize(ctx: SourceCommandContext, map_path: str, max_range: float, 
     ctx.frame_set_iter = partial(localization_iter, ctx.frame_set_iter)  # type: ignore
 
 
-source.commands['ANY']['localize'] = source_localize
+source.source_commands['ANY']['localize'] = source_localize

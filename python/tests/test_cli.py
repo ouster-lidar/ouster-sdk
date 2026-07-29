@@ -163,11 +163,15 @@ def test_help(runner) -> None:
     assert "Usage: cli util [OPTIONS] COMMAND [ARGS]" in result.output
     assert result.exit_code == 0
 
+    # NOTE: click >= 8.2 exits with code 2 (instead of 0) when a group is
+    # invoked without a subcommand and no_args_is_help is set.
+    no_args_is_help_exit_codes = (0, 2)
+
     result = runner.invoke(core.cli, ['--traceback', 'util'])
-    assert result.exit_code == 0
+    assert result.exit_code in no_args_is_help_exit_codes
 
     result = runner.invoke(core.cli, ['--sdk-log-level', 'debug', 'util'])
-    assert result.exit_code == 0
+    assert result.exit_code in no_args_is_help_exit_codes
 
 
 def test_mapping_help(runner, has_mapping):

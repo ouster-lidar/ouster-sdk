@@ -18,7 +18,8 @@ from ouster.sdk.viz import Cloud
 # via PR #3139). _NamedTextIOWrapper.close() closes the BytesIO buffer it
 # wraps, causing "ValueError: I/O operation on closed file" when background
 # threads outlive cli.main(). Remove this once Click >= 8.3.2 is available.
-_ct._NamedTextIOWrapper.close = lambda self: None  # type: ignore[assignment]
+if hasattr(_ct, "_NamedTextIOWrapper"):
+    _ct._NamedTextIOWrapper.close = lambda self: None  # type: ignore[assignment]
 
 pytest.register_assert_rewrite('ouster.sdk.core._digest')
 import ouster.sdk.core._digest as digest  # noqa

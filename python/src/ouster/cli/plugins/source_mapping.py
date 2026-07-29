@@ -187,5 +187,5 @@ def save_trajectory(ctx: SourceCommandContext, filename: str, sensor_idx: int, t
     ctx.frame_set_iter = partial(trajectory_dump, ctx.frame_set_iter)  # type: ignore
 
 
-source.commands['ANY']['slam'] = source_slam
-source.commands['ANY']['save_trajectory'] = save_trajectory
+source.source_commands['ANY']['slam'] = source_slam
+source.source_commands['ANY']['save_trajectory'] = save_trajectory

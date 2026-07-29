@@ -65,5 +65,5 @@ def source_restore_instance_ids(ctx: SourceCommandContext) -> None:
     ctx.frame_set_iter = detect_iter  # type: ignore[assignment]
 
 
-source.commands['ANY']['detect'] = source_detect
-source.commands['ANY']['restore_instance_ids'] = source_restore_instance_ids
+source.source_commands['ANY']['detect'] = source_detect
+source.source_commands['ANY']['restore_instance_ids'] = source_restore_instance_ids

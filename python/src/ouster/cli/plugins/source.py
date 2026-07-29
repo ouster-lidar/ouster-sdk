@@ -1912,7 +1912,7 @@ def source_emulate_zones(
     ctx.frame_set_iter = emulate_zones_iter  # type: ignore
 
 
-class SourceMultiCommand(click.MultiCommand):
+class SourceMultiCommand(click.Group):
     """This class implements the ouster-cli source command group.  It uses the
     `io_type` method to determine the source type and map it to the
     available sub commands for that type.
@@ -1920,13 +1920,15 @@ class SourceMultiCommand(click.MultiCommand):
     The source is also added to the click context so that sub commands that use
     @click.pass_context have access to it."""
 
-    commands: MutableMapping[Any, MutableMapping[str, click.Command]]
+    source_commands: MutableMapping[Any, MutableMapping[str, click.Command]]
 
     def __init__(self, *args, **kwargs):
         kwargs['no_args_is_help'] = True
 
         super().__init__(*args, **kwargs)
-        self.commands = {
+        # NOTE: this map is deliberately not stored in click.Group.commands, which
+        # click expects to be a flat mapping of command name to command.
+        self.source_commands = {
             'ANY': {
                 'align': source_align,
                 'clip': source_clip,
@@ -2008,12 +2010,12 @@ class SourceMultiCommand(click.MultiCommand):
                                       OusterIoType.LAS, OusterIoType.LAZ]
 
     def get_supported_source_types(self):
-        return [iotype for iotype in self.commands.keys() if isinstance(iotype, OusterIoType)]
+        return [iotype for iotype in self.source_commands.keys() if isinstance(iotype, OusterIoType)]
 
     def get_source_file_extension_str(self):
         exts = sorted(
             [extension_from_io_type(src_type)
-                for src_type in self.commands.keys() if src_type != 'ANY' and extension_from_io_type(src_type)]
+                for src_type in self.source_commands.keys() if src_type != 'ANY' and extension_from_io_type(src_type)]
         )
         return _join_with_conjunction(exts)
 
@@ -2061,17 +2063,18 @@ class SourceMultiCommand(click.MultiCommand):
         if not source and CliArgs().has_any_of(click_ctx.help_option_names):
             # Build a map from command name to command
             command_to_types: Dict[str, Dict[Any, click.core.Command]] = {}
-            for src_type in self.commands.keys():
-                for command_name in self.commands[src_type].keys():
+            for src_type in self.source_commands.keys():
+                for command_name in self.source_commands[src_type].keys():
+                    command = self.source_commands[src_type][command_name]
                     if command_name not in command_to_types:
                         command_to_types[command_name] = {}
                     if src_type == "ANY":
                         for supported_src_type in self.get_supported_source_types():
                             if supported_src_type in self.non_frame_set_sources:
                                 continue
-                            command_to_types[command_name][supported_src_type] = self.commands[src_type][command_name]
+                            command_to_types[command_name][supported_src_type] = command
                     else:
-                        command_to_types[command_name][src_type] = self.commands[src_type][command_name]
+                        command_to_types[command_name][src_type] = command
 
             # Postfix command name with names of supported source types
             command_to_types_renamed = {}
@@ -2091,8 +2094,8 @@ class SourceMultiCommand(click.MultiCommand):
         try:
             src_type = io_type(source)
             if src_type in self.non_frame_set_sources:
-                return {**self.commands[src_type]}
-            return {**self.commands[src_type], **self.commands["ANY"]}
+                return {**self.source_commands[src_type]}
+            return {**self.source_commands[src_type], **self.source_commands["ANY"]}
         except ValueError as e:  # noqa: F841
             click.echo(click_ctx.get_usage())
             raise click.exceptions.UsageError("Source type expected to be a sensor hostname, "
@@ -2144,7 +2147,14 @@ class SourceMultiCommand(click.MultiCommand):
         """Called when the source command is invoked.
         If called without any args, prints the help.
         Otherwise, the superclass method is called."""
-        if not click_ctx.protected_args:
+        # NOTE: click < 8.2 stores the pending subcommand tokens of a chained
+        # group in Context.protected_args, click >= 8.2 renamed that attribute
+        # to Context._protected_args and deprecated the public one. Look both
+        # up directly to avoid the deprecation warning.
+        pending_args = (click_ctx.__dict__.get("protected_args")
+                        or click_ctx.__dict__.get("_protected_args")
+                        or click_ctx.args)
+        if not pending_args:
             print(self.get_help(click_ctx))
             return
         super().invoke(click_ctx)
