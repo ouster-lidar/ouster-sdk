@@ -181,7 +181,7 @@ class OUSTER_API_CLASS LocalToneMapper {
     bool initialized_ = false;
     int counter_ = 0;
 
-    bool compress_dr_ = true;
+    double compress_dr_max_lum_ = 0.2;
     bool color_correct_ = true;
 
     template <typename T>
@@ -213,6 +213,21 @@ class OUSTER_API_CLASS LocalToneMapper {
     OUSTER_API_FUNCTION
     LocalToneMapper(double lo_percentile, double hi_percentile, int update_every, double damping,
                     bool compress_dr, bool color_correct);
+
+    /**
+     * Constructor specifying low and high percentiles, and update modulo.
+     *
+     * @param[in] lo_percentile low percentile to use for luminance scaling.
+     * @param[in] hi_percentile high percentile to use for luminance scaling.
+     * @param[in] update_every update every this number of frames.
+     * @param[in] damping update ratio for AE setpoints, 0 = fast, 1 = slow
+     * @param[in] compress_dr_max_lum compress DR in dark scenes such as tunnels
+     *                                below this brightness
+     * @param[in] color_correct correct colors to recover any dampened colors
+     */
+    OUSTER_API_FUNCTION
+    LocalToneMapper(double lo_percentile, double hi_percentile, int update_every, double damping,
+                    double compress_dr_max_lum, bool color_correct);
 
     /**
      * Adjusts the RGB image so that contrast is stretched between 0 and 1.

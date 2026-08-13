@@ -66,7 +66,11 @@ def set_local_project_version(log_fn=print):
     if not os.path.isfile(dev_cli):
         return
     local_version_filepath = os.path.join(sdk_root, "VERSION.generated")
-    branch = os.environ.get("BRANCH_NAME")
+    mr_source_branch = os.environ.get("CHANGE_BRANCH")
+    if mr_source_branch and mr_source_branch.startswith("release"):
+        branch = mr_source_branch
+    else:
+        branch = os.environ.get("BRANCH_NAME")
     if branch is None and os.path.isfile(local_version_filepath):
         os.remove(local_version_filepath)
     cmd = [

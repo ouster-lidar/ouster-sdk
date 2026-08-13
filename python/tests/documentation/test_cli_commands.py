@@ -447,10 +447,10 @@ ouster-cli source {SENSOR_HOSTNAME} save_raw --duration 5 {BAG_OUTPUT_FILENAME}.
 
 def test_record_pcap(SENSOR_HOSTNAME, tmp_path):
     run_for_sec = 10.0
-    OSF_OUTPUT_FILENAME = str(tmp_path / "recording")
+    PCAP_OUTPUT_FILENAME = str(tmp_path / "recording")
     command = f"""
 # [doc-stag-cli-record-pcap]
-ouster-cli source {SENSOR_HOSTNAME} save {OSF_OUTPUT_FILENAME}.pcap
+ouster-cli source {SENSOR_HOSTNAME} save {PCAP_OUTPUT_FILENAME}.pcap
 # [doc-etag-cli-record-pcap]
     """
     args, _ = command_to_args(command)

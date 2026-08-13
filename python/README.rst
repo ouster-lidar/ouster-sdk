@@ -13,11 +13,11 @@ Ouster Python SDK
    :alt: Supported Python versions
 
 .. |license_bsd| image:: https://img.shields.io/badge/License-BSD%203--Clause-blue
-   :target: https://github.com/ouster-lidar/ouster-sdk/blob/develop/LICENSE
+   :target: https://github.com/ouster-lidar/ouster-sdk/blob/master/LICENSE
    :alt: BSD 3-Clause License (source)
 
 .. |license_freeware| image:: https://img.shields.io/badge/License-Ouster%20Freeware%20EULA-blue
-   :target: https://static.ouster.dev/sdk-docs/LICENSE-freeware.txt
+   :target: https://docs.ouster.com/sdk-docs/LICENSE-freeware.txt
    :alt: Ouster Freeware EULA (build artifacts)
 
 .. |downloads| image:: https://static.pepy.tech/badge/ouster-sdk
@@ -94,4 +94,4 @@ proprietary Ouster components that are provided as freeware under additional
 `Ouster Freeware EULA`_ licensing.
 
 .. _Ouster SDK repository: https://github.com/ouster-lidar/ouster-sdk
-.. _Ouster Freeware EULA: https://static.ouster.dev/sdk-docs/LICENSE-freeware.txt
+.. _Ouster Freeware EULA: https://docs.ouster.com/sdk-docs/LICENSE-freeware.txt

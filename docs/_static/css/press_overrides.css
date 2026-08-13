@@ -301,6 +301,23 @@ body[data-page-name^="_modules/"] #searchbox {
     scroll-padding-bottom: var(--sidebar-version-switcher-reserve);
 }
 
+/* In the mobile drawer the sidebar is transformed, which makes it the
+ * containing block for position: fixed children -- the version- switcher then scrolls
+ * with the nav items instead of pinning.  Sticky pins to the scrollport. */
+@media (max-width: 1295px) {
+    .vp-sidebar .sidebar-version-switcher {
+        position: sticky !important;
+        bottom: 0 !important;
+        width: auto;
+        margin: auto 0 0 !important;
+    }
+
+    .vp-sidebar {
+        padding-bottom: 0;
+        scroll-padding-bottom: 0;
+    }
+}
+
 /* Tabbed API link badges */
 a.ouster-tabbed-api-link.reference.internal {
     background-color: #f8f9fa;
@@ -1377,6 +1394,8 @@ header.navbar .github-link-header .nav-dropdown {
     min-width: 8.5rem;
     align-items: center;
     cursor: pointer;
+    padding-bottom: 0.6rem;
+    margin-bottom: -0.6rem;
 }
 
 header.navbar .github-link-header .nav-dropdown:focus-visible {
@@ -1397,7 +1416,7 @@ header.navbar .github-link-header .nav-dropdown-label {
 header.navbar .github-link-header .nav-dropdown-menu {
     display: none;
     position: absolute;
-    top: calc(100% + 0.6rem);
+    top: 100%;
     left: 50%;
     transform: translateX(-50%);
     flex-direction: column;
@@ -1486,6 +1505,8 @@ header.navbar .github-link-header .nav-dropdown-menu a + a {
         align-items: center;
         cursor: pointer;
         position: relative;
+        padding-bottom: 0.6rem;
+        margin-bottom: -0.6rem;
     }
     .github-link-header .mobile-nav-dropdown:focus-visible {
         outline: 2px solid var(--solid-white);
@@ -1504,7 +1525,7 @@ header.navbar .github-link-header .nav-dropdown-menu a + a {
     .github-link-header .mobile-nav-dropdown-menu {
         display: none;
         position: absolute;
-        top: calc(100% + 0.6rem);
+        top: 100%;
         right: 0;
         flex-direction: column;
         gap: 0.4rem;

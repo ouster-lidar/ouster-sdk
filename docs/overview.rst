@@ -99,7 +99,7 @@ sensor documentation`_ and/or contact `Ouster support`_.
 For issues specific to the SDK please use the `GitHub issue tracker`_. Announcements for the Ouster SDK are posted in the `Ouster Github
 announcements`_
 
-.. _Ouster sensor documentation: https://static.ouster.dev/sensor-docs/index.html
+.. _Ouster sensor documentation: https://docs.ouster.com/sensor-docs
 .. _Ouster support: https://ouster.atlassian.net/servicedesk/customer/portal/8
 .. _Github issue tracker: https://github.com/ouster-lidar/ouster-sdk/issues
 .. _Ouster Github announcements: https://github.com/ouster-lidar/ouster-sdk/discussions/categories/announcements

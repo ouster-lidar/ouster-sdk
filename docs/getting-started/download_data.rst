@@ -50,9 +50,9 @@ In your open python session, save the two paths to variables:
    >>> metadata_path = '{SAMPLE_DATA_JSON_PATH}'
 
 
-.. _sensor documentation: https://static.ouster.dev/sensor-docs/#sample-data
-.. _Lidar Data Format: https://static.ouster.dev/sensor-docs/sw_manual/sensor_data/sensor-data.html#lidar-data
-.. _IMU Data Format: https://static.ouster.dev/sensor-docs/sw_manual/sensor_data/sensor-data.html#imu-data
+.. _sensor documentation: https://docs.ouster.com/sensor-docs
+.. _Lidar Data Format: https://docs.ouster.com/sensor-docs/docs/sensor-data/lidar-data
+.. _IMU Data Format: https://docs.ouster.com/sensor-docs/docs/sensor-data/imu-data
 
 ..
    [end-download-instructions]

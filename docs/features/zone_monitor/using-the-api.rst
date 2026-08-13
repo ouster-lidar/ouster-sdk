@@ -49,14 +49,14 @@ Zones have several parameters that determine how and when they trigger. The most
 * ``frame_count`` - the number of consecutive LiDAR frames that must meet the triggering criteria before the zone triggers.
 * ``label`` - an optional string label for the zone, useful for identifying zones in application code.
 
-Refer to the Python :ouster:class:`Zone <py=ouster.sdk.zone_monitor.Zone|cpp=ouster::sdk::core::Zone>` API reference for more information about these parameters.
+Refer to the Python :ouster:class:`Zone <py=ouster.sdk.core.Zone|cpp=ouster::sdk::core::Zone>` API reference for more information about these parameters.
 
 So far, we've described how to define a single zone's geometry and triggering criteria. The following sections will explain how to programmatically create a complete set of zones from either mesh-derived or image-derived zone geometry and upload it to the sensor.
 
 Creating a ``ZoneSet``
 ======================
 
-The Python class :ouster:class:`ZoneSet <py=ouster.sdk.zone_monitor.ZoneSet|cpp=ouster::sdk::core::ZoneSet>` are for storing a complete Zone Monitor configuration consisting of multiple zones, their geometry, and their associated metadata.
+The Python class :ouster:class:`ZoneSet <py=ouster.sdk.core.ZoneSet|cpp=ouster::sdk::core::ZoneSet>` are for storing a complete Zone Monitor configuration consisting of multiple zones, their geometry, and their associated metadata.
 
 Specifying a sensor-to-body transform for the ZoneSet
 ------------------------------------------------------
@@ -65,7 +65,7 @@ The ``ZoneSet`` requires a sensor-to-body transform that specifies the pose of t
 
 The `Ouster Sensor Docs`_ contain a detailed description of the sensor's coordinate frames.
 
-.. _Ouster Sensor Docs: https://static.ouster.dev/sensor-docs/image_route1/image_route2/sensor_data/sensor-data.html#coordinate-frames-and-xyz-calculation
+.. _Ouster Sensor Docs: https://docs.ouster.com/sensor-docs/coordinate-system#sensor-coordinate-frame
 
 .. important:: The zone geometry must remain fully or partially within the sensor's FOV after applying the sensor-to-body transform; otherwise, the zone set is invalid.
 
@@ -328,7 +328,7 @@ Reading Zone Monitor output
 
 An Ouster LiDAR with Zone Monitor enabled emits zone packets that the SDK automatically batches into ``LidarFrame`` objects yielded from ``FrameSetSource``. This means determining whether an object has entered, exited, or is obstructing a zone is easy. The ``ZONE_STATES`` field in the ``LidarFrame`` contains a `numpy structured array`_ containing the state of all live zones. The ``ZONE_OCCUPANCY`` field is an image, the same dimensions as the other pixel fields, where each pixel is a bitset indicating which zones overlap with the corresponding lidar point.
 
-Refer to the :ouster:class:`ZoneState <py=ouster.sdk.zone_monitor.ZoneState|cpp=ouster::sdk::core::ZoneState>` API reference for more information about these parameters.
+Refer to the :ouster:class:`ZoneState <py=ouster.sdk.core.ZoneState|cpp=ouster::sdk::core::ZoneState>` API reference for more information about these parameters.
 
 .. tab-set::
    :sync-group: api-lang

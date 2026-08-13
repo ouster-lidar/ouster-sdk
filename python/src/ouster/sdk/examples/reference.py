@@ -32,7 +32,7 @@ def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
     Returns:
         A H x W x 3 array of point coordinates
 
-    .. _Section X: https://static.ouster.dev/sensor-docs
+    .. _Section X: https://docs.ouster.com/sensor-docs
     """
 
     # use homogeneous coordinates for convenient transformation

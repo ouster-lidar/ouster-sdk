@@ -237,4 +237,4 @@ sensor.
 
 Congratulations! You've installed and visualized with the Ouster Python SDK!
 
-.. _Networking Guide: https://static.ouster.dev/sensor-docs/image_route1/image_route3/networking_guide/networking_guide.html
+.. _Networking Guide: https://docs.ouster.com/sensor-docs/host-networking

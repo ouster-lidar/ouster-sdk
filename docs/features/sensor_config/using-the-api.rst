@@ -76,8 +76,11 @@ output.
 
 The sensor configuration can be updated using the API which will be covered in the next sections.
 
-The configuration parameters provided are in direct correspondence with the settings available for the sensor. 
-A complete list of the sensor settings can be found in the `sensor configuration overview <https://static.ouster.dev/sensor-docs/image_route1/image_route2/common_sections/API/sensor_configuration_description.html>`__ .
+The configuration parameters provided are in direct correspondence with the settings available for the sensor.
+See the `sensor configuration overview <https://docs.ouster.com/sensor-docs/api-reference#sensor-configuration>`__ for the
+HTTP API endpoints that read and modify these settings, and the `set configuration parameters
+<https://docs.ouster.com/sensor-docs/api-reference/ouster-http-api/sensor-metadata/post-config>`__ reference for a complete
+list of the sensor settings.
 
 Some of the most commonly modified parameters are described below.
 

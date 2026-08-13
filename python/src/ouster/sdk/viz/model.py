@@ -165,6 +165,12 @@ for i in range(0, 256):
 discrete_rainbow_palette = rainbow_palette[::len(rainbow_palette) // 36]
 
 
+# Generate a B/W palette for images with a special case for 0
+image_bw_palette = np.zeros((256, 3), np.float32)
+for i in range(1, 256):
+    image_bw_palette[i, :] = 0.1 + 0.9 * (i - 1) / 254
+
+
 class Palettes:
     """Represents the color palettes used within an instance of LidarFrameViz.
     Also keeps track of the palette currently in use."""
@@ -329,6 +335,9 @@ _colors.append((255, 191, 0))
 _colors.append((0, 120, 0))
 
 
+_zero_invalid_fields = ["NEAR_IR", "SIGNAL", "REFLECTIVITY", "RANGE", "WINDOW"]
+
+
 class SensorModel:
     """
     A model object representing viz state for a single sensor.
@@ -488,14 +497,18 @@ class SensorModel:
                 else:
                     mode = RGBMode(field_name, info=self._meta)
             elif len(f_shape) == 2:
+                zero_invalid = field_name in _zero_invalid_fields
                 if field_name == ChanField.REFLECTIVITY:
                     mode = ReflMode(info=self._meta)
                 elif field_name == ChanField.NEAR_IR:
-                    mode = SimpleMode(field_name, info=self._meta, use_ae=True, use_buc=True)
+                    mode = SimpleMode(field_name, info=self._meta, use_ae=True,
+                                      use_buc=True, zero_invalid=zero_invalid)
                 elif field_name == ChanField.WINDOW:
-                    mode = SimpleMode(field_name, info=self._meta, scale=1.0 / 255.0, use_ae=False, use_buc=False)
+                    mode = SimpleMode(field_name, info=self._meta, scale=1.0 / 255.0,
+                                      use_ae=False, use_buc=False, zero_invalid=zero_invalid)
                 else:
-                    mode = SimpleMode(field_name, info=self._meta, use_ae=True, use_buc=False)
+                    mode = SimpleMode(field_name, info=self._meta, use_ae=True,
+                                      use_buc=False, zero_invalid=zero_invalid)
         return mode
 
     # TODO[tws] rename
@@ -595,7 +608,12 @@ class SensorModel:
             refl_mode = is_norm_reflectivity_mode(mode)
             if refl_mode:
                 image.set_palette(self._image_calref_palette)
-        if not refl_mode:
+            elif mode.name in _zero_invalid_fields:
+                # use a pallete with a special case for 0 = invalid
+                image.set_palette(image_bw_palette)
+            else:
+                image.clear_palette()
+        else:
             image.clear_palette()
 
         if mode is not None and mode.enabled(frame, image_mode_item.return_num):
@@ -1579,7 +1597,7 @@ class LidarFrameVizModel:
             # with invalid 0 values
             if key in [ChanField.RANGE, ChanField.RANGE2, ChanField.REFLECTIVITY,
                        ChanField.REFLECTIVITY2, ChanField.SIGNAL, ChanField.SIGNAL2,
-                       ChanField.NEAR_IR]:
+                       ChanField.NEAR_IR, ChanField.WINDOW]:
                 valid_field = frame.field(key) > 0
                 valid &= valid_field
 
