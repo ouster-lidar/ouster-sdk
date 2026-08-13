@@ -17,6 +17,13 @@ add_library(ouster_viz STATIC src/point_viz.cpp src/cloud.cpp src/camera.cpp src
   src/zone_monitor_voxel_mesh.cpp src/buffers.cpp src/object_overlay.cpp)
 target_link_libraries(ouster_viz
   PRIVATE Eigen3::Eigen glfw ${GL_LOADER} OpenGL::GL ouster_core glad PNG::PNG)
+
+if(APPLE)
+  enable_language(OBJCXX)
+  target_sources(ouster_viz PRIVATE src/glfw_macos.mm)
+  target_link_libraries(ouster_viz PRIVATE "-framework AppKit")
+endif()
+
 set_property(TARGET ouster_viz PROPERTY POSITION_INDEPENDENT_CODE ON)
 if(BUILD_SHARED_LIBRARY)
   set_target_properties(ouster_viz PROPERTIES CXX_VISIBILITY_PRESET hidden)

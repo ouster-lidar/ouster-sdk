@@ -3,7 +3,7 @@
  * All rights reserved.
  *
  * This file contains example code for working with the osf::Writer class of
- * the C++ Ouster SDK. Please see the sdk docs at static.ouster.dev for clearer
+ * the C++ Ouster SDK. Please see the sdk docs at docs.ouster.com for clearer
  * explanations.
  */
 

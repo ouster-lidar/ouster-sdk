@@ -40,7 +40,7 @@ TEST(FusaProfileTest, packet_size) {
 /// The fields of a packet with FuSa UDP profile are parsed properly.
 TEST(FusaProfileTest, fields) {
     // Ref:
-    // https://static.ouster.dev/sensor-docs/image_route1/image_route2/sensor_data/sensor-data.html#configurable-data-packet-format-v2-x
+    // https://docs.ouster.com/sensor-docs/docs/sensor-data/lidar-data
     // Note - I painstakingly validated the constants using a hex editor:
     // https://imhex.werwolv.net/
     auto data_dir = getenvs("DATA_DIR");

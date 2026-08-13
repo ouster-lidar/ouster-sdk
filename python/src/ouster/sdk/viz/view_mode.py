@@ -228,7 +228,8 @@ class SimpleMode(ImageCloudMode):
                  suffix: Optional[str] = "",
                  use_ae: bool = True,
                  use_buc: bool = False,
-                 scale: Optional[float] = None) -> None:
+                 scale: Optional[float] = None,
+                 zero_invalid: bool = False) -> None:
         """
         Args:
             info: sensor metadata used mainly for destaggering here
@@ -238,6 +239,7 @@ class SimpleMode(ImageCloudMode):
             use_ae: if True, use AutoExposure for the field
             use_buc: if True, use BeamUniformityCorrector for the field
             scale: if use_ae is false and this is set, use this to scale the values for display
+            zero_invalid: if true, only allow 0 to map to zero
         """
         self._info = info
         self._fields = [field]
@@ -250,6 +252,7 @@ class SimpleMode(ImageCloudMode):
         self._suffix = f" ({suffix})" if suffix else ""
         self._wrap_name = lambda n: f"{self._prefix}{n}{self._suffix}"
         self._scale = scale
+        self._zero_invalid = zero_invalid
 
     @property
     def name(self) -> str:
@@ -280,6 +283,10 @@ class SimpleMode(ImageCloudMode):
             key_max = np.max(key_data)
             if key_max:
                 key_data = key_data / key_max
+
+        if self._zero_invalid:
+            key_data = np.maximum(key_data, 1.01 / 255)
+            key_data[field == 0] = 0
 
         return key_data
 

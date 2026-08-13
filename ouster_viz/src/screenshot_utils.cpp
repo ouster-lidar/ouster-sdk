@@ -19,8 +19,6 @@
 #include <string>
 #include <vector>
 
-#include "display_p3_icc.h"
-
 namespace ouster {
 namespace sdk {
 namespace viz {
@@ -110,13 +108,10 @@ std::string write_png(const std::string& path, const std::vector<uint8_t>& pixel
     png_set_IHDR(png, info, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 
-#ifdef __APPLE__
-    // On Apple, "Display P3" is the default color profile setting.
-    // This function embeds a color profile into the resulting PNG making the
-    // screenshot colors to better match what the user is seeing on the screen.
-    png_set_iCCP(png, info, "Display P3", 0, display_p3_icc.data(),
-                 (png_uint_32)display_p3_icc.size());
-#endif
+    // Viz colors are authored as sRGB, and on macOS the window is tagged as
+    // sRGB (see glfw_macos.mm), so record that in the PNG. This keeps
+    // screenshots consistent across platforms and display profiles.
+    png_set_sRGB_gAMA_and_cHRM(png, info, PNG_sRGB_INTENT_PERCEPTUAL);
 
     png_write_info(png, info);
     png_set_filter(png, 0, PNG_FILTER_NONE);

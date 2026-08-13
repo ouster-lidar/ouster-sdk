@@ -4,7 +4,7 @@
  *
  * This file contains example code for working with 2D and 3D representations of
  * lidar data with the C++ Ouster SDK. Please see the sdk docs at
- * static.ouster.dev for clearer explanations.
+ * docs.ouster.com for clearer explanations.
  */
 
 // NOLINTBEGIN(cppcoreguidelines-narrowing-conversions)

@@ -17,6 +17,17 @@ namespace ouster {
 namespace sdk {
 namespace viz {
 
+#ifdef __APPLE__
+/*
+ * Tag the Cocoa window as sRGB (the space viz colors are authored in) so the
+ * OS color-matches the viz output to the display's actual profile. Without a
+ * tag the raw framebuffer values are interpreted in the display's native
+ * color space, which oversaturates colors on wide-gamut (Display P3) panels.
+ * Implemented in glfw_macos.mm.
+ */
+void set_window_color_space(GLFWwindow* window);
+#endif
+
 namespace {
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -213,6 +224,10 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect, int window_wi
         glfwTerminate();
         throw std::runtime_error("Failed to create GLFW window");
     }
+
+#ifdef __APPLE__
+    set_window_color_space(window);
+#endif
     glfwMakeContextCurrent(window);
 
     if (gladLoadGL(glfwGetProcAddress) == 0) {

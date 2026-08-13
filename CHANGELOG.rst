@@ -3,6 +3,15 @@ Changelog
 =========
 
 
+[1.0.1]
+=========
+* [core] Improve LocalToneMapper visuals in midtones in dark scenes by using non-linear compression for bright pixels.
+* [core] Optimizing AutoExposure and LocalToneMapper to only convert necessary pixels to luminance and
+* [core] Disable LocalToneMapper saturation in low light environments to improve visuals.
+* [viz] In zero-invalid images, 0 (invalid) and 1 (valid) now map to distinctly different colors—black for invalid and grayscale for valid—so invalid data regions are clearly visible and easy to spot.
+* [viz] Tag the viz window (macOS) and screenshot PNGs (all platforms) as sRGB for consistent colors across displays and platforms.
+
+
 [1.0.0]
 =========
 * Refactor map export to downsample points as they get added into the map, flushing the pointcloud data to disk as the map accumulates.

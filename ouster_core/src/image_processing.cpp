@@ -20,6 +20,11 @@ namespace image {
 
 namespace {
 
+// Color ratios used for converting to luminance
+const double R_LUM = 0.299;
+const double G_LUM = 0.587;
+const double B_LUM = 0.114;
+
 /*
  * damping makes the autoexposure smooth and avoids flickering however, it
  * becomes slower to update.
@@ -57,6 +62,17 @@ inline uint32_t f16_bits_to_f32_bits_fast_nan_zero(uint16_t bits) {
     // This also converts quiet nan in f16 to 0
     const uint32_t expanded = static_cast<uint32_t>(bits + 0x1C000u) << 13;
     return bits != 0 ? (bits != 0x7e00 ? expanded : 0u) : 0u;
+}
+
+// Fast approximation of log10 used for luminance compression
+inline float fast_log10(float x) {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
+    uint32_t bits;
+    std::memcpy(&bits, &x, sizeof(x));
+
+    // Treats exponent + fractional mantissa as a single fixed-point continuous value
+    float log2_approx = static_cast<float>(static_cast<int32_t>(bits) - 0x3F800000) * 1.1920929e-7f;
+    return log2_approx * 0.30103f;
 }
 
 /*
@@ -294,18 +310,16 @@ void AutoExposure::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_state
     const auto pixel_count = static_cast<size_t>(pixel_count_index);
 
     if (counter_ == 0 && update_state) {
-        Eigen::Tensor<T, 2, Eigen::RowMajor> lum = image.chip(0, 2) * static_cast<T>(0.299) +
-                                                   image.chip(1, 2) * static_cast<T>(0.587) +
-                                                   image.chip(2, 2) * static_cast<T>(0.114);
-
-        Eigen::Map<Eigen::Array<T, -1, 1>> lum_flat(lum.data(), pixel_count_index);
-
         std::vector<T> indices;
         size_t reservation = pixel_count / AE_STRIDE + 1;
         indices.reserve(reservation);
+        const T* data = image.data();
         for (size_t i = 0; i < pixel_count; i += AE_STRIDE) {
-            if (lum_flat[i] > 0) {
-                indices.push_back(lum_flat[i]);
+            T lum = (data[(i * 3) + 0] * static_cast<T>(R_LUM)) +
+                    (data[(i * 3) + 1] * static_cast<T>(G_LUM)) +
+                    (data[(i * 3) + 2] * static_cast<T>(B_LUM));
+            if (lum > 0) {
+                indices.push_back(lum);
             }
         }
         if (indices.size() < AE_MIN_NONZERO_POINTS) {
@@ -498,12 +512,21 @@ LocalToneMapper::LocalToneMapper(int update_every)
     : lo_percentile_(0.0), hi_percentile_(0.2), update_every_(update_every), damping_(0.3) {}
 
 LocalToneMapper::LocalToneMapper(double lo_percentile, double hi_percentile, int update_every,
+                                 double damping, double compress_dr_max_lum, bool color_correct)
+    : lo_percentile_(lo_percentile),
+      hi_percentile_(hi_percentile),
+      update_every_(update_every),
+      damping_(damping),
+      compress_dr_max_lum_(compress_dr_max_lum),
+      color_correct_(color_correct) {}
+
+LocalToneMapper::LocalToneMapper(double lo_percentile, double hi_percentile, int update_every,
                                  double damping, bool compress_dr, bool color_correct)
     : lo_percentile_(lo_percentile),
       hi_percentile_(hi_percentile),
       update_every_(update_every),
       damping_(damping),
-      compress_dr_(compress_dr),
+      compress_dr_max_lum_(compress_dr ? 0.2 : 0.0),
       color_correct_(color_correct) {}
 
 template <typename T>
@@ -513,18 +536,16 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
     // --- Stage 1: AutoExposure scaling ---
     // Update lo/hi luminance percentile state.
     if (counter_ == 0 && update_state) {
-        Eigen::Tensor<T, 2, Eigen::RowMajor> lum = image.chip(0, 2) * static_cast<T>(0.299) +
-                                                   image.chip(1, 2) * static_cast<T>(0.587) +
-                                                   image.chip(2, 2) * static_cast<T>(0.114);
-
-        Eigen::Map<Eigen::Array<T, -1, 1>> lum_flat(lum.data(), pixel_count);
-
         std::vector<T> indices;
         size_t reservation = pixel_count / AE_STRIDE + 1;
         indices.reserve(reservation);
+        const T* data = image.data();
         for (size_t i = 0; i < pixel_count; i += AE_STRIDE) {
-            if (lum_flat[i] > 0) {
-                indices.push_back(lum_flat[i]);
+            T lum = (data[(i * 3) + 0] * static_cast<T>(R_LUM)) +
+                    (data[(i * 3) + 1] * static_cast<T>(G_LUM)) +
+                    (data[(i * 3) + 2] * static_cast<T>(B_LUM));
+            if (lum > 0) {
+                indices.push_back(lum);
             }
         }
         if (indices.size() < AE_MIN_NONZERO_POINTS) {
@@ -582,20 +603,19 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
         counter_ = (counter_ + 1) % update_every_;
     }
 
-    T thresh = 0.8;
-    T scale = 0.05;
+    const T thresh = 0.8;
 
     // --- Stage 2: Dynamic Range Compression ---
-    // bring down brightness of incredibly bright areas when in dark
-    // environments
-    if (hi_state_ < 0.2 && compress_dr_) {
+    // bring down brightness of incredibly bright areas when in dark environments
+    if (hi_state_ < compress_dr_max_lum_) {
         T* b = const_cast<T*>(image.data());
         const auto nb_signed = static_cast<std::ptrdiff_t>(image.size());
         for (std::ptrdiff_t i = 0; i < nb_signed; i += 3) {
-            T lum = b[i + 0] * 0.299 + b[i + 1] * 0.587 + b[i + 2] * 0.114;
+            T lum = (b[i + 0] * static_cast<T>(R_LUM)) + (b[i + 1] * static_cast<T>(G_LUM)) +
+                    (b[i + 2] * static_cast<T>(B_LUM));
 
             if (lum > thresh) {
-                auto new_lum = thresh + (lum - thresh) * scale;
+                auto new_lum = thresh + fast_log10(lum - thresh + 1.0);
                 auto scale = new_lum / lum;
                 b[i + 0] *= scale;
                 b[i + 1] *= scale;
@@ -608,9 +628,9 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
     all_flat = all_flat.max(static_cast<T>(0));
     all_flat = all_flat / (1.0 + all_flat);
 
-    const Eigen::Tensor<T, 2, Eigen::RowMajor> lum_ae = image.chip(0, 2) * static_cast<T>(0.299) +
-                                                        image.chip(1, 2) * static_cast<T>(0.587) +
-                                                        image.chip(2, 2) * static_cast<T>(0.114);
+    const Eigen::Tensor<T, 2, Eigen::RowMajor> lum_ae = (image.chip(0, 2) * static_cast<T>(R_LUM)) +
+                                                        (image.chip(1, 2) * static_cast<T>(G_LUM)) +
+                                                        (image.chip(2, 2) * static_cast<T>(B_LUM));
 
     // --- Stage 3: CLAHE on luminance ---
     // Compute CLAHE on the AE-normalised luminance, then scale each channel by
@@ -623,8 +643,15 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
     const Eigen::Tensor<T, 2, Eigen::RowMajor> lum_clahe =
         apply_clahe_luts(lum_ae, luts, CLAHE_TILES_H, CLAHE_TILES_W, CLAHE_HIST_BINS);
 
-    const T color_factor = static_cast<T>(0.75);
-    if (!color_correct_) {
+    // Fade out the saturation adjustment in dark environments where it isn't necessary
+    T color_factor = static_cast<T>(0.75);
+    const T ramp_start = static_cast<T>(1.0);
+    const T ramp_end = static_cast<T>(0.5);
+    if (hi_state_ < ramp_start) {
+        color_factor *= std::max<T>(0, (hi_state_ - ramp_end) / (ramp_start - ramp_end));
+    }
+
+    if (!color_correct_ || color_factor == static_cast<T>(0)) {
         for (int y = 0; y < h; ++y) {
             for (int x = 0; x < w; ++x) {
                 const T lum_old = lum_ae(y, x);

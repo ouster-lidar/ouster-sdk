@@ -414,6 +414,9 @@ def test_lidar_frame_viz_cycle_img_mode_updates_images():
         def __init__(self):
             self.set_image_called = False
 
+        def set_palette(self, *args, **kwargs):
+            pass
+
         def clear_palette(self, *args, **kwargs):
             pass
 

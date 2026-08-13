@@ -156,7 +156,7 @@ The key coordinate frames used in this pose graph are:
 
 All of these frames are right-handed. For the exact axis directions and origins of the Ouster
 ``sensor``, ``lidar``, and ``imu`` frames, see the `Ouster sensor coordinate frame documentation
-<https://static.ouster.dev/sensor-docs/image_route1/image_route3/sensor_data/sensor-data.html#coordinate-frames-and-xyz-calculation>`_.
+<https://docs.ouster.com/sensor-docs/coordinate-system#sensor-coordinate-frame>`_.
 
 Where poses are stored
 ^^^^^^^^^^^^^^^^^^^^^^^

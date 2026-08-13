@@ -385,7 +385,7 @@ html_context["navbar_links"] = [
     },
     {
         "label": "Sensor Docs",
-        "url": "https://static.ouster.dev/sensor-docs/index.html",
+        "url": "https://docs.ouster.com/sensor-docs",
     },
     {
         "label": "API Reference",

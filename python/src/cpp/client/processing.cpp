@@ -844,6 +844,15 @@ Returns:
         .def(
             "__init__",
             [](LocalToneMapper* self, double low, double high, int update_every, double damping,
+               double compress_dr_max_lum, bool color_correct) {
+                new (self) LocalToneMapper(low, high, update_every, damping, compress_dr_max_lum,
+                                           color_correct);
+            },
+            py::arg("lo_percentile"), py::arg("hi_percentile"), py::arg("update_every"),
+            py::arg("damping"), py::arg("compress_dr_max_lum"), py::arg("color_correct"))
+        .def(
+            "__init__",
+            [](LocalToneMapper* self, double low, double high, int update_every, double damping,
                bool compress_dr, bool color_correct) {
                 new (self)
                     LocalToneMapper(low, high, update_every, damping, compress_dr, color_correct);
