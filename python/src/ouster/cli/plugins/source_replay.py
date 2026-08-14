@@ -1065,8 +1065,8 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: 
     process.wait()
 
 
-source.commands[OusterIoType.PCAP]['sensor_replay'] = source_sensor_replay
-source.commands[OusterIoType.BAG]['sensor_replay'] = source_sensor_replay
-source.commands[OusterIoType.MCAP]['sensor_replay'] = source_sensor_replay
-source.commands[OusterIoType.OSF]['sensor_replay'] = source_sensor_replay
-# source.commands[OusterIoType.SENSOR]['sensor_replay'] = source_sensor_replay  # not supported for now
+source.source_commands[OusterIoType.PCAP]['sensor_replay'] = source_sensor_replay
+source.source_commands[OusterIoType.BAG]['sensor_replay'] = source_sensor_replay
+source.source_commands[OusterIoType.MCAP]['sensor_replay'] = source_sensor_replay
+source.source_commands[OusterIoType.OSF]['sensor_replay'] = source_sensor_replay
+# source.source_commands[OusterIoType.SENSOR]['sensor_replay'] = source_sensor_replay  # not supported for now

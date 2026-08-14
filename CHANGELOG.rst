@@ -14,6 +14,7 @@ Changelog
 
 [1.0.0]
 =========
+* Support newer ``click`` versions (>=8.2) in the Python SDK CLI and relax the ``click`` requirement to ``>=8.1.3, <9``.
 * Refactor map export to downsample points as they get added into the map, flushing the pointcloud data to disk as the map accumulates.
 * Added ``ouster::sdk::core::Vector3iHash``, a non-``std`` voxel-index hash with a splitmix64 finalizer that produces good 64-bit dispersion.
 * [CLI/BREAKING] Dropped ``--max-z`` and ``--min-z`` options from ``ouster-cli source ... save (.pcd/.ply)``
