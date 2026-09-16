@@ -8,6 +8,7 @@ option(OUSTER_OSF_NO_THREADING "Don't use threads, useful for WASM targets" OFF)
 
 # ==== Requirements ====
 find_package(ZLIB REQUIRED)
+find_package(zstd REQUIRED)
 find_package(PNG REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(CURL REQUIRED)
@@ -152,6 +153,7 @@ target_link_libraries(ouster_osf
     PNG::PNG
     ZLIB::ZLIB
     zpng
+    zstd
     $<BUILD_INTERFACE:CURL::libcurl>
 )
 target_include_directories(ouster_osf
