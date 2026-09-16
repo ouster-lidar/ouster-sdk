@@ -11,7 +11,9 @@ if(NOT zstd_FOUND)
   if(PKG_CONFIG_FOUND)
     pkg_check_modules(PC_ZSTD QUIET zstd)
   endif()
-else()
+elseif(NOT TARGET zstd)
+  # Guarded: with CMAKE_FIND_PACKAGE_TARGETS_GLOBAL=ON the alias created by an
+  # earlier find_package(zstd) is visible here, and recreating it is an error.
   if (TARGET zstd::libzstd_shared)
     add_library(zstd ALIAS zstd::libzstd_shared)
   else()
