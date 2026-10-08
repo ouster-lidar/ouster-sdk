@@ -107,6 +107,8 @@ struct FieldInfo {
  * @param[in] upshift amount of bits to shift the value up, if any; this is
  *            used in packet values that are truncating lower significance bits,
  *            e.g. in low bandwidth profiles
+ * @param[in] max_length max buffer size, used to reject invalid fields or shift
+ *                       the word access so it stays within the buffer
  *
  * @return FieldInfo
  */
@@ -153,6 +155,23 @@ FieldInfo field_info(size_t bit_start, size_t bit_size, size_t upshift = 0,
             break;
         default:
             info.ty_tag = ChanFieldType::VOID;
+    }
+
+    if (max_length > 0) {
+        if (info.offset + size_bytes > max_length) {
+            throw std::invalid_argument(
+                "failed creating FieldInfo: asked to read past end of packet");
+        }
+
+        // The accessor loads/stores a whole uint64_t even for smaller fields.
+        // Move that word backwards when the field ends at the packet boundary.
+        int needed_shift_bytes = static_cast<int>(info.offset) + 8 -
+                                 static_cast<int>(max_length);
+        if (needed_shift_bytes > 0) {
+            info.offset -= needed_shift_bytes;
+            info.mask <<= needed_shift_bytes * 8;
+            info.shift += needed_shift_bytes * 8;
+        }
     }
 
     return info;
@@ -565,16 +584,16 @@ struct PacketFormat::Impl {
             imu_packet_size = 48;
             imu_measurement_offset = 0;
             imu_measurement_size = 0;
-            imu_sys_ts_info = field_info(0, 64);
-            imu_accel_ts_info = field_info(64, 64);
-            imu_gyro_ts_info = field_info(128, 64);
-            imu_nmea_ts_info = field_info(0, 0);
-            imu_la_x_info = field_info(192, 32);
-            imu_la_y_info = field_info(224, 32);
-            imu_la_z_info = field_info(256, 32);
-            imu_av_x_info = field_info(288, 32);
-            imu_av_y_info = field_info(320, 32);
-            imu_av_z_info = field_info(352, 32);
+            imu_sys_ts_info = field_info(0, 64, 0, imu_packet_size);
+            imu_accel_ts_info = field_info(64, 64, 0, imu_packet_size);
+            imu_gyro_ts_info = field_info(128, 64, 0, imu_packet_size);
+            imu_nmea_ts_info = field_info(0, 0, 0, imu_packet_size);
+            imu_la_x_info = field_info(192, 32, 0, imu_packet_size);
+            imu_la_y_info = field_info(224, 32, 0, imu_packet_size);
+            imu_la_z_info = field_info(256, 32, 0, imu_packet_size);
+            imu_av_x_info = field_info(288, 32, 0, imu_packet_size);
+            imu_av_y_info = field_info(320, 32, 0, imu_packet_size);
+            imu_av_z_info = field_info(352, 32, 0, imu_packet_size);
         } else if (imu_profile == UDPProfileIMU::ACCEL32_GYRO32_NMEA) {
             size_t nmea_block_size = 100;
             imu_measurement_size = 36;
