@@ -178,6 +178,7 @@ ouster_test(beam_config_test "beam_config_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}
 ouster_test(metadata_test "metadata_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 ouster_test(lidar_scan_test "lidar_scan_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 ouster_test(metadata_errors_test "metadata_errors_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
+ouster_test(imu_packet_test "imu_packet_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 if (BUILD_PCAP)
 ouster_test(pcap_test "pcap_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(profile_extension_test "profile_extension_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
