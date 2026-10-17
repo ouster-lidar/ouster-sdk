@@ -187,6 +187,10 @@ class OUSTER_API_CLASS LocalToneMapper {
     template <typename T>
     void apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_state);
 
+    template <typename T>
+    void apply(Eigen::Ref<img_t<T>> r, Eigen::Ref<img_t<T>> g, Eigen::Ref<img_t<T>> b,
+               bool update_state);
+
    public:
     /** Default constructor using default percentile and update values. */
     OUSTER_API_FUNCTION
@@ -246,6 +250,38 @@ class OUSTER_API_CLASS LocalToneMapper {
      */
     OUSTER_API_FUNCTION
     void update(Eigen::TensorMap<rgb_img_t<double>> image, bool update_state = true);
+
+    /**
+     * Adjusts the RGB image so that contrast is stretched between 0 and 1.
+     *
+     * Operates on planar channels (each stored as a separate H x W image)
+     * rather than an interleaved tensor, modifying them in-place. Produces the
+     * same end result as the interleaved rgb_img_t overload.
+     *
+     * @param[in] r Red channel image, modified in-place.
+     * @param[in] g Green channel image, modified in-place.
+     * @param[in] b Blue channel image, modified in-place.
+     * @param[in] update_state Update lo/hi luminance percentiles if true.
+     */
+    OUSTER_API_FUNCTION
+    void update(Eigen::Ref<img_t<float>> r, Eigen::Ref<img_t<float>> g,
+                Eigen::Ref<img_t<float>> b, bool update_state = true);
+
+    /**
+     * Adjusts the RGB image so that contrast is stretched between 0 and 1.
+     *
+     * Operates on planar channels (each stored as a separate H x W image)
+     * rather than an interleaved tensor, modifying them in-place. Produces the
+     * same end result as the interleaved rgb_img_t overload.
+     *
+     * @param[in] r Red channel image, modified in-place.
+     * @param[in] g Green channel image, modified in-place.
+     * @param[in] b Blue channel image, modified in-place.
+     * @param[in] update_state Update lo/hi luminance percentiles if true.
+     */
+    OUSTER_API_FUNCTION
+    void update(Eigen::Ref<img_t<double>> r, Eigen::Ref<img_t<double>> g,
+                Eigen::Ref<img_t<double>> b, bool update_state = true);
 
     /**
      * Adjusts the RGB image so that contrast is stretched between 0 and 1.

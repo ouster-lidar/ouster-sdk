@@ -87,6 +87,10 @@ static constexpr cf_type ZONE_PACKET_TIMESTAMP =
 static constexpr cf_type ZONE_STATES = "ZONE_STATES";  ///< zone states
 static constexpr cf_type ZONE_ALERT_FLAGS = "ZONE_ALERT_FLAGS";  ///< zone alert flags
 
+static constexpr cf_type R_U8 = "R_U8";  ///< Red channel 8-bit
+static constexpr cf_type G_U8 = "G_U8";  ///< Green channel 8-bit
+static constexpr cf_type B_U8 = "B_U8";  ///< Blue channel 8-bit
+
 /// Build the field name for a given base field and 0-based return index.
 /// @param[in] base  The base field name (e.g. "RANGE", "GROUND").
 /// @param[in] ret   Sensor return index.

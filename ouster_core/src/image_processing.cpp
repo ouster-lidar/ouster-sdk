@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <stdexcept>
 #include <vector>
 
 namespace ouster {
@@ -695,6 +696,200 @@ void LocalToneMapper::update(Eigen::TensorMap<rgb_img_t<float>> image, bool upda
 
 void LocalToneMapper::update(Eigen::TensorMap<rgb_img_t<double>> image, bool update_state) {
     apply(image, update_state);
+}
+
+template <typename T>
+void LocalToneMapper::apply(Eigen::Ref<img_t<T>> r, Eigen::Ref<img_t<T>> g,
+                            Eigen::Ref<img_t<T>> b, bool update_state) {
+    if (r.rows() != g.rows() || r.rows() != b.rows() || r.cols() != g.cols() ||
+        r.cols() != b.cols()) {
+        throw std::invalid_argument("LocalToneMapper: R, G, B channel dimensions must match");
+    }
+    const auto pixel_count = static_cast<size_t>(r.size());
+    const auto pixel_count_index = static_cast<Eigen::Index>(pixel_count);
+
+    // --- Stage 1: AutoExposure scaling ---
+    // Update lo/hi luminance percentile state.
+    if (counter_ == 0 && update_state) {
+        std::vector<T> indices;
+        size_t reservation = pixel_count / AE_STRIDE + 1;
+        indices.reserve(reservation);
+        const T* rp = r.data();
+        const T* gp = g.data();
+        const T* bp = b.data();
+        for (size_t i = 0; i < pixel_count; i += AE_STRIDE) {
+            T lum = (rp[i] * static_cast<T>(R_LUM)) + (gp[i] * static_cast<T>(G_LUM)) +
+                    (bp[i] * static_cast<T>(B_LUM));
+            if (lum > 0) {
+                indices.push_back(lum);
+            }
+        }
+        if (indices.size() < AE_MIN_NONZERO_POINTS) {
+            return;
+        }
+
+        // validate that we arent somehow resizing
+        if (indices.size() > reservation) {
+            throw std::runtime_error("Unexpected resize.");
+        }
+
+        auto cmp = [&](const T a, const T b) { return a < b; };
+
+        const size_t lo_k = static_cast<size_t>(indices.size() * lo_percentile_);
+        std::nth_element(indices.begin(), indices.begin() + lo_k, indices.end(), cmp);
+        lo_ = indices[lo_k];
+
+        const size_t hi_k = static_cast<size_t>(indices.size() * hi_percentile_);
+        std::nth_element(indices.begin() + lo_k, indices.end() - hi_k - 1, indices.end(), cmp);
+        hi_ = *(indices.end() - hi_k - 1);
+
+        if (!initialized_) {
+            initialized_ = true;
+            lo_state_ = lo_;
+            hi_state_ = hi_;
+        }
+    }
+
+    if (!initialized_) {
+        return;
+    }
+
+    if (update_state) {
+        lo_state_ = damping_ * lo_state_ + (1.0 - damping_) * lo_;
+        hi_state_ = damping_ * hi_state_ + (1.0 - damping_) * hi_;
+    }
+
+    // Apply a uniform affine transform derived from luminance to all channels,
+    // mapping the dynamic range into [0, 1] while preserving color balance.
+    Eigen::Map<Eigen::Array<T, -1, 1>> r_flat(r.data(), pixel_count_index);
+    Eigen::Map<Eigen::Array<T, -1, 1>> g_flat(g.data(), pixel_count_index);
+    Eigen::Map<Eigen::Array<T, -1, 1>> b_flat(b.data(), pixel_count_index);
+
+    double lo_hi_scale = (1.0 - (lo_percentile_ + hi_percentile_)) / (hi_state_ - lo_state_);
+
+    if (std::isinf(lo_hi_scale) || std::isnan(lo_hi_scale)) {
+        const auto s = static_cast<T>(0.5 / hi_state_);
+        r_flat *= s;
+        g_flat *= s;
+        b_flat *= s;
+    } else if (lo_hi_scale * (0.0 - lo_state_) + lo_percentile_ <= 0.0) {
+        const auto lo = static_cast<T>(lo_state_);
+        const auto s = static_cast<T>(lo_hi_scale);
+        const auto off = static_cast<T>(lo_percentile_);
+        r_flat = (r_flat - lo) * s + off;
+        g_flat = (g_flat - lo) * s + off;
+        b_flat = (b_flat - lo) * s + off;
+    } else {
+        const auto s = static_cast<T>((1.0 - hi_percentile_) / hi_state_);
+        r_flat *= s;
+        g_flat *= s;
+        b_flat *= s;
+    }
+
+    if (update_state) {
+        counter_ = (counter_ + 1) % update_every_;
+    }
+
+    const T thresh = 0.8;
+
+    // --- Stage 2: Dynamic Range Compression ---
+    // bring down brightness of incredibly bright areas when in dark environments
+    if (hi_state_ < compress_dr_max_lum_) {
+        T* rp = r.data();
+        T* gp = g.data();
+        T* bp = b.data();
+        for (size_t i = 0; i < pixel_count; ++i) {
+            T lum = (rp[i] * static_cast<T>(R_LUM)) + (gp[i] * static_cast<T>(G_LUM)) +
+                    (bp[i] * static_cast<T>(B_LUM));
+
+            if (lum > thresh) {
+                auto new_lum = thresh + fast_log10(lum - thresh + 1.0);
+                auto scale = new_lum / lum;
+                rp[i] *= scale;
+                gp[i] *= scale;
+                bp[i] *= scale;
+            }
+        }
+    }
+
+    // use Reinhard to saturate at 1 make sure we don't erase bright spots
+    r_flat = r_flat.max(static_cast<T>(0));
+    g_flat = g_flat.max(static_cast<T>(0));
+    b_flat = b_flat.max(static_cast<T>(0));
+    r_flat = r_flat / (1.0 + r_flat);
+    g_flat = g_flat / (1.0 + g_flat);
+    b_flat = b_flat / (1.0 + b_flat);
+
+    // --- Stage 3: CLAHE on luminance ---
+    // Compute CLAHE on the AE-normalised luminance, then scale each channel by
+    // lum_clahe / lum_ae to enhance local contrast while preserving hue.
+    const int h = static_cast<int>(r.rows());
+    const int w = static_cast<int>(r.cols());
+
+    Eigen::Tensor<T, 2, Eigen::RowMajor> lum_ae(h, w);
+    Eigen::Map<Eigen::Array<T, -1, 1>>(lum_ae.data(), pixel_count_index) =
+        (r_flat * static_cast<T>(R_LUM)) + (g_flat * static_cast<T>(G_LUM)) +
+        (b_flat * static_cast<T>(B_LUM));
+
+    const auto luts =
+        compute_clahe_luts(lum_ae, CLAHE_TILES_H, CLAHE_TILES_W, CLAHE_HIST_BINS, CLAHE_CLIP_LIMIT);
+    const Eigen::Tensor<T, 2, Eigen::RowMajor> lum_clahe =
+        apply_clahe_luts(lum_ae, luts, CLAHE_TILES_H, CLAHE_TILES_W, CLAHE_HIST_BINS);
+
+    // Fade out the saturation adjustment in dark environments where it isn't necessary
+    T color_factor = static_cast<T>(0.75);
+    const T ramp_start = static_cast<T>(1.0);
+    const T ramp_end = static_cast<T>(0.5);
+    if (hi_state_ < ramp_start) {
+        color_factor *= std::max<T>(0, (hi_state_ - ramp_end) / (ramp_start - ramp_end));
+    }
+
+    if (!color_correct_ || color_factor == static_cast<T>(0)) {
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                const T lum_old = lum_ae(y, x);
+                const T lum_new = lum_clahe(y, x);
+                const T scale =
+                    (lum_old > static_cast<T>(1e-6)) ? lum_new / lum_old : static_cast<T>(1);
+                r(y, x) = std::min(r(y, x) * scale, static_cast<T>(1));
+                g(y, x) = std::min(g(y, x) * scale, static_cast<T>(1));
+                b(y, x) = std::min(b(y, x) * scale, static_cast<T>(1));
+            }
+        }
+    } else {
+        // --- Stage 4: Improve color saturation ---
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                const T lum_old = lum_ae(y, x);
+                const T lum_new = lum_clahe(y, x);
+                const T scale =
+                    (lum_old > static_cast<T>(1e-6)) ? lum_new / lum_old : static_cast<T>(1);
+                auto rv = r(y, x) * scale;
+                auto gv = g(y, x) * scale;
+                auto bv = b(y, x) * scale;
+
+                auto grey = lum_new;
+
+                rv = -grey * color_factor + rv * (1 + color_factor);
+                gv = -grey * color_factor + gv * (1 + color_factor);
+                bv = -grey * color_factor + bv * (1 + color_factor);
+
+                r(y, x) = std::max(static_cast<T>(0), std::min(rv, static_cast<T>(1)));
+                g(y, x) = std::max(static_cast<T>(0), std::min(gv, static_cast<T>(1)));
+                b(y, x) = std::max(static_cast<T>(0), std::min(bv, static_cast<T>(1)));
+            }
+        }
+    }
+}
+
+void LocalToneMapper::update(Eigen::Ref<img_t<float>> r, Eigen::Ref<img_t<float>> g,
+                             Eigen::Ref<img_t<float>> b, bool update_state) {
+    apply(r, g, b, update_state);
+}
+
+void LocalToneMapper::update(Eigen::Ref<img_t<double>> r, Eigen::Ref<img_t<double>> g,
+                             Eigen::Ref<img_t<double>> b, bool update_state) {
+    apply(r, g, b, update_state);
 }
 
 void LocalToneMapper::update(Eigen::TensorMap<const rgb_img_t<float16_t>> input,
