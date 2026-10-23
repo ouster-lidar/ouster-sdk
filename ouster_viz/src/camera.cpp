@@ -73,7 +73,7 @@ int dd(float degrees) {
 }  // namespace
 
 /*
- * The camera class computes the folowing matrices:
+ * The camera class computes the following matrices:
  *
  * - Projection matrix proj, determined by view angle
  * - View matrix, relative to the target matrix, controlled by the user

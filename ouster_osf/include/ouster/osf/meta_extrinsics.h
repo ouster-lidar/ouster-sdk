@@ -81,7 +81,7 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
     /**
      * Create an Extrinsics object from a byte array.
      *
-     * @todo Figure out why this wasnt just done as a constructor overload.
+     * @todo Figure out why this wasn't just done as a constructor overload.
      *
      * @relates MetadataEntry::from_buffer
      *
