@@ -13,7 +13,7 @@ namespace impl {
 /// Computes the longest prefix-suffix for the given string.
 std::vector<int> compute_lps(const std::string& pattern);
 
-/// Knuth–Morris–Pratt search for the given pattern in the input stream. Returns
+/// Knuth-Morris-Pratt search for the given pattern in the input stream. Returns
 /// the offset of the first occurrence of the pattern, or npos if the pattern is
 /// not found. The search is case-insensitive.
 std::string::size_type kmp_search(std::istream& input, const std::string& pattern);

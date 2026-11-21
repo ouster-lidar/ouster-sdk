@@ -226,6 +226,7 @@ breathe_projects_source = {
     "cpp_api": ("../", [
         "ouster_algorithm",
         "ouster_core",
+        "ouster_io",
         "ouster_library",
         "ouster_mapping",
         "ouster_osf",
@@ -330,6 +331,7 @@ html_js_files = ['js/page_ready.js',
                  'js/tabbed-links.js']
 
 MIGRATION_GUIDE_LINKS = [
+    ("Migrating from 1.0.0 to 2.0.0", "migration/migration-1.0.0-2.0.0"),
     ("Migrating from 0.16.2 to 1.0.0", "migration/migration-0.16.2-1.0"),
     ("Migrating from 0.15.0 to 0.16.0", "migration/migration-0.15.0-0.16.0"),
     ("Migrating from 0.14.0 to 0.15.0", "migration/migration-0.14.0-0.15.0"),

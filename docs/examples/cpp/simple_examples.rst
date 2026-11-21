@@ -33,7 +33,7 @@ We learnt all about ``LidarFrames`` in :doc:`/features/consumption/lidar_frame`.
 Here we will see this in action, you can do this by running the example executable ``lidar_frame_example``:
 
 .. code::
-    
+
     $ lidar_frame_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
 The source code of ``lidar_frame_example`` is available `here <https://github.com/ouster-lidar/ouster-sdk/blob/master/examples/lidar_frame_example.cpp>`_.
@@ -55,7 +55,7 @@ that example.
 To run this example:
 
 .. code::
-    
+
     representations_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
 The source code of ``representations_example`` is available `on the GitHub <https://github.com/ouster-lidar/ouster-sdk/blob/master/examples/representations_example.cpp>`_.

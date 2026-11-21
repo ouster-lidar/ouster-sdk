@@ -529,7 +529,7 @@ ReturnResult:
     const unsigned byteCount = pixelBytes * pixelCount;
 
     // Space for packing
-    packing = (uint8_t*)calloc(1, byteCount);
+    packing = (uint8_t*)malloc(byteCount);
 
     if (!packing) {
         goto ReturnResult;

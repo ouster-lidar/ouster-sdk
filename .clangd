@@ -268,7 +268,6 @@ Diagnostics:
       - cppcoreguidelines-noexcept-move-operations
       - cppcoreguidelines-noexcept-swap
       - cppcoreguidelines-prefer-member-initializer
-      - cppcoreguidelines-pro-bounds-constant-array-index
       - cppcoreguidelines-pro-type-const-cast
       - cppcoreguidelines-pro-type-cstyle-cast
       - cppcoreguidelines-pro-type-member-init

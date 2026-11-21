@@ -30,7 +30,7 @@ def get_system_info() -> dict:
     except ModuleNotFoundError:
         click.echo(
             "This command requires the py-cpuinfo package. Try running "
-            "`pip3 install py-cpuinfo` first.")
+            "'pip3 install py-cpuinfo' first.")
         exit(1)
 
     res = {}

@@ -11,6 +11,14 @@ def bindings_client():
     return pytest.importorskip("ouster.sdk._bindings.client")
 
 
+@pytest.mark.skipif(
+    not os.environ.get("CHANGE_TARGET")
+    and not os.environ.get("JENKINS_URL"),
+    reason=(
+        "Version needs MR variable CHANGE_TARGET in some cases; skipped on local runs "
+        "Runs on CI (JENKINS_URL set) on MRs"
+    ),
+)
 def test_sdk_package_version() -> None:
     """``ouster.sdk.__version__`` contains ``__version__`` from repo-root ``VERSION``."""
     import ouster.sdk as sdk

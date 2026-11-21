@@ -3,14 +3,14 @@
 Lidar and IMU Packets
 ---------------------
 
-The :py:class:`.core.PacketSource` (previously `PacketMultiSource`) is the basic interface for sensor packets 
-and returns `Tuple[int, Packet]`. It can be advantageous to work with packets directly when latency is a 
+The :py:class:`.core.PacketSource` (previously `PacketMultiSource`) is the basic interface for sensor packets
+and returns `Tuple[int, Packet]`. It can be advantageous to work with packets directly when latency is a
 concern, or when you wish to examine the data packet by packet, e.g., if you wish to examine timestamps of packets.
 
 Let's make a :py:class:`.core.PacketSource` from our sample data using :py:class:`.pcap.PcapPacketSource`:
 
 .. code:: python
-    
+
     from ouster.sdk import pcap
     source = pcap.PcapPacketSource(pcap_path)
     for _, packet in source:

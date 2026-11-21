@@ -9,6 +9,7 @@ function(ouster_benchmark target_name)
       ${CMAKE_CURRENT_LIST_DIR}/../../thirdparty/sophus
       ${CMAKE_CURRENT_LIST_DIR}/../../ouster_mapping/src
       ${CMAKE_CURRENT_LIST_DIR}/../../ouster_core/include
+      ${CMAKE_CURRENT_LIST_DIR}/../../ouster_core/src
   )
   if(BUILD_MAPPING)
     target_include_directories(${target_name}

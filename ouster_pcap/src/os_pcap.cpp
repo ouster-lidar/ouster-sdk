@@ -16,18 +16,15 @@
 #include <string>
 #include <vector>
 
-#include "ouster/pcap/indexed_pcap_reader.h"
-#include "ouster/pcap/pcap.h"
-
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
+#include "indexed_pcap_reader.h"
+#include "pcap.h"
 
 namespace ouster {
 namespace sdk {
 namespace pcap {
 
 // TODO: IndexedPcapReader bypasses PlaybackHandle and RecordHandle, either
-// use the same fencing mechansim or switch to use OOP style
+// use the same fencing mechanism or switch to use OOP style
 
 struct RecordHandle {
     RecordHandle(const std::string& path, PcapWriter::PacketEncapsulation encap, uint16_t frag_size)
@@ -53,10 +50,10 @@ struct PlaybackHandle {
 };
 
 std::ostream& operator<<(std::ostream& stream_in, const PacketInfo& data) {
-    stream_in << "Source IP: \"" << data.src_ip << "\" ";
+    stream_in << "Source IP: \"" << data.src_ip() << "\" ";
     stream_in << "Source Port: " << data.src_port << std::endl;
 
-    stream_in << "Destination IP: \"" << data.dst_ip << "\" ";
+    stream_in << "Destination IP: \"" << data.dst_ip() << "\" ";
     stream_in << "Destination Port: " << data.dst_port << std::endl;
 
     stream_in << "Payload Size: " << data.payload_size << std::endl;
@@ -104,7 +101,7 @@ std::ostream& operator<<(std::ostream& stream_in, const StreamData& data) {
 
 std::ostream& operator<<(std::ostream& stream_in, const StreamInfo& data) {
     stream_in << "Total Packets: " << data.total_packets << std::endl;
-    stream_in << "Encapsultion Protocol: " << data.encapsulation_protocol << std::endl;
+    stream_in << "Encapsulation Protocol: " << data.encapsulation_protocol << std::endl;
     stream_in << "Max Timestamp: " << data.timestamp_max.count() << std::endl;
     stream_in << "Min Timestamp: " << data.timestamp_min.count() << std::endl;
 
@@ -222,8 +219,8 @@ std::shared_ptr<StreamInfo> get_stream_info(
 
         StreamKey key;
 
-        key.dst_ip = info.dst_ip;
-        key.src_ip = info.src_ip;
+        key.dst_ip = info.dst_ip();
+        key.src_ip = info.src_ip();
         key.dst_port = info.dst_port;
         key.src_port = info.src_port;
 
@@ -355,5 +352,3 @@ std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_size, i
 }  // namespace pcap
 }  // namespace sdk
 }  // namespace ouster
-
-OUSTER_DIAGNOSTIC_POP

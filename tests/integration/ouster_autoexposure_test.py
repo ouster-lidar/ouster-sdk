@@ -100,16 +100,16 @@ def stream_digest() -> digest.StreamDigest:
 def meta():
     meta_path = os.path.join(DATA_DIR, "OS-1-32-G_v2.1.1_1024x10.json")
     with open(meta_path, 'r') as f:
-        return core.SensorInfo(f.read())
+        return core.LidarInfo(f.read())
 
 @pytest.fixture
-def frame(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> core.LidarFrame:
+def frame(stream_digest: digest.StreamDigest, meta: core.LidarInfo) -> core.LidarFrame:
     pcap_path = os.path.join(DATA_DIR, "OS-1-32-G_v2.1.1_1024x10.pcap")
 
     with closing(pcap.PcapFrameSetSource(pcap_path, sensor_info=[meta])) as source:
         frame = next(iter(source))[0]
 
-    assert frame is not None
+    assert isinstance(frame, core.LidarFrame)
     return frame
 
 
@@ -174,8 +174,8 @@ def test_straight_line(ae_with_params, straight_line):
     Output should be a straight line fulfilling
         - only 1 minimum at 0
         - only 1 max between 1 - hi_percentile and 1
-        
-    note: due to implementation max is not guaranteed to be 1.0 
+
+    note: due to implementation max is not guaranteed to be 1.0
     """
     auto_exposure, params = ae_with_params
     lo_percentile, hi_percentile, update_every = params

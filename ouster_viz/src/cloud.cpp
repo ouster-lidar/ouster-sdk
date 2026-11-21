@@ -24,11 +24,15 @@ namespace impl {
 
 GLCloud::GLCloud(const Cloud& cloud) : point_size_{cloud.point_size_} {
     // allocate gl object names
-    glGenVertexArrays(1, &vao_);
+    glGenVertexArrays(1, &ordered_vao_);
+    glGenVertexArrays(1, &unordered_vao_);
+    glGenVertexArrays(1, &maskless_unordered_vao_);
 }
 
 GLCloud::~GLCloud() {
-    glDeleteVertexArrays(1, &vao_);
+    glDeleteVertexArrays(1, &ordered_vao_);
+    glDeleteVertexArrays(1, &unordered_vao_);
+    glDeleteVertexArrays(1, &maskless_unordered_vao_);
 }
 
 namespace {
@@ -41,15 +45,27 @@ inline size_t ti_key(size_t cloud_size, size_t w) {
 
 // update buffers common to all shaders
 // currently this includes everything but mask and mono
-void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera, Cloud& cloud) {
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void GLCloud::update_buffers(const GlobalState& /*state*/, const CameraData& camera, Cloud& cloud,
+                             const ProgramIds& program) {
+    // Reupload to VAO on program change
+    if (last_program_ != &program) {
+        cloud.key_changed_ = true;
+        cloud.mask_changed_ = true;
+        cloud.xyz_changed_ = true;
+        cloud.offset_changed_ = true;
+        cloud.range_changed_ = true;
+        last_program_ = &program;
+    }
+
     // transformation indices buffers cache by dimensions
     static std::mutex trans_indexes_mutex;
     static std::map<std::pair<uint32_t, size_t>, std::weak_ptr<BufferReference>> trans_indexes;
 
     auto trans_index_key = ti_key(cloud.n_, cloud.w_);
-    if (!trans_index_buffer_ || trans_index_key != last_trans_index_key_) {
-        //  check do we have a transformation indices in cache and if not
-        //  generate
+    if (program.trans_index_id >= 0 &&
+        (!trans_index_buffer_ || trans_index_key != last_trans_index_key_)) {
+        //  check do we have a transformation indices in cache and if not generate
         std::shared_ptr<BufferReference> buffer;
         {
             std::unique_lock<std::mutex> lock(trans_indexes_mutex);
@@ -71,9 +87,9 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
         trans_index_buffer_ = buffer;
         last_trans_index_key_ = trans_index_key;
 
-        glEnableVertexAttribArray(state.trans_index_id);
+        glEnableVertexAttribArray(program.trans_index_id);
         glBindBuffer(GL_ARRAY_BUFFER, trans_index_buffer_->vbo(cloud.viz_instance_));
-        glVertexAttribPointer(state.trans_index_id,
+        glVertexAttribPointer(program.trans_index_id,
                               1,         // size
                               GL_FLOAT,  // type
                               GL_FALSE,  // normalized
@@ -82,12 +98,11 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
         );
     }
 
-    if (!cloud.mask_data_) {
+    // load an empty cached mask if we are doing a range image cloud
+    if (!cloud.mask_data_ && program.mask_id >= 0) {
         // load an empty mask from cache
-        // TODO dont even render with a mask if no mask present
         if (!cached_mask_) {
-            // deduplicate zero initialized masks by size (most frames do not
-            // use a mask)
+            // deduplicate zero initialized masks by size (most frames do not use a mask)
             static std::mutex mask_mutex;
             static std::map<std::pair<uint32_t, size_t>, std::weak_ptr<impl::BufferReference>>
                 mask_cache;
@@ -113,9 +128,9 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
     }
 
     if (cloud.xyz_changed_) {
-        glEnableVertexAttribArray(state.xyz_id);
+        glEnableVertexAttribArray(program.xyz_id);
         glBindBuffer(GL_ARRAY_BUFFER, cloud.xyz_data_->vbo(cloud.viz_instance_));
-        glVertexAttribPointer(state.xyz_id,
+        glVertexAttribPointer(program.xyz_id,
                               3,         // size
                               GL_FLOAT,  // type
                               GL_FALSE,  // normalized
@@ -125,10 +140,10 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
         cloud.xyz_changed_ = false;
     }
 
-    if (cloud.offset_changed_) {
-        glEnableVertexAttribArray(state.off_id);
+    if (cloud.offset_changed_ && program.off_id >= 0) {
+        glEnableVertexAttribArray(program.off_id);
         glBindBuffer(GL_ARRAY_BUFFER, cloud.off_data_->vbo(cloud.viz_instance_));
-        glVertexAttribPointer(state.off_id,
+        glVertexAttribPointer(program.off_id,
                               3,         // size
                               GL_FLOAT,  // type
                               GL_FALSE,  // normalized
@@ -138,10 +153,10 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
         cloud.offset_changed_ = false;
     }
 
-    if (cloud.range_changed_) {
-        glEnableVertexAttribArray(state.range_id);
+    if (cloud.range_changed_ && program.range_id >= 0) {
+        glEnableVertexAttribArray(program.range_id);
         glBindBuffer(GL_ARRAY_BUFFER, cloud.range_data_->vbo(cloud.viz_instance_));
-        glVertexAttribPointer(state.range_id,
+        glVertexAttribPointer(program.range_id,
                               1,         // size
                               GL_FLOAT,  // type
                               GL_FALSE,  // normalized
@@ -153,9 +168,9 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
 
     if (cloud.key_changed_) {
         mono_ = cloud.mono_;
-        glEnableVertexAttribArray(state.key_id);
+        glEnableVertexAttribArray(program.key_id);
         glBindBuffer(GL_ARRAY_BUFFER, cloud.key_data_->vbo(cloud.viz_instance_));
-        glVertexAttribPointer(state.key_id,
+        glVertexAttribPointer(program.key_id,
                               4,                 // size
                               GL_UNSIGNED_BYTE,  // type
                               GL_TRUE,           // normalized
@@ -165,13 +180,15 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
         cloud.key_changed_ = false;
     }
 
-    glUniform1i(state.palette_id, 0);
+    glUniform1i(program.palette_id, 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, cloud.palette_data_->texture(cloud.viz_instance_));
 
-    glUniform1i(state.transformation_id, 1);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, cloud.transform_data_->texture(cloud.viz_instance_));
+    if (program.transformation_id >= 0) {
+        glUniform1i(program.transformation_id, 1);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, cloud.transform_data_->texture(cloud.viz_instance_));
+    }
 
     if (cloud.point_size_changed_) {
         point_size_ = cloud.point_size_;
@@ -185,10 +202,20 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
     }
     extrinsic_ = cloud.extrinsic_.cast<float>();
 
-    const Matrix4fR mvp = (camera.proj * camera.view * camera.target * map_pose_).cast<float>();
+    if (program.model_id >= 0) {
+        const Matrix4fR mvp = (camera.proj * camera.view * camera.target * map_pose_).cast<float>();
 
-    glUniformMatrix4fv(state.model_id, 1, GL_TRUE, extrinsic_.data());
-    glUniformMatrix4fv(state.proj_view_id, 1, GL_TRUE, mvp.data());
+        glUniformMatrix4fv(program.model_id, 1, GL_TRUE, extrinsic_.data());
+        glUniformMatrix4fv(program.proj_view_id, 1, GL_TRUE, mvp.data());
+    }
+
+    if (program.proj_view_model_id >= 0) {
+        const Matrix4fR mvp =
+            (camera.proj * camera.view * camera.target * map_pose_ * cloud.extrinsic_)
+                .cast<float>();
+
+        glUniformMatrix4fv(program.proj_view_model_id, 1, GL_TRUE, mvp.data());
+    }
 }
 
 /*
@@ -196,14 +223,32 @@ void GLCloud::update_buffers(const GlobalState& state, const CameraData& camera,
  */
 void GLCloud::draw(const GlobalState& state, const WindowCtx& /*unused*/, const CameraData& camera,
                    Cloud& cloud) {
-    glBindVertexArray(vao_);
+    const ProgramIds* program = &state.ordered;
+    if (cloud.off_data_) {
+        // ordered range image cloud
+        glUseProgram(program->program_id);
+        glBindVertexArray(ordered_vao_);
+    } else {
+        // mask is unlikely with unordered clouds, optimize for it
+        if (cloud.mask_data_) {
+            program = &state.unordered;
 
-    update_buffers(state, camera, cloud);
+            glUseProgram(program->program_id);
+            glBindVertexArray(unordered_vao_);
+        } else {
+            program = &state.unordered_maskless;
 
-    if (cloud.mask_changed_) {
-        glEnableVertexAttribArray(state.mask_id);
+            glUseProgram(program->program_id);
+            glBindVertexArray(maskless_unordered_vao_);
+        }
+    }
+
+    update_buffers(state, camera, cloud, *program);
+
+    if (cloud.mask_changed_ && cloud.mask_data_) {
+        glEnableVertexAttribArray(program->mask_id);
         glBindBuffer(GL_ARRAY_BUFFER, cloud.mask_data_->vbo(cloud.viz_instance_));
-        glVertexAttribPointer(state.mask_id,
+        glVertexAttribPointer(program->mask_id,
                               4,                 // size
                               GL_UNSIGNED_BYTE,  // type
                               GL_TRUE,           // normalized
@@ -214,7 +259,7 @@ void GLCloud::draw(const GlobalState& state, const WindowCtx& /*unused*/, const 
     }
 
     // put the shader into mono or rgb mode
-    glUniform1i(state.mono_id, mono_ ? 1 : 0);
+    glUniform1i(program->mono_id, mono_ ? 1 : 0);
 
     glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(cloud.n_));
     glBindVertexArray(0);
@@ -227,9 +272,18 @@ void GLCloud::draw_select(const GlobalState& state, const WindowCtx& /*unused*/,
         return;
     }
 
-    glBindVertexArray(vao_);
+    const ProgramIds* program = &state.ordered;
+    if (cloud.off_data_) {
+        // ordered range image cloud
+        glBindVertexArray(ordered_vao_);
+    } else {
+        // we always have a mask for this
+        program = &state.unordered;
+        glBindVertexArray(unordered_vao_);
+    }
+    glUseProgram(program->program_id);
 
-    update_buffers(state, camera, cloud);
+    update_buffers(state, camera, cloud, *program);
 
     // make a mask that colors each point uniquely
     uint32_t n_pts = cloud.n_;
@@ -252,9 +306,9 @@ void GLCloud::draw_select(const GlobalState& state, const WindowCtx& /*unused*/,
 
     BufferReference mask_buffer(std::move(mask), true);
 
-    glEnableVertexAttribArray(state.mask_id);
+    glEnableVertexAttribArray(program->mask_id);
     glBindBuffer(GL_ARRAY_BUFFER, mask_buffer.vbo(cloud.viz_instance_));
-    glVertexAttribPointer(state.mask_id,
+    glVertexAttribPointer(program->mask_id,
                           4,                 // size
                           GL_UNSIGNED_BYTE,  // type
                           GL_TRUE,           // normalized
@@ -266,7 +320,7 @@ void GLCloud::draw_select(const GlobalState& state, const WindowCtx& /*unused*/,
 
     // put the shader into mono mode
     bool mono = false;
-    glUniform1i(state.mono_id, mono ? 1 : 0);
+    glUniform1i(program->mono_id, mono ? 1 : 0);
 
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
@@ -275,10 +329,9 @@ void GLCloud::draw_select(const GlobalState& state, const WindowCtx& /*unused*/,
     glBindVertexArray(0);
 }
 
-GLCloud::GlobalState::GlobalState() {
+GLCloud::ProgramIds::ProgramIds(const std::string& vertexs, const std::string& frags) {
     // NOLINTBEGIN(cppcoreguidelines-prefer-member-initializer)
-    program_id = load_shaders(POINT_VERTEX_SHADER_CODE, POINT_FRAGMENT_SHADER_CODE);
-
+    program_id = load_shaders(vertexs, frags);
     xyz_id = glGetAttribLocation(program_id, "xyz");
     off_id = glGetAttribLocation(program_id, "offset");
     range_id = glGetAttribLocation(program_id, "range");
@@ -290,17 +343,34 @@ GLCloud::GlobalState::GlobalState() {
     palette_id = glGetUniformLocation(program_id, "palette");
     transformation_id = glGetUniformLocation(program_id, "transformation");
     trans_index_id = glGetAttribLocation(program_id, "trans_index");
+    proj_view_model_id = glGetUniformLocation(program_id, "proj_view_model");
+    // NOLINTEND(cppcoreguidelines-prefer-member-initializer)
+}
+
+GLCloud::ProgramIds::~ProgramIds() {
+    // TODO: delete shaders here if I add proper move semantics
+}
+
+GLCloud::GlobalState::GlobalState() {
+    // NOLINTBEGIN(cppcoreguidelines-prefer-member-initializer)
+    ordered = ProgramIds(POINT_VERTEX_SHADER_CODE, POINT_FRAGMENT_SHADER_CODE);
+    unordered = ProgramIds(UNORDERED_POINT_VERTEX_SHADER_CODE, POINT_FRAGMENT_SHADER_CODE);
+
+    std::string maskless_vs = "#define NO_MASK\n" + UNORDERED_POINT_VERTEX_SHADER_CODE;
+    std::string maskless_fs = "#define NO_MASK\n" + POINT_FRAGMENT_SHADER_CODE;
+    unordered_maskless = ProgramIds(maskless_vs, maskless_fs);
     // NOLINTEND(cppcoreguidelines-prefer-member-initializer)
 }
 
 GLCloud::GlobalState::~GlobalState() {
-    glDeleteProgram(program_id);
+    glDeleteProgram(ordered.program_id);
+    glDeleteProgram(unordered.program_id);
+    glDeleteProgram(unordered_maskless.program_id);
 }
 
-void GLCloud::beginDraw(const GlobalState& state) {
+void GLCloud::beginDraw(const GlobalState& /*state*/) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
-    glUseProgram(state.program_id);
 }
 
 void GLCloud::endDraw() {

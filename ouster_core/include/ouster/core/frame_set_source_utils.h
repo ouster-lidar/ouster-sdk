@@ -152,12 +152,17 @@ class OUSTER_API_CLASS Collator : public FrameSetSourceWrapper {
     std::vector<int64_t> collation_latencies() const;
 };
 
-/// Build a frame set source that collates the provided source
-/// @return frame set source collating the provided source
+/**
+ * Build a frame set source that collates the provided source.
+ *
+ * @param[in] source Frame set source to collate.
+ *
+ * @return Collator wrapping @p source.
+ */
 OUSTER_API_FUNCTION
 Collator collate(const FrameSetSource& source);
 
-/// @copydoc collate()
+/** @copydoc collate(const FrameSetSource&) */
 OUSTER_API_FUNCTION
 Collator collate(FrameSetSource&& source);
 
@@ -333,7 +338,7 @@ class OUSTER_API_CLASS AnyPacketSource : public PacketSource {
     PacketIterator end() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info() const override;
+    const std::vector<std::shared_ptr<LidarInfo>>& sensor_info() const override;
 
     OUSTER_API_FUNCTION
     bool is_live() const override;
@@ -403,10 +408,14 @@ class OUSTER_API_CLASS MultiFrameSetSource : public FrameSetSource {
 
     bool indexed_;
 
-    // mapping of original sensor info to sensor index and output sensor info
+    // mapping of each source's original sensor info to the unified (output)
+    // sensor index and the canonical deduplicated info instance. Keyed on the
+    // shared SensorInfo base so lidar and camera sensors are handled uniformly.
     std::map<const SensorInfo*, std::pair<int, std::shared_ptr<SensorInfo>>> info_map_;
 
-    std::vector<std::shared_ptr<SensorInfo>> sensor_info_;
+    // combined lidar + camera info exposed via sensor_info(), in unified sensor
+    // index order (which is also the FrameSet frame-slot order).
+    std::vector<std::shared_ptr<SensorInfo>> all_info_;
 
     struct OUSTER_API_CLASS IndexSample {
         int source_index;
@@ -421,21 +430,6 @@ class OUSTER_API_CLASS MultiFrameSetSource : public FrameSetSource {
     size_t size_;
     size_t size_hint_;
 };
-}  // namespace core
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace core {
-
-OUSTER_DEPRECATED_TYPE(ScanSourceWrapper, FrameSetSourceWrapper,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(AnyScanSource, AnyFrameSetSource, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(MultiScanSource, MultiFrameSetSource, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-
 }  // namespace core
 }  // namespace sdk
 }  // namespace ouster

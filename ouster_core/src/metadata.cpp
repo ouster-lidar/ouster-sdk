@@ -8,7 +8,7 @@
 
 /** Linting Exceptions:
  *   (modernize-pass-by-value): This complains about not using std::move,
- *   which you cant do for const types.
+ *   which you can't do for const types.
  **/
 
 #include "ouster/core/metadata.h"
@@ -34,12 +34,13 @@
 #include <utility>
 #include <vector>
 
+#include "metadata_json.h"
 #include "ouster/core/data_format.h"
 #include "ouster/core/impl/json_tools.h"
 #include "ouster/core/impl/logging.h"
 #include "ouster/core/json_tools.h"
-#include "ouster/core/sensor_config.h"
-#include "ouster/core/sensor_info.h"
+#include "ouster/core/lidar_config.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/zone_monitor.h"
 
 namespace ouster {
@@ -56,7 +57,7 @@ const mat4d DEFAULT_LIDAR_TO_SENSOR =
 
 class SensorInfoImpl : public impl::JsonTools {
    public:
-    SensorInfoImpl(const jsoncons::json& root, SensorInfo& sensor_info, ValidatorIssues& issues)
+    SensorInfoImpl(const jsoncons::json& root, LidarInfo& sensor_info, ValidatorIssues& issues)
         : JsonTools(root, issues) {
         parse_and_validate_sensor_info(sensor_info);
         parse_and_validate_config_params(sensor_info.config);
@@ -128,7 +129,7 @@ class SensorInfoImpl : public impl::JsonTools {
     const std::string columns_per_frame_string_{"$.lidar_data_format.columns_per_frame"};
 
     // Sections
-    void parse_and_validate_sensor_info(SensorInfo& sensor_info) {
+    void parse_and_validate_sensor_info(LidarInfo& sensor_info) {
         parse_and_validate_datetime(issues_.information, "$.sensor_info.build_date", "%Y-%m-%dT%TZ",
                                     sensor_info.build_date);
 
@@ -175,7 +176,7 @@ class SensorInfoImpl : public impl::JsonTools {
                                 verify_string_not_empty);
     }
 
-    void parse_and_validate_config_params(SensorConfig& config) {
+    void parse_and_validate_config_params(LidarConfig& config) {
         std::vector<uint64_t> azimuth_window_data;
         if (parse_and_validate_item(issues_.information, "$.config_params.azimuth_window.*",
                                     azimuth_window_data, 2,
@@ -312,9 +313,8 @@ class SensorInfoImpl : public impl::JsonTools {
         parse_and_validate_enum<std::string>(issues_.information, "$.config_params.udp_profile_imu",
                                              config.udp_profile_imu, udp_profile_imu_of_string);
 
-        parse_and_validate_enum<std::string>(issues_.information,
-                                             "$.config_params.udp_profile_lidar",
-                                             config.udp_profile_lidar, udp_profile_lidar_of_string);
+        parse_and_validate_item(issues_.information, "$.config_params.udp_profile_lidar",
+                                config.udp_profile_lidar);
 
         parse_and_validate_enum<std::string>(issues_.information, "$.config_params.header_type",
                                              config.header_type, udp_profile_type_of_string);
@@ -391,7 +391,7 @@ class SensorInfoImpl : public impl::JsonTools {
     // parse_and_validate_config_params must be run before
     // internal_parse_and_validate_columns_per_frame due to requirements on
     // lidar_mode
-    bool internal_parse_and_validate_columns_per_frame(SensorInfo& sensor_info) {
+    bool internal_parse_and_validate_columns_per_frame(LidarInfo& sensor_info) {
         bool columns_per_frame_success = false;
         if (parse_and_validate_item<uint32_t>(issues_.information, columns_per_frame_string_,
                                               sensor_info.format.columns_per_frame)) {
@@ -435,7 +435,7 @@ class SensorInfoImpl : public impl::JsonTools {
     // parse_and_validate_sensor_info must be run before
     // internal_parse_and_validate_pixels_per_column due to requirements on
     // prod_line
-    void internal_parse_and_validate_pixels_per_column(SensorInfo& sensor_info) {
+    void internal_parse_and_validate_pixels_per_column(LidarInfo& sensor_info) {
         if (parse_and_validate_item(issues_.information, pixels_per_column_string_,
                                     sensor_info.format.pixels_per_column)) {
             if (have_prod_line_) {
@@ -479,7 +479,7 @@ class SensorInfoImpl : public impl::JsonTools {
     // parse_and_validate_data_format due to requirements on prod_line
     // parse_and_validate_config_params must be run before
     // parse_and_validate_data_format due to requirements on lidar_mode
-    void parse_and_validate_data_format(SensorInfo& sensor_info) {
+    void parse_and_validate_data_format(LidarInfo& sensor_info) {
         if (have_lidar_mode_) {
             // lidar mode is present, create default data format
             sensor_info.format = default_data_format(*sensor_info.config.lidar_mode);
@@ -528,15 +528,14 @@ class SensorInfoImpl : public impl::JsonTools {
         }
         parse_and_validate_item<int>(issues_.information, pixel_shift_string,
                                      sensor_info.format.pixel_shift_by_row, verify_count);
-        // pad pixel shift by row with all zeros if it isnt present or isnt
+        // pad pixel shift by row with all zeros if it isn't present or isn't
         // large enough
         if (sensor_info.format.pixel_shift_by_row.size() != sensor_info.format.pixels_per_column) {
             sensor_info.format.pixel_shift_by_row.resize(sensor_info.format.pixels_per_column);
         }
 
-        parse_and_validate_enum<std::string>(
-            issues_.information, "$.lidar_data_format.udp_profile_lidar",
-            sensor_info.format.udp_profile_lidar, udp_profile_lidar_of_string);
+        parse_and_validate_item(issues_.information, "$.lidar_data_format.udp_profile_lidar",
+                                sensor_info.format.udp_profile_lidar);
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.lidar_data_format.udp_profile_imu",
@@ -582,6 +581,14 @@ class SensorInfoImpl : public impl::JsonTools {
             }
         }
 
+        /**
+         * IMU stream is enabled if there's a destination and port for IMU
+         */
+        if (!sensor_info.config.udp_dest.value_or("").empty() &&
+            sensor_info.config.udp_port_imu.value_or(0) != 0) {
+            sensor_info.format.imu_enabled = true;
+        }
+
         // handle the case where lidar data is disabled
         // make sure to default to assuming the stream is enabled if we
         // are missing the config settings for some reason
@@ -591,7 +598,7 @@ class SensorInfoImpl : public impl::JsonTools {
         }
     }
 
-    void parse_and_validate_calibration_status(SensorInfo& sensor_info) {
+    void parse_and_validate_calibration_status(LidarInfo& sensor_info) {
         parse_and_validate_datetime(issues_.information,
                                     "$.calibration_status.reflectivity.timestamp", "%Y-%m-%dT%T",
                                     sensor_info.cal.reflectivity_timestamp);
@@ -709,7 +716,7 @@ class SensorInfoImpl : public impl::JsonTools {
     // parse_and_validate_data_format due to requirements on lidar_mode
     // parse_and_validate_data_format must be run before
     // parse_and_validate_intrinsics due to requirements on pixels_per_column
-    void parse_and_validate_intrinsics(SensorInfo& sensor_info) {
+    void parse_and_validate_intrinsics(LidarInfo& sensor_info) {
         std::vector<double> imu_intrinsics_data;
         const std::string imu_intrinsics_string = "$.imu_intrinsics.imu_to_sensor_transform.*";
         if (parse_and_validate_item<double>(issues_.information, imu_intrinsics_string,
@@ -760,7 +767,7 @@ class SensorInfoImpl : public impl::JsonTools {
         }
     }
 
-    void parse_and_validate_misc(SensorInfo& sensor_info) {
+    void parse_and_validate_misc(LidarInfo& sensor_info) {
         std::vector<double> extrinsic_data;
         const std::string extrinsic_string = "$.'ouster-sdk'.extrinsic.*";
         if (parse_and_validate_item<double>(issues_.information, extrinsic_string, extrinsic_data,
@@ -787,16 +794,23 @@ class SensorInfoImpl : public impl::JsonTools {
 
 class ConfigImpl : public SensorInfoImpl {
    public:
-    ConfigImpl(const jsoncons::json& root, SensorConfig& config, ValidatorIssues& issues)
+    ConfigImpl(const jsoncons::json& root, LidarConfig& config, ValidatorIssues& issues)
         : SensorInfoImpl(root, issues) {
         parse_and_validate_config_params(config);
     }
 };
 
+// clang-format off
 const std::map<std::string, bool> NONLEGACY_METADATA_FIELDS = {
-    {"sensor_info", true},        {"beam_intrinsics", true}, {"imu_intrinsics", true},
-    {"lidar_intrinsics", true},   {"config_params", true},   {"lidar_data_format", false},
-    {"calibration_status", false}};
+    {"sensor_info", true},
+    {"beam_intrinsics", true},
+    {"imu_intrinsics", true},
+    {"lidar_intrinsics", true},
+    {"config_params", true},
+    {"lidar_data_format", false},
+    {"calibration_status", false},
+};
+// clang-format on
 
 // Copypasta and changed form sensor_info.cpp
 bool is_new_format(const jsoncons::json& root) {
@@ -887,7 +901,10 @@ jsoncons::json convert_legacy_to_nonlegacy(const jsoncons::json& root) {
     return result;
 }
 
-bool parse_and_validate_metadata(const jsoncons::json& root, SensorInfo& sensor_info,
+// External linkage is intentional; forward-declared and used across translation
+// units (e.g. sensor sources).
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+bool parse_and_validate_metadata(const jsoncons::json& root, LidarInfo& sensor_info,
                                  ValidatorIssues& issues) {
     size_t nonlegacy_fields_present = 0;
     std::vector<ValidatorIssues::ValidatorEntry> missing_fields;
@@ -933,25 +950,28 @@ bool parse_and_validate_metadata(const jsoncons::json& root, SensorInfo& sensor_
     return issues.critical.empty();
 }
 
-bool parse_and_validate_metadata(const std::string& json_data, SensorInfo& sensor_info,
+// External linkage is intentional; forward-declared and used across translation
+// units (e.g. sensor sources).
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+bool parse_and_validate_metadata(const std::string& json_data, LidarInfo& sensor_info,
                                  ValidatorIssues& issues) {
     jsoncons::json data = jsoncons::json::parse(json_data);
     return parse_and_validate_metadata(data, sensor_info, issues);
 }
 
 bool parse_and_validate_metadata(const std::string& json_data, ValidatorIssues& issues) {
-    nonstd::optional<SensorInfo> sensor_info;
+    nonstd::optional<LidarInfo> sensor_info;
     return parse_and_validate_metadata(json_data, sensor_info, issues);
 }
 
 bool parse_and_validate_metadata(const std::string& json_data,
-                                 nonstd::optional<SensorInfo>& sensor_info,
+                                 nonstd::optional<LidarInfo>& sensor_info,
                                  ValidatorIssues& issues) {
     sensor_info = nonstd::nullopt;
-    SensorInfo temp_info;
+    LidarInfo temp_info;
     bool result = parse_and_validate_metadata(json_data, temp_info, issues);
     if (result) {
-        sensor_info = nonstd::make_optional<SensorInfo>(temp_info);
+        sensor_info = nonstd::make_optional<LidarInfo>(temp_info);
     } else {
         sensor_info.reset();
     }
@@ -959,7 +979,7 @@ bool parse_and_validate_metadata(const std::string& json_data,
     return result;
 }
 
-bool parse_and_validate_config(const std::string& config, SensorConfig& sensor_config,
+bool parse_and_validate_config(const std::string& config, LidarConfig& sensor_config,
                                ValidatorIssues& issues) {
     jsoncons::json root;
     root["config_params"] = jsoncons::json::parse(config);
@@ -969,16 +989,9 @@ bool parse_and_validate_config(const std::string& config, SensorConfig& sensor_c
     return issues.critical.empty();
 }
 
-bool parse_and_validate_config(const std::string& config, SensorConfig& sensor_config) {
+bool parse_and_validate_config(const std::string& config, LidarConfig& sensor_config) {
     ValidatorIssues issues;
     return parse_and_validate_config(config, sensor_config, issues);
-}
-
-SensorConfig parse_config(const std::string& config) {
-    SensorConfig sensor_config;
-    parse_and_validate_config(config, sensor_config);
-
-    return sensor_config;
 }
 
 }  // namespace core

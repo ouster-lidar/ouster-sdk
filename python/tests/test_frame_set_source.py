@@ -6,7 +6,7 @@ All rights reserved.
 import os
 import pytest
 from ouster.sdk import open_source, osf
-from ouster.sdk.core import (SensorInfo, LidarMode, FrameSetSourceMetadataSet,
+from ouster.sdk.core import (LidarInfo, LidarMode, FrameSetSourceMetadataSet,
                              ClassMap, ClassMapSet, LidarFrame, FrameSet)
 
 from tests.conftest import OSFS_DATA_DIR
@@ -63,9 +63,9 @@ def test_frame_set_source_index(input_osf_file, tmp_path) -> None:
     num_sensors = 2
     num_frames = len(src)
     for frame, in src:
-        assert frame is not None
+        assert isinstance(frame, LidarFrame)
         for i in range(num_sensors):
-            frame.packet_timestamp[:] = ts
+            frame.receive_timestamp[:] = ts
             ts += 10
             writer.save(i, frame)
     writer.close()
@@ -156,10 +156,10 @@ def test_length(input_osf_file, collated: bool) -> None:
 
 
 def test_frame_set_source_metadata(tmp_path):
-    sensor_info = SensorInfo.from_default(LidarMode._1024x10)
+    sensor_info = LidarInfo.from_default(LidarMode._1024x10)
     lidar_frame = LidarFrame(sensor_info)
     lidar_frame.status[:] = 1
-    lidar_frame.packet_timestamp[:] = 123456789
+    lidar_frame.receive_timestamp[:] = 123456789
     lidar_frame.frame_id = 42
 
     writer = osf.Writer(str(tmp_path / "test.osf"), [sensor_info])
@@ -203,3 +203,30 @@ def test_frame_set_source_metadata_unsupported_type(tmp_path):
     metadata = FrameSetSourceMetadataSet()
     with pytest.raises(ValueError, match=r"Value must be either a string or ClassMapSet."):
         metadata['custom_int'] = 42
+
+
+def test_frame_set_source_metadata_overwrite():
+    metadata = FrameSetSourceMetadataSet()
+    metadata['info'] = "first"
+    metadata['info'] = "second"
+    assert metadata['info'] == "second"
+
+    class_maps = ClassMapSet({'four_legs': ClassMap({1: 'dog'})})
+    metadata['info'] = class_maps
+    assert metadata['info'] == class_maps
+
+    metadata['info'] = "third"
+    assert metadata['info'] == "third"
+    assert metadata.keys() == {'info'}
+
+
+def test_class_map_missing_key_raises_key_error():
+    class_map = ClassMap({1: 'dog'})
+    with pytest.raises(KeyError):
+        class_map[2]
+    assert class_map.get(2) is None
+
+    class_maps = ClassMapSet({'four_legs': class_map})
+    with pytest.raises(KeyError):
+        class_maps['zero_legs']
+    assert class_maps.get('zero_legs') is None

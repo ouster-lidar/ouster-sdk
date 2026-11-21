@@ -21,7 +21,7 @@ To continue to output the legacy format with Python, set the parameter ``_legacy
 
 If you find that you have written data out in the non-legacy format and you wish to use the legacy
 format instead, use the provided Python utility ``convert-meta-to-legacy``::
-    
+
     convert-meta-to-legacy </path/to/metadata/json> </path/to/desired/output/json>
 
 
@@ -46,7 +46,7 @@ A number of long-deprecated members of the LidarScan interface have been removed
 
     you should now use the ``status()`` function::
 
-        auto status = scan.status(); 
+        auto status = scan.status();
         auto n_invalid = std::count_if(status.data(), status.data() + status.size(), [](const uint32_t s) { return !(s & 0x01); });
 
     Timestamps are now available through ``timestamp()``, also returning a ``Header``; and the

@@ -44,7 +44,7 @@ class OUSTER_API_CLASS FrameSetSourceMetadataStreamMeta
     /**
      * Create a FrameSetSourceMetadataStreamMeta object from a byte array.
      *
-     * @todo Figure out why this wasnt just done as a constructor overload.
+     * @todo Figure out why this wasn't just done as a constructor overload.
      *
      * @relates MetadataEntry::from_buffer
      *
@@ -149,21 +149,6 @@ class OUSTER_API_CLASS FrameSetSourceMetadataStream
      */
     uint32_t stream_meta_id_{0};
 };
-
-}  // namespace osf
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace osf {
-
-OUSTER_DEPRECATED_TYPE(ScanSourceMetadataStream, FrameSetSourceMetadataStream,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(ScanSourceMetadataStreamMeta, FrameSetSourceMetadataStreamMeta,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
 
 }  // namespace osf
 }  // namespace sdk

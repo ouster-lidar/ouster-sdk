@@ -1,5 +1,5 @@
 from .conftest import MockPointViz
-from ouster.sdk.core import SensorInfo, LidarMode, LidarFrame
+from ouster.sdk.core import LidarInfo, LidarMode, LidarFrame
 from ouster.sdk.viz.model import LidarFrameVizModel
 from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
 from ouster.sdk.viz.track import Track, TRACK_INIT_POINTS_NUM
@@ -10,8 +10,8 @@ def test_toggle_visibility():
     """It should add/remove the Clouds used to render
     the track and key frames depending on visibility."""
     infos = [
-        SensorInfo.from_default(LidarMode._2048x10),
-        SensorInfo.from_default(LidarMode._2048x10)
+        LidarInfo.from_default(LidarMode._2048x10),
+        LidarInfo.from_default(LidarMode._2048x10)
     ]
     viz = MockPointViz()
     model = LidarFrameVizModel(viz, infos, _img_aspect_ratio=0)
@@ -35,8 +35,8 @@ def test_toggle_visibility():
 def test_draw_track():
     """It should update the cloud based on the contents of the track."""
     infos = [
-        SensorInfo.from_default(LidarMode._2048x10),
-        SensorInfo.from_default(LidarMode._2048x10)
+        LidarInfo.from_default(LidarMode._2048x10),
+        LidarInfo.from_default(LidarMode._2048x10)
     ]
     viz = MockPointViz()
     model = LidarFrameVizModel(viz, infos, _img_aspect_ratio=0)

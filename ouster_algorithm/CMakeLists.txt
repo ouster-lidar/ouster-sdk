@@ -1,12 +1,15 @@
 cmake_minimum_required(VERSION 3.16.3)
 
 find_package(Eigen3 REQUIRED)
+find_package(TBB CONFIG REQUIRED)
 
 add_library(ouster_algorithm STATIC
   src/align_clouds.cpp
   src/ground_seg.cpp
   src/normals.cpp
-  src/voxel_downsample.cpp
+  src/plumb.cpp
+  src/custom_voxel_downsample.cpp
+  src/wall.cpp
 )
 set_target_properties(ouster_algorithm PROPERTIES
   CXX_STANDARD 14
@@ -23,6 +26,9 @@ target_link_libraries(ouster_algorithm
   PUBLIC
     Eigen3::Eigen
     OusterSDK::ouster_core
+    TBB::tbb
+  PRIVATE
+    $<BUILD_INTERFACE:tsl::robin_map>
 )
 
 add_library(OusterSDK::ouster_algorithm ALIAS ouster_algorithm)

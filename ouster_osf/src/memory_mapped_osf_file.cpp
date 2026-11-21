@@ -39,7 +39,7 @@ uint8_t* MemoryMappedOsfFile::buf_raw_ptr(OsfOffset& base_offset, OsfOffset& off
     if (!good()) {
         throw std::logic_error("bad osf file");
     }
-    if (base_offset.offset() + offset.offset() >= size_) {
+    if (base_offset.offset() + offset.offset() + offset.size() > size_) {
         throw std::runtime_error("EOF reached");
     }
     if (base_offset.size() > 0 && offset.size() > base_offset.size()) {
@@ -65,20 +65,23 @@ OsfBuffer MemoryMappedOsfFile::read(OsfOffset base_offset, OsfOffset offset) {
 }
 
 MemoryMappedOsfFile::MemoryMappedOsfFile(MemoryMappedOsfFile&& other) noexcept
-    : OsfFile(std::move(other)) {
-    other.file_buf_ = nullptr;
+    : OsfFile(std::move(other)),
+      file_buf_(std::exchange(other.file_buf_, nullptr)),
+      size_(std::exchange(other.size_, 0)),
+      memmap_handle_(std::exchange(other.memmap_handle_, 0)) {
     other.state_ = FileState::BAD;
 }
 
 MemoryMappedOsfFile& MemoryMappedOsfFile::operator=(MemoryMappedOsfFile&& other) noexcept {
-    OsfFile::operator=(std::move(other));
     if (this != &other) {
         close();
-        file_buf_ = other.file_buf_;
-        other.file_buf_ = nullptr;
+        OsfFile::operator=(std::move(other));
+        file_buf_ = std::exchange(other.file_buf_, nullptr);
+        size_ = std::exchange(other.size_, 0);
+        memmap_handle_ = std::exchange(other.memmap_handle_, 0);
     }
     return *this;
-};
+}
 
 }  // namespace osf
 }  // namespace sdk

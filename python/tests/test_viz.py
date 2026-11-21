@@ -3,15 +3,16 @@ Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
 """
 
+import gc
 import weakref
-from typing import TYPE_CHECKING, Tuple, Optional, Callable, Iterable
+from typing import TYPE_CHECKING, Tuple, Optional, Callable, Iterable, List, Set
 
 import pytest
 import numpy as np
 
 import random
 
-from ouster.sdk.core import ChanField, LidarFrame, SensorInfo, FrameSet
+from ouster.sdk.core import ChanField, Frame, LidarFrame, LidarInfo, FrameSet
 
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
@@ -34,6 +35,9 @@ def make_checker_board(square_size: int, reps: Tuple[int, int]) -> np.ndarray:
 
 @pytest.fixture
 def point_viz() -> viz.PointViz:
+    # handle_keys below makes each instance part of a reference cycle; collect the ones left
+    # over from earlier tests now, since destroying one mid-test can break the live instance
+    gc.collect()
     point_viz = viz.PointViz("Test Viz",
                              fix_aspect=True,
                              window_width=640,
@@ -467,6 +471,136 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     show_viz()
 
 
+# window size of the point_viz fixture
+VIZ_WIDTH, VIZ_HEIGHT = 640, 480
+WHOLE_WINDOW = (0, 0, VIZ_WIDTH - 1, VIZ_HEIGHT - 1)
+
+
+def _render(point_viz: viz.PointViz) -> None:
+    """Draw a frame on this thread, which makes pick() and get_screenshot() synchronous."""
+    point_viz.update()
+    point_viz.run_once()
+
+
+def _grid_cloud(x_center: float = 0.0, masked: bool = False) -> viz.Cloud:
+    """A 10x10 grid of points in the z = 0 plane, spaced so that none of them overlap on screen."""
+    xs, ys = np.meshgrid(np.linspace(-3, 3, 10), np.linspace(-3, 3, 10))
+    xyz = np.stack([xs.ravel() + x_center, ys.ravel(), np.zeros(xs.size)], axis=1)
+    cloud = viz.Cloud(xyz.shape[0])
+    cloud.set_xyz(xyz.astype(np.float32))
+    cloud.set_point_size(4)
+    if masked:
+        cloud.set_mask(np.zeros((cloud.size, 4), np.float32))
+    return cloud
+
+
+def _selectable(cloud: viz.Cloud) -> Set[int]:
+    """Make the cloud selectable and return the set that its picked indices are collected in."""
+    picked: Set[int] = set()
+    cloud.set_on_select(lambda selection: picked.update(selection.tolist()))
+    return picked
+
+
+def _pick(point_viz: viz.PointViz, picked: List[Set[int]],
+          rect: Tuple[int, int, int, int] = WHOLE_WINDOW) -> None:
+    for indices in picked:
+        indices.clear()
+    point_viz.pick(*rect)
+
+
+@pytest.mark.parametrize('masked', [False, True], ids=['no_mask', 'mask'])
+def test_point_viz_pick_unstructured(point_viz: viz.PointViz, masked: bool) -> None:
+    """Picking the whole window selects every point of a fully visible unstructured cloud,
+    and doesn't change how the cloud is drawn afterwards."""
+    cloud = _grid_cloud(masked=masked)
+    picked = _selectable(cloud)
+    point_viz.add(cloud)
+    _render(point_viz)
+    before = point_viz.get_screenshot(VIZ_WIDTH, VIZ_HEIGHT)
+
+    _pick(point_viz, [picked])
+    assert picked == set(range(cloud.size))
+
+    _render(point_viz)
+    np.testing.assert_array_equal(point_viz.get_screenshot(VIZ_WIDTH, VIZ_HEIGHT), before)
+
+    _pick(point_viz, [picked])
+    assert picked == set(range(cloud.size))
+
+
+@pytest.mark.parametrize('pick_first', [False, True], ids=['not_picked_before_mask', 'picked_before_mask'])
+def test_point_viz_pick_after_mask_added(point_viz: viz.PointViz, pick_first: bool) -> None:
+    """Picking selects every point after a mask is added to an unstructured cloud that has
+    already been drawn without one."""
+    cloud = _grid_cloud()
+    picked = _selectable(cloud)
+    point_viz.add(cloud)
+    _render(point_viz)
+    if pick_first:
+        _pick(point_viz, [picked])
+        _render(point_viz)
+
+    cloud.set_mask(np.zeros((cloud.size, 4), np.float32))
+    _render(point_viz)
+
+    _pick(point_viz, [picked])
+    assert picked == set(range(cloud.size))
+
+
+def test_point_viz_pick_multiple_clouds(point_viz: viz.PointViz) -> None:
+    """Each cloud gets back only its own points, indexed from zero, and only the ones inside
+    the picked rectangle."""
+    left = _grid_cloud(x_center=-5.0)
+    right = _grid_cloud(x_center=5.0, masked=True)
+    left_picked = _selectable(left)
+    right_picked = _selectable(right)
+    point_viz.add(left)
+    point_viz.add(right)
+    _render(point_viz)
+    everything = set(range(left.size))
+
+    _pick(point_viz, [left_picked, right_picked])
+    assert left_picked == everything
+    assert right_picked == everything
+
+    _pick(point_viz, [left_picked, right_picked], (0, 0, VIZ_WIDTH // 2 - 1, VIZ_HEIGHT - 1))
+    assert left_picked == everything
+    assert right_picked == set()
+
+    _pick(point_viz, [left_picked, right_picked], (VIZ_WIDTH // 2, 0, VIZ_WIDTH - 1, VIZ_HEIGHT - 1))
+    assert left_picked == set()
+    assert right_picked == everything
+
+
+@pytest.mark.parametrize('test_key', ['single-2.3'])
+@pytest.mark.parametrize('masked', [False, True], ids=['no_mask', 'mask'])
+def test_point_viz_pick_structured(meta: LidarInfo, point_viz: viz.PointViz, masked: bool) -> None:
+    """Picking the whole window selects exactly the pixels of a structured cloud that have a
+    range, and doesn't change how the cloud is drawn afterwards."""
+    cloud = viz.Cloud(meta)
+    # sparse enough that no two points overlap on screen; zero-range pixels aren't drawn
+    range_image = np.zeros((meta.h, meta.w), np.uint32)
+    range_image[::16, ::64] = 10000
+    cloud.set_range(range_image)
+    cloud.set_point_size(3)
+    if masked:
+        cloud.set_mask(np.zeros((meta.h, meta.w, 4), np.float32))
+    picked = _selectable(cloud)
+    point_viz.add(cloud)
+    _render(point_viz)
+    before = point_viz.get_screenshot(VIZ_WIDTH, VIZ_HEIGHT)
+    has_range = set(np.flatnonzero(range_image).tolist())
+
+    _pick(point_viz, [picked])
+    assert picked == has_range
+
+    _render(point_viz)
+    np.testing.assert_array_equal(point_viz.get_screenshot(VIZ_WIDTH, VIZ_HEIGHT), before)
+
+    _pick(point_viz, [picked])
+    assert picked == has_range
+
+
 def test_point_viz_destruction() -> None:
     """Check that PointViz is destroyed deterministically."""
     point_viz = viz.PointViz("Test Viz")
@@ -477,7 +611,7 @@ def test_point_viz_destruction() -> None:
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_frame_viz_destruction(meta: SensorInfo,
+def test_frame_viz_destruction(meta: LidarInfo,
                               point_viz: viz.PointViz) -> None:
     """Check that LidarFrameViz is destroyed deterministically."""
     ls_viz = viz.LidarFrameViz([meta], point_viz)
@@ -488,7 +622,7 @@ def test_frame_viz_destruction(meta: SensorInfo,
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_viz_multiple_instances(meta: SensorInfo,
+def test_viz_multiple_instances(meta: LidarInfo,
                                 frame: LidarFrame) -> None:
     """Check that destructing a visualizer doesn't break other instances."""
     point_viz = viz.PointViz("Test Viz")
@@ -504,7 +638,7 @@ def test_viz_multiple_instances(meta: SensorInfo,
     point_viz.run()
 
 
-def test_frame_viz_smoke(meta: SensorInfo,
+def test_frame_viz_smoke(meta: LidarInfo,
                         frame: LidarFrame) -> None:
     """Smoke test LidarFrame visualization."""
     ls_viz = viz.LidarFrameViz([meta])
@@ -515,7 +649,7 @@ def test_frame_viz_smoke(meta: SensorInfo,
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_frame_viz_extras(meta: SensorInfo,
+def test_frame_viz_extras(meta: LidarInfo,
                          frame: LidarFrame) -> None:
     """Check rendering of labels, cuboids, clouds and images together."""
     point_viz = viz.PointViz("Test Viz")
@@ -549,7 +683,7 @@ class LidarFrameVizWithCallbacks(viz.LidarFrameViz):
 
     def __init__(
         self,
-        meta: SensorInfo,
+        meta: LidarInfo,
         viz: Optional[viz.PointViz] = None,
         pre_draw_callback: Optional[
             Callable[
@@ -568,7 +702,7 @@ class LidarFrameVizWithCallbacks(viz.LidarFrameViz):
     def _draw(self, update_camera: bool = True) -> None:
         """Overriding the draw and setting pre/post callbacks"""
 
-        # pre draw callbacl takes LidarFrame and returns LidarFrame
+        # pre draw callback takes LidarFrame and returns LidarFrame
         if self._pre_draw_callback:
             self._model.update(self._pre_draw_callback(self._frame_set))
 
@@ -582,7 +716,7 @@ class LidarFrameVizWithCallbacks(viz.LidarFrameViz):
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_simple_viz_with_callbacks(meta: SensorInfo,
+def test_simple_viz_with_callbacks(meta: LidarInfo,
                                    frame: LidarFrame) -> None:
     """Call the callback on pre/post draw example."""
 
@@ -594,7 +728,7 @@ def test_simple_viz_with_callbacks(meta: SensorInfo,
     # this can be any frame source (just a repeater as an example)
     def repeated_frame_set() -> Iterable[FrameSet]:
         for i in range(num_steps):
-            frame.packet_timestamp[:] += 1000 * 1000 * 100
+            frame.receive_timestamp[:] += 1000 * 1000 * 100
             yield FrameSet([frame])
     frame_sets = repeated_frame_set()
 
@@ -602,8 +736,8 @@ def test_simple_viz_with_callbacks(meta: SensorInfo,
 
     frame_cnt = 0
 
-    def modify_frame(ls: Optional[LidarFrame]) -> Optional[LidarFrame]:
-        """Modify the range channel of a LidarFrame if it exists, otherwise return None."""
+    def modify_frame(ls: Optional[Frame]) -> Optional[Frame]:
+        """Modify the range channel of a frame if it exists, otherwise return None."""
         if ls:
             nls = deepcopy(ls)
             ratio = frame_cnt / num_steps

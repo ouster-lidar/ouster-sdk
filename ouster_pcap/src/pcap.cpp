@@ -12,7 +12,7 @@
  * @todo improve error reporting
  */
 
-#include "ouster/pcap/pcap.h"
+#include "pcap.h"
 
 #include <algorithm>
 #include <atomic>
@@ -69,9 +69,6 @@ using Tins::PDU;
 using Tins::RawPDU;
 using Tins::UDP;
 
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
-
 static constexpr size_t UDP_BUF_SIZE = 65535;
 static constexpr int PROTOCOL_UDP = 17;
 
@@ -81,7 +78,44 @@ namespace pcap {
 namespace {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::atomic<int> global_id = {1};
+
+PacketInfo::IpAddress raw_address(const Tins::IPv4Address& addr) {
+    PacketInfo::IpAddress result{};
+    const uint32_t value = addr;
+    std::memcpy(result.data(), &value, sizeof(value));
+    return result;
+}
+
+PacketInfo::IpAddress raw_address(const Tins::IPv6Address& addr) {
+    PacketInfo::IpAddress result{};
+    addr.copy(result.begin());
+    return result;
+}
+
+uint32_t ipv4_value(const PacketInfo::IpAddress& addr) {
+    uint32_t value = 0;
+    std::memcpy(&value, addr.data(), sizeof(value));
+    return value;
+}
+
+std::string format_ip_address(const PacketInfo::IpAddress& addr, int ip_version) {
+    if (ip_version == 4) {
+        return Tins::IPv4Address(ipv4_value(addr)).to_string();
+    }
+    if (ip_version == 6) {
+        return Tins::IPv6Address(addr.data()).to_string();
+    }
+    return {};
+}
 }  // namespace
+
+std::string PacketInfo::dst_ip() const {
+    return format_ip_address(dst_addr, ip_version);
+}
+
+std::string PacketInfo::src_ip() const {
+    return format_ip_address(src_addr, ip_version);
+}
 
 struct pcap_impl {
     pcap_t* handle{nullptr};
@@ -184,13 +218,13 @@ size_t PcapReader::next_packet() {
                         info_.encapsulation_protocol = impl_->encap_proto;
 
                         if (ip != nullptr) {
-                            info_.dst_ip = ip->dst_addr().to_string();
-                            info_.src_ip = ip->src_addr().to_string();
+                            info_.dst_addr = raw_address(ip->dst_addr());
+                            info_.src_addr = raw_address(ip->src_addr());
                             info_.ip_version = 4;
                             info_.network_protocol = ip->protocol();
                         } else if (ipv6 != nullptr) {
-                            info_.dst_ip = ipv6->dst_addr().to_string();
-                            info_.src_ip = ipv6->src_addr().to_string();
+                            info_.dst_addr = raw_address(ipv6->dst_addr());
+                            info_.src_addr = raw_address(ipv6->src_addr());
                             info_.ip_version = 6;
                             info_.network_protocol = ipv6->next_header();
                         }
@@ -269,8 +303,8 @@ header.
 */
 // SLL is the linux pcap capture container
 namespace {
-std::vector<IP> buffer_to_frag_packets(size_t frag_size, const std::string& src_ip,
-                                       const std::string& dst_ip, int src_port, int dst_port,
+std::vector<IP> buffer_to_frag_packets(size_t frag_size, Tins::IPv4Address src_ip,
+                                       Tins::IPv4Address dst_ip, int src_port, int dst_port,
                                        const uint8_t* buf, size_t buf_size) {
     /// @todo check fragsize to make sure it is in acceptable bounds
     frag_size = UDP_BUF_SIZE;
@@ -363,9 +397,16 @@ void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size, const std::st
             "PcapWriter: dst_ip and/or src_ip arguments to write_packet cannot "
             "be empty.");
     }
+    write_packet(buf, buf_size, static_cast<uint32_t>(Tins::IPv4Address(src_ip)),
+                 static_cast<uint32_t>(Tins::IPv4Address(dst_ip)), src_port, dst_port, timestamp);
+}
+
+void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size, uint32_t src_ip, uint32_t dst_ip,
+                              uint16_t src_port, uint16_t dst_port, PacketInfo::ts timestamp) {
     // For each of the packets write it to the pcap file
     for (const auto& item :
-         buffer_to_frag_packets(frag_size_, src_ip, dst_ip, src_port, dst_port, buf, buf_size)) {
+         buffer_to_frag_packets(frag_size_, Tins::IPv4Address(src_ip), Tins::IPv4Address(dst_ip),
+                                src_port, dst_port, buf, buf_size)) {
         Packet packet;
         std::unique_ptr<PDU> pdu;
         switch (encap_) {
@@ -405,12 +446,13 @@ void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size, const std::st
 }
 
 void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size, const PacketInfo& info) {
-    write_packet(buf, buf_size, info.src_ip, info.dst_ip, info.src_port, info.dst_port,
-                 info.timestamp);
+    if (info.ip_version != 4) {
+        throw std::invalid_argument("PcapWriter: only IPv4 packets can be written");
+    }
+    write_packet(buf, buf_size, ipv4_value(info.src_addr), ipv4_value(info.dst_addr), info.src_port,
+                 info.dst_port, info.timestamp);
 }
 
 }  // namespace pcap
 }  // namespace sdk
 }  // namespace ouster
-
-OUSTER_DIAGNOSTIC_POP

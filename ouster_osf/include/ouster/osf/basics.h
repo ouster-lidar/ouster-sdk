@@ -44,7 +44,7 @@ enum class OsfVersion : uint64_t {
     V_1_4,          ///< Gen2/128 support (2020/08/11)
 
     V_2_0 = 20,  ///< Second Generation OSF v2
-    V_2_1 = 21   ///< Add full index and addtional info to LidarFrames
+    V_2_1 = 21   ///< Add full index and additional info to LidarFrames
     // IMPORTANT: do not add new entries here; doing so is unnecessary.
     // Instead, use ouster::sdk::core::Version class to specify a semver-style
     // version. The OSF implementation is capable of handling versions beyond
@@ -72,7 +72,7 @@ std::string to_string(ChunksLayout chunks_layout);
  * From String Conversion Functionality To ChunksLayout
  *
  * @param[in] layout_string The String Representation of ChunksLayout
- * @return The corrosponding ChunksLayout object
+ * @return The corresponding ChunksLayout object
  */
 OUSTER_API_FUNCTION
 ChunksLayout chunks_layout_of_string(const std::string& layout_string);
@@ -139,7 +139,8 @@ OUSTER_API_FUNCTION
 uint32_t get_block_size(const OsfBuffer& buf);
 
 /**
- * Check the prefixed size buffer CRC32 fields.
+ * Check the prefixed size and CRC32 in a buffer.
+ * The CRC32 check is disabled by default unless OUSTER_OSF_CRC is set to a non-0 value.
  *
  * @param[in] buf Structured as size prefixed Flatbuffer buffer, i.e. first
  *                4 bytes is the size of the buffer (excluding 4 bytes of the

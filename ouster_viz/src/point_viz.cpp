@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -31,6 +32,7 @@
 #include "camera.h"
 #include "cloud.h"
 #include "colormaps.h"
+#include "common.h"
 #include "framebuffer.h"
 #include "glfw.h"
 #include "image.h"
@@ -38,7 +40,11 @@
 #include "mesh.h"
 #include "misc.h"
 #include "object_overlay.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/pose_conversion.h"
+#include "ouster/core/typedefs.h"
+#include "ouster/core/xyzlut.h"
+#include "ouster/viz/impl/buffers.h"
 #include "screenshot_utils.h"
 
 static_assert(std::is_same<GLfloat, float>::value, "Platform has unexpected definition of GLfloat");
@@ -91,6 +97,12 @@ class ScreenshotRequest {
     std::vector<uint8_t> pixels_;
 };
 
+const float QUAD_VERTS[] = {
+    // positions   // texCoords
+    -1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
+
+    -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f, 1.0f};
+
 }  // namespace
 
 /*
@@ -133,6 +145,9 @@ struct PointViz::Impl {
 
     uint32_t instance_id{0};
 
+    bool title_changed = false;
+    std::string title;
+
     Indexed<impl::GLCloud, Cloud> clouds;
     Indexed<impl::GLMesh, Mesh> meshes;
     Indexed<impl::GLCuboid, Cuboid> cuboids;
@@ -166,6 +181,20 @@ struct PointViz::Impl {
     double fps{0};
     vec4f background_color{0, 0, 0, 1};
 
+    // eye dome lighting
+    bool enable_eye_dome_lighting{false};
+    std::unique_ptr<impl::Framebuffer> eye_dome_fb;
+    GLuint eye_dome_shader;
+    GLuint quad_vbo;
+    GLuint quad_vao;
+    GLint eye_dome_image_id;
+    GLint eye_dome_depth_id;
+    GLint eye_dome_is_ortho_id;
+    GLint eye_dome_data_id;
+    GLint eye_dome_sx_id;
+    GLint eye_dome_sy_id;
+    float eye_dome_data[2 * 8];
+
     explicit Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
 };
 
@@ -188,13 +217,13 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width, i
 
     pimpl_ = std::make_unique<Impl>(std::move(glfw));
     pimpl_->instance_id =
-        static_cast<uint32_t>(viz_instance++ + 1);  // make sure we dont start at 0
+        static_cast<uint32_t>(viz_instance++ + 1);  // make sure we don't start at 0
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    // These two lines are confugurations necessary for every
+    // These two lines are configurations necessary for every
     // glReadPixels call. If any of these settings is changed somewhere else
     // in the program, special attention needs to be put on the screenshot
     // functionality
@@ -203,10 +232,40 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width, i
 
     pimpl_->ring_state = std::make_unique<impl::GLRings::GlobalState>();
 
+    // Instantiate eye dome things
+    pimpl_->eye_dome_shader =
+        ouster::sdk::viz::impl::load_shaders(ouster::sdk::viz::impl::EYE_DOME_VERTEX_SHADER_CODE,
+                                             ouster::sdk::viz::impl::EYE_DOME_FRAGMENT_SHADER_CODE);
+    pimpl_->eye_dome_image_id = glGetUniformLocation(pimpl_->eye_dome_shader, "color_texture");
+    pimpl_->eye_dome_depth_id = glGetUniformLocation(pimpl_->eye_dome_shader, "depth_texture");
+    pimpl_->eye_dome_is_ortho_id = glGetUniformLocation(pimpl_->eye_dome_shader, "is_ortho");
+    pimpl_->eye_dome_data_id = glGetUniformLocation(pimpl_->eye_dome_shader, "neighbors");
+    pimpl_->eye_dome_sx_id = glGetUniformLocation(pimpl_->eye_dome_shader, "step_x");
+    pimpl_->eye_dome_sy_id = glGetUniformLocation(pimpl_->eye_dome_shader, "step_y");
+
+    glGenVertexArrays(1, &pimpl_->quad_vao);
+    glGenBuffers(1, &pimpl_->quad_vbo);
+    glBindVertexArray(pimpl_->quad_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, pimpl_->quad_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD_VERTS), QUAD_VERTS, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(1);
+    // NOLINTBEGIN(performance-no-int-to-ptr)
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                          reinterpret_cast<void*>(2 * sizeof(float)));
+    // NOLINTEND(performance-no-int-to-ptr)
+    for (ptrdiff_t i = 0; i < 8; i++) {
+        double x = cos(2.0 * M_PI * static_cast<double>(i) / 8.0);
+        double y = sin(2.0 * M_PI * static_cast<double>(i) / 8.0);
+        pimpl_->eye_dome_data[i * 2] = static_cast<float>(x / sqrt((x * x) + (y * y)));
+        pimpl_->eye_dome_data[(i * 2) + 1] = static_cast<float>(y / sqrt((x * x) + (y * y)));
+    }
+
     // release context in case subsequent calls are done from another thread
     glfwMakeContextCurrent(nullptr);
 
-    // add user-setable input handlers
+    // add user-settable input handlers
     pimpl_->glfw->key_handler = [this](const WindowCtx& ctx, int key, int mods) {
         for (auto& handler : pimpl_->key_handlers) {
             if (!handler(ctx, key, mods)) {
@@ -247,9 +306,9 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width, i
     };
     pimpl_->glfw->mouse_pos_handler = [this](const WindowCtx& ctx, double x, double y) {
         for (auto& handler : pimpl_->mouse_pos_handlers) {
-            // skip callbacks that dont have the appropiate mouse button down
+            // skip callbacks that don't have the appropriate mouse button down
             if (handler.second != MouseEventType::ANY) {
-                // if an appropriate button isnt pressed, dont call that callback
+                // if an appropriate button isn't pressed, don't call that callback
                 int button_mask = 0;
                 button_mask |= ctx.rbutton_down ? MouseEventType::RIGHT : 0;
                 button_mask |= ctx.lbutton_down ? MouseEventType::LEFT : 0;
@@ -468,6 +527,15 @@ void PointViz::visible(bool state) {
     pimpl_->glfw->visible(state);
 }
 
+void PointViz::set_title(const std::string& title) {
+    std::lock_guard<std::mutex> guard{pimpl_->update_mx};
+    pimpl_->title_changed = true;
+    pimpl_->title = title;
+
+    // wake the main thread if its waiting on events
+    glfwPostEmptyEvent();
+}
+
 void PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl_->update_mx};
 
@@ -526,6 +594,14 @@ void PointViz::count_fps() {
     }
 }
 
+void PointViz::enable_eye_dome_lighting(bool enable) {
+    pimpl_->enable_eye_dome_lighting = enable;
+    pimpl_->front_changed = true;
+
+    // wake the main thread if its waiting on events
+    glfwPostEmptyEvent();
+}
+
 void PointViz::draw() {
     glClearColor(pimpl_->background_color[0], pimpl_->background_color[1],
                  pimpl_->background_color[2], pimpl_->background_color[3]);
@@ -538,8 +614,52 @@ void PointViz::draw() {
     // draw rings
     pimpl_->rings.draw(*pimpl_->ring_state, ctx, camera_data);
 
+    // if eye dome enabled, render the clouds into a render texture rather than the back buffer
+    GLint current_fbo{};
+    if (pimpl_->enable_eye_dome_lighting) {
+        auto& fb = pimpl_->eye_dome_fb;
+        int width{0};
+        int height{0};
+        glfwGetFramebufferSize(pimpl_->glfw->window, &width, &height);
+        if (!fb || fb->height() != height || fb->width() != width) {
+            fb = std::make_unique<impl::Framebuffer>(width, height, true);
+        }
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &current_fbo);
+        fb->bind();
+
+        glClearColor(pimpl_->background_color[0], pimpl_->background_color[1],
+                     pimpl_->background_color[2], pimpl_->background_color[3]);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
     // draw clouds
     pimpl_->clouds.draw(ctx, camera_data);
+
+    if (pimpl_->enable_eye_dome_lighting) {
+        // rebind the old FBO
+        glBindFramebuffer(GL_FRAMEBUFFER, current_fbo);
+        // finally render this into our actual image with the eye dome effect
+        glUseProgram(pimpl_->eye_dome_shader);
+        glUniform1i(pimpl_->eye_dome_image_id, 0);
+        glUniform1i(pimpl_->eye_dome_depth_id, 1);
+        glUniform1i(pimpl_->eye_dome_is_ortho_id, pimpl_->camera_front.is_orthographic() ? 1 : 0);
+        glUniform2fv(pimpl_->eye_dome_data_id, 8, pimpl_->eye_dome_data);
+        glUniform1f(pimpl_->eye_dome_sx_id,
+                    1.0f / static_cast<float>(pimpl_->eye_dome_fb->width()));
+        glUniform1f(pimpl_->eye_dome_sy_id,
+                    1.0f / static_cast<float>(pimpl_->eye_dome_fb->height()));
+
+        glDisable(GL_DEPTH_TEST);
+        glBindVertexArray(pimpl_->quad_vao);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, pimpl_->eye_dome_fb->texture());
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, pimpl_->eye_dome_fb->depth_texture());
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glEnable(GL_DEPTH_TEST);
+    }
 
     // draw meshes
     pimpl_->meshes.draw(ctx, camera_data);
@@ -616,7 +736,7 @@ void PointViz::do_pick(uint32_t x_1, uint32_t y_1, uint32_t x_2, uint32_t y_2) {
         auto camera_data = pimpl_->camera_front.matrices(impl::window_aspect(ctx));
 
         // draw clouds
-        uint32_t start_index = 1;  // to make sure they arent black
+        uint32_t start_index = 1;  // to make sure they aren't black
         std::vector<std::pair<Selectable*, uint32_t>> ranges;
         pimpl_->clouds.draw_select(ctx, camera_data, start_index, ranges);
 
@@ -656,7 +776,7 @@ void PointViz::do_pick(uint32_t x_1, uint32_t y_1, uint32_t x_2, uint32_t y_2) {
                 }
 
                 // find which cloud it was part of
-                // todo dont do a linear search, fine for small numbers of
+                // todo don't do a linear search, fine for small numbers of
                 // objects though
                 auto selected = ranges[0];
                 for (size_t i = 1; i < ranges.size(); i++) {
@@ -790,6 +910,11 @@ void PointViz::process_frame() {
     // Draw
     {
         std::lock_guard<std::mutex> guard{pimpl_->update_mx};
+        // update window title
+        if (pimpl_->title_changed) {
+            pimpl_->title_changed = false;
+            pimpl_->glfw->set_title(pimpl_->title);
+        }
         if (pimpl_->front_changed || pimpl_->camera_changed) {
             count_fps();
         }
@@ -1124,109 +1249,119 @@ bool PointViz::toggle_screen_recording(double scale_factor) {
     return toggle_screen_recording(size.first, size.second);
 }
 
-Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
-    : n_{w * h},
-      w_{w},
-      extrinsic_{extrinsic},
-      range_data_{std::make_shared<impl::BufferReference>(n_, 0)},
-      xyz_data_{std::make_shared<impl::BufferReference>(3 * n_, 0)},
-      off_data_{std::make_shared<impl::BufferReference>(3 * n_, 0)} {
-    // initialize per-column poses to identity
-    std::vector<float> transform_data(12 * w, 0.0f);
-    for (size_t v = 0; v < w; v++) {
-        transform_data[3 * v] = 1.0f;
-        transform_data[(3 * (v + w)) + 1] = 1.0f;
-        transform_data[(3 * (v + 2 * w)) + 2] = 1.0f;
-    }
-    transform_data_ =
-        std::make_shared<impl::TextureReference>(std::move(transform_data), w_, 4, GL_RGB32F);
-
-    // set initial rgba alpha to 1.0
-    std::vector<uint8_t> key_data(4 * n_, 0);
-    for (size_t i = 3; i < 4 * n_; i += 4) {
-        key_data[i] = 255;
-    }
-    key_data_ = std::make_shared<impl::BufferReference>(std::move(key_data));
-    key_changed_ = true;
-
-    // let mask be unallocated if zero initialized, the glcloud can deal with it
-
+Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic) : n_{w * h}, w_{w}, extrinsic_{extrinsic} {
     set_palette(&SPEZIA_PALETTE[0][0], SPEZIA_N);
 
     pose_.setIdentity();
-    pose_changed_ = true;
+}
+
+namespace {
+
+using LutBuffers =
+    std::pair<std::shared_ptr<impl::BufferReference>, std::shared_ptr<impl::BufferReference>>;
+
+template <typename T>
+std::shared_ptr<impl::BufferReference> make_lut_buffer(const core::ArrayX3R<T>& table) {
+    std::vector<float> data(table.size());
+    Eigen::Map<core::ArrayX3R<float>>(data.data(), table.rows(), 3) = table.template cast<float>();
+    return std::make_shared<impl::BufferReference>(std::move(data));
+}
+
+template <typename T>
+LutBuffers make_lut_buffers(const core::XYZLutT<T>& lut) {
+    return {make_lut_buffer(lut.direction), make_lut_buffer(lut.offset)};
+}
+
+template <typename T>
+struct LutBufferCache {
+    struct Entry {
+        std::weak_ptr<const core::XYZLutT<T>> lut;
+        std::weak_ptr<impl::BufferReference> xyz;
+        std::weak_ptr<impl::BufferReference> offset;
+    };
+    std::mutex mutex;
+    std::vector<Entry> entries;
+    size_t misses = 0;
+
+    static LutBufferCache& instance() {
+        static LutBufferCache cache;
+        return cache;
+    }
+
+    size_t size() {
+        std::lock_guard<std::mutex> lock(mutex);
+        return static_cast<size_t>(
+            std::count_if(entries.begin(), entries.end(), [](const Entry& entry) {
+                return !entry.lut.expired() && !entry.xyz.expired() && !entry.offset.expired();
+            }));
+    }
+};
+
+// Clouds built from the same LUT instance share its direction and offset buffers (and so their GPU
+// memory) for as long as any of those clouds holds them.
+template <typename T>
+LutBuffers cached_lut_buffers(const std::shared_ptr<const core::XYZLutT<T>>& lut) {
+    using Entry = typename LutBufferCache<T>::Entry;
+    auto& cache = LutBufferCache<T>::instance();
+
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    auto& entries = cache.entries;
+    entries.erase(std::remove_if(entries.begin(), entries.end(),
+                                 [](const Entry& entry) {
+                                     return entry.lut.expired() || entry.xyz.expired() ||
+                                            entry.offset.expired();
+                                 }),
+                  entries.end());
+    for (const auto& entry : entries) {
+        if (entry.lut.lock() == lut) {
+            LutBuffers buffers{entry.xyz.lock(), entry.offset.lock()};
+            if (buffers.first && buffers.second) {
+                return buffers;
+            }
+        }
+    }
+    auto buffers = make_lut_buffers(*lut);
+    entries.push_back({lut, buffers.first, buffers.second});
+    cache.misses++;
+    return buffers;
+}
+
+}  // namespace
+
+size_t impl::cloud_lut_cache_size() {
+    return LutBufferCache<float>::instance().size() + LutBufferCache<double>::instance().size();
+}
+
+size_t impl::cloud_lut_cache_misses() {
+    return LutBufferCache<float>::instance().misses + LutBufferCache<double>::instance().misses;
 }
 
 Cloud::Cloud(const ouster::sdk::core::XYZLut& xyz_lut)
     : Cloud::Cloud{xyz_lut.w, xyz_lut.h, viz::IDENTITY4D} {
-    // make_xyz_lut still outputs doubles
-    Eigen::Array<float, Eigen::Dynamic, 3, Eigen::RowMajor> direction =
-        xyz_lut.direction.cast<float>();
-    Eigen::Array<float, Eigen::Dynamic, 3, Eigen::RowMajor> offset = xyz_lut.offset.cast<float>();
-    // initialize unit vectors and offsets, set_range() used for data
-    set_xyz(direction.data());
-    set_offset(offset.data());
+    std::tie(xyz_data_, off_data_) = make_lut_buffers(xyz_lut);
 }
 
-struct CacheItem {
-    std::weak_ptr<impl::BufferReference> xyz;
-    std::weak_ptr<impl::BufferReference> offset;
-};
-
-Cloud::Cloud(const std::shared_ptr<ouster::sdk::core::XYZLut>& xyz_lut)
+Cloud::Cloud(const std::shared_ptr<const ouster::sdk::core::XYZLut>& xyz_lut)
     : Cloud::Cloud{xyz_lut->w, xyz_lut->h, viz::IDENTITY4D} {
-    static std::mutex xyxl_cache_mutex;
-    static std::map<ouster::sdk::core::XYZLut*, CacheItem> xyzl_cache;
-
-    // cache buffers for each unique xyzlut instance to deduplicate
-    std::shared_ptr<impl::BufferReference> xyz;
-    std::shared_ptr<impl::BufferReference> offset;
-    {
-        std::unique_lock<std::mutex> lock(xyxl_cache_mutex);
-        auto iter = xyzl_cache.find(xyz_lut.get());
-        if (iter != xyzl_cache.end()) {
-            xyz = iter->second.xyz.lock();
-            offset = iter->second.offset.lock();
-        }
-    }
-
-    // if its not cached, generate it and add it to the cache
-    if (!xyz || !offset) {
-        Eigen::Array<float, Eigen::Dynamic, 3, Eigen::RowMajor> direction =
-            xyz_lut->direction.cast<float>();
-        Eigen::Array<float, Eigen::Dynamic, 3, Eigen::RowMajor> offset =
-            xyz_lut->offset.cast<float>();
-        set_xyz(direction.data());
-        set_offset(offset.data());
-
-        std::unique_lock<std::mutex> lock(xyxl_cache_mutex);
-        xyzl_cache[xyz_lut.get()] = {xyz_data_, off_data_};
-    } else {
-        // otherwise reuse the cached value
-        xyz_data_ = xyz;
-        off_data_ = offset;
-        xyz_changed_ = true;
-        offset_changed_ = true;
-    }
+    std::tie(xyz_data_, off_data_) = cached_lut_buffers(xyz_lut);
 }
 
-Cloud::Cloud(const ouster::sdk::core::SensorInfo& sensor_info)
-    : Cloud::Cloud{sensor_info.w(), sensor_info.h(), viz::IDENTITY4D} {
-    ouster::sdk::core::XYZLutT<float> lut(sensor_info, true);
-
-    // initialize unit vectors and offsets, set_range() used for data
-    set_xyz(lut.direction.data());
-    set_offset(lut.offset.data());
+Cloud::Cloud(const std::shared_ptr<const ouster::sdk::core::XYZLutT<float>>& xyz_lut)
+    : Cloud::Cloud{xyz_lut->w, xyz_lut->h, viz::IDENTITY4D} {
+    std::tie(xyz_data_, off_data_) = cached_lut_buffers(xyz_lut);
 }
+
+Cloud::Cloud(const ouster::sdk::core::LidarInfo& sensor_info)
+    : Cloud::Cloud{sensor_info.xyzlut<float>()} {}
 
 /*
  * Drawable types exposed to the user
  */
-Cloud::Cloud(size_t num_points, const mat4d& extrinsic) : Cloud{1, num_points, extrinsic} {
-    // initialize ranges to 1, set_xyz() used for data
-    Eigen::Array<uint32_t, 1, -1> ones =
-        Eigen::Array<uint32_t, 1, -1>::Ones(static_cast<std::ptrdiff_t>(num_points * 3));
-    set_range(ones.data());
+Cloud::Cloud(size_t num_points, const mat4d& extrinsic)
+    : n_{num_points}, w_{1}, extrinsic_{extrinsic} {
+    set_palette(&SPEZIA_PALETTE[0][0], SPEZIA_N);
+
+    pose_.setIdentity();
 }
 
 Cloud::Cloud(size_t w, size_t h, const float* dir, const float* off, const mat4d& extrinsic)
@@ -1236,7 +1371,51 @@ Cloud::Cloud(size_t w, size_t h, const float* dir, const float* off, const mat4d
     set_offset(off);
 }
 
-void Cloud::update_from(const Cloud& other) {
+void Cloud::update_from(Cloud& other) {
+    // Allocate any missing arrays with default values. This is a rare case as these are usually
+    // filled out.
+    if (other.off_data_) {
+        // allocate anything missing for ordered cloud (range is already present so skip that)
+        if (!other.transform_data_) {
+            std::vector<float> transform_data(12 * other.w_, 0.0f);
+            for (size_t v = 0; v < other.w_; v++) {
+                transform_data[3 * v] = 1.0f;
+                transform_data[(3 * (v + other.w_)) + 1] = 1.0f;
+                transform_data[(3 * (v + 2 * other.w_)) + 2] = 1.0f;
+            }
+            other.transform_data_ = std::make_shared<impl::TextureReference>(
+                std::move(transform_data), other.w_, 4, GL_RGB32F);
+        }
+
+        // The constructor guarantees that xyz and offset are set for ordered clouds
+        // So no need to check those
+
+        if (!other.range_data_) {
+            std::vector<float> data(other.n_, 0.0f);
+            other.range_data_ = std::make_shared<impl::BufferReference>(std::move(data), true);
+            other.range_changed_ = true;
+        }
+    } else {
+        // allocate anything missing for unordered cloud (xyz)
+        if (!other.xyz_data_) {
+            std::vector<float> data(3 * other.n_, 0.0f);
+            other.xyz_data_ = std::make_shared<impl::BufferReference>(std::move(data), 0);
+            other.xyz_changed_ = true;
+        }
+    }
+
+    // allocate anything generally missing (e.g. key)
+    if (!other.key_data_) {
+        std::vector<uint8_t> key_data(4 * other.n_, 0);
+        for (size_t i = 3; i < 4 * other.n_; i += 4) {
+            key_data[i] = 255;
+        }
+        other.key_data_ = std::make_shared<impl::BufferReference>(std::move(key_data));
+        other.key_changed_ = true;
+    }
+
+    // do not allocate a missing mask, we cache it at the GlCloud level
+
     // TODO[tws] This is ugly.
     // VAOs should have some encapsulation that allows better management.
     bool range_changed = other.range_changed_ || range_changed_;
@@ -1277,6 +1456,9 @@ void Cloud::dirty() {
 }
 
 void Cloud::set_range(const uint32_t* range) {
+    if (!off_data_) {
+        throw std::logic_error("Cannot set range for an unordered pointcloud.");
+    }
     std::vector<float> data(n_, 0);
     std::transform(range, range + n_, std::begin(data),
                    [](uint32_t range_val) { return static_cast<float>(range_val); });
@@ -1382,6 +1564,10 @@ void Cloud::set_mask(const uint8_t* mask_data) {
 }
 
 void Cloud::set_xyz(const float* xyz) {
+    // allow calling this once (in the constructor) per ordered pointcloud
+    if (off_data_ && xyz_data_) {
+        throw std::logic_error("Cannot set xyz positions for an ordered pointcloud.");
+    }
     std::vector<float> data(xyz, xyz + (3 * n_));
     xyz_data_ = std::make_shared<impl::BufferReference>(std::move(data));
     xyz_changed_ = true;
@@ -1404,6 +1590,9 @@ void Cloud::set_pose(const mat4d& pose) {
 }
 
 void Cloud::set_column_poses(const float* rotation, const float* translation) {
+    if (!off_data_) {
+        throw std::logic_error("Cannot set column poses for an unordered pointcloud.");
+    }
     std::vector<float> transform_data(12 * w_, 0);
     for (size_t v = 0; v < w_; v++) {
         for (size_t u = 0; u < 3; u++) {
@@ -1420,6 +1609,9 @@ void Cloud::set_column_poses(const float* rotation, const float* translation) {
 }
 
 void Cloud::set_column_poses(const float* column_poses) {
+    if (!off_data_) {
+        throw std::logic_error("Cannot set column poses for an unordered pointcloud.");
+    }
     // columns_poses: is [Wx4x4] and row-major (C-order) storage
     std::vector<float> transform_data(12 * w_, 0);
     for (size_t v = 0; v < w_; v++) {
@@ -1987,8 +2179,13 @@ double TargetDisplay::get_ring_size_m() const {
 void TargetDisplay::set_ring_size(int ring_size) {
     ring_size_ = ring_size;
 }
+
 void TargetDisplay::set_ring_line_width(int line_width) {
     ring_line_width_ = line_width;
+}
+
+void TargetDisplay::set_ring_anchor_in_world(bool state) {
+    rings_in_world_ = state;
 }
 
 void add_default_controls(PointViz& viz, std::mutex* mx) {

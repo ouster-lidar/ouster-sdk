@@ -21,7 +21,7 @@
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/types.h"
 #include "ouster/osf/basics.h"
-#include "ouster/osf/png_lidarframe_encoder.h"
+#include "ouster/osf/png_frame_encoder.h"
 
 namespace ouster {
 namespace sdk {
@@ -38,8 +38,8 @@ class OsfPngToolsTest : public OsfTestWithDataAndFiles {};
 using ouster::sdk::core::ChanFieldType;
 using ouster::sdk::core::Field;
 using ouster::sdk::core::LidarFrame;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::core::LidarMode;
-using ouster::sdk::core::SensorInfo;
 
 size_t field_size(LidarFrame& ls, const std::string& f) {
     switch (ls.field_type(f).element_type) {
@@ -63,7 +63,7 @@ size_t field_size(LidarFrame& ls, const std::string& f) {
 
 // Check that we can make lidar frame and have fields with expected value inside
 TEST_F(OsfPngToolsTest, MakesLidarFrame) {
-    const SensorInfo si = ouster::sdk::core::metadata_from_json(
+    const LidarInfo si = ouster::sdk::core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
 
     LidarFrame ls = get_random_lidar_frame(si);
@@ -85,7 +85,7 @@ TEST_F(OsfPngToolsTest, frameDecodeFields) {
     // if destagger throws std::invalid_argument
 
     // create a writer with a sensor info from DATA_DIR
-    const SensorInfo si = ouster::sdk::core::metadata_from_json(
+    const LidarInfo si = ouster::sdk::core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
 
     // assert precondition
@@ -93,9 +93,10 @@ TEST_F(OsfPngToolsTest, frameDecodeFields) {
     std::string output_osf_filename = tmp_file("frame_decode_fields_test.osf");
 
     // create a lidar frame that's the wrong size
-    int w = 32;
-    int h = 32;
-    auto frame = ouster::sdk::core::LidarFrame(h, w);
+    auto si2 = std::make_shared<LidarInfo>(si);
+    si2->format.columns_per_frame = 32;
+    si2->format.pixels_per_column = 32;
+    auto frame = ouster::sdk::core::LidarFrame(si2);
     auto field_types = frame.field_types();
     std::vector<int> shift_by_row;
     EXPECT_THROW(
@@ -119,13 +120,13 @@ TEST_F(OsfPngToolsTest, frameDecodeFields) {
 TEST(OsfFieldEncodeTest, field_encode_decode_test) {
     auto test_field_encoding = [](const ouster::sdk::core::Field& f) {
         FrameChannelData compressed;
-        PngLidarFrameEncoder encoder(4);
+        PngFrameEncoder encoder(4);
         EXPECT_NO_THROW({ compressed = encoder.encode_field(f); });
         Field decoded(f.desc(), ouster::sdk::core::FieldClass::FRAME_FIELD);
         ouster::sdk::osf::impl::EncodedFrameChannelData compressed_data;
         compressed_data.data_internal = compressed.data();
         compressed_data.size_internal = compressed.size();
-        EXPECT_NO_THROW({ impl::decode_field(decoded, compressed_data); });
+        EXPECT_NO_THROW({ impl::decode_field(decoded, compressed_data, {}); });
         EXPECT_EQ(f, decoded);
     };
 

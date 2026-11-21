@@ -59,7 +59,7 @@ def test_pcap_to_ply_writes_expected_points(tmp_path, test_data_dir: Path):
     pcap_file = _pcap_path(test_data_dir)
     meta_file = _metadata_path(test_data_dir)
 
-    metadata = core.SensorInfo(meta_file.read_text())
+    metadata = core.LidarInfo(meta_file.read_text())
 
     # limit to first frame from pcap
     frame_set_source = pcap.PcapFrameSetSource(str(pcap_file), sensor_info=[metadata])
@@ -105,7 +105,7 @@ def test_pcap_to_pcd_writes_expected_points(tmp_path, test_data_dir: Path):
     pcap_file = _pcap_path(test_data_dir)
     meta_file = _metadata_path(test_data_dir)
 
-    metadata = core.SensorInfo(meta_file.read_text())
+    metadata = core.LidarInfo(meta_file.read_text())
 
     frame_set_source = pcap.PcapFrameSetSource(str(pcap_file), sensor_info=[metadata])
     frame, = next(iter(frame_set_source))
@@ -135,7 +135,7 @@ def test_pcap_to_las_writes_expected_points(tmp_path, test_data_dir: Path):
 
     pcap_file = _pcap_path(test_data_dir)
     meta_file = _metadata_path(test_data_dir)
-    metadata = core.SensorInfo(meta_file.read_text())
+    metadata = core.LidarInfo(meta_file.read_text())
 
     frame_set_source = pcap.PcapFrameSetSource(str(pcap_file), sensor_info=[metadata])
     frame, = next(iter(frame_set_source))
@@ -163,7 +163,7 @@ def test_pcap_display_xyz_points_returns_data_without_plot(test_data_dir: Path):
 
     pcap_file = _pcap_path(test_data_dir)
     meta_file = _metadata_path(test_data_dir)
-    sensor_info = core.SensorInfo(meta_file.read_text())
+    sensor_info = core.LidarInfo(meta_file.read_text())
 
     x, y, z, colors = pcap_examples.pcap_display_xyz_points(str(pcap_file),
                                                             plot=False)

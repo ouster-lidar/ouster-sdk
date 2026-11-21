@@ -55,7 +55,7 @@ def test_exp_log_pose_vectorized(poses6: List[pu.Pose6]):
         # check roundtrip p -> gt -> p
         assert np.allclose(p, gt_homMatToPose6(exp_p))
 
-    # check vectrised conversion of [N, 6] size
+    # check vectorized conversion of [N, 6] size
     vec_p = pu.exp_pose6(np.array(poses6))
     assert np.allclose(np.array(gt_p_vec), vec_p)
 
@@ -357,6 +357,29 @@ def test_dewarp():
 
     np.testing.assert_allclose(dewarped_points_cc.shape, (2, 4, 3))
     np.testing.assert_allclose(dewarped_points_cc, expected_points, rtol=1e-5, atol=1e-8)
+
+
+def test_dewarp_single_pose_broadcast():
+    """A single (1, 4, 4) pose is broadcast to every column (CameraFrame path)."""
+    pose = np.array([[1, 0, 0, 1],
+                     [0, 1, 0, 2],
+                     [0, 0, 1, 3],
+                     [0, 0, 0, 1]], dtype=np.float64)
+    poses = pose.reshape(1, 4, 4)
+    points = np.array([[[0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [1.0, 1.0, 0.0]],
+                       [[0.0, 0.0, 1.0],
+                        [1.0, 0.0, 1.0],
+                        [0.0, 1.0, 1.0],
+                        [1.0, 1.0, 1.0]]], dtype=np.float64)
+
+    dewarped = dewarp(points, poses)
+    expected = transform(points, pose)
+
+    np.testing.assert_allclose(dewarped.shape, points.shape)
+    np.testing.assert_allclose(dewarped, expected, rtol=1e-5, atol=1e-8)
 
 
 def test_euler_pose_to_matrix():

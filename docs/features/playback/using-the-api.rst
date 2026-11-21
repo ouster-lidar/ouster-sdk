@@ -8,14 +8,14 @@ Recording Sensor Data to OSF
 -----------------------------
 
 OSF (Open Sensor Format) files provide a more structured approach to data storage, including sensor info and frame-level organization.
-It is the recommended format used to store Ouster sensor data. 
+It is the recommended format used to store Ouster sensor data.
 
-Instead of saving raw packets, one can batch packets from a live sensor into LidarFrame objects first, and then saves those ``LidarFrame`` objects to an .osf file. This is useful if you want to store processed, ready-to-use frames.
+Instead of saving raw packets, one can batch packets from a live sensor into ``Frame`` objects first (a ``LidarFrame`` for a lidar stream, a ``CameraFrame`` for a camera stream), and then save those frames to an .osf file. This is useful if you want to store processed, ready-to-use frames.
 
 An API for writing to the OSF file format is also exposed. This is most often used for writing
 frames and sensor info, possibly with a reduced number of fields in order to save data.
 
-Let's walkthough an example of recording data from a live sensor and storing it into an OSF file.
+Let's walk through an example of recording data from a live sensor and storing it into an OSF file.
 
 .. rubric:: **Imports**
 
@@ -32,7 +32,7 @@ Let's walkthough an example of recording data from a live sensor and storing it 
          :class: doc-snippet scroll-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/osf.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -59,7 +59,7 @@ Let's walkthough an example of recording data from a live sensor and storing it 
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/osf.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -75,10 +75,11 @@ Let's walkthough an example of recording data from a live sensor and storing it 
 
 A general scheme of writing frames to the OSF with ``Writer``:
 
-1. Create ``osf.Writer`` with the output file name, lidar metadata(s) (``ouster.sdk.core.SensorInfo``) and optionally the desired output frame fields.
-2. Use the writer's ``save`` function ``writer.save(index, frame)`` to encode the ``LidarFrame`` into the
-   underlying message buffer for lidar ``index`` and finally push it to disk.
-   If you have multiple lidar sensors you can save the frames simultaneously by providing them in an array to ``writer.save``.
+1. Create ``osf.Writer`` with the output file name, the sensor metadata(s) (``ouster.sdk.core.SensorInfo`` — a ``LidarInfo`` and/or ``CameraInfo`` per stream) and optionally the desired output frame fields.
+2. Use the writer's ``save`` function ``writer.save(index, frame)`` to encode the ``Frame`` (a ``LidarFrame`` or ``CameraFrame``) into the
+   underlying message buffer for the stream at ``index`` and finally push it to disk.
+   ``index`` is the sensor's position in registration order (the same order as the source's ``sensor_info``); ``save`` dispatches on the concrete frame type and raises if the frame's kind doesn't match the sensor registered at that index.
+   If you have multiple sensors you can save the frames simultaneously by providing them in an array to ``writer.save``.
 
 .. tab-set::
    :sync-group: api-lang
@@ -93,7 +94,7 @@ A general scheme of writing frames to the OSF with ``Writer``:
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/osf.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -109,11 +110,12 @@ A general scheme of writing frames to the OSF with ``Writer``:
 Modifying an OSF File
 ---------------------
 
-Next, we will look at an example where ``osf.Writer`` is used for saving the available OSF file into Lidar
-Frames with a reduced fields. By reduce fields, we mean here that if ``LidarFrame`` has 7 channel
-fields, we can keep only 3 and save the disk space and bandwidth during replay.
+Next, we will look at an example where ``osf.Writer`` is used for saving the available OSF file into
+frames with a reduced fields. By reduce fields, we mean here that if a ``Frame`` has 7 channel
+fields, we can keep only 3 and save the disk space and bandwidth during replay. The field mask applies
+to lidar and camera streams alike.
 
-New field types should be a subset of fields in encoded ``LidarFrame`` so we just assume that ``RANGE``, ``SIGNAL`` and ``REFLECTIVITY`` fields will be present in the input OSF file.
+New field types should be a subset of fields in the encoded ``Frame`` so we just assume that ``RANGE``, ``SIGNAL`` and ``REFLECTIVITY`` fields will be present in the input OSF file.
 Create Writer with a subset of fields to save (i.e. slicing will happen automatically on write).
 
 .. tab-set::
@@ -128,7 +130,7 @@ Create Writer with a subset of fields to save (i.e. slicing will happen automati
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/osf.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -160,7 +162,7 @@ Below you can see an example which creates a frame and writes it to an OSF File 
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/osf.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -171,11 +173,15 @@ Below you can see an example which creates a frame and writes it to an OSF File 
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|examples/osf_writer_example.cpp>`__
          :dedent: 0
-         
+
 .. rubric:: **Create LidarFrame and save**
 
 The LidarFrame constructor has an overload taking — width (columns per frame), and height (pixels per column).
 The number of columns per packet is set to the default DEFAULT_COLUMNS_PER_PACKET which is 16.
+
+A ``CameraFrame`` can be constructed and saved the same way: build it from a ``CameraInfo``, register the
+stream with the writer (``add_sensor`` / a mixed ``SensorInfo`` list), and call ``writer.save(index, frame)``
+with its stream index.
 
 .. tab-set::
    :sync-group: api-lang
@@ -190,7 +196,7 @@ The number of columns per packet is set to the default DEFAULT_COLUMNS_PER_PACKE
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/osf.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -232,7 +238,7 @@ Both PCAP and OSF files can be played back using the ``open_source`` helper, whi
          :caption: `View on GitHub <|github-src|_snippets/cpp/stream_multi_source.cpp>`__
          :dedent: 4
 
-For a detailed guide on reading and iterating over LidarFrame objects from all source types, please see the :doc:`previous section <../consumption/using-the-api>`.
+For a detailed guide on reading and iterating over frames (``LidarFrame`` and ``CameraFrame``) from all source types, please see the :doc:`previous section <../consumption/using-the-api>`.
 
 Converting PCAPs to Other Formats
 ---------------------------------

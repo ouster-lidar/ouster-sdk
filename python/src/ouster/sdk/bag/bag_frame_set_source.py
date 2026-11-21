@@ -1,4 +1,4 @@
-from typing import Iterator, List, Optional, Union
+from typing import cast, Iterator, List, Optional, Union
 import numpy as np
 import copy
 
@@ -57,7 +57,7 @@ class BagFrameSetSource(FrameSetSource):
                                           raw_fields=raw_fields,
                                           field_names=field_names)
 
-        # copy sensor info for decoding so it cant get messed with
+        # copy sensor info for decoding so it can't get messed with
         self._orig_sensor_info = [copy.copy(si) for si in self._source.sensor_info]
 
     @property
@@ -66,7 +66,7 @@ class BagFrameSetSource(FrameSetSource):
 
     @property
     def sensor_info(self) -> List[SensorInfo]:
-        return self._source.sensor_info
+        return cast(List[SensorInfo], self._source.sensor_info)
 
     @property
     def id_error_count(self) -> int:
@@ -98,7 +98,7 @@ class BagFrameSetSource(FrameSetSource):
         # todo maybe do this in time order
         for idx, frame in enumerate(frames):
             if frame is not None:
-                # dont output frames that got no packets
+                # don't output frames that got no packets
                 if batchers[idx].batched_packets() == 0:
                     frames[idx] = None
                     continue

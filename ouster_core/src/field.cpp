@@ -249,9 +249,15 @@ Field::~Field() {
     free(ptr_);
 }
 
-Field::Field(const FieldDescriptor& desc, FieldClass field_class)
+Field::Field(const FieldDescriptor& desc, FieldClass field_class, bool zero)
     : FieldView(nullptr, desc), class_{field_class} {
-    ptr_ = calloc(desc.bytes(), sizeof(uint8_t));
+    if (zero) {
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
+        ptr_ = calloc(desc.bytes(), sizeof(uint8_t));
+    } else {
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
+        ptr_ = malloc(desc.bytes());
+    }
     if (ptr_ == nullptr) {
         throw std::runtime_error("Field: host allocation failed");
     }
@@ -326,15 +332,27 @@ FieldView uint_view(const FieldView& other) {
     return {const_cast<void*>(other.get()), desc};
 }
 
-Field destagger(const SensorInfo& info, const FieldView& field, bool inverse) {
+struct ApplyDestaggerOp {
+    template <typename T, size_t NDim>
+    void operator()(ArrayView<T, NDim> field, const LidarInfo& info, bool inverse,
+                    Field& result) const {
+        using NonConstT = std::remove_const_t<T>;
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+        std::array<Eigen::Index, NDim> size_array;
+        for (size_t i = 0; i < NDim; i++) {
+            size_array[i] = field.shape[i];
+        }
+        Eigen::TensorMap<Eigen::Tensor<NonConstT, NDim, Eigen::RowMajor>> destaggered(
+            result.get<NonConstT>(), size_array);
+        Eigen::TensorMap<const Eigen::Tensor<NonConstT, NDim, Eigen::RowMajor>> img(field.data(),
+                                                                                    size_array);
+        destagger_into<NonConstT, NDim>(img, info.format.pixel_shift_by_row, inverse, destaggered);
+    }
+};
+
+Field destagger(const LidarInfo& info, const FieldView& field, bool inverse) {
     Field result(field.desc(), FieldClass::PIXEL_FIELD);
-
-    auto destagger_fn = [&](auto ref) {
-        destagger_into<std::decay_t<decltype(ref(0))>>(ref, info.format.pixel_shift_by_row, inverse,
-                                                       result);
-    };
-
-    ouster::sdk::core::impl::visit_field_2d(field, destagger_fn);
+    ouster::sdk::core::impl::visit_field_ndim(field, ApplyDestaggerOp{}, info, inverse, result);
 
     return result;
 }

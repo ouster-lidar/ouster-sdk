@@ -1,13 +1,38 @@
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
+#include "ouster/core/camera_info.h"
+#include "ouster/core/frame.h"
+#include "ouster/core/frame_set_source.h"
 #include "ouster/core/frame_set_source_utils.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/sensor_info.h"
 
 namespace ouster {
 namespace sdk {
 namespace core {
+
+namespace {
+// Two sensors are considered "the same" (and thus deduplicated across sources)
+// when they have the same concrete kind and compare equal. Works uniformly for
+// lidar and camera without the caller knowing the sensor kind.
+bool same_sensor(const SensorInfo& a, const SensorInfo& b) {
+    if (const auto* a_lidar = dynamic_cast<const LidarInfo*>(&a)) {
+        const auto* b_lidar = dynamic_cast<const LidarInfo*>(&b);
+        return b_lidar != nullptr && *a_lidar == *b_lidar;
+    }
+    if (const auto* a_cam = dynamic_cast<const CameraInfo*>(&a)) {
+        const auto* b_cam = dynamic_cast<const CameraInfo*>(&b);
+        return b_cam != nullptr && *a_cam == *b_cam;
+    }
+    return false;
+}
+}  // namespace
 
 class MultiFrameSetSource;
 class MultiFrameSetIteratorImpl : public FrameSetIteratorImpl {
@@ -97,9 +122,10 @@ class MultiFrameSetIteratorImpl : public FrameSetIteratorImpl {
                         "sources.");
                 }
 
-                // update sensor info
-                auto res = source_->info_map_.find((*frame_set_)[0]->sensor_info.get());
-                (*frame_set_)[0]->sensor_info = res->second.second;
+                // update sensor info (any frame kind, keyed on the shared base)
+                auto& frame = (*frame_set_)[0];
+                auto res = source_->info_map_.find(frame->sensor_info().get());
+                core::impl::assign_sensor_info(*frame, res->second.second);
 
                 position_ += static_cast<int64_t>(offset);
                 return false;
@@ -140,8 +166,8 @@ class MultiFrameSetIteratorImpl : public FrameSetIteratorImpl {
             int earliest = -1;
             uint64_t minimum_ts = std::numeric_limits<uint64_t>::max();
             for (const auto& item : nexts_) {
-                // ideally wouldnt calculate all timestamps each time
-                auto timestamp = (*item.second)[0]->get_first_valid_packet_timestamp();
+                // ideally wouldn't calculate all timestamps each time
+                auto timestamp = (*item.second)[0]->get_first_valid_receive_timestamp();
                 if (timestamp < minimum_ts) {
                     earliest = static_cast<int>(item.first);
                     minimum_ts = timestamp;
@@ -158,9 +184,10 @@ class MultiFrameSetIteratorImpl : public FrameSetIteratorImpl {
                     "sources.");
             }
 
-            // update to the correct sensor info instance
-            auto res = source_->info_map_.find((*frame_set_)[0]->sensor_info.get());
-            (*frame_set_)[0]->sensor_info = res->second.second;
+            // update to the correct sensor info instance (any frame kind)
+            auto& frame = (*frame_set_)[0];
+            auto res = source_->info_map_.find(frame->sensor_info().get());
+            core::impl::assign_sensor_info(*frame, res->second.second);
 
             // skip frames from sensors we want to filter out
             if (sensor_idx_ >= 0 && res->second.first != sensor_idx_) {
@@ -188,17 +215,23 @@ class MultiFrameSetIteratorImpl : public FrameSetIteratorImpl {
     std::map<size_t, std::unique_ptr<FrameSet>> nexts_;
 };
 
+// Multi-source indexing and alignment is inherently sequential; splitting
+// obscures it.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MultiFrameSetSource::MultiFrameSetSource(std::vector<std::shared_ptr<FrameSetSource>> sources)
     : sources_(std::move(sources)), indexed_(true), size_(0) {
     // calculate everything!
 
-    // okay, build a list of each unique sensor into
+    // Build a unified list of unique sensors (lidar and camera alike) across
+    // all sources, in the same order they appear. Each source's per-sensor info
+    // is mapped to the unified (output) sensor index; the unified index doubles
+    // as the FrameSet frame-slot index exposed via sensor_info().
     for (const auto& src : sources_) {
         for (const auto& info : src->sensor_info()) {
             std::shared_ptr<SensorInfo> found;
             int sensor_index = 0;
-            for (const auto& si2 : sensor_info_) {
-                if (*info == *si2) {
+            for (const auto& si2 : all_info_) {
+                if (same_sensor(*info, *si2)) {
                     found = si2;
                     break;
                 }
@@ -206,7 +239,7 @@ MultiFrameSetSource::MultiFrameSetSource(std::vector<std::shared_ptr<FrameSetSou
             }
 
             if (!found) {
-                sensor_info_.push_back(info);
+                all_info_.push_back(info);
                 info_map_[info.get()] = {sensor_index, info};
             } else {
                 info_map_[info.get()] = {sensor_index, found};
@@ -228,14 +261,15 @@ MultiFrameSetSource::MultiFrameSetSource(std::vector<std::shared_ptr<FrameSetSou
         return;
     }
 
-    frames_num_.resize(sensor_info_.size(), 0);
+    frames_num_.resize(all_info_.size(), 0);
     for (size_t src_index = 0; src_index < sources_.size(); src_index++) {
         const auto& src = sources_[src_index];
         size_ += src->size();
 
         std::vector<uint64_t> src_idx_to_dest_index;
-        for (size_t i = 0; i < src->sensor_info().size(); i++) {
-            const auto& si = src->sensor_info()[i];
+        const auto& src_info = src->sensor_info();
+        for (size_t i = 0; i < src_info.size(); i++) {
+            const auto& si = src_info[i];
             size_t sensor_index = info_map_[si.get()].first;
             frames_num_[sensor_index] += src->frames_num()[i];
 
@@ -266,7 +300,7 @@ MultiFrameSetSource::MultiFrameSetSource(std::vector<std::shared_ptr<FrameSetSou
               [](const IndexSample& a, const IndexSample& b) { return a.timestamp < b.timestamp; });
 
     // then build individual indices
-    individual_index_.resize(sensor_info_.size());
+    individual_index_.resize(all_info_.size());
     for (uint64_t i = 0; i < full_index_.size(); i++) {
         const auto& sample = full_index_[i];
         individual_index_[sample.second].emplace_back(sample.first, i);
@@ -286,7 +320,7 @@ FrameSetIterator MultiFrameSetSource::end() const {
 }
 
 const std::vector<std::shared_ptr<SensorInfo>>& MultiFrameSetSource::sensor_info() const {
-    return sensor_info_;
+    return all_info_;
 }
 
 bool MultiFrameSetSource::is_live() const {

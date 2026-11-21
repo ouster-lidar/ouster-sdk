@@ -9,14 +9,14 @@ switch between mapping a new environment and localizing against an existing map.
 
 The API is built around two components:
 
-* :ouster:class:`LocalizationConfig <py=ouster.sdk.mapping.LocalizationConfig|cpp=ouster::sdk::mapping::LocalizationConfig>` - 
-  A class whose instances hold configuration parameters (range gates, voxel size, deskew method, initial pose). Subclasses, such as 
+* :ouster:class:`LocalizationConfig <py=ouster.sdk.mapping.LocalizationConfig|cpp=ouster::sdk::mapping::LocalizationConfig>` -
+  A class whose instances hold configuration parameters (range gates, voxel size, deskew method, initial pose). Subclasses, such as
   :ouster:class:`LIOLocalizationConfig <py=ouster.sdk.mapping.LIOLocalizationConfig|cpp=ouster::sdk::mapping::LIOLocalizationConfig>`,
   provide specific configurations for different localization engines.
 * :ouster:class:`LocalizationEngine <py=ouster.sdk.mapping.LocalizationEngine|cpp=ouster::sdk::mapping::LocalizationEngine>`
-  - An interface for implementations that process lidar frames and writes per-column poses to the frames using a user-provided map.
+  - An interface for implementations that process frames (lidar and/or camera) and write poses back to the frames using a user-provided map.
   This interface also serves as a factory for different localization implementations, e.g. the built-in LIO-based engine.
-* The engine modifies input LidarFrame objects to include per-column pose information.
+* The engine modifies input :ouster:class:`Frame <py=ouster.sdk.core.Frame|cpp=ouster::sdk::core::Frame>` objects to include pose information — per-column for a ``LidarFrame`` and a single rigid pose for a ``CameraFrame``.
 
 
 Prerequisites
@@ -62,16 +62,27 @@ In C++, construct :ouster:class:`LIOLocalizationConfig <cpp=ouster::sdk::mapping
      - ``0.0``
      - Voxel grid resolution in meters for downsampling. When set to ``0.0``, the engine estimates
        a suitable value automatically from the first batch of frames (falling back to ``1.0`` m).
+   * - ``voxel_map_size``
+     - infinity
+     - Maximum distance from the initial pose, in meters, at which points from the preloaded map
+       are retained in the local voxel map. Defaults to infinity, i.e. the preloaded map is not
+       trimmed. This trimming happens once, when the map is loaded.
    * - ``max_iterations``
      - ``500``
      - Maximum number of ICP registration iterations per frame update.
    * - ``initial_pose``
      - Identity (4×4)
      - A 4×4 transformation matrix specifying the sensor's starting pose in the map frame.
+   * - ``plumb_method``
+     - ``"all"``
+     - First-frame gravity plumbing: ``"imu"``, ``"walls"``, or ``"all"``.
    * - ``deskew_method``
      - ``"auto"``
      - Motion compensation strategy: ``"auto"``, ``"constant_velocity"``, ``"imu_deskew"``, or
        ``"none"``.
+
+See :ref:`localization-initial-pose-gravity` for how IMU deskewing uses ``initial_pose``,
+including when it is unset.
 
 The following code snippets demonstrate how to create a ``LocalizationConfig``, which the ``LocalizationEngine.create`` method needs to instantiate a ``LocalizationEngine``.
 
@@ -130,19 +141,44 @@ The following code snippets demonstrate how to create a ``LocalizationConfig``, 
          :dedent: 4
 
 
+.. _localization-initial-pose-gravity:
+
+Initial Pose and Gravity
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+With IMU deskewing, localization plumbs the frame set its trajectory starts from: the first one
+that produces a pose, whether registration succeeds or ICP is skipped for too few valid columns.
+``plumb_method`` selects how: ``imu`` estimates gravity from the IMU, ``walls`` uses wall
+geometry, and ``all``, the default, refines the IMU result with walls. If the wall refinement is
+unavailable, ``all`` keeps the IMU result. A frame set with no valid points produces no pose, so
+the next one is plumbed again, wall search included; once a pose exists, walls are never searched
+again.
+
+Plumbing measures gravity in the body frame, and ``initial_pose`` rotates that measurement into
+the map frame. The pose is used directly as the first integration anchor and never levelled; an
+unset pose starts at identity exactly as if identity had been passed. If plumbing fails, later
+frames retry the IMU plumb to estimate gravity.
+
+The initial gravity stays in use until the platform holds still: near-static IMU windows then
+gradually refine it. A platform that never holds still keeps the initial gravity for the whole
+run.
+
+
 Open a Data Source and Construct the Engine
 -------------------------------------------
 
-Open your lidar data source with :ouster:func:`open_source <py=ouster.sdk.open_source|cpp=ouster::sdk::open_source>`.  This function handles live sensors, PCAP files, and OSF files,
-returning an iterable source object and associated metadata (:ouster:class:`SensorInfo <py=ouster.sdk.core.SensorInfo|cpp=ouster::sdk::core::SensorInfo>`).
+Open your data source with :ouster:func:`open_source <py=ouster.sdk.open_source|cpp=ouster::sdk::open_source>`.  This function handles live sensors, PCAP files, and OSF files,
+returning an iterable source object and associated per-sensor metadata (:ouster:class:`SensorInfo <py=ouster.sdk.core.SensorInfo|cpp=ouster::sdk::core::SensorInfo>` — a :ouster:class:`LidarInfo <py=ouster.sdk.core.LidarInfo|cpp=ouster::sdk::core::LidarInfo>` and/or :ouster:class:`CameraInfo <py=ouster.sdk.core.CameraInfo|cpp=ouster::sdk::core::CameraInfo>` for each stream).
 
 Use :ouster:func:`LocalizationEngine.create <py=ouster.sdk.mapping.LocalizationEngine.create|cpp=ouster::sdk::mapping::LocalizationEngine::create>` to instantiate the engine,
-passing the ``SensorInfo`` list (even for a single sensor), a map (a PLY/PCD file path or an in-memory point cloud),
-and an optional ``LocalizationConfig`` (defaults to ``LIOLocalizationConfig{}``).
+passing the sensor metadata list (``source.sensor_info``, even for a single sensor), a map (a PLY/PCD file path or an in-memory point cloud),
+and an optional ``LocalizationConfig`` (defaults to ``LIOLocalizationConfig{}``). The list may mix
+``LidarInfo`` and ``CameraInfo`` entries in any order — the engine dispatches per sensor on the
+concrete type, so lidar-only, camera-only, and mixed sources all use the same call.
 
 Currently, ``LocalizationEngine`` supports only the ``lio`` (Lidar Inertial Odometry) implementation, which provides
 fast, incremental, CPU-based frame-to-map registration.
-The ``SensorInfo`` is crucial as it contains calibration data (beam angles, intrinsics) needed for point cloud generation and deskewing.
+The ``SensorInfo`` is crucial as it contains the calibration data (lidar beam angles / camera intrinsics, plus extrinsics) needed for point cloud generation and deskewing.
 
 .. note::
 
@@ -214,12 +250,13 @@ Processing Pipeline Detail
 --------------------------
 
 The core entry point is the :ouster:func:`update() <py=ouster.sdk.mapping.LocalizationEngine.update|cpp=ouster::sdk::mapping::LocalizationEngine::update>` method on ``LocalizationEngine``. You pass it a
-:ouster:class:`FrameSet <py=ouster.sdk.core.FrameSet|cpp=ouster::sdk::core::FrameSet>` (one or more lidar frames from a single rotation cycle).
+:ouster:class:`FrameSet <py=ouster.sdk.core.FrameSet|cpp=ouster::sdk::core::FrameSet>` (one or more frames — lidar and/or camera — from a single acquisition cycle).
 In Python, it returns the updated frame set; in C++, it modifies the ``FrameSet`` in place and returns ``void``.
-The engine registers the frame against the static map and writes map-aligned per-column poses into each frame.
-The result is a ``(W, 4, 4)`` array of SE(3) transforms on each frame — one 4×4 matrix per measurement
-column — encoding the sensor's position and orientation at each column's timestamp relative to
-the map origin.
+The engine registers the frames against the static map and writes map-aligned poses into each frame.
+The result is a ``(N, 4, 4)`` array of SE(3) transforms on each frame — one 4×4 matrix per pose,
+encoding the sensor's position and orientation at each timestamp relative to the map origin.
+For a ``LidarFrame`` there is one pose per measurement column (``N == W``); a ``CameraFrame`` carries a
+single rigid pose (``N == 1``).
 
 Each call to :ouster:func:`update() <py=ouster.sdk.mapping.LocalizationEngine.update|cpp=ouster::sdk::mapping::LocalizationEngine::update>` performs the following steps:
 
@@ -229,7 +266,8 @@ Each call to :ouster:func:`update() <py=ouster.sdk.mapping.LocalizationEngine.up
 2. **Deskewing (motion compensation)** — because each column in a lidar frame is captured at a
    slightly different time, sensor motion introduces distortion. The SDK applies a deskew method
    (configurable via ``deskew_method``) to estimate per-column poses that compensate for this
-   motion:
+   motion. A ``CameraFrame`` (global shutter) has a single pose and needs no rolling-shutter
+   compensation, so deskewing is effectively a no-op for camera frames:
 
    * ``"auto"`` — uses IMU-based deskewing when synchronous IMU data is available (FW 3.2+ with
      ``ACCEL32_GYRO32_NMEA``), otherwise falls back to constant-velocity deskewing.
@@ -243,9 +281,10 @@ Each call to :ouster:func:`update() <py=ouster.sdk.mapping.LocalizationEngine.up
 4. **Frame-to-map registration** — The aggregated frame is aligned to the static map via ICP. This process
    determines the rigid transformation that minimizes the distance between live points and their nearest map neighbors.
 
-5. **Pose correction** — The ICP correction is applied to every deskewed column pose, writing
-   map-aligned per-column SE(3) transforms back into each ``LidarFrame``. The poses you read after
-   ``update()`` are deskewed *and* map-aligned—not deskew-only estimates.
+5. **Pose correction** — The ICP correction is applied to every deskewed pose, writing
+   map-aligned SE(3) transforms back into each frame (per-column for a ``LidarFrame``, the single
+   pose for a ``CameraFrame``). The poses you read after ``update()`` are deskewed *and*
+   map-aligned—not deskew-only estimates.
 
 
 .. figure:: /images/localization_data_pipeline.svg
@@ -261,7 +300,12 @@ Run Localization on Each Frame
 
 The core loop reads :ouster:class:`FrameSet <py=ouster.sdk.core.FrameSet|cpp=ouster::sdk::core::FrameSet>` batches from the source and passes each to :ouster:func:`update() <py=ouster.sdk.mapping.LocalizationEngine.update|cpp=ouster::sdk::mapping::LocalizationEngine::update>`.
 In Python, ``update()`` returns the updated frame set; in C++, it mutates the ``FrameSet`` in place.
-Each frame's per-column ``body_to_world`` array is filled with SE(3) transforms relative to the map origin.
+Each frame's ``body_to_world`` array is filled with SE(3) transforms relative to the map origin
+(per-column for a ``LidarFrame``, a single pose for a ``CameraFrame``). Iterating
+``frame_set.valid_frames()`` yields frames of any type, and because ``get_last_valid_column()``,
+``body_to_world``, and ``timestamp`` are all defined on the shared ``Frame`` base, the same loop
+reads poses from lidar and camera frames alike. The example below uses ``timestamp`` to identify
+each frame in the printed output.
 
 .. tab-set::
    :sync-group: api-lang
@@ -298,8 +342,11 @@ Each frame's per-column ``body_to_world`` array is filled with SE(3) transforms 
 Inspect Localization Output
 ---------------------------
 
-After ``update()``, each :ouster:class:`LidarFrame <py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>` carries ``frame.body_to_world`` — a ``(W, 4, 4)`` array of per-column
-SE(3) transforms. You can extract translation and rotation for the last valid column:
+After ``update()``, each :ouster:class:`Frame <py=ouster.sdk.core.Frame|cpp=ouster::sdk::core::Frame>` carries ``frame.body_to_world`` — a ``(N, 4, 4)`` array of
+SE(3) transforms (``N == W`` per-column poses for a ``LidarFrame``; ``N == 1`` for a
+``CameraFrame``). ``get_last_valid_column()`` returns the last valid column for a lidar frame or ``0``
+for a camera frame, so the same code extracts translation and rotation for the most recent valid pose
+regardless of frame type:
 
 .. tab-set::
    :sync-group: api-lang
@@ -364,10 +411,12 @@ Advanced Topics
 Multi-Sensor Localization
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``LocalizationEngine`` accepts a list of :ouster:class:`SensorInfo <py=ouster.sdk.core.SensorInfo|cpp=ouster::sdk::core::SensorInfo>` objects and processes a
+The ``LocalizationEngine`` accepts a list of :ouster:class:`SensorInfo <py=ouster.sdk.core.SensorInfo|cpp=ouster::sdk::core::SensorInfo>` objects (a mix of
+``LidarInfo`` and ``CameraInfo`` in any order) and processes a
 :ouster:class:`FrameSet <py=ouster.sdk.core.FrameSet|cpp=ouster::sdk::core::FrameSet>` containing frames from multiple sensors. Points from all sensors are aggregated
 into a single frame before registration, providing a wider field of view and improving robustness
-in feature-poor environments (e.g., long hallways with few geometric features).
+in feature-poor environments (e.g., long hallways with few geometric features). Combining lidar and
+camera sensors this way lets a camera contribute points to the same map-aligned registration.
 
 For best results with multi-sensor setups:
 
@@ -407,7 +456,7 @@ For CLI usage of the initial pose flag see :ref:`setting-the-initial-pose` in :d
 Dynamic Filtering
 ^^^^^^^^^^^^^^^^^
 
-When a sensor is mounted close to the robot chassis, the lidar consistently sees the robot's own
+When a sensor is mounted close to the robot chassis, it consistently sees the robot's own
 body. These static, close-range points can confuse the frame-to-map registration and cause drift.
 
 Increase ``min_range`` so that returns from the robot's frame are excluded before they reach the

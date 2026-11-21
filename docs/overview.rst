@@ -27,7 +27,7 @@ firmware through the website downloads_ section.
 Compatibility with Firmware (FW)
 --------------------------------
 
-All current SDK releases are backward compatible with sensor firmware version 2.4 and later. 
+All current SDK releases are backward compatible with sensor firmware version 2.4 and later.
 Older SDK versions are not guaranteed to function with newer firmware (“forward compatibility” is not assured).
 e.g., the SDK version 20210608 (ouster-sdk 0.2.0) is not compatible with FW 3.0.
 
@@ -41,16 +41,17 @@ e.g., the SDK version 20210608 (ouster-sdk 0.2.0) is not compatible with FW 3.0.
 
 
 .. note::
-    
+
     Compatibility does not imply a frictionless upgrade; review the `Changelog`_ for breaking changes before migrating.
 
 The following table indicates the compatibility of each released SDK version and its FW compatibility:
 
-===================================== ======= ======= ======= ======= ======= ======= ======= ======= ======= 
+===================================== ======= ======= ======= ======= ======= ======= ======= ======= =======
 SDK Tag (Release) / Python SDK        FW 2.0  FW 2.1  FW 2.2  FW 2.3  FW 2.4  FW 2.5  FW 3.0  FW 3.1  FW 3.2
 ===================================== ======= ======= ======= ======= ======= ======= ======= ======= =======
-C++ SDK 2026XXXX / Python SDK 1.0.0   |no|    |no|    |no|    |no|    |yes|   |yes|   |yes|   |yes|   |yes|
-C++ SDK 2025XXXX / Python SDK 0.16.0  |no|    |no|    |no|    |no|    |yes|   |yes|   |yes|   |yes|   |yes|
+C++ SDK 2.0.0 / Python SDK 2.0.0      |no|    |no|    |no|    |no|    |yes|   |yes|   |yes|   |yes|   |yes|
+C++ SDK 1.0.0 / Python SDK 1.0.0      |no|    |no|    |no|    |no|    |yes|   |yes|   |yes|   |yes|   |yes|
+C++ SDK 0.16.0 / Python SDK 0.16.0    |no|    |no|    |no|    |no|    |yes|   |yes|   |yes|   |yes|   |yes|
 C++ SDK 20250408 / Python SDK 0.15.0  |no|    |yes|   |yes|   |yes|   |yes|   |yes|   |yes|   |yes|   |no|
 C++ SDK 20250117 / Python SDK 0.14.0  |no|    |yes|   |yes|   |yes|   |yes|   |yes|   |yes|   |yes|   |no|
 C++ SDK 20240703 / Python SDK 0.13.1  |no|    |yes|   |yes|   |yes|   |yes|   |yes|   |yes|   |yes|   |no|
@@ -94,7 +95,7 @@ Get Help and Stay Updated
 -------------------------
 
 We are continuously working to improve Ouster SDK. For questions about using your Ouster hardware, you may find it useful to reference the `Ouster
-sensor documentation`_ and/or contact `Ouster support`_. 
+sensor documentation`_ and/or contact `Ouster support`_.
 
 For issues specific to the SDK please use the `GitHub issue tracker`_. Announcements for the Ouster SDK are posted in the `Ouster Github
 announcements`_

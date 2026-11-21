@@ -55,7 +55,7 @@ struct OUSTER_API_CLASS Version {
      * @return the version formatted as a string.
      */
     OUSTER_API_FUNCTION
-    std::string to_string() const {
+    inline std::string to_string() const {
         std::stringstream sstream;
         sstream << major << "." << minor << "." << patch;
         if (!prerelease.empty()) {

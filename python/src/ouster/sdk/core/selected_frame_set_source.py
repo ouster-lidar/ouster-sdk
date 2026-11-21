@@ -1,6 +1,6 @@
-from typing import Optional, Iterator, List
+from typing import cast, Optional, Iterator, List
 from ouster.sdk._bindings.client import FrameSetSource
-from ouster.sdk.core import SensorInfo, LidarFrame, FrameSet
+from ouster.sdk.core import SensorInfo, LidarInfo, Frame, LidarFrame, FrameSet
 from ouster.sdk.core.frame_ops import select_by_index, select_by_index_metadata
 
 
@@ -11,10 +11,11 @@ class SelectedFrameSetSource(FrameSetSource):
 
     def __init__(self, frame_set_source: FrameSetSource, indices: List[List[int]]) -> None:
         FrameSetSource.__init__(self)
+        # Beam selection is a lidar concept; only lidar sensors participate.
         if len(frame_set_source.sensor_info) != len(indices):
             raise ValueError("beam indices should match the count of sensors")
 
-        for beams, metadata in zip(indices, frame_set_source.sensor_info):
+        for beams, metadata in zip(indices, cast(List[LidarInfo], frame_set_source.sensor_info)):
             if len(beams) != len(set(beams)):
                 raise ValueError("beam indices can't contain duplicates")
             invalid_indices = [
@@ -37,7 +38,7 @@ class SelectedFrameSetSource(FrameSetSource):
 
     @property
     def sensor_info(self) -> List[SensorInfo]:
-        return self._metadata
+        return cast(List[SensorInfo], self._metadata)
 
     @property
     def is_live(self) -> bool:
@@ -64,16 +65,17 @@ class SelectedFrameSetSource(FrameSetSource):
             return out
 
         for scans in self._frame_set_source:
-            out: List[Optional[LidarFrame]] = []
+            out: List[Optional[Frame]] = []
             for frame in scans:
+                if not isinstance(frame, LidarFrame):
+                    # pass through camera / other frame types (and None) unchanged
+                    out.append(frame)
+                    continue
                 for idx, info in enumerate(self._input_sensor_info):
-                    if frame is not None and info is frame.sensor_info:
+                    if info is frame.sensor_info:
                         break
-                if frame is None:
-                    out.append(None)
-                else:
-                    out.append(select_frame(frame, self._indices[idx],
-                                           self._metadata[idx]))
+                out.append(select_frame(frame, self._indices[idx],
+                                       self._metadata[idx]))
             yield FrameSet(out)
 
     def close(self) -> None:

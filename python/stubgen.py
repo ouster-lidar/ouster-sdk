@@ -117,7 +117,13 @@ SKIP_LIST = [
     "__package__", "__nb_signature__", "__class_getitem__", "__orig_bases__",
     "__file__", "__dict__", "__weakref__", "__format__", "__nb_enum__",
     "__firstlineno__", "__static_attributes__", "__annotations__", "__annotate__",
-    "__annotate_func__"
+    "__annotate_func__",
+    "_new_member_",
+    "_use_args_",
+    "_hashable_values_",
+    "_unhashable_values_",
+    "_unhashable_values_map_",
+    "_value_repr_",
 ]
 # fmt: on
 
@@ -279,7 +285,7 @@ class StubGen:
         # Negative lookbehind matching word boundaries except '.'
         sep_before = r"(?<![\\B\.])"
 
-        # Negative lookforward matching word boundaries except '.'
+        # Negative lookahead matching word boundaries except '.'
         sep_after = r"(?![\\B\.])"
 
         # Regexp matching a Python identifier

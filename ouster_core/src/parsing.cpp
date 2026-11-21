@@ -334,7 +334,8 @@ static const Table<std::string, FieldDecodeInfo, 14> DUAL_ZONE_FIELD_INFO{{
 static const Table<std::string, FieldDecodeInfo, 0> OFF_PROFILE_INFO{};
 
 // TWS 20260113: trying not to touch the profiles table, which is used in tests
-Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> OUSTER_API_FUNCTION profiles{{
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+std::vector<std::pair<const char*, ProfileEntry>> OUSTER_API_FUNCTION profiles{{
     {UDPProfileLidar::LEGACY, {LEGACY_FIELD_INFO.data(), LEGACY_FIELD_INFO.size(), 12}},
     {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL,
      {DUAL_FIELD_INFO.data(), DUAL_FIELD_INFO.size(), 16}},
@@ -362,21 +363,22 @@ Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> OUSTER_API_FUNCTION profi
      {DUAL_RGB_FIELD_INFO.data(), DUAL_RGB_FIELD_INFO.size(), 20}},
 }};
 
-OUSTER_API_FUNCTION Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> get_profiles() {
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+OUSTER_API_FUNCTION std::vector<std::pair<const char*, ProfileEntry>> get_profiles() {
     return profiles;
 }
 
 }  // namespace impl
 
 namespace {
-const impl::ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
+const impl::ProfileEntry& lookup_profile_entry(const std::string& profile) {
     auto end = impl::profiles.end();
     auto it = std::find_if(impl::profiles.begin(), end, [profile](const auto& profile_pair) {
         return profile_pair.first == profile;
     });
 
     if (it == end || it->first == UDPProfileLidar::UNKNOWN) {
-        throw std::invalid_argument("Unknown lidar udp profile");
+        throw std::invalid_argument("Unknown lidar udp profile '" + profile + "'");
     }
 
     return it->second;
@@ -579,8 +581,8 @@ struct PacketFormat::Impl {
         // zone monitoring
         zone_timestamp_info = field_info(256, 64);
         zone_live_info = field_info(0, 1);
-        zone_id_info = field_info(8, 8);
-        zone_error_flags_info = field_info(16, 8);
+        zone_id_info = field_info(8, 10);
+        zone_error_flags_info = field_info(20, 4);
         zone_trigger_type_info = field_info(26, 2);
         zone_trigger_status_info = field_info(31, 1);
         zone_triggered_frames_info = field_info(32, 32);
@@ -615,6 +617,7 @@ PacketFormat::PacketFormat(const DataFormat& format)
       col_size{impl_->col_size},
       packet_footer_size{impl_->packet_footer_size},
       max_frame_id{impl_->max_frame_id},
+      imu_enabled{format.imu_enabled},
       zone_monitoring_enabled{format.zone_monitoring_enabled} {
     for (const auto& kv : impl_->fields) {
         std::pair<ouster::sdk::core::ChanFieldType, int> elm = {kv.second.ty_tag,
@@ -623,7 +626,7 @@ PacketFormat::PacketFormat(const DataFormat& format)
     }
 }
 
-PacketFormat::PacketFormat(const SensorInfo& info) : PacketFormat(info.format) {}
+PacketFormat::PacketFormat(const LidarInfo& info) : PacketFormat(info.format) {}
 
 template <typename T, int BlockDim>
 void PacketFormat::block_field(T* data, int cols, const std::string& field_name,
@@ -990,7 +993,7 @@ const PacketFormat& get_format(const DataFormat& format) {
     return *cache.at(format);
 }
 
-const PacketFormat& get_format(const SensorInfo& info) {
+const PacketFormat& get_format(const LidarInfo& info) {
     return get_format(info.format);
 }
 
@@ -1259,8 +1262,8 @@ bool PacketFormat::zone_live(const uint8_t* zone_buffer) const {
     return impl_->zone_live_info.get<uint8_t>(zone_buffer) != 0u;
 }
 
-uint8_t PacketFormat::zone_id(const uint8_t* zone_buffer) const {
-    return impl_->zone_id_info.get<uint8_t>(zone_buffer);
+uint16_t PacketFormat::zone_id(const uint8_t* zone_buffer) const {
+    return impl_->zone_id_info.get<uint16_t>(zone_buffer);
 }
 
 uint8_t PacketFormat::zone_error_flags(const uint8_t* zone_buffer) const {
@@ -1307,7 +1310,7 @@ uint32_t PacketFormat::zone_mean_range(const uint8_t* zone_buffer) const {
     return impl_->zone_mean_range_info.get<uint32_t>(zone_buffer);
 }
 
-static_assert(sizeof(ZoneState) == 37, "ZoneState must have a fixed size across all platforms");
+static_assert(sizeof(ZoneState) == 38, "ZoneState must have a fixed size across all platforms");
 
 int PacketFormat::frame_id_difference(uint32_t current, uint32_t other) const {
     int64_t half = max_frame_id >> 1;

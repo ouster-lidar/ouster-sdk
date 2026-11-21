@@ -98,8 +98,7 @@ class Trajectory {
     std::vector<core::Matrix4dR> get_poses(SamplingMode type);
 
     std::string input_osf_file;
-    ouster::sdk::core::SensorInfo info;
-    std::shared_ptr<ouster::sdk::core::XYZLut> xyz_lut;
+    ouster::sdk::core::LidarInfo info;
 
     // timestamps to key node lookup map
     std::map<uint64_t, std::shared_ptr<Node>> timestamp_node_map;

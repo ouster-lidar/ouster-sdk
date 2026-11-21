@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <type_traits>
 #include <vector>
 
 namespace ouster {
@@ -19,6 +20,12 @@ namespace core {
 namespace image {
 
 namespace {
+
+template <typename T>
+constexpr bool is_power_of_two(T value) {
+    static_assert(std::is_integral<T>::value, "Must be an integral type");
+    return value > 0 && (value & (value - 1)) == 0;
+}
 
 // Color ratios used for converting to luminance
 const double R_LUM = 0.299;
@@ -84,10 +91,12 @@ inline float fast_log10(float x) {
  * index to an output value in [0, 1].
  */
 template <typename T>
-std::vector<float> compute_clahe_luts(const Eigen::Tensor<T, 2, Eigen::RowMajor>& lum, int tiles_h,
-                                      int tiles_w, int hist_bins, float clip_limit) {
+std::vector<float> compute_clahe_luts(const Eigen::Tensor<T, 2, Eigen::RowMajor>& lum,
+                                      int hist_bins, float clip_limit) {
     const int h = static_cast<int>(lum.dimension(0));
     const int w = static_cast<int>(lum.dimension(1));
+    const int tiles_w = CLAHE_TILES_W;
+    const int tiles_h = CLAHE_TILES_H;
 
     std::vector<float> luts(tiles_h * tiles_w * hist_bins, 0.0f);
     for (int ty = 0; ty < tiles_h; ++ty) {
@@ -136,10 +145,15 @@ std::vector<float> compute_clahe_luts(const Eigen::Tensor<T, 2, Eigen::RowMajor>
 /// values for each pixel.
 template <typename T>
 Eigen::Tensor<T, 2, Eigen::RowMajor> apply_clahe_luts(
-    const Eigen::Tensor<T, 2, Eigen::RowMajor>& lum, const std::vector<float>& luts, int tiles_h,
-    int tiles_w, int hist_bins) {
+    const Eigen::Tensor<T, 2, Eigen::RowMajor>& lum, const std::vector<float>& luts, int hist_bins,
+    bool x_wrap) {
     const int h = static_cast<int>(lum.dimension(0));
     const int w = static_cast<int>(lum.dimension(1));
+    const int tiles_w = CLAHE_TILES_W;
+    const int tiles_h = CLAHE_TILES_H;
+
+    static_assert(is_power_of_two(tiles_w), "CLAHE_TILES_W must be a power of two!");
+    static_assert(is_power_of_two(tiles_h), "CLAHE_TILES_H must be a power of two!");
 
     Eigen::Tensor<T, 2, Eigen::RowMajor> result(h, w);
 
@@ -149,12 +163,22 @@ Eigen::Tensor<T, 2, Eigen::RowMajor> apply_clahe_luts(
         float fx;
     };
     std::vector<XCache> x_cache(w);
+    const int mask = CLAHE_TILES_W - 1;
     for (int x = 0; x < w; ++x) {
-        float tx_f = (static_cast<float>(x) + 0.5f) * tiles_w / w - 0.5f;
-        int tx0 = std::max(0, std::min(tiles_w - 1, static_cast<int>(std::floor(tx_f))));
-        x_cache[x].tx0 = tx0;
-        x_cache[x].tx1 = std::min(tiles_w - 1, tx0 + 1);
-        x_cache[x].fx = tx_f - static_cast<float>(tx0);
+        float tx_f = ((static_cast<float>(x) + 0.5f) * tiles_w / w) - 0.5f;
+        int floor_tx = static_cast<int>(std::floor(tx_f));
+        if (x_wrap) {
+            // Wrap tile indices around x-axis boundaries
+            x_cache[x].tx0 = floor_tx & mask;
+            x_cache[x].tx1 = (floor_tx + 1) & mask;
+            x_cache[x].fx = tx_f - static_cast<float>(floor_tx);
+        } else {
+            // Clamp tile indices at x-axis boundaries
+            int tx0 = std::max(0, std::min(tiles_w - 1, floor_tx));
+            x_cache[x].tx0 = tx0;
+            x_cache[x].tx1 = std::min(tiles_w - 1, tx0 + 1);
+            x_cache[x].fx = tx_f - static_cast<float>(tx0);
+        }
     }
 
     const float* luts_ptr = luts.data();
@@ -326,7 +350,7 @@ void AutoExposure::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_state
             return;
         }
 
-        // validate that we arent somehow resizing
+        // validate that we aren't somehow resizing
         if (indices.size() > reservation) {
             throw std::runtime_error("Unexpected resize.");
         }
@@ -422,7 +446,7 @@ const int BUC_UPDATE_EVERY = 8;
 
 /*
  * computes the dark count, i.e. an additive offset in the brightness of the
- * image, to smoothe the difference between rows
+ * image, to smooth the difference between rows
  */
 template <typename T>
 Eigen::Array<T, -1, 1> compute_dark_count(const Eigen::Ref<img_t<T>>& image) {
@@ -506,19 +530,25 @@ void BeamUniformityCorrector::update(Eigen::Ref<img_t<double>> image, bool updat
 }
 
 LocalToneMapper::LocalToneMapper()
-    : lo_percentile_(0.0), hi_percentile_(0.2), update_every_(1), damping_(0.3) {}
+    : lo_percentile_(0.0), hi_percentile_(0.2), update_every_(1), damping_(0.3), x_wrap_(true) {}
 
 LocalToneMapper::LocalToneMapper(int update_every)
-    : lo_percentile_(0.0), hi_percentile_(0.2), update_every_(update_every), damping_(0.3) {}
+    : lo_percentile_(0.0),
+      hi_percentile_(0.2),
+      update_every_(update_every),
+      damping_(0.3),
+      x_wrap_(true) {}
 
 LocalToneMapper::LocalToneMapper(double lo_percentile, double hi_percentile, int update_every,
-                                 double damping, double compress_dr_max_lum, bool color_correct)
+                                 double damping, double compress_dr_max_lum, bool color_correct,
+                                 bool x_wrap)
     : lo_percentile_(lo_percentile),
       hi_percentile_(hi_percentile),
       update_every_(update_every),
       damping_(damping),
       compress_dr_max_lum_(compress_dr_max_lum),
-      color_correct_(color_correct) {}
+      color_correct_(color_correct),
+      x_wrap_(x_wrap) {}
 
 LocalToneMapper::LocalToneMapper(double lo_percentile, double hi_percentile, int update_every,
                                  double damping, bool compress_dr, bool color_correct)
@@ -527,7 +557,8 @@ LocalToneMapper::LocalToneMapper(double lo_percentile, double hi_percentile, int
       update_every_(update_every),
       damping_(damping),
       compress_dr_max_lum_(compress_dr ? 0.2 : 0.0),
-      color_correct_(color_correct) {}
+      color_correct_(color_correct),
+      x_wrap_(true) {}
 
 template <typename T>
 void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_state) {
@@ -552,7 +583,7 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
             return;
         }
 
-        // validate that we arent somehow resizing
+        // validate that we aren't somehow resizing
         if (indices.size() > reservation) {
             throw std::runtime_error("Unexpected resize.");
         }
@@ -615,7 +646,7 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
                     (b[i + 2] * static_cast<T>(B_LUM));
 
             if (lum > thresh) {
-                auto new_lum = thresh + fast_log10(lum - thresh + 1.0);
+                auto new_lum = thresh + fast_log10(lum - thresh + static_cast<T>(1));
                 auto scale = new_lum / lum;
                 b[i + 0] *= scale;
                 b[i + 1] *= scale;
@@ -626,7 +657,7 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
 
     // use Reinhard to saturate at 1 make sure we don't erase bright spots
     all_flat = all_flat.max(static_cast<T>(0));
-    all_flat = all_flat / (1.0 + all_flat);
+    all_flat = all_flat / (static_cast<T>(1) + all_flat);
 
     const Eigen::Tensor<T, 2, Eigen::RowMajor> lum_ae = (image.chip(0, 2) * static_cast<T>(R_LUM)) +
                                                         (image.chip(1, 2) * static_cast<T>(G_LUM)) +
@@ -638,10 +669,9 @@ void LocalToneMapper::apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_st
     const int h = static_cast<int>(image.dimension(0));
     const int w = static_cast<int>(image.dimension(1));
 
-    const auto luts =
-        compute_clahe_luts(lum_ae, CLAHE_TILES_H, CLAHE_TILES_W, CLAHE_HIST_BINS, CLAHE_CLIP_LIMIT);
+    const auto luts = compute_clahe_luts(lum_ae, CLAHE_HIST_BINS, CLAHE_CLIP_LIMIT);
     const Eigen::Tensor<T, 2, Eigen::RowMajor> lum_clahe =
-        apply_clahe_luts(lum_ae, luts, CLAHE_TILES_H, CLAHE_TILES_W, CLAHE_HIST_BINS);
+        apply_clahe_luts(lum_ae, luts, CLAHE_HIST_BINS, x_wrap_);
 
     // Fade out the saturation adjustment in dark environments where it isn't necessary
     T color_factor = static_cast<T>(0.75);

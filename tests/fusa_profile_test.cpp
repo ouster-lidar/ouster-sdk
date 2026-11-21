@@ -8,7 +8,7 @@
 #include <iostream>
 
 #include "ouster/pcap/os_pcap.h"
-#include "ouster/pcap/pcap.h"
+#include "ouster/pcap/pcap_packet_source.h"
 
 using namespace ouster::sdk::core;
 using namespace ouster::sdk::pcap;
@@ -25,15 +25,16 @@ inline std::string getenvs(const std::string& var) {
 TEST(FusaProfileTest, packet_size) {
     auto data_dir = getenvs("DATA_DIR");
     std::string dataset = "OS-1-128_767798045_1024x10_20230712_120049";
-    PcapReader pcap(data_dir + "/" + dataset + ".pcap");
+    std::string pcap_path = data_dir + "/" + dataset + ".pcap";
     std::string metadata_path = data_dir + "/" + dataset + ".json";
-    auto info = metadata_from_json(metadata_path);
+    PcapPacketSource pcap(pcap_path, [&](auto m) { m.meta = {metadata_path}; });
+    auto info = pcap.sensor_info()[0];
 
     // The profile in the corresponding metadata should be
     // identified correctly as PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL
-    ASSERT_EQ(info.format.udp_profile_lidar, UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
+    ASSERT_EQ(info->format.udp_profile_lidar, UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
 
-    size_t packet_size = pcap.next_packet();
+    size_t packet_size = (*pcap.begin()).second->buf.size();
     ASSERT_EQ(packet_size, 16640L);
 }
 
@@ -45,15 +46,16 @@ TEST(FusaProfileTest, fields) {
     // https://imhex.werwolv.net/
     auto data_dir = getenvs("DATA_DIR");
     std::string dataset = "OS-1-128_767798045_1024x10_20230712_120049";
-    PcapReader pcap(data_dir + "/" + dataset + ".pcap");
+    std::string pcap_path = data_dir + "/" + dataset + ".pcap";
     std::string metadata_path = data_dir + "/" + dataset + ".json";
-    auto info = metadata_from_json(metadata_path);
-    auto pf = get_format(info);
+    PcapPacketSource pcap(pcap_path, [&](auto m) { m.meta = {metadata_path}; });
+    auto info = pcap.sensor_info()[0];
+    auto pf = get_format(*info);
 
     // check preconditions for the test
     constexpr int pixels_per_column = 128u;
-    ASSERT_EQ(info.config.lidar_mode, LidarMode::_1024x10);
-    ASSERT_EQ(info.format.udp_profile_lidar, UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
+    ASSERT_EQ(info->config.lidar_mode, LidarMode::_1024x10);
+    ASSERT_EQ(info->format.udp_profile_lidar, UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL);
     ASSERT_EQ(pf.pixels_per_column, pixels_per_column);
 
     // check field widths
@@ -63,15 +65,15 @@ TEST(FusaProfileTest, fields) {
     ASSERT_EQ(pf.columns_per_packet, expected_cols);
 
     // check packet header values
-    pcap.next_packet();
-    ASSERT_EQ(pf.packet_type(pcap.current_data()), 1u);
-    ASSERT_EQ(pf.frame_id(pcap.current_data()), 229u);
-    ASSERT_EQ(pf.init_id(pcap.current_data()), info.init_id);
-    ASSERT_EQ(pf.prod_sn(pcap.current_data()), info.sn);
-    ASSERT_EQ(pf.countdown_thermal_shutdown(pcap.current_data()), 0u);
-    ASSERT_EQ(pf.countdown_shot_limiting(pcap.current_data()), 0u);
-    ASSERT_EQ(pf.thermal_shutdown(pcap.current_data()), ThermalShutdownStatus::NORMAL);
-    ASSERT_EQ(pf.shot_limiting(pcap.current_data()), ShotLimitingStatus::NORMAL);
+    auto packet = (*pcap.begin()).second;
+    ASSERT_EQ(pf.packet_type(packet->buf.data()), 1u);
+    ASSERT_EQ(pf.frame_id(packet->buf.data()), 229u);
+    ASSERT_EQ(pf.init_id(packet->buf.data()), info->init_id);
+    ASSERT_EQ(pf.prod_sn(packet->buf.data()), info->sn);
+    ASSERT_EQ(pf.countdown_thermal_shutdown(packet->buf.data()), 0u);
+    ASSERT_EQ(pf.countdown_shot_limiting(packet->buf.data()), 0u);
+    ASSERT_EQ(pf.thermal_shutdown(packet->buf.data()), ThermalShutdownStatus::NORMAL);
+    ASSERT_EQ(pf.shot_limiting(packet->buf.data()), ShotLimitingStatus::NORMAL);
 
     // check column header values
     uint64_t col_timestamps[] = {647839983424, 647840089656, 647840187456, 647840275096,
@@ -80,11 +82,11 @@ TEST(FusaProfileTest, fields) {
                                  647841161128, 647841259968, 647841351568, 647841450008};
 
     for (int col = 0; col < expected_cols; col++) {
-        EXPECT_EQ(pf.col_timestamp(pf.nth_col(col, pcap.current_data())), col_timestamps[col]);
+        EXPECT_EQ(pf.col_timestamp(pf.nth_col(col, packet->buf.data())), col_timestamps[col]);
         // note - measurement id isn't necessarily the same as the column number
         // just a coincidence here
-        EXPECT_EQ(pf.col_measurement_id(pf.nth_col(col, pcap.current_data())), col);
-        EXPECT_EQ(pf.col_status(pf.nth_col(col, pcap.current_data())),
+        EXPECT_EQ(pf.col_measurement_id(pf.nth_col(col, packet->buf.data())), col);
+        EXPECT_EQ(pf.col_status(pf.nth_col(col, packet->buf.data())),
                   1u  // per eUDP docs, the column status of 0x01 indicates a
                       // valid column
         );
@@ -93,7 +95,7 @@ TEST(FusaProfileTest, fields) {
     // check some pixel values
     int test_col_idx = 4;
     int pixels_to_test = 16;
-    const uint8_t* col = pf.nth_col(test_col_idx, pcap.current_data());
+    const uint8_t* col = pf.nth_col(test_col_idx, packet->buf.data());
     uint32_t expected_range[] = {0,    2328, 2328, 2320, 3096, 2312, 2304, 2280,
                                  3056, 2296, 2264, 2256, 3000, 2272, 2240, 2240};
     uint32_t expected_range2[] = {0, 0, 0, 0, 0, 0, 0, 0, 480, 0, 0, 0, 448, 0, 0, 0};

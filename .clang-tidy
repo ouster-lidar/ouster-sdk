@@ -265,7 +265,6 @@ Checks: '
   cppcoreguidelines-noexcept-move-operations,
   cppcoreguidelines-noexcept-swap,
   cppcoreguidelines-prefer-member-initializer,
-  cppcoreguidelines-pro-bounds-constant-array-index,
   cppcoreguidelines-pro-type-const-cast,
   cppcoreguidelines-pro-type-cstyle-cast,
   cppcoreguidelines-pro-type-member-init,
@@ -485,5 +484,5 @@ CheckOptions:
   - key:   readability-function-cognitive-complexity.Threshold
     value: 28
   - key:   misc-include-cleaner.IgnoreHeaders
-    value: 'Eigen/.*;.*socket.h;jsoncons/.*;spdlog/.*;netdb.h;netinet/.*;arpa/.*;sys/.*;bits/.*;tins/.*;pcap/.*;GL/.*;glad.h;glfw.h;GLFW/.*;pybind11/.*;flatbuffers/.*'
+    value: 'Eigen/.*;.*socket.h;jsoncons/.*;spdlog/.*;netdb.h;netinet/.*;arpa/.*;sys/.*;bits/.*;tins/.*;pcap/.*;GL/.*;glad.h;glfw.h;GLFW/.*;pybind11/.*;nanobind/.*;numpy/.*;flatbuffers/.*'
 

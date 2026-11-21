@@ -116,6 +116,15 @@ TEST_F(OsfBufferTest, LoadVectorMove) {
     EXPECT_TRUE(vec.empty());
 }
 
+TEST_F(OsfBufferTest, LoadPointer) {
+    OsfBuffer buf;
+
+    buf.load_data(std::make_shared<uint8_t>(), 1);
+
+    EXPECT_TRUE(buf.has_value());
+    EXPECT_EQ(buf.size(), 1);
+}
+
 TEST_F(OsfBufferTest, LoadEmptyVectorThrows) {
     std::vector<uint8_t> vec;
     OsfBuffer buf;

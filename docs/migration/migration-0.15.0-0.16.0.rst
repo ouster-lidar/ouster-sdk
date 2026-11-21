@@ -478,9 +478,9 @@ The old ``PointsT``, ``PointsD``, ``PointsF`` aliases are deprecated in favor of
 .. code-block:: cpp
 
    // Before (deprecated)
-   ouster::sdk::core::PointsT cloud; 
-   ouster::sdk::core::PointsD cloud; 
-   ouster::sdk::core::PointsF cloud; 
+   ouster::sdk::core::PointsT cloud;
+   ouster::sdk::core::PointsD cloud;
+   ouster::sdk::core::PointsF cloud;
 
    // After
    ouster::sdk::core::PointCloudXYZ cloud;

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from ouster.sdk import mapping, open_source
+from ouster.sdk import core, mapping, open_source
 from ouster.sdk.mapping import LIOLocalizationConfig
 
 
@@ -62,7 +62,7 @@ def test_localization_engine_initialization_fails_with_nonexistent_map_default_c
 
 
 def test_localization_engine_initialization_succeeds_with_valid_map(input_osf_file):
-    """It initializes without error with a valid SensorInfo, config, and map."""
+    """It initializes without error with a valid LidarInfo, config, and map."""
     src = open_source(str(input_osf_file))
     config = create_lio_localization_config()
     # Use the same OSF as a dummy "map" since it exists and has the right format
@@ -76,4 +76,16 @@ def test_localization_engine_initialization_default_config_with_map_array(input_
     src = open_source(str(input_osf_file))
     map_points = np.zeros((3, 3), dtype=np.float32)
     engine = mapping.LocalizationEngine.create(src.sensor_info, map_points)
+    assert engine is not None
+
+
+def test_localization_engine_create_accepts_camera_infos(input_osf_file):
+    """LocalizationEngine.create should accept a mixed lidar + camera sensor list."""
+    src = open_source(str(input_osf_file))
+    config = create_lio_localization_config()
+    map_points = np.zeros((3, 3), dtype=np.float32)
+    sensor_infos = list(src.sensor_info) + [core.CameraInfo()]
+    engine = mapping.LocalizationEngine.create(
+        sensor_infos, map_points, config
+    )
     assert engine is not None

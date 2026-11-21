@@ -19,13 +19,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "ouster/core/deprecation.h"
 #include "ouster/core/types.h"
 #include "ouster/core/visibility.h"
-#include "ouster/pcap/pcap.h"
-
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
 
 namespace ouster {
 namespace sdk {
@@ -66,17 +61,6 @@ namespace sdk {
 namespace pcap {
 
 using ts = std::chrono::microseconds;  ///< Microsecond timestamp
-
-/**
- * To string method for packet info structs.
- *
- * @param[inout] stream_in The pre-existing ostream to concat with data.
- * @param[in] data The packet_info to output.
- *
- * @return The new output stream containing concatted stream_in and data.
- */
-OUSTER_API_FUNCTION
-std::ostream& operator<<(std::ostream& stream_in, const PacketInfo& data);
 
 /**
  * Structure representing a hash key/sorting key for a udp stream
@@ -154,16 +138,6 @@ OUSTER_API_FUNCTION
 std::ostream& operator<<(std::ostream& stream_in, const StreamInfo& data);
 
 /**
- * @struct PlaybackHandle
- *
- * @brief struct to hide the stepwise playback details.
- *
- * This struct handles stepwise playback details.
- */
-struct OUSTER_DEPRECATED_MSG("PcapPacketSource",
-                             OUSTER_DEPRECATED_LAST_SUPPORTED_1_0) OUSTER_API_CLASS PlaybackHandle;
-
-/**
  * @struct RecordHandle
  *
  * @brief struct to hide the record details.
@@ -171,64 +145,6 @@ struct OUSTER_DEPRECATED_MSG("PcapPacketSource",
  * This struct handles hiding the record details.
  */
 struct RecordHandle;
-
-/**
- * Initialize the stepwise playback handle.
- *
- * @param[in] file The file path of the pcap file.
- *
- * @return A handle to the initialized playback struct.
- */
-OUSTER_DEPRECATED_MSG("PcapPacketSource", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-std::shared_ptr<PlaybackHandle> replay_initialize(const std::string& file);
-
-/**
- * Uninitialize the stepwise playback handle.
- *
- * @param[in] handle A handle to the initialized playback struct.
- */
-OUSTER_DEPRECATED_MSG("PcapPacketSource", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-void replay_uninitialize(PlaybackHandle& handle);
-
-/**
- * Restart playback from the beginning of the pcap file.
- *
- * @param[in] handle A handle to the initialized playback struct.
- */
-OUSTER_DEPRECATED_MSG("PcapPacketSource", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-void replay_reset(PlaybackHandle& handle);
-
-/**
- * Return the information on the next packet avaliable in the PlaybackHandle.
- * This must be called BEFORE calling the read_next_packet function.
- *
- * @param[in] handle The playback handle.
- * @param[out] info The returned information on the next packet.
- *
- * @return The status on whether there is a new packet or not.
- */
-OUSTER_DEPRECATED_MSG("PcapPacketSource", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-bool next_packet_info(PlaybackHandle& handle, PacketInfo& info);
-
-/**
- * Read the data from the next packet avaliable in the PlaybackHandle.
- * This must be called AFTER calling the next_packet_info function.
- *
- * @param[in] handle The playback handle.
- * @param[out] buf The buffer to write the recieved data to (Must be sized
- *                 appropriately.
- * @param[in] buffer_size The size of the output buffer.
- *
- * @return 0 on no new packet, > 0 the size of the bytes recieved.
- */
-OUSTER_DEPRECATED_MSG("PcapPacketSource", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-size_t read_packet(PlaybackHandle& handle, uint8_t* buf, size_t buffer_size);
-
 /**
  * Initialize the record handle for recording multi sensor pcap files. Source
  * and destination IPs must be provided with each packet.
@@ -269,18 +185,6 @@ void record_packet(RecordHandle& handle, const std::string& src_ip, const std::s
                    uint64_t microsecond_timestamp);
 
 /**
- * Record a buffer to a multi sensor RecordHandle pcap file.
- *
- * @param[in] handle The record handle that record_initialize has initted.
- * @param[in] info The packet_info object to use for the packet.
- * @param[in] buf The buffer to record to the pcap file.
- * @param[in] buffer_size The size of the buffer to record to the pcap file.
- */
-OUSTER_API_FUNCTION
-void record_packet(RecordHandle& handle, const PacketInfo& info, const uint8_t* buf,
-                   size_t buffer_size);
-
-/**
  * Return the information about network streams in a pcap file.
  *
  * @param[in] file The pcap file to read.
@@ -314,28 +218,6 @@ std::shared_ptr<StreamInfo> get_stream_info(
     int packets_per_callback, int packets_to_process = -1);
 
 /**
- * Return the information about network streams in a PcapReader and generate
- * indicies (if the PcapReader is an IndexedPcapReader).
- *
- * @param[in] pcap_reader The PcapReader
- * @param[in] progress_callback A callback to invoke after each packet is
- *                              scanned
- *                                  current: The current file offset
- *                                  delta: The delta in file offset
- *                                  total: The total size of the file
- * @param[in] packets_per_callback Callback every n packets
- * @param[in] packets_to_process Number of packets to process < 0 for all of
- *                               them
- *
- * @return A pointer to the resulting stream_info
- */
-OUSTER_DEPRECATED_MSG("get_stream_info(file, ...)", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-std::shared_ptr<StreamInfo> get_stream_info(
-    PcapReader& pcap_reader,
-    const std::function<void(uint64_t, uint64_t, uint64_t)>& progress_callback,
-    int packets_per_callback, int packets_to_process = -1);
-/**
  * Return a guess of the correct ports located in a pcap file.
  *
  * @param[in] info The stream_info structure generated from a specific pcap file
@@ -351,8 +233,29 @@ std::shared_ptr<StreamInfo> get_stream_info(
 OUSTER_API_FUNCTION
 std::vector<GuessedPorts> guess_ports(StreamInfo& info, int lidar_packet_size, int imu_packet_size,
                                       int expected_lidar_port, int expected_imu_port);
+
+/**
+ * @brief Constructs the PcapDuplicatePortException with a descriptive message.
+ *
+ * @param[in] msg Description of the duplicate port error encountered during
+ * PCAP parsing.
+ */
+class OUSTER_API_CLASS PcapDuplicatePortException : public std::runtime_error {
+   public:
+    /**
+     * @brief Exception thrown when duplicate sensor ports are detected during
+     * PCAP indexing.
+     *
+     * This exception is raised when two or more sensors are found to be using
+     * the same UDP port (for either lidar or IMU data), which would prevent
+     * unambiguous packet-to-sensor mapping during index construction.
+     *
+     * @param[in] msg Descriptive error message indicating the conflicting port
+     * and sensor serial.
+     */
+    OUSTER_API_FUNCTION
+    PcapDuplicatePortException(const std::string& msg) : runtime_error(msg) {}
+};
 }  // namespace pcap
 }  // namespace sdk
 }  // namespace ouster
-
-OUSTER_DIAGNOSTIC_POP

@@ -8,19 +8,20 @@
 #include <nanobind/stl/vector.h>
 
 #include <Eigen/Core>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "ouster/core/frame.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/types.h"
 
 namespace py = nanobind;
 
+using ouster::sdk::core::Frame;
 using ouster::sdk::core::img_t;
-using ouster::sdk::core::LidarFrame;
-using ouster::sdk::core::SensorInfo;
 
 namespace {
 
@@ -44,7 +45,7 @@ invalid value (default is zero).
 
     module.def(
         "filter_field",
-        [](LidarFrame& frame, const std::string& field, double lower, double upper, double invalid,
+        [](Frame& frame, const std::string& field, double lower, double upper, double invalid,
            const std::optional<std::vector<std::string>>& filtered_fields) {
             const auto* fields_ptr = filtered_fields ? &filtered_fields.value() : nullptr;
             fops::filter_field(frame, field, lower, upper, invalid, fields_ptr);
@@ -57,7 +58,7 @@ Pixels whose filter field values fall in the range [lower, upper] are
 replaced by the supplied invalid value (default is zero).
 
 Parameters:
-- frame: LidarFrame
+- frame: Frame (LidarFrame or CameraFrame)
 - field: str; the pixel field to be used as the filter mask source
 - lower: float; lower bound
 - upper: float; upper bound
@@ -67,8 +68,8 @@ Parameters:
 
     module.def(
         "_frame_ops_filter_uv",
-        [](LidarFrame& frame, const std::string& coord_2d, size_t lower, size_t upper,
-           double invalid, const std::vector<std::string>& fields, bool has_fields) {
+        [](Frame& frame, const std::string& coord_2d, size_t lower, size_t upper, double invalid,
+           const std::vector<std::string>& fields, bool has_fields) {
             fops::filter_uv(frame, coord_2d, lower, upper, invalid,
                             optional_fields(fields, has_fields));
         },
@@ -78,7 +79,7 @@ Parameters:
 
     module.def(
         "_frame_ops_mask",
-        [](LidarFrame& frame, const std::vector<std::string>& fields,
+        [](Frame& frame, const std::vector<std::string>& fields,
            const py::ndarray<const uint8_t, py::ndim<2>, py::c_contig>& mask) {
             Eigen::Map<const img_t<uint8_t>> mask_eigen(mask.data(),
                                                         static_cast<Eigen::Index>(mask.shape(0)),

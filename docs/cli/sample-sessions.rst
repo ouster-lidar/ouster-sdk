@@ -30,7 +30,7 @@ You should get a return that looks like
 
     No config specified; using defaults and auto UDP dest:
     {
-        "azimuth_window": 
+        "azimuth_window":
         [
             0,
             360000
@@ -53,7 +53,7 @@ Because many of ``ouster-cli`` commands can be chained together, we'll add the `
 If the ``slice`` is not present before ``save``, you can stop recording at anytime with ``CTRL-C``.
 
 .. code:: bash
-    
+
     $ ouster-cli source <SENSOR HOSTNAME> slice 0:100 save .pcap
 
 That should produce screen output that looks something like:
@@ -90,7 +90,7 @@ This should output something that looks like:
 
 .. code:: bash
 
-          Reading pcap:  [####################################]  100%          
+          Reading pcap:  [####################################]  100%
           File size:     2247.16M
           Packets read:  85085
           Encapsulation: ETHERNET
@@ -98,9 +98,9 @@ This should output something that looks like:
           Capture end:   2023-02-16 22:30:49.369547
           Duration:      0:01:51.210042
           UDP Streams:
-              Src IP              Dst IP        Src Port        Dst Port        AF        Frag         Size        Count        
-              127.0.0.1        127.0.0.1            7502            7502         4          No        33024        71182        
-              127.0.0.1        127.0.0.1            7503            7503         4          No           48        13903        
+              Src IP              Dst IP        Src Port        Dst Port        AF        Frag         Size        Count
+              127.0.0.1        127.0.0.1            7502            7502         4          No        33024        71182
+              127.0.0.1        127.0.0.1            7503            7503         4          No           48        13903
 
 That tells us the number of packets belonging to each port captured in the pcap, and the associated
 size.
@@ -109,7 +109,7 @@ To visualize the pcap at 2x speed while looping back:
 
 .. code:: bash
 
-    $ ouster-cli source <PCAP_FILE.pcap> viz -r 2 -e loop 
+    $ ouster-cli source <PCAP_FILE.pcap> viz -r 2 -e loop
 
 You can check check out all the available options by typing ``--help`` after ``ouster-cli source <PCAP_FILE.pcap> viz``.
 

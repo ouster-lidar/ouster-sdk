@@ -30,12 +30,14 @@ namespace impl {
 /*
  * Rings
  */
-GLRings::GLRings() : ring_size_(1.0), ring_line_width_(1), rings_enabled_(true) {}
+GLRings::GLRings()
+    : ring_size_(1.0), ring_line_width_(1), rings_enabled_(true), rings_in_world_(false) {}
 
 void GLRings::update(const TargetDisplay& target) {
     rings_enabled_ = target.rings_enabled_;
     ring_size_ = target.get_ring_size_m();
     ring_line_width_ = target.ring_line_width_;
+    rings_in_world_ = target.rings_in_world_;
 }
 
 void GLRings::draw(const GlobalState& state, const WindowCtx& /*unused*/,
@@ -50,8 +52,13 @@ void GLRings::draw(const GlobalState& state, const WindowCtx& /*unused*/,
 
     glBindVertexArray(state.ring_vao);
     glUseProgram(state.ring_program_id);
-    // rings are displayed at the camera target, so model is inverse of target
-    Matrix4fR mvp = (camera.proj * camera.view).cast<float>();
+    // rings are displayed either at the camera target or world
+    Matrix4fR mvp;
+    if (rings_in_world_) {
+        mvp = (camera.proj * camera.view * camera.target).cast<float>();
+    } else {
+        mvp = (camera.proj * camera.view).cast<float>();
+    }
 
     glUniformMatrix4fv(state.ring_proj_view_id, 1, GL_TRUE, mvp.data());
     glUniform1f(state.ring_range_id, static_cast<float>(ring_size_));
@@ -75,7 +82,7 @@ GLRings::GlobalState::GlobalState()
     glGenVertexArrays(1, &ring_vao);
     glBindVertexArray(ring_vao);
 
-    // Make a quad thats a bit larger than our maximum range
+    // Make a quad that's a bit larger than our maximum range
     std::vector<GLfloat> xyz(static_cast<size_t>(3 * 6), 0.0f);
     const float max_range = 1000.0f;
     // Point 0

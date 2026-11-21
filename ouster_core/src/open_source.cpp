@@ -18,9 +18,11 @@
 #include <memory>
 #include <nonstd/optional.hpp>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ouster/core/frame_set_source_utils.h"
+#include "ouster/core/lidar_info.h"
 
 using ouster::sdk::core::IoType;
 
@@ -121,8 +123,18 @@ void populate_extrinsics(const std::string& extrinsics_file,
     }
 }
 
+void populate_extrinsics(const std::string& extrinsics_file,
+                         std::vector<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>> extrinsics,
+                         std::vector<std::shared_ptr<LidarInfo>>& sensor_infos) {
+    // Delegate to the SensorInfo overload. The upcast shared_ptrs alias the
+    // same underlying objects, so extrinsics are written back to the lidar
+    // infos in place.
+    std::vector<std::shared_ptr<SensorInfo>> base_infos(sensor_infos.begin(), sensor_infos.end());
+    populate_extrinsics(extrinsics_file, std::move(extrinsics), base_infos);
+}
+
 std::vector<std::vector<FieldType>> resolve_field_types(
-    const std::vector<std::shared_ptr<SensorInfo>>& sensor_infos, bool raw_headers, bool raw_fields,
+    const std::vector<std::shared_ptr<LidarInfo>>& sensor_infos, bool raw_headers, bool raw_fields,
     const nonstd::optional<std::vector<std::string>>& field_names) {
     std::vector<std::vector<FieldType>> all_ftypes;
     for (const auto& meta : sensor_infos) {
@@ -171,7 +183,7 @@ std::vector<std::vector<FieldType>> resolve_field_types(
                 }
             }
 
-            // Error if we cant find a field with the requested name
+            // Error if we can't find a field with the requested name
             for (const auto& name : field_names.value()) {
                 bool found = false;
                 for (const auto& field_type : ftypes) {
@@ -308,6 +320,7 @@ PacketSourceOptions::PacketSourceOptions(FrameSetSourceOptions& options)
       meta(options.meta.move()),
       lidar_port(options.lidar_port.move()),
       imu_port(options.imu_port.move()),
+      config_timeout(options.config_timeout.move()),
       timeout(options.timeout.move()),
       index(options.index.move()),
       sensor_info(options.sensor_info.move()),

@@ -32,7 +32,7 @@ const auto MIN_VERSION = ouster::sdk::core::Version(1, 12, 0);
  * to direct the library log statements to a different medium (other than
  * console which is the default).
  *
- * @param[in] log_level Control the level of log messages outputed by the
+ * @param[in] log_level Control the level of log messages output by the
  * client. Valid options are (case-sensitive): "trace", "debug", "info",
  * "warning", "error", "critical" and "off".
  * @param[in] log_file_path Path to location where log files are stored. The
@@ -44,7 +44,7 @@ const auto MIN_VERSION = ouster::sdk::core::Version(1, 12, 0);
  * max_files. If rotating is set to false the following parameters are ignored.
  * @param[in] max_size_in_bytes Maximum number of bytes to write to a rotating
  * log file before starting a new file. ignored if rotating is set to false.
- * @param[in] max_files Maximum number of rotating files to accumlate before
+ * @param[in] max_files Maximum number of rotating files to accumulate before
  * re-using the first file. ignored if rotating is set to false.
  *
  * @return true on success, otherwise false.
@@ -65,8 +65,8 @@ bool init_logger(const std::string& log_level, const std::string& log_file_path 
  * @return retrieved sensor config
  */
 OUSTER_API_FUNCTION
-ouster::sdk::core::SensorConfig get_config(const std::string& hostname, bool active = true,
-                                           int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
+ouster::sdk::core::LidarConfig get_config(const std::string& hostname, bool active = true,
+                                          int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 // clang-format off
 /**
@@ -84,7 +84,7 @@ enum ConfigFlags : uint8_t {
 /**
  * Set sensor config on sensor.
  *
- * @throw runtime_error on failure to communcate with the sensor.
+ * @throw runtime_error on failure to communicate with the sensor.
  * @throw invalid_argument when config parameters fail validation.
  *
  * @param[in] hostname sensor hostname.
@@ -93,7 +93,7 @@ enum ConfigFlags : uint8_t {
  * @param[in] timeout_sec timeout in seconds for http requests
  */
 OUSTER_API_FUNCTION
-void set_config(const std::string& hostname, const ouster::sdk::core::SensorConfig& config,
+void set_config(const std::string& hostname, const ouster::sdk::core::LidarConfig& config,
                 uint8_t config_flags = 0, int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /**

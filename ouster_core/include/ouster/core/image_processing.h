@@ -92,7 +92,7 @@ class OUSTER_API_CLASS AutoExposure {
     void update(Eigen::Ref<img_t<double>> image, bool update_state = true);
 
     /**
-     * Apply global RGB auto-exposure in-place stretching constrast between 0
+     * Apply global RGB auto-exposure in-place stretching contrast between 0
      * and 1.
      *
      * @param[in] image RGB image tensor (H x W x 3), modified in-place.
@@ -102,7 +102,7 @@ class OUSTER_API_CLASS AutoExposure {
     void update(Eigen::TensorMap<rgb_img_t<float>> image, bool update_state = true);
 
     /**
-     * Apply global RGB auto-exposure in-place stretching constrast between 0
+     * Apply global RGB auto-exposure in-place stretching contrast between 0
      * and 1.
      *
      * @param[in] image RGB image tensor (H x W x 3), modified in-place.
@@ -113,7 +113,7 @@ class OUSTER_API_CLASS AutoExposure {
 
     /**
      * Convert fp16-bit RGB to float and apply global RGB auto-exposure
-     * stretching constrast between 0 and 1.
+     * stretching contrast between 0 and 1.
      *
      * @param[in] input input RGB image tensor (H x W x 3) as float16_t.
      * @param[out] out output RGB image tensor (H x W x 3) as float.
@@ -184,6 +184,8 @@ class OUSTER_API_CLASS LocalToneMapper {
     double compress_dr_max_lum_ = 0.2;
     bool color_correct_ = true;
 
+    bool x_wrap_;
+
     template <typename T>
     void apply(Eigen::TensorMap<rgb_img_t<T>> image, bool update_state);
 
@@ -224,10 +226,11 @@ class OUSTER_API_CLASS LocalToneMapper {
      * @param[in] compress_dr_max_lum compress DR in dark scenes such as tunnels
      *                                below this brightness
      * @param[in] color_correct correct colors to recover any dampened colors
+     * @param[in] x_wrap If true, smooth tone mapping around the X edge of the image
      */
     OUSTER_API_FUNCTION
     LocalToneMapper(double lo_percentile, double hi_percentile, int update_every, double damping,
-                    double compress_dr_max_lum, bool color_correct);
+                    double compress_dr_max_lum, bool color_correct, bool x_wrap = true);
 
     /**
      * Adjusts the RGB image so that contrast is stretched between 0 and 1.

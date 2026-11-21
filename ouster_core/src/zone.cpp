@@ -60,6 +60,21 @@ bool Zone::string_to_zonemode(const std::string& str, Zone::ZoneMode& mode) {
     return true;
 }
 
+bool string_to_zonetriggeroutput(const std::string& str, ZoneTriggerOutput& mode) {
+    if (str == "NONE") {
+        mode = ZoneTriggerOutput::NONE;
+    } else if (str == "OSSD_DUAL") {
+        mode = ZoneTriggerOutput::OSSD_DUAL;
+    } else if (str == "GPIO_0") {
+        mode = ZoneTriggerOutput::GPIO_0;
+    } else if (str == "GPIO_1") {
+        mode = ZoneTriggerOutput::GPIO_1;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 bool Zone::render(const BeamConfig& config) {
     check_invariants();
     if (!stl) {
@@ -134,6 +149,22 @@ bool Zone::render(const BeamConfig& config) {
     return pixels_with_intersections > 0;
 }
 
+std::string to_string(ZoneTriggerOutput zone_trigger) {
+    switch (zone_trigger) {
+        case ZoneTriggerOutput::NONE:
+            return "NONE";
+        case ZoneTriggerOutput::OSSD_DUAL:
+            return "OSSD_DUAL";
+        case ZoneTriggerOutput::GPIO_0:
+            return "GPIO_0";
+        case ZoneTriggerOutput::GPIO_1:
+            return "GPIO_1";
+        default:
+            break;
+    };
+    return "UNKNOWN";
+}
+
 std::string to_string(Zone::ZoneMode zone_mode) {
     switch (zone_mode) {
         case Zone::ZoneMode::NONE:
@@ -150,7 +181,8 @@ std::string to_string(Zone::ZoneMode zone_mode) {
 
 bool operator==(const Zone& lhs, const Zone& rhs) {
     return lhs.point_count == rhs.point_count && lhs.frame_count == rhs.frame_count &&
-           lhs.mode == rhs.mode && lhs.stl == rhs.stl && lhs.zrb == rhs.zrb;
+           lhs.mode == rhs.mode && lhs.stl == rhs.stl && lhs.zrb == rhs.zrb &&
+           lhs.trigger_output == rhs.trigger_output;
 }
 
 bool operator!=(const Zone& lhs, const Zone& rhs) {

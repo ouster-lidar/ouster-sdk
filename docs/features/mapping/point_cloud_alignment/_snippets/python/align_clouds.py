@@ -24,6 +24,8 @@ def align_frame_set_example(source_file):
 
     for i, extrinsic in enumerate(aligned_extrinsics):
         source.sensor_info[i].sensor_to_body = extrinsic
+        # drop any XYZLut cached with the old extrinsics
+        source.sensor_info[i].clear_cache()
 
     # [doc-etag-alignment-frame-set]
 

@@ -241,6 +241,24 @@ TEST(ZoneMonitorTests, from_zip_file_test) {
     std::remove(cfg_path.c_str());
 }
 
+TEST(ZoneMonitorTests, save_throws_if_file_cannot_be_opened) {
+    ZoneSet config = test_zone_set();
+    std::string data_dir = getenvs("DATA_DIR");
+    std::string cfg_path = data_dir + "/nonexistent_dir/test_6_zones_zmcfg.zip";
+    EXPECT_THROW(config.save(cfg_path, ZoneSetOutputFilter::STL_AND_ZRB), std::runtime_error);
+}
+
+TEST(ZoneMonitorTests, save_to_directory_throws_if_file_cannot_be_opened) {
+    ZoneSet config = test_zone_set();
+    std::string data_dir = getenvs("DATA_DIR");
+    // a regular file can't contain the files save_to_directory writes
+    std::string not_a_dir = data_dir + "/save_to_directory_not_a_dir";
+    std::ofstream(not_a_dir).close();
+    EXPECT_THROW(config.save_to_directory(not_a_dir, ZoneSetOutputFilter::STL_AND_ZRB),
+                 std::runtime_error);
+    std::remove(not_a_dir.c_str());
+}
+
 TEST(ZoneMonitorTests, from_zip_file_invalid) {
     EXPECT_THROW(
         {

@@ -15,15 +15,14 @@
 #include "ouster/core/xyzlut.h"
 #include "ouster/pcap/pcap_packet_source.h"
 
-using ouster::sdk::core::cartesian;
 using ouster::sdk::core::destagger;
 using ouster::sdk::core::FrameBatcher;
 using ouster::sdk::core::img_t;
 using ouster::sdk::core::LidarFrame;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::core::LidarPacket;
 using ouster::sdk::core::PacketFormat;
 using ouster::sdk::core::PacketType;
-using ouster::sdk::core::SensorInfo;
 using ouster::sdk::pcap::PcapPacketSource;
 
 TEST(CoreBenchmark, Cartesian) {
@@ -41,7 +40,7 @@ TEST(CoreBenchmark, Cartesian) {
     Timer t;
     t.start();
     for (int i = 0; i < N_ITERS; ++i) {
-        auto points = cartesian(pool[i % POOL_SIZE], lut);
+        auto points = lut(pool[i % POOL_SIZE]);
         ASSERT_EQ(points.rows(), WIDTH * HEIGHT);
     }
     t.stop();
@@ -108,8 +107,8 @@ TEST(CoreBenchmark, FrameBatcher) {
         if (source.sensor_info().empty()) {
             GTEST_FAIL() << "No metadata found for: " << pcap_filename;
         }
-        const SensorInfo& info = *source.sensor_info()[0];
-        auto pf_shared = std::make_shared<PacketFormat>(info);
+        auto info = source.sensor_info()[0];
+        auto pf_shared = std::make_shared<PacketFormat>(*info);
 
         // Load one frame worth of lidar packets from the pcap to use as a
         // template.
@@ -121,7 +120,7 @@ TEST(CoreBenchmark, FrameBatcher) {
                 const auto& [sensor_idx, pkt_ptr] = *it;
                 if (pkt_ptr->type() != PacketType::Lidar) continue;
                 template_packets.push_back(pkt_ptr->as<LidarPacket>());
-                if (probe(template_packets.back(), probe_frame)) break;
+                if (probe.batch(template_packets.back(), probe_frame)) break;
             }
         }
 
@@ -142,7 +141,7 @@ TEST(CoreBenchmark, FrameBatcher) {
         Timer t;
         t.start();
         for (const auto& pkt : all_packets) {
-            if (batcher(pkt, output_frames[num_batched % 2])) {
+            if (batcher.batch(pkt, output_frames[num_batched % 2])) {
                 ++num_batched;
             }
         }

@@ -288,7 +288,7 @@ Environment Variables
 
 The Ouster SDK Dev Script Cli supports using environment variables for command options/arguments via Click.
 This feature allows you to set default values for options without needing to specify them explicitly in every command invocation.
-It is particularly useful for automating workflows or setting up consistent environments. The name of the environent variable
+It is particularly useful for automating workflows or setting up consistent environments. The name of the environment variable
 is prefixed with OSDK_DEV_CLI and is the option name uppercase with `-` replaced with `_`.
 
 Below is an example using the `--threads` option.

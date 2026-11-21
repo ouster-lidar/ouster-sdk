@@ -65,7 +65,7 @@ struct OUSTER_API_CLASS SensorFrameSetSourceOptions : private FrameSetSourceOpti
     SensorFrameSetSourceOptions() = default;
 };
 
-/// Provides a simple API for configuring sensors and retreiving LidarFrames
+/// Provides a simple API for configuring sensors and retrieving LidarFrames
 /// from them
 class OUSTER_API_CLASS SensorFrameSetSource
     : public ouster::sdk::core::FrameSetSource,
@@ -123,7 +123,7 @@ class OUSTER_API_CLASS SensorFrameSetSource
     OUSTER_API_FUNCTION
     SensorFrameSetSource(
         const std::vector<Sensor>& sensors,  ///< [in] sensors to connect to
-        const std::vector<ouster::sdk::core::SensorInfo>&
+        const std::vector<ouster::sdk::core::LidarInfo>&
             infos,                    ///< [in] metadata for each sensor, if present used instead
                                       ///< of configuring each sensor
         double config_timeout = 45,   ///< [in] timeout for sensor config
@@ -138,7 +138,7 @@ class OUSTER_API_CLASS SensorFrameSetSource
     OUSTER_API_FUNCTION
     SensorFrameSetSource(
         const std::vector<Sensor>& sensors,  ///< [in] sensors to connect to
-        const std::vector<ouster::sdk::core::SensorInfo>&
+        const std::vector<ouster::sdk::core::LidarInfo>&
             infos,  ///< [in] metadata for each sensor, if present used instead
                     ///< of configuring each sensor
         const std::vector<ouster::sdk::core::LidarFrameFieldTypes>&
@@ -165,14 +165,6 @@ class OUSTER_API_CLASS SensorFrameSetSource
         return dropped_frames_;
     }
 
-    /// @deprecated Use dropped_frames() instead
-    /// @copydoc dropped_frames()
-    OUSTER_DEPRECATED_MSG("dropped_frames()", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION
-    inline uint64_t dropped_scans() {
-        return dropped_frames();
-    }
-
     /// Get the number of packets that had an id verification error
     /// @return the number of errors
     OUSTER_API_FUNCTION
@@ -191,13 +183,6 @@ class OUSTER_API_CLASS SensorFrameSetSource
         double timeout_sec = 0.0  /// [in] timeout for retrieving a frame
     );
 
-    /// @deprecated Use get_frame() instead
-    /// @copydoc get_frame()
-    OUSTER_DEPRECATED_MSG("get_frame()", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION
-    std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>> get_scan(
-        double timeout_sec = 0.0);
-
     OUSTER_API_FUNCTION
     bool is_live() const override {
         return true;
@@ -206,7 +191,7 @@ class OUSTER_API_CLASS SensorFrameSetSource
     OUSTER_API_FUNCTION
     const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& sensor_info()
         const override {
-        return client_.sensor_info();
+        return combined_info_;
     }
 
     OUSTER_API_FUNCTION
@@ -254,30 +239,18 @@ class OUSTER_API_CLASS SensorFrameSetSource
     std::deque<std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>>> buffer_;
     uint64_t dropped_frames_ = 0;
     std::vector<ouster::sdk::core::LidarFrameFieldTypes> fields_;
-    bool run_thread_;
+    bool run_thread_ = false;
     std::thread batcher_thread_;
     std::atomic<uint64_t> id_error_count_;
     double timeout_ = -1.0;
     int64_t timeout_ns_ = -1;
     std::vector<int64_t> last_receive_times_;
-    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> orig_sensor_info_;
+    std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>> orig_sensor_info_;
+    // combined lidar (+ future camera) info exposed via sensor_info()
+    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> combined_info_;
 
     void start_thread(unsigned int queue_size, bool soft_id_check);
 };
-
-}  // namespace sensor
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace sensor {
-
-OUSTER_DEPRECATED_TYPE(SensorScanSource, SensorFrameSetSource, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(SensorScanSourceOptions, SensorFrameSetSourceOptions,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
 
 }  // namespace sensor
 }  // namespace sdk

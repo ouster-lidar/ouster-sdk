@@ -7,7 +7,7 @@ Building the Python SDK from source requires several dependencies:
 
 - a C++14-capable compiler
 - `cmake <https://cmake.org/>`_  >= 3.16
-- `eigen <https://eigen.tuxfamily.org>`_ >= 3.3
+- `eigen <http://libeigen.gitlab.io/>`_ >= 3.3
 - `curl <https://curl.se/libcurl/>`_ >= 7.58
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
@@ -19,7 +19,7 @@ Building the Python SDK from source requires several dependencies:
 - `tbb <https://github.com/oneapi-src/oneTBB>`_
 - `libzstd <http://facebook.github.io/zstd/>`_
 - `libzip <https://libzip.org/>`_
-- `ceres <http://ceres-solver.org/>`_ == 2.0.0
+- `ceres <https://github.com/ceres-solver/ceres-solver>`_ == 2.0.0
 - `python <https://www.python.org/>`_ >= 3.8; <= 3.13 (with headers and development libraries)
 - `nanobind <https://nanobind.readthedocs.io>`_ == 2.9.2
 
@@ -29,8 +29,8 @@ The Python SDK source is available `on the Ouster Github <https://github.com/ous
 Linux and macOS
 ---------------
 
-It is now recommended to use ``vcpkg`` to install dependencies across all platforms. 
-The list of required dependencies is defined in the ``vcpkg.json`` file located at the root of the repository. 
+It is now recommended to use ``vcpkg`` to install dependencies across all platforms.
+The list of required dependencies is defined in the ``vcpkg.json`` file located at the root of the repository.
 vcpkg manifest mode is used to manage ouster-sdk dependencies in a consistent and reproducible way.
 
 To install ``vcpkg``, please follow the instructions in the `vcpkg documentation`_.
@@ -119,11 +119,11 @@ After that, using a developer powershell prompt:
    # install nanobind
    PS > py -m pip install nanobind ninja
 
-Optionally, if you want to update the default settings of directory for the manifest file or disable manifest mode, 
-update the environment variables below: 
+Optionally, if you want to update the default settings of directory for the manifest file or disable manifest mode,
+update the environment variables below:
 
 .. code:: powershell
-   
+
    PS > $env:VCPKG_MANIFEST_DIR=<PATH TO OUSTER_SDK REPO>
    PS > $env:VCPKG_MANIFEST_MODE=ON
 
@@ -142,6 +142,66 @@ development environment on Windows.
 
 .. _vcpkg documentation powershell: https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell
 .. _Ouster SDK repository: https://github.com/ouster-lidar/ouster-sdk
+
+
+.. _glibc-tuning:
+
+Tuning glibc Memory Allocation on Linux
+---------------------------------------
+
+Reading frames from a pcap or OSF file allocates and frees about a frame's worth of memory per frame
+(roughly 1 MB for a 1024x10 sensor with 128 beams). Depending on incidental heap layout, glibc may
+return that memory to the operating system each time a frame is freed. The next frame then has to
+page-fault it back in, which can make frame reading about a third slower. Because it depends on
+heap layout, the slowdown can come and go between runs, between machines, or after unrelated
+changes to the program, which makes it look like a performance regression in benchmarks.
+
+To keep freed memory in the process, raise glibc's ``mmap`` and trim thresholds with
+``GLIBC_TUNABLES`` before starting the program:
+
+.. code:: console
+
+   $ export GLIBC_TUNABLES=glibc.malloc.mmap_threshold=33554432:glibc.malloc.trim_threshold=67108864
+
+Notes:
+
+- glibc reads ``GLIBC_TUNABLES`` only at process startup, so setting it with ``os.environ`` from a
+  running Python program has no effect.
+- The tradeoff is memory: the process may keep up to 64 MiB of freed memory instead of returning
+  it to the operating system, so its resident set size can stay higher.
+- This applies to any program using the SDK on a glibc-based Linux system, whether it was built
+  from source or installed from PyPI. It has no effect on macOS or Windows.
+
+Choosing the values
+^^^^^^^^^^^^^^^^^^^
+
+By default, glibc serves blocks of 128 KiB or more with ``mmap`` and returns them to the operating
+system when they're freed. Each field buffer of a 1024x128 frame is at least that large. glibc
+adjusts this threshold on its own as blocks are freed, and raises the trim threshold along with it,
+so whether frame memory stays in the process depends on the order of earlier allocations. Setting
+either threshold turns that adjustment off, which is why both are needed:
+
+- ``mmap_threshold`` must be larger than the largest field buffer, so that field buffers come from
+  the heap. 32 MiB (``33554432``) is well above the buffers of any current sensor mode, and it's also
+  the most glibc 2.28 accepts: older versions silently ignore a larger value. Newer versions such as
+  2.35 accept larger values.
+- ``trim_threshold`` must be larger than the memory freed at the top of the heap between frames, so
+  that glibc doesn't release it. 64 MiB (``67108864``) leaves room for larger frames and for several
+  sensors while limiting how much freed memory the process can hold on to.
+
+Setting only one of them can be worse than the defaults. Reading a 1024x10, 128-beam pcap from
+Python with glibc 2.39 took the following time per frame:
+
+========================================== ==============
+Setting                                    Time per frame
+========================================== ==============
+Defaults                                   0.72 ms
+``mmap_threshold`` and ``trim_threshold``  0.53 ms
+``mmap_threshold`` only                    0.73 ms
+``trim_threshold`` only                    0.82 ms
+========================================== ==============
+
+Trim thresholds from 32 MiB to 256 MiB performed the same, and peak memory use rose by about 2 MiB.
 
 
 Developing

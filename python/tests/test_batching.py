@@ -12,7 +12,7 @@ import pytest
 
 from ouster.sdk import core
 from ouster.sdk.core import PacketFormat, \
-    FieldType, FrameBatcher, LidarFrame, ImuPacket, LidarPacket, SensorInfo
+    FieldType, FrameBatcher, LidarFrame, ImuPacket, LidarPacket, LidarInfo
 from ouster.sdk.pcap import PcapPacketSource
 from ouster.sdk.core import ShotLimitingStatus, ThermalShutdownStatus
 
@@ -27,13 +27,13 @@ def _patch_frame_id(packet: core.LidarPacket, fid: int) -> None:
 
 
 def _valid_packet_idxs(frame: LidarFrame) -> np.ndarray:
-    """Checks for valid packets that was used in in the frame construction"""
+    """Checks for valid packets that was used in the frame construction"""
     valid_cols = frame.status & 0x1
-    valid_packet_ts = frame.packet_timestamp != 0
-    sp = np.split(valid_cols, frame.packet_timestamp.shape[0])
+    valid_packet_ts = frame.receive_timestamp != 0
+    sp = np.split(valid_cols, frame.receive_timestamp.shape[0])
     # here we consider the packet is valid when either one is true:
     #   - any columns in the packet has a valid status
-    #   - packet_timestamp is not zero, which may occur even when
+    #   - receive_timestamp is not zero, which may occur even when
     #     all columns/px data in invalid state within the packet.
     #     It means that we received the packet without per px data
     #     but with all other headers in place
@@ -78,13 +78,13 @@ def test_batch_missing_zeroed(lidar_stream: core.PacketSource) -> None:
     batcher = FrameBatcher(info)
 
     ls = core.LidarFrame(info)
-    assert ls.packet_timestamp.shape == (packets_per_frame,)
+    assert ls.receive_timestamp.shape == (packets_per_frame,)
 
     def non_zero_frame(frame: core.LidarFrame):
         frame.timestamp[:] = 1
         frame.measurement_id[:] = 1
         frame.status[:] = 1
-        frame.packet_timestamp[:] = 1
+        frame.receive_timestamp[:] = 1
         for f in frame.fields:
             frame.field(f)[:] = 1
 
@@ -95,7 +95,7 @@ def test_batch_missing_zeroed(lidar_stream: core.PacketSource) -> None:
     drop_inds = [10, 20, 63]
 
     # column indexes should be in [0, info.format.columns_per_packet - 1] range
-    # columns_per_packet in these tests is 16, as defined byt the seed pcap + json
+    # columns_per_packet in these tests is 16, as defined by the seed pcap + json
     drop_columns = {
         2: [0, 1, 2],
         3: [12, 13, 14, 15],
@@ -147,17 +147,17 @@ def test_batch_missing_zeroed(lidar_stream: core.PacketSource) -> None:
             assert (frame.timestamp[i * n:(i + 1) * n] == 0).all()
             assert (frame.measurement_id[i * n:(i + 1) * n] == 0).all()
             assert (frame.status[i * n:(i + 1) * n] == 0).all()
-            assert (frame.packet_timestamp[i:i + 1] == 0).all()
+            assert (frame.receive_timestamp[i:i + 1] == 0).all()
 
             for f in frame.fields:
                 assert (frame.field(f)[:, i * n:n] == 0).all()
 
         valid_packets = _valid_packet_idxs(frame)
-        assert (frame.packet_timestamp[valid_packets] != 0).all()
+        assert (frame.receive_timestamp[valid_packets] != 0).all()
 
         # valid packets timestamps should be non-decreasing
         for i, j in zip(valid_packets[:-1], valid_packets[1:]):
-            assert frame.packet_timestamp[i] <= frame.packet_timestamp[j]
+            assert frame.receive_timestamp[i] <= frame.receive_timestamp[j]
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
@@ -296,7 +296,7 @@ def test_early_release(file: str, test_data_dir):
 def test_batching_alerts():
     """It should include alert_flags from the packet in the LidarFrame."""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16
     info.format.pixels_per_column = 128
@@ -328,7 +328,7 @@ def test_batching_alerts():
 def test_batching_bad_column_id():
     """It should include alert_flags from the packet in the LidarFrame."""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.column_window = [0, 1023]
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16
@@ -342,7 +342,7 @@ def test_batching_bad_column_id():
     frame.frame_id = 0
 
     # create a packet that has valid columns, but ones too close
-    # to block parsing boundaries to make sure we dont crash
+    # to block parsing boundaries to make sure we don't crash
     # it should fail over to column parsing instead
     packet = LidarPacket(packet_format)
     packet.host_timestamp = 1
@@ -360,7 +360,7 @@ def test_batching_bad_column_id():
 def test_batching_countdowns():
     """It should include shutdown_countdown and shot_limiting_countdown in the LidarFrame."""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16
     info.format.pixels_per_column = 128
@@ -387,12 +387,13 @@ def test_batching_countdowns():
 def test_batching_dups():
     """It handles a good packet stream with packets in the expected order."""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 4
     info.format.columns_per_packet = 2
     info.format.pixels_per_column = 128
     info.format.udp_profile_lidar = profile
     info.format.imu_packets_per_frame = 1
+    info.format.imu_enabled = True
     info.format.udp_profile_imu = core.UDPProfileIMU.ACCEL32_GYRO32_NMEA
     info.format.header_type = core.HeaderType.STANDARD
     info.format.column_window = [0, info.format.columns_per_frame - 1]
@@ -434,12 +435,13 @@ def test_batching_dups():
 def test_batching_dups_2():
     """It handles frame id roll over"""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 4
     info.format.columns_per_packet = 2
     info.format.pixels_per_column = 128
     info.format.udp_profile_lidar = profile
     info.format.imu_packets_per_frame = 1
+    info.format.imu_enabled = True
     info.format.udp_profile_imu = core.UDPProfileIMU.ACCEL32_GYRO32_NMEA
     info.format.header_type = core.HeaderType.STANDARD
     info.format.column_window = [0, info.format.columns_per_frame - 1]
@@ -481,12 +483,13 @@ def test_batching_dups_2():
 def test_batching_dups_3():
     """It handles out of order packets, but may drop old packets."""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 4
     info.format.columns_per_packet = 2
     info.format.pixels_per_column = 128
     info.format.udp_profile_lidar = profile
     info.format.imu_packets_per_frame = 1
+    info.format.imu_enabled = True
     info.format.udp_profile_imu = core.UDPProfileIMU.ACCEL32_GYRO32_NMEA
     info.format.header_type = core.HeaderType.STANDARD
     info.format.column_window = [0, info.format.columns_per_frame - 1]
@@ -538,12 +541,13 @@ def test_batching_dups_3():
 def test_batching_dups_4():
     """Packets from prior frames are ignored, and won't cause a frame with a duplicate id."""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 8
     info.format.columns_per_packet = 2
     info.format.pixels_per_column = 128
     info.format.udp_profile_lidar = profile
     info.format.imu_packets_per_frame = 1
+    info.format.imu_enabled = True
     info.format.udp_profile_imu = core.UDPProfileIMU.ACCEL32_GYRO32_NMEA
     info.format.header_type = core.HeaderType.STANDARD
     info.format.column_window = [0, info.format.columns_per_frame - 1]
@@ -592,7 +596,7 @@ def test_batching_dups_4():
 def test_batching_dups_5():
     """Packets from prior frames are ignored, and won't cause a frame with a duplicate id."""
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 6
     info.format.columns_per_packet = 2
     info.format.pixels_per_column = 128
@@ -636,7 +640,7 @@ def test_batcher_late_finalization():
     It will still produce frames if they're never complete but the cache is too full.
     """
     profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.format.columns_per_frame = 4
     info.format.columns_per_packet = 2
     info.format.pixels_per_column = 128

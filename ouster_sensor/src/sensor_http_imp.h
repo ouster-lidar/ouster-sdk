@@ -87,7 +87,7 @@ class SensorHttpImp : public SensorHttp {
         bool active, int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
-     * Set the value of a specfic configuration on the sensor, the changed
+     * Set the value of a specific configuration on the sensor, the changed
      * configuration is not active until the sensor is restarted.
      *
      * @param[in] key name of the config to change.
@@ -138,7 +138,7 @@ class SensorHttpImp : public SensorHttp {
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
-     * Gets the calibaration status of the sensor.
+     * Gets the calibration status of the sensor.
      */
     std::string calibration_status(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
@@ -208,14 +208,14 @@ class SensorHttpImp : public SensorHttp {
     /**
      * Get the live zones for a sensor.
      */
-    std::vector<uint8_t> get_zone_monitor_live_ids(
+    std::vector<uint16_t> get_zone_monitor_live_ids(
         int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Sets the live zones for a sensor.
      */
     void set_zone_monitor_live_ids(
-        const std::vector<uint8_t>& zone_ids,
+        const std::vector<uint16_t>& zone_ids,
         int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
@@ -250,6 +250,11 @@ class SensorHttpImp : public SensorHttp {
                        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     void delete_static_ip(int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
+    void set_mtu(unsigned int mtu,
+                 int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
+    void delete_mtu(int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     std::vector<uint8_t> diagnostics_dump(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;

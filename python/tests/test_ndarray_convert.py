@@ -6,7 +6,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
-from ouster.sdk import viz
+from ouster.sdk import viz, core
 from ouster.sdk.core import (
     AutoExposure,
     BeamUniformityCorrector,
@@ -187,6 +187,8 @@ def test_xyzlut_accepts_range_order(meta, order, dtype):
     expected_f = lut_f(_as_order(range_img, 'C', np.uint32))
     np.testing.assert_allclose(lut_f(range_img), expected_f, rtol=0, atol=0)
 
+    # An XYZLut projects range images (uint32) only (lidar and camera alike). A
+    # float range array is not accepted here.
     with pytest.raises(TypeError, match="unexpected array dtype"):
         lut(range_img.astype(np.float32))
     with pytest.raises(TypeError, match="unexpected array dtype"):
@@ -304,19 +306,66 @@ def test_normals_dual_return_accepts_dtype_and_order(order, dtype):
 def test_cloud_setters_accept_dtype_and_order(order, dtype):
     n = 64
     cloud = viz.Cloud(n)
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._512x10)
+    ocloud = viz.Cloud(sensor_info)
 
     xyz = _as_order(np.random.rand(n, 3), order, dtype)
     key = _as_order(np.random.rand(n), order, dtype)
     mask = _as_order(np.random.rand(n, 4), order, dtype)
     palette = _as_order(np.random.rand(256, 3), order, dtype)
-    range_img = np.asfortranarray(np.full((8, 8), 1000, dtype=np.uint32)) \
-        if order == 'F' else np.full((8, 8), 1000, dtype=np.uint32)
+    range_img = np.asfortranarray(np.full((64, 512), 1000, dtype=np.uint32)) \
+        if order == 'F' else np.full((64, 512), 1000, dtype=np.uint32)
 
     cloud.set_xyz(xyz)
     cloud.set_key(key)
     cloud.set_mask(mask)
     cloud.set_palette(palette)
-    cloud.set_range(range_img)
+    ocloud.set_range(range_img)
+
+
+@pytest.mark.parametrize('source', ['info', 'XYZLut', 'XYZLutFloat', 'xyzlut_double', 'xyzlut_float'])
+def test_structured_cloud_from_info_or_lut(source):
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._512x10)
+    arg = {
+        'info': lambda: sensor_info,
+        'XYZLut': lambda: XYZLut(sensor_info),
+        'XYZLutFloat': lambda: XYZLutFloat(sensor_info),
+        'xyzlut_double': lambda: sensor_info.xyzlut_double,
+        'xyzlut_float': lambda: sensor_info.xyzlut_float,
+    }[source]()
+    cloud = viz.Cloud(arg)
+    assert cloud.size == sensor_info.w * sensor_info.h
+    assert cloud.cols == sensor_info.w
+    cloud.set_range(np.full((sensor_info.h, sensor_info.w), 1000, dtype=np.uint32))
+
+
+@pytest.mark.parametrize('make_lut', [
+    pytest.param(lambda info: info.xyzlut_double, id='xyzlut_double'),
+    pytest.param(lambda info: info.xyzlut_float, id='xyzlut_float'),
+    pytest.param(core.XYZLut, id='XYZLut'),
+    pytest.param(core.XYZLutFloat, id='XYZLutFloat'),
+])
+def test_structured_clouds_share_cached_lut_buffers(make_lut):
+    """Clouds built from the same LUT, cached on a sensor info or constructed in Python, share
+    one set of buffers, another LUT gets its own, and the buffers are released once no cloud
+    built from the LUT is left. The cache is process-wide, so this counts misses, which
+    clouds released by other tests or threads can't change, rather than entries."""
+    from ouster.sdk._bindings.viz import _cloud_lut_cache_misses
+    info = core.LidarInfo.from_default(core.LidarMode._512x10)
+    other = core.LidarInfo.from_default(core.LidarMode._1024x10)
+    lut = make_lut(info)
+    other_lut = make_lut(other)
+
+    misses = _cloud_lut_cache_misses()
+    first = viz.Cloud(lut)
+    assert _cloud_lut_cache_misses() == misses + 1
+    second = viz.Cloud(lut)
+    assert _cloud_lut_cache_misses() == misses + 1
+    third = viz.Cloud(other_lut)
+    assert _cloud_lut_cache_misses() == misses + 2
+    del first, second, third
+    viz.Cloud(lut)
+    assert _cloud_lut_cache_misses() == misses + 3
 
 
 @pytest.mark.parametrize('order', ORDERS)

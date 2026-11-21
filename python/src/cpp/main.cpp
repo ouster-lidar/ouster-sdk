@@ -5,11 +5,13 @@
 #include <nanobind/stl/vector.h>
 
 #include "common.h"  // NOLINT(unused-includes)
+#include "ouster/core/signals.h"
 
 // BEGINNOLINT(misc-use-internal-linkage)
 void init_perception(py::module_&, py::module_&);
 void init_algorithm(py::module_&, py::module_&);
 void init_client(py::module_&, py::module_&);
+void init_io(py::module_&, py::module_&);
 void init_pcap(py::module_&, py::module_&);
 void init_osf(py::module_&, py::module_&);
 void init_viz(py::module_&, py::module_&);
@@ -34,6 +36,8 @@ NB_MODULE(_bindings, module) {
     init_client(client, module);
     auto algorithm = module.def_submodule("algorithm");
     init_algorithm(algorithm, module);
+    auto io = module.def_submodule("io");
+    init_io(io, module);
     auto pcap = module.def_submodule("pcap");
     init_pcap(pcap, module);
     auto osf = module.def_submodule("osf");
@@ -44,4 +48,6 @@ NB_MODULE(_bindings, module) {
     init_mapping(mapping, module);
     auto perception = module.def_submodule("perception");
     init_perception(perception, module);
+
+    ouster::sdk::core::setup_signal_handler([]() { PyErr_SetInterrupt(); });
 }

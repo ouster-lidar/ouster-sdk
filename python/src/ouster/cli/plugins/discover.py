@@ -330,8 +330,6 @@ def discover(ctx, output, timeout, continuous, http_timeout, interface, show_use
     )
     try:
         loop.run_until_complete(runner.async_run())
-    except KeyboardInterrupt:
-        pass
     finally:
         loop.run_until_complete(runner.async_close())
         loop.close()

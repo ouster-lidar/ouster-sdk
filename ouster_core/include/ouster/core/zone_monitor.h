@@ -22,7 +22,7 @@ namespace ouster {
 namespace sdk {
 namespace core {
 
-class SensorInfo;
+class LidarInfo;
 
 /**
  * @brief Specifies which files to include in a ZoneSet zip archive.
@@ -42,8 +42,7 @@ enum class ZoneSetOutputFilter {
  */
 struct OUSTER_API_CLASS ZoneSet {
     /**
-     * Map of zones available for monitoring.
-     * Max 128 zones.
+     * Map of zones available for monitoring. Max number allowed depends on FW.
      */
     std::unordered_map<uint32_t, ouster::sdk::core::Zone> zones{};
 
@@ -59,11 +58,11 @@ struct OUSTER_API_CLASS ZoneSet {
      * @note Do not use this method if you intend to use STL-based zones on the
      * sensor, as the sensor will render them as needed. This updates each
      * Zone's ZRB and sets the ZoneSet's type to ZRB.
-     * @param[in] sensor_info SensorInfo containing beam configuration and
+     * @param[in] lidar_info LidarInfo containing beam configuration and
      *            sensor to body transform for rendering.
      */
     OUSTER_API_FUNCTION
-    void render(const SensorInfo& sensor_info);
+    void render(const LidarInfo& lidar_info);
 
     /**
      * Instantiates ZoneSet from sensor info and zone set type.

@@ -36,8 +36,8 @@ struct GLObj {
 
     int draw_called{0};
     GLObj(Obj&) {}
-    void draw(const GlobalState& /*state*/, const WindowCtx&,
-              const ouster::sdk::viz::impl::CameraData&, Obj& obj) {
+    void draw(const GlobalState& /*state*/, const WindowCtx&, const ouster::sdk::viz::CameraData&,
+              Obj& obj) {
         draw_called++;
         obj.draw_called++;
     }
@@ -139,7 +139,7 @@ TEST(Indexed, add_remove_swap_draw_1) {
     // was replaced at some point.
     IndexedTest objs;
     WindowCtx ctx;
-    ouster::sdk::viz::impl::CameraData camera;
+    ouster::sdk::viz::CameraData camera;
     auto obj_a = std::make_shared<Obj>("data_a");
     auto obj_b = std::make_shared<Obj>("data_b");
 
@@ -227,7 +227,7 @@ TEST(Indexed, removeUpdateRaceCondition) {
     };
     // Drawable state should not be marked for deletion until update is called.
     IndexedTestTmp objs;
-    ouster::sdk::viz::impl::CameraData camera;
+    ouster::sdk::viz::CameraData camera;
     auto obj_a = std::make_shared<Tmp>();
 
     // ADD A
@@ -253,7 +253,7 @@ TEST(Indexed, removeUpdateRaceCondition) {
     ASSERT_FALSE(objs.front_contains(obj_a));
     ASSERT_FALSE(objs.back_contains(obj_a));
 
-    // Our fron copy of A is finally cleaned up after a subsequent call to
+    // Our front copy of A is finally cleaned up after a subsequent call to
     // clean_up_removed_drawables
     ASSERT_FALSE(destructor_called);
     objs.clean_up_removed_drawables();

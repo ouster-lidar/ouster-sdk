@@ -20,7 +20,7 @@ To install the Ouster SDK with the mapping capabilities:
       .. code::
 
         $ python3 install ouster-sdk
-   
+
    .. tab-item:: Windows x64
       :sync: windows
 
@@ -94,7 +94,7 @@ Then execute the following command.
 
 
 .. note::
-        
+
         Saving frames will fail if they are missing packet timestamps. Try adding the `--ts lidar` option to the `save` command invocation in such cases, or use the `-c` flag to continue attempting to save data after encountering a save error.
 
 
@@ -112,7 +112,7 @@ cloud generation and the other post-process tools we offer in the future.
    :start-after: [doc-slam-save-begin]
    :end-before: [doc-slam-save-end]
    :dedent: 0
-   
+
 
 
 The ``save`` command can also be used to generate an accumulated point cloud map using a
@@ -158,7 +158,7 @@ file to a PLY file and keep only the point within 20 to 80 meters range you can 
    :start-after: [doc-clipply-begin]
    :end-before: [doc-clipply-end]
    :dedent: 0
-   
+
 More details about the clip command usage can be found in the :ref:`Clip Command <ouster-cli-clip>`
 
 You can use an open source software `CloudCompare`_ to import and view the generated point cloud
@@ -173,10 +173,10 @@ The accuracy of multi-sensor SLAM relies on two key prerequisites:
 - Precise sensor extrinsics (rigid-body calibration between sensors)
 - Tightly synchronized timestamps (via PTP or equivalent)
 
-When both are in place, the SLAM algorithm can fuse point clouds with minimal drift and maximum consistency. 
+When both are in place, the SLAM algorithm can fuse point clouds with minimal drift and maximum consistency.
 
 In cases where sensors may not be time-synchronized or column timestamps present within frames are not guaranteed to be monotonically increasing,
-SDK applies an estimated clock offset. This might result in a degradation of map quality. 
+SDK applies an estimated clock offset. This might result in a degradation of map quality.
 
 In those cases, the SDK’s software-based timing correction serves as a patch, but it cannot fully recover the precision of a properly synchronized setup.
 

@@ -14,7 +14,8 @@ namespace sdk {
 namespace viz {
 namespace impl {
 
-Framebuffer::Framebuffer(int width, int height) : width_(width), height_(height) {
+Framebuffer::Framebuffer(int width, int height, bool depth_texture)
+    : width_(width), height_(height), has_depth_texture_(depth_texture) {
     // Create the FBO
     glGenFramebuffers(1, &fbo_handle_);
 
@@ -31,12 +32,29 @@ Framebuffer::Framebuffer(int width, int height) : width_(width), height_(height)
     // Attach the texture to the FBO
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_handle_, 0);
 
-    // Create the depth renderbuffer
-    glGenRenderbuffers(1, &depth_rbo_handle_);
-    glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo_handle_);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width_, height_);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
-                              depth_rbo_handle_);
+    if (depth_texture) {
+        glGenTextures(1, &depth_texture_handle_);
+        glBindTexture(GL_TEXTURE_2D, depth_texture_handle_);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, width_, height_, 0,
+                     GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        // Standard clamping behavior to avoid sampling beyond edge artifacts
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
+                               depth_texture_handle_, 0);
+    } else {
+        // Create the depth renderbuffer
+        glGenRenderbuffers(1, &depth_rbo_handle_);
+        glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo_handle_);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width_, height_);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
+                                  depth_rbo_handle_);
+    }
 
     // Unbind the FBO (return to the default framebuffer)
     unbind();
@@ -63,6 +81,17 @@ int Framebuffer::height() const {
     return height_;
 }
 
+GLuint Framebuffer::texture() const {
+    return texture_handle_;
+}
+
+GLuint Framebuffer::depth_texture() const {
+    if (!has_depth_texture_) {
+        throw std::runtime_error("This framebuffer does not have a depth texture.");
+    }
+    return depth_texture_handle_;
+}
+
 void Framebuffer::bind() {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_handle_);
     bound_ = true;
@@ -83,8 +112,12 @@ Framebuffer::~Framebuffer() {
     if (bound_) {
         unbind();
     }
-    glDeleteRenderbuffers(1, &depth_rbo_handle_);
-    depth_rbo_handle_ = 0;
+    if (has_depth_texture_) {
+        glDeleteTextures(1, &depth_texture_handle_);
+    } else {
+        glDeleteRenderbuffers(1, &depth_rbo_handle_);
+        depth_rbo_handle_ = 0;
+    }
 
     glDeleteTextures(1, &texture_handle_);
     texture_handle_ = 0;

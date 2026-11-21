@@ -1,4 +1,4 @@
-from typing import (List, Optional, Union, Protocol, runtime_checkable, Tuple)
+from typing import (cast, List, Optional, Union, Protocol, runtime_checkable, Tuple)
 
 from dataclasses import dataclass
 import numpy as np
@@ -7,6 +7,23 @@ from ouster.sdk.core import (Version, AutoExposure, BeamUniformityCorrector,
                              LocalToneMapper)
 
 from ouster.sdk._bindings.viz import Cloud, Image
+
+# Any concrete frame (LidarFrame, CameraFrame, ...). View modes operate on the
+# common Frame API, so they accept the polymorphic base.
+FrameLike = core.Frame
+
+
+def _set_viz_image(img: Image,
+                   info: Optional[core.LidarInfo],
+                   key_data: np.ndarray,
+                   frame: FrameLike) -> None:
+    """Set a viz Image from field data, destaggering lidar images only."""
+    if isinstance(frame, core.CameraFrame):
+        img.set_image(key_data)
+    elif info is not None:
+        img.set_image(core.destagger(info, key_data))
+    else:
+        raise ValueError("VizMode requires metadata to make a 2D image")
 
 
 @runtime_checkable
@@ -18,7 +35,7 @@ class FieldViewMode(Protocol):
     of showing data in that mode, see `enabled()`.
     """
 
-    _info: Optional[core.SensorInfo]
+    _info: Optional[core.LidarInfo]
 
     @property
     def name(self) -> str:
@@ -31,12 +48,12 @@ class FieldViewMode(Protocol):
         ...
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
         """Prepares data for visualization given the frame and return number"""
         ...
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0) -> bool:
+    def enabled(self, ls: FrameLike, return_num: int = 0) -> bool:
         """Checks the view mode availability for a frame and return number"""
         ...
 
@@ -47,7 +64,7 @@ class ImageMode(FieldViewMode, Protocol):
 
     def set_image(self,
                   img: Image,
-                  ls: core.LidarFrame,
+                  ls: FrameLike,
                   return_num: int = 0) -> None:
         """Prepares the key data and sets the image key to it."""
         ...
@@ -59,7 +76,7 @@ class CloudMode(FieldViewMode, Protocol):
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         *,
                         return_num: int = 0) -> None:
         """Prepares the key data and sets the cloud key to it."""
@@ -80,7 +97,8 @@ def _second_chan_field(field: str) -> Optional[str]:
         core.ChanField.REFLECTIVITY: core.ChanField.REFLECTIVITY2,
         core.ChanField.FLAGS: core.ChanField.FLAGS2,
         core.ChanField.NORMALS: core.ChanField.NORMALS2,
-        core.ChanField.GROUND: core.ChanField.GROUND2
+        core.ChanField.GROUND: core.ChanField.GROUND2,
+        core.ChanField.WALL: core.ChanField.WALL2
     })
     # yapf: enable
     return second_fields.get(field, None)
@@ -89,7 +107,7 @@ def _second_chan_field(field: str) -> Optional[str]:
 class RingMode(CloudMode):
     """View mode to show laser ring."""
 
-    def __init__(self, info: core.SensorInfo) -> None:
+    def __init__(self, info: core.LidarInfo) -> None:
         """
         Args:
             info: sensor metadata
@@ -106,7 +124,7 @@ class RingMode(CloudMode):
         return ["RING"]
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if self._key_data is None:
             key_data = np.empty((self._info.h, self._info.w), dtype=np.uint8)
@@ -117,20 +135,20 @@ class RingMode(CloudMode):
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         return_num: int = 0) -> None:
         self._prepare_data(ls, return_num)
         assert self._key_data is not None
         cloud.set_key(self._key_data)
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0):
+    def enabled(self, ls: FrameLike, return_num: int = 0):
         return True
 
 
 class SensorMode(CloudMode):
     """View mode to show sensor index."""
 
-    def __init__(self, info: core.SensorInfo, color: Tuple[int, int, int]) -> None:
+    def __init__(self, info: core.LidarInfo, color: Tuple[int, int, int]) -> None:
         """
         Args:
             info: sensor metadata
@@ -148,7 +166,7 @@ class SensorMode(CloudMode):
         return ["SENSOR"]
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if self._key_data is None:
             self._key_data = np.empty((self._info.h, self._info.w, 3), dtype=np.uint8)
@@ -157,20 +175,20 @@ class SensorMode(CloudMode):
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         return_num: int = 0) -> None:
         self._prepare_data(ls, return_num)
         assert self._key_data is not None
         cloud.set_key(self._key_data)
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0):
+    def enabled(self, ls: FrameLike, return_num: int = 0):
         return True
 
 
 class TimestampMode(CloudMode):
     """View mode to show column timestamp."""
 
-    def __init__(self, info: core.SensorInfo) -> None:
+    def __init__(self, info: core.LidarInfo) -> None:
         """
         Args:
             info: sensor metadata
@@ -186,12 +204,14 @@ class TimestampMode(CloudMode):
         return ["TIMESTAMP"]
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
+        # TIMESTAMP mode relies on per-column status; it is only used for lidar.
+        ls = cast(core.LidarFrame, ls)
         nonzero = np.nonzero(ls.status)
         min = np.min(ls.timestamp[nonzero])
         timestamps = (ls.timestamp - min).astype(np.float32, copy=True)
-        delta = np.max(ls.timestamp) - min
+        delta = float(np.max(ls.timestamp) - min)
         # handle case when all points have same value to avoid divide by zero
         if delta <= 0:
             delta = 1.0
@@ -201,13 +221,13 @@ class TimestampMode(CloudMode):
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         return_num: int = 0) -> None:
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
             cloud.set_key(key_data)
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0):
+    def enabled(self, ls: FrameLike, return_num: int = 0):
         return True
 
 
@@ -223,7 +243,7 @@ class SimpleMode(ImageCloudMode):
     def __init__(self,
                  field: str,
                  *,
-                 info: Optional[core.SensorInfo] = None,
+                 info: Optional[core.LidarInfo] = None,
                  prefix: Optional[str] = "",
                  suffix: Optional[str] = "",
                  use_ae: bool = True,
@@ -263,7 +283,7 @@ class SimpleMode(ImageCloudMode):
         return [self._wrap_name(str(f)) for f in self._fields]
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if not self.enabled(ls, return_num):
             return None
@@ -292,26 +312,59 @@ class SimpleMode(ImageCloudMode):
 
     def set_image(self,
                   img: Image,
-                  ls: core.LidarFrame,
+                  ls: FrameLike,
                   return_num: int = 0) -> None:
-        if self._info is None:
-            raise ValueError(
-                f"VizMode[{self.name}] requires metadata to make a 2D image")
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
-            img.set_image(core.destagger(self._info, key_data))
+            _set_viz_image(img, self._info, key_data, ls)
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         return_num: int = 0) -> None:
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
             cloud.set_key(key_data)
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0):
+    def enabled(self, ls: FrameLike, return_num: int = 0):
         return (self._fields[return_num] in ls.fields
                 if return_num < len(self._fields) else False)
+
+
+class MaskMode(SimpleMode):
+    """View mode for a per-pixel yes/no mask field, red for yes.
+
+    A mask carries two values and no scale, so it is shown as two colors
+    rather than pushed through a palette: red where the mask is set, green
+    where it is not.
+    """
+
+    _YES_RGB = (255, 0, 0)
+    _NO_RGB = (0, 255, 0)
+
+    def __init__(self,
+                 field: str,
+                 *,
+                 info: Optional[core.LidarInfo] = None) -> None:
+        """
+        Args:
+            field: mask field to process, nonzero meaning yes; the second
+                   return field is picked up automatically
+            info: sensor metadata used mainly for destaggering here
+        """
+        super().__init__(field, info=info, use_ae=False)
+
+    def _prepare_data(self,
+                      ls: FrameLike,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+        if not self.enabled(ls, return_num):
+            return None
+        mask = ls.field(self._fields[return_num])
+        if mask.ndim != 2:
+            raise TypeError(f"Unsupported mask field shape: {mask.shape}")
+        key_data = np.full(mask.shape + (3, ), self._NO_RGB, dtype=np.uint8)
+        key_data[mask != 0] = self._YES_RGB
+        return key_data
 
 
 class RGBMode(ImageCloudMode):
@@ -320,7 +373,7 @@ class RGBMode(ImageCloudMode):
     def __init__(self,
                  field: str,
                  *,
-                 info: Optional[core.SensorInfo] = None) -> None:
+                 info: Optional[core.LidarInfo] = None) -> None:
         """
         Args:
             info: sensor metadata used mainly for destaggering here
@@ -338,12 +391,12 @@ class RGBMode(ImageCloudMode):
         return [self._field]
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
 
         field = ls.field(self._field)
         if np.ndim(field) != 3 and field.shape != 3:
-            raise TypeError(f"Unsupport field shape: {field.shape}")
+            raise TypeError(f"Unsupported field shape: {field.shape}")
         if field.dtype == np.uint8:
             return field
         elif field.dtype == np.uint16:
@@ -353,30 +406,27 @@ class RGBMode(ImageCloudMode):
         elif field.dtype == np.float64:
             key_data = field.astype(np.float32, copy=True)
         else:
-            raise TypeError(f"Unsupport field type {field.dtype}")
+            raise TypeError(f"Unsupported field type {field.dtype}")
 
         return key_data.clip(0, 1.0)
 
     def set_image(self,
                   img: Image,
-                  ls: core.LidarFrame,
+                  ls: FrameLike,
                   return_num: int = 0) -> None:
-        if self._info is None:
-            raise ValueError(
-                f"VizMode[{self.name}] requires metadata to make a 2D image")
         key_data = self._prepare_data(ls)
         if key_data is not None:
-            img.set_image(core.destagger(self._info, key_data))
+            _set_viz_image(img, self._info, key_data, ls)
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         return_num: int = 0) -> None:
         key_data = self._prepare_data(ls)
         if key_data is not None:
             cloud.set_key(key_data)
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0):
+    def enabled(self, ls: FrameLike, return_num: int = 0):
         field = ls.field(self._field)
         return np.ndim(field) == 3
 
@@ -386,11 +436,11 @@ class HDRRGBMode(ImageCloudMode):
 
     def __init__(self,
                  field: str,
-                 info: core.SensorInfo) -> None:
+                 info: core.LidarInfo) -> None:
         self._info = info
         self._field = field
         self._tonemapper = LocalToneMapper()
-        self._last_frame: Optional[core.LidarFrame] = None
+        self._last_frame: Optional[FrameLike] = None
         self._last_data: Optional[np.ndarray] = None
 
     @property
@@ -402,7 +452,7 @@ class HDRRGBMode(ImageCloudMode):
         return [self._field]
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if not self.enabled(ls, return_num):
             return None
@@ -423,7 +473,7 @@ class HDRRGBMode(ImageCloudMode):
 
     def set_image(self,
                   img: Image,
-                  ls: core.LidarFrame,
+                  ls: FrameLike,
                   return_num: int = 0) -> None:
         if self._info is None:
             raise ValueError(
@@ -434,13 +484,13 @@ class HDRRGBMode(ImageCloudMode):
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         return_num: int = 0) -> None:
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
             cloud.set_key(key_data)
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0) -> bool:
+    def enabled(self, ls: FrameLike, return_num: int = 0) -> bool:
         field = ls.field(self._field)
         return np.ndim(field) == 3 and field.shape[2] == 3
 
@@ -451,7 +501,7 @@ class NormalsMode(ImageCloudMode):
     def __init__(self,
                  field: str,
                  *,
-                 info: Optional[core.SensorInfo] = None) -> None:
+                 info: Optional[core.LidarInfo] = None) -> None:
         self._info = info
         self._fields = [field]
         field2 = _second_chan_field(field)
@@ -467,7 +517,7 @@ class NormalsMode(ImageCloudMode):
         return [str(field) for field in self._fields]
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if not self.enabled(ls, return_num):
             return None
@@ -486,24 +536,21 @@ class NormalsMode(ImageCloudMode):
 
     def set_image(self,
                   img: Image,
-                  ls: core.LidarFrame,
+                  ls: FrameLike,
                   return_num: int = 0) -> None:
-        if self._info is None:
-            raise ValueError(
-                f"VizMode[{self.name}] requires metadata to make a 2D image")
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
-            img.set_image(core.destagger(self._info, key_data))
+            _set_viz_image(img, self._info, key_data, ls)
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: core.LidarFrame,
+                        ls: FrameLike,
                         return_num: int = 0) -> None:
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
             cloud.set_key(key_data)
 
-    def enabled(self, ls: core.LidarFrame, return_num: int = 0):
+    def enabled(self, ls: FrameLike, return_num: int = 0):
         if return_num >= len(self._fields):
             return False
 
@@ -518,7 +565,7 @@ class NormalsMode(ImageCloudMode):
 class ReflMode(SimpleMode, ImageCloudMode):
     """Prepares image/cloud data for REFLECTIVITY channel"""
 
-    def __init__(self, *, info: Optional[core.SensorInfo] = None) -> None:
+    def __init__(self, *, info: Optional[core.LidarInfo] = None) -> None:
         super().__init__(core.ChanField.REFLECTIVITY, info=info, use_ae=True)
         # used only for uncalibrated reflectivity in FW prior v2.1.0
         # TODO: should we check for calibrated reflectivity status from
@@ -532,7 +579,7 @@ class ReflMode(SimpleMode, ImageCloudMode):
             self._normalized_refl = True
 
     def _prepare_data(self,
-                      ls: core.LidarFrame,
+                      ls: FrameLike,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if not self.enabled(ls, return_num):
             return None

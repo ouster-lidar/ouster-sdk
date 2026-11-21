@@ -4,12 +4,12 @@
 Migration from 20241004/0.13.0 to 20250117/0.14.0
 =================================================
 
-The OusterSDK 0.14.0 release brings a few breaking changes.  Here we summarize how to migrate 
+The OusterSDK 0.14.0 release brings a few breaking changes.  Here we summarize how to migrate
 from 0.13.0 to 0.14.0
 
 ouster_client c++ module changes
 ++++++++++++++++++++++++++++++++
-The ``SensorClient`` ``get_packet`` signature was changed. 
+The ``SensorClient`` ``get_packet`` signature was changed.
 
 Before, this method was used as follows:
 
@@ -56,5 +56,5 @@ this was changed and the same logic would be written now as follows:
     }
 
 
-Now, ``LidarPacket`` and ``ImuPacket`` provide convenient methods that return the parsed fields that 
+Now, ``LidarPacket`` and ``ImuPacket`` provide convenient methods that return the parsed fields that
 are specific to each packet type.

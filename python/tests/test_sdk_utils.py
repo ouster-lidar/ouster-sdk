@@ -5,7 +5,7 @@ import os
 import re
 from tests.conftest import PCAPS_DATA_DIR
 from ouster.sdk import core
-from ouster.sdk.core import SensorInfo, LidarMode, UDPProfileLidar, PacketFormat, LidarFrame, FrameBatcher
+from ouster.sdk.core import LidarInfo, LidarMode, UDPProfileLidar, PacketFormat, LidarFrame, FrameBatcher
 from os.path import commonprefix
 from pathlib import Path
 from ouster.sdk.util import img_aspect_ratio
@@ -98,7 +98,7 @@ def test_resolve_metadata_multi_exception_raised():
 
     with open(os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.json')) as file:
         meta_content = file.read()
-        si = SensorInfo(meta_content)
+        si = LidarInfo(meta_content)
 
     metas = set([os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.2.json'),
                  os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.json')])
@@ -115,9 +115,9 @@ def test_resolve_metadata_multi_exception_raised():
 
 def test_img_aspect_ratio():
     # aspect ratio is independent of the mode
-    assert img_aspect_ratio(SensorInfo.from_default(LidarMode._1024x10)) == pytest.approx(0.09228333333333334)
-    assert img_aspect_ratio(SensorInfo.from_default(LidarMode._2048x10)) == pytest.approx(0.09228333333333334)
-    assert img_aspect_ratio(SensorInfo.from_default(LidarMode._512x10)) == pytest.approx(0.09228333333333334)
+    assert img_aspect_ratio(LidarInfo.from_default(LidarMode._1024x10)) == pytest.approx(0.09228333333333334)
+    assert img_aspect_ratio(LidarInfo.from_default(LidarMode._2048x10)) == pytest.approx(0.09228333333333334)
+    assert img_aspect_ratio(LidarInfo.from_default(LidarMode._512x10)) == pytest.approx(0.09228333333333334)
 
 
 def test_frame_to_packets():
@@ -127,7 +127,7 @@ def test_frame_to_packets():
     the packets back into a new frame and compare the frames.
     """
     profile = UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
-    info = SensorInfo()
+    info = LidarInfo()
     info.init_id = 1234
     info.sn = 5678
 
@@ -153,15 +153,15 @@ def test_frame_to_packets():
 
     # Important: frame_to_packets assumes these are set.
     # Also, frame_to_packets dislikes packets with timestamps equal to zero
-    assert len(frame.packet_timestamp) == frame.packet_count
-    frame.packet_timestamp[:] = range(1, len(frame.packet_timestamp) + 1)
+    assert len(frame.receive_timestamp) == frame.packet_count
+    frame.receive_timestamp[:] = range(1, len(frame.receive_timestamp) + 1)
     frame.status[:] = np.ones(frame.status.shape)
 
     packets = frame_to_packets(frame, info)
     crcs = [packet_format.crc(packet.buf) for packet in packets]
 
     # Check results
-    assert len(packets) == len(frame.packet_timestamp)
+    assert len(packets) == len(frame.receive_timestamp)
     batcher = FrameBatcher(info)
 
     # Batch the packets back into a frame, which we use to test the frame-to-packet results, since methods to get packet
@@ -174,7 +174,7 @@ def test_frame_to_packets():
         assert packet_format.crc(packet.buf) == packet_format.calculate_crc(packet.buf)
         assert packet_format.packet_type(packet.buf) == 0x1
         batcher.batch(packet, output_frame)
-    assert np.array_equal(output_frame.packet_timestamp, frame.packet_timestamp)
+    assert np.array_equal(output_frame.receive_timestamp, frame.receive_timestamp)
     assert np.array_equal(output_frame.timestamp, frame.timestamp)
     assert np.array_equal(output_frame.measurement_id, frame.measurement_id)
     assert np.array_equal(output_frame.alert_flags, frame.alert_flags)
@@ -183,6 +183,6 @@ def test_frame_to_packets():
     assert output_frame.shot_limiting() == frame.shot_limiting()
     assert output_frame.thermal_shutdown() == frame.thermal_shutdown()
 
-    # Ensure that CRCs surive the round trip packet->frame->packet conversion.
+    # Ensure that CRCs survive the round trip packet->frame->packet conversion.
     crcs2 = [packet_format.crc(packet.buf) for packet in frame_to_packets(output_frame, info)]
     assert crcs == crcs2

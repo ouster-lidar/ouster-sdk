@@ -50,6 +50,10 @@ def test_operating_mode_misc() -> None:
      "OUTPUT_FROM_PTP_1588"),
     (core.MultipurposeIOMode.OUTPUT_FROM_ENCODER_ANGLE,
      "OUTPUT_FROM_ENCODER_ANGLE"),
+    (core.MultipurposeIOMode.ZONE_MONITOR_OVER_OSSD,
+     "ZONE_MONITOR_OVER_OSSD"),
+    (core.MultipurposeIOMode.ZONE_MONITOR_OVER_GPIO,
+     "ZONE_MONITOR_OVER_GPIO"),
 ])
 def test_multipurpose_io_mode(mode, string) -> None:
     """Check multipurpose mode (un)parsing."""
@@ -61,7 +65,7 @@ def test_multipurpose_io_mode(mode, string) -> None:
 def test_multipurpose_io_mode_misc() -> None:
     """Check some misc properties of multipurpose mode."""
     assert len(core.MultipurposeIOMode.__members__
-               ) == 6, "Don't forget to update tests!"
+               ) == 8, "Don't forget to update tests!"
     assert core.MultipurposeIOMode.from_string("foo") is None
     assert core.MultipurposeIOMode(0) == core.MultipurposeIOMode.OFF
 
@@ -91,7 +95,7 @@ def test_polarity_misc() -> None:
 ])
 def test_nmea_baud_rate(nmea_baud_rate, string) -> None:
     """Check nmea baud rate (un)parsing."""
-    int(nmea_baud_rate)  # make usre nothing is raised
+    int(nmea_baud_rate)  # make sure nothing is raised
     assert str(nmea_baud_rate) == string
     assert core.NMEABaudRate.from_string(string) == nmea_baud_rate
 
@@ -106,7 +110,7 @@ def test_nmea_baud_rate_misc() -> None:
 
 def test_optional_config() -> None:
     """Check that all fields are optional."""
-    config = core.SensorConfig()
+    config = core.LidarConfig()
 
     # make sure all the values are empty
     assert config.accel_fsr is None
@@ -148,7 +152,7 @@ def test_optional_config() -> None:
 
 def test_write_config() -> None:
     """Check modifying config."""
-    config = core.SensorConfig()
+    config = core.LidarConfig()
     config.lidar_frame_azimuth_offset = 0
     config.azimuth_window = (0, 0)
     config.lidar_mode = core.LidarMode._512x10
@@ -276,7 +280,7 @@ def all_different_config_string() -> str:
 
 def test_read_config(complete_config_string: str) -> None:
     """Check reading from and writing to string."""
-    config = core.SensorConfig(complete_config_string)  # read from string
+    config = core.LidarConfig(complete_config_string)  # read from string
 
     # make sure all the values are correct
     assert config.accel_fsr == core.FullScaleRange.EXTENDED
@@ -335,18 +339,18 @@ def test_read_config(complete_config_string: str) -> None:
 def test_equality_config(complete_config_string: str, all_different_config_string: str) -> None:
     """Check equality comparisons."""
 
-    complete_config_1 = core.SensorConfig(complete_config_string)
-    complete_config_2 = core.SensorConfig(complete_config_string)
+    complete_config_1 = core.LidarConfig(complete_config_string)
+    complete_config_2 = core.LidarConfig(complete_config_string)
     assert complete_config_1 == complete_config_2
 
     complete_config_2.multipurpose_io_mode = core.MultipurposeIOMode.OUTPUT_FROM_PTP_1588
     assert complete_config_1 != complete_config_2
 
-    partial_config_1 = core.SensorConfig()
+    partial_config_1 = core.LidarConfig()
     partial_config_1.nmea_baud_rate = core.NMEABaudRate.BAUD_115200
     partial_config_1.operating_mode = core.OperatingMode.STANDBY
 
-    partial_config_2 = core.SensorConfig()
+    partial_config_2 = core.LidarConfig()
     partial_config_2.nmea_baud_rate = core.NMEABaudRate.BAUD_115200
     partial_config_2.operating_mode = core.OperatingMode.STANDBY
     assert partial_config_1 == partial_config_2
@@ -354,8 +358,8 @@ def test_equality_config(complete_config_string: str, all_different_config_strin
     partial_config_2.operating_mode = core.OperatingMode.NORMAL
     assert partial_config_1 != partial_config_2
 
-    empty_config_1 = core.SensorConfig()
-    empty_config_2 = core.SensorConfig()
+    empty_config_1 = core.LidarConfig()
+    empty_config_2 = core.LidarConfig()
     assert empty_config_1 == empty_config_2
 
     assert complete_config_1 != empty_config_1
@@ -364,12 +368,12 @@ def test_equality_config(complete_config_string: str, all_different_config_strin
     assert partial_config_1 != empty_config_1
     assert partial_config_2 != empty_config_1
 
-    config_attributes = inspect.getmembers(core.SensorConfig, lambda a: not inspect.isroutine(a))
+    config_attributes = inspect.getmembers(core.LidarConfig, lambda a: not inspect.isroutine(a))
     assert 'zone_set_config' not in [a[0] for a in config_attributes]
     config_properties = [a for a in config_attributes if not a[0].startswith('__')]
 
-    base_config = core.SensorConfig(complete_config_string)
-    different_config = core.SensorConfig(all_different_config_string)
+    base_config = core.LidarConfig(complete_config_string)
+    different_config = core.LidarConfig(all_different_config_string)
 
     for config_property in config_properties:
         copy_config = deepcopy(base_config)  # reset to initial
@@ -382,9 +386,23 @@ def test_equality_config(complete_config_string: str, all_different_config_strin
     assert len(config_properties) == 36, "Don't forget to update tests and the config == operator!"
 
 
+def test_sensor_config_is_base_of_lidar_config() -> None:
+    """SensorConfig is an (attribute-less) base class of LidarConfig."""
+    # SensorConfig is exposed and is the base class of LidarConfig
+    assert issubclass(core.LidarConfig, core.SensorConfig)
+    assert isinstance(core.LidarConfig(), core.SensorConfig)
+
+    # For now the base carries no config attributes of its own
+    base_properties = [
+        name for name, _ in inspect.getmembers(core.SensorConfig, lambda a: not inspect.isroutine(a))
+        if not name.startswith('__')
+    ]
+    assert base_properties == []
+
+
 def test_copy_config(complete_config_string: str) -> None:
     """Check that copy() works."""
-    config = core.SensorConfig(complete_config_string)
+    config = core.LidarConfig(complete_config_string)
     config1 = copy(config)
 
     assert config1 is not config
@@ -395,9 +413,9 @@ def test_parse_config() -> None:
     """Sanity check parsing from json string."""
 
     with pytest.raises(RuntimeError):
-        core.SensorConfig('/')
+        core.LidarConfig('/')
     with pytest.raises(RuntimeError):
-        core.SensorConfig('{ ')
+        core.LidarConfig('{ ')
 
 
 # Note that config.signal_multiplier will also accept values
@@ -407,7 +425,7 @@ def test_parse_config() -> None:
 def test_signal_multiplier(signal_multiplier) -> None:
     """Check that signal multiplier supports all FW values"""
 
-    config = core.SensorConfig()
+    config = core.LidarConfig()
     config.signal_multiplier = signal_multiplier
 
 
@@ -419,7 +437,7 @@ def signal_multiplier_config_json(signal_multiplier):
 def test_config_valid_signal_multiplier_parse(signal_multiplier) -> None:
     """Check parsing valid signal multiplier from json"""
 
-    core.SensorConfig(signal_multiplier_config_json(signal_multiplier))
+    core.LidarConfig(signal_multiplier_config_json(signal_multiplier))
 
 
 @pytest.mark.parametrize("signal_multiplier", invalid_signal_multiplier_values)
@@ -427,14 +445,14 @@ def test_config_invalid_signal_multiplier_parse(signal_multiplier) -> None:
     """Check parsing invalid signal multiplier from json"""
 
     with pytest.raises(RuntimeError):
-        core.SensorConfig(signal_multiplier_config_json(signal_multiplier))
+        core.LidarConfig(signal_multiplier_config_json(signal_multiplier))
 
 
 @pytest.mark.parametrize("signal_multiplier", valid_signal_multiplier_values)
 def test_config_valid_signal_multiplier_to_str(signal_multiplier) -> None:
     """Check writing valid signal multiplier to string"""
 
-    config = core.SensorConfig()
+    config = core.LidarConfig()
     config.signal_multiplier = signal_multiplier
     str(config)
 
@@ -443,7 +461,7 @@ def test_config_valid_signal_multiplier_to_str(signal_multiplier) -> None:
 def test_config_invalid_signal_multiplier_to_str(signal_multiplier) -> None:
     """Check writing invalid signal multiplier to string"""
 
-    config = core.SensorConfig()
+    config = core.LidarConfig()
     # note: won't error out here bc it's just a double
     config.signal_multiplier = signal_multiplier
     with pytest.raises(RuntimeError):
@@ -452,14 +470,14 @@ def test_config_invalid_signal_multiplier_to_str(signal_multiplier) -> None:
 
 def test_extra_options() -> None:
     """Test that extra_options is parsed and serialized correctly"""
-    config = core.SensorConfig()
+    config = core.LidarConfig()
     config.signal_multiplier = 1
     config.extra_options = {"hi": '"hello"', "hi2": "2", "hi3": '{"hi":"hi"}'}
 
     assert config.extra_options == {"hi": '"hello"', "hi2": "2", "hi3": '{"hi":"hi"}'}
     assert str(config) == '{"hi":"hello","hi2":2,"hi3":{"hi":"hi"},"signal_multiplier":1}'
 
-    copy = core.SensorConfig(str(config))
+    copy = core.LidarConfig(str(config))
 
     assert copy == config
     assert str(copy) == str(config)
@@ -471,9 +489,9 @@ def test_extra_options() -> None:
 
 
 @pytest.fixture()
-def deprecated_params_config() -> core.SensorConfig:
+def deprecated_params_config() -> core.LidarConfig:
     deprecated_params = """ { "udp_ip": "169.254.148.183", "auto_start_flag": 1 }"""
-    return core.SensorConfig(deprecated_params)
+    return core.LidarConfig(deprecated_params)
 
 
 def test_deprecated_config(deprecated_params_config) -> None:

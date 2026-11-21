@@ -42,6 +42,8 @@ std::string to_string(ChanFieldType field_type) {
             return "CHAR";
         case ChanFieldType::FLOAT16:
             return "FLOAT16";
+        case ChanFieldType::ZONE_STATE:
+            return "ZONE_STATE";
         default:
             return "UNKNOWN";
     }

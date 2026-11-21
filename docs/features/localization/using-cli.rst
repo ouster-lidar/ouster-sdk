@@ -2,8 +2,8 @@ Using the CLI
 ==============
 
 The ``localize`` command was introduced in SDK 0.14.0. It loads a pre-built point cloud map,
-streams lidar data from a sensor or recording, and continuously estimates the sensor's pose
-relative to the map.
+streams data from a sensor or recording (lidar and/or camera), and continuously estimates the
+sensor's pose relative to the map.
 
 Basic Usage
 -----------
@@ -19,7 +19,7 @@ The ``{MAP}`` argument is a PLY (or PCD) file produced by a prior SLAM run (see
 :ref:`ouster-cli-mapping-save`).
 
 When you append ``viz`` after the map path, the Ouster Visualizer loads the reference map in the
-background (flattened by default), streams lidar from the source, and updates the sensor pose
+background (flattened by default), streams frames from the source, and updates the sensor pose
 relative to the map origin:
 
 .. figure:: ../mapping/_snippets/images/localization-map-main.png
@@ -68,7 +68,12 @@ To see all available options:
      - Upper limit of range measurements in meters. Points beyond this are excluded.
    * - ``-v`` / ``--voxel-size``
      - auto
-     - Map voxel size in meters. When omitted (or ``0.0``), the engine estimates a suitable size.
+     - Voxel grid resolution used for downsampling, in meters. When omitted (or ``0.0``), the engine
+       estimates a suitable size.
+   * - ``--voxel-map-size``
+     - infinity
+     - Maximum distance from the initial pose, in meters, at which points are retained in the local
+       voxel map. Defaults to infinity, i.e. the preloaded map is not trimmed.
    * - ``--deskew-method``
      - ``auto``
      - Deskewing strategy: ``auto``, ``none``, ``constant_velocity``, or ``imu_deskew``.
@@ -92,6 +97,10 @@ This would set the initial pose of the input source with respect to the map orig
 where ``PX,PY,PZ``  represent the position and R,P,Y represent orientation in Euler angles (roll, pitch, yaw) specified in degrees.
 
 When not specified, the initial pose defaults to the identity matrix (the map origin).
+
+With IMU deskewing, the initial gravity comes from plumbing the frame set the trajectory starts
+from, rotated into the map frame by the initial pose. See :ref:`localization-initial-pose-gravity`
+for the full rules.
 
 For the Python API, see :ref:`setting-the-initial-pose` in :doc:`using-the-api`.
 

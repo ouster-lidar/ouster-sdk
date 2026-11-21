@@ -14,6 +14,12 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/core/camera_frame.h"
+#include "ouster/core/field.h"
+#include "ouster/core/frame.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/object.h"
+
 namespace ouster {
 namespace sdk {
 namespace core {
@@ -23,37 +29,43 @@ FrameSet::FrameSet()
       fields_(std::make_shared<std::unordered_map<std::string, Field>>()),
       objects_(std::make_shared<std::unordered_map<std::string, std::vector<Object>>>()) {}
 
-FrameSet::FrameSet(const std::vector<std::shared_ptr<LidarFrame>>& frames)
-    : frames_(frames),
-      fields_(std::make_shared<std::unordered_map<std::string, Field>>()),
-      objects_(std::make_shared<std::unordered_map<std::string, std::vector<Object>>>()) {}
-
-FrameSet::FrameSet(std::vector<std::shared_ptr<LidarFrame>>&& frames) : FrameSet() {
-    frames_.swap(frames);
+FrameSet::FrameSet(std::vector<std::shared_ptr<Frame>> frames) : FrameSet() {
+    // Clang-tidy stupidly doesn't like this, but moving frames_ initialization into the member
+    // initializer list is a compile error
+    frames_ = std::move(frames);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
 }
 
-FrameSet::FrameSet(std::initializer_list<std::shared_ptr<LidarFrame>> frames)
-    : frames_(frames),
-      fields_(std::make_shared<std::unordered_map<std::string, Field>>()),
-      objects_(std::make_shared<std::unordered_map<std::string, std::vector<Object>>>()) {}
+FrameSet::FrameSet(const std::vector<std::shared_ptr<LidarFrame>>& frames) : FrameSet() {
+    frames_.reserve(frames.size());
+    for (const auto& frame : frames) {
+        frames_.push_back(frame);
+    }
+}
 
-std::vector<std::shared_ptr<LidarFrame>>::iterator FrameSet::begin() {
+FrameSet::FrameSet(std::initializer_list<std::shared_ptr<LidarFrame>> frames) : FrameSet() {
+    frames_.reserve(frames.size());
+    for (const auto& frame : frames) {
+        frames_.push_back(frame);
+    }
+}
+
+std::vector<std::shared_ptr<Frame>>::iterator FrameSet::begin() {
     return frames_.begin();
 }
 
-std::vector<std::shared_ptr<LidarFrame>>::iterator FrameSet::end() {
+std::vector<std::shared_ptr<Frame>>::iterator FrameSet::end() {
     return frames_.end();
 }
 
-std::vector<std::shared_ptr<LidarFrame>>::const_iterator FrameSet::begin() const {
+std::vector<std::shared_ptr<Frame>>::const_iterator FrameSet::begin() const {
     return frames_.cbegin();
 }
 
-std::vector<std::shared_ptr<LidarFrame>>::const_iterator FrameSet::end() const {
+std::vector<std::shared_ptr<Frame>>::const_iterator FrameSet::end() const {
     return frames_.cend();
 }
 
-const std::shared_ptr<LidarFrame>& FrameSet::operator[](size_t index) const {
+const std::shared_ptr<Frame>& FrameSet::operator[](size_t index) const {
     try {
         return frames_.at(index);
     } catch (std::out_of_range& e) {
@@ -61,8 +73,12 @@ const std::shared_ptr<LidarFrame>& FrameSet::operator[](size_t index) const {
     }
 }
 
-std::shared_ptr<LidarFrame>& FrameSet::operator[](size_t index) {
-    return const_cast<std::shared_ptr<LidarFrame>&>((*const_cast<const FrameSet*>(this))[index]);
+std::shared_ptr<Frame>& FrameSet::operator[](size_t index) {
+    try {
+        return frames_.at(index);
+    } catch (std::out_of_range& e) {
+        throw std::out_of_range("Requested frame out of range");
+    }
 }
 
 size_t FrameSet::size() const {
@@ -76,12 +92,12 @@ size_t FrameSet::size() const {
  * make it not worth the refactoring trouble at the moment.
  */
 
-Field& FrameSet::add_field(const std::string& name, const FieldDescriptor& desc) {
+Field& FrameSet::add_field(const std::string& name, const FieldDescriptor& desc, bool zero) {
     if (has_field(name)) {
         throw std::invalid_argument("Duplicated field '" + name + "'");
     }
 
-    fields()[name] = Field{desc, FieldClass::COLLATION_FIELD};
+    fields()[name] = Field{desc, FieldClass::COLLATION_FIELD, zero};
 
     return fields()[name];
 }
@@ -129,23 +145,21 @@ const std::unordered_map<std::string, std::vector<Object>>& FrameSet::objects() 
     return *objects_;
 }
 
-std::vector<std::shared_ptr<LidarFrame>>& FrameSet::frames() {
+std::vector<std::shared_ptr<Frame>>& FrameSet::frames() {
     return frames_;
 }
 
-const std::vector<std::shared_ptr<LidarFrame>>& FrameSet::frames() const {
+const std::vector<std::shared_ptr<Frame>>& FrameSet::frames() const {
     return frames_;
 }
 
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
-std::vector<std::shared_ptr<LidarFrame>>& FrameSet::scans() {
-    return frames();
+std::vector<std::shared_ptr<LidarFrame>> FrameSet::valid_lidar_frames() const {
+    return valid_frames_of<LidarFrame>();
 }
-const std::vector<std::shared_ptr<LidarFrame>>& FrameSet::scans() const {
-    return frames();
+
+std::vector<std::shared_ptr<CameraFrame>> FrameSet::valid_camera_frames() const {
+    return valid_frames_of<CameraFrame>();
 }
-OUSTER_DIAGNOSTIC_POP
 
 void FrameSet::swap(FrameSet& other) noexcept {
     std::swap(frames(), other.frames());
@@ -156,9 +170,10 @@ void FrameSet::swap(FrameSet& other) noexcept {
 FrameSet FrameSet::clone() const {
     FrameSet out{};
 
+    out.frames_.reserve(frames_.size());
     for (const auto& ptr : frames_) {
         if (ptr) {
-            out.frames_.push_back(std::make_shared<LidarFrame>(*ptr));
+            out.frames_.push_back(ptr->clone());
         } else {
             out.frames_.push_back({});
         }
@@ -174,16 +189,25 @@ bool operator==(const FrameSet& a, const FrameSet& b) {
     }
 
     for (size_t i = 0; i < a.size(); ++i) {
-        bool both_empty = !a[i] && !b[i];
-        bool frames_equal = a[i] && b[i] && (*a[i] == *b[i]);
-        // return early if frames aren't equal
-        if (!(both_empty || frames_equal)) {
+        const bool both_empty = !a[i] && !b[i];
+        const bool both_present = a[i] && b[i];
+        if (both_empty) {
+            continue;
+        }
+        // Frame::equals() is virtual, so this compares the frames by their
+        // concrete types (LidarFrame, CameraFrame, ...) without downcasting
+        // here, and reports frames of differing types as unequal.
+        if (!both_present || !a[i]->equals(*b[i])) {
             return false;
         }
     }
 
     // frames are equal, return true if fields and object lists are equal too
     return a.fields() == b.fields() && a.objects() == b.objects();
+}
+
+bool operator!=(const FrameSet& a, const FrameSet& b) {
+    return !(a == b);
 }
 
 }  // namespace core

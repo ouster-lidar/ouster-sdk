@@ -11,12 +11,15 @@
 #include "curl_client.h"
 #include "ouster/core/types.h"
 
+// BEGINNOLINT(google-default-arguments)
 using namespace ouster::sdk::sensor::impl;
 using namespace ouster::sdk::core;
 using ouster::sdk::sensor::UserDataAndPolicy;
 const static Version MINIMUM_STAGING_VERSION = Version(3, 1, 0);
 
 const static Version MINIMUM_ZM_VERSION = Version(3, 2, 0);
+
+const static Version MINIMUM_MTU_VERSION = Version(4, 0, 0);
 
 SensorHttpImp::SensorHttpImp(const std::string& hostname)
     : http_client_(std::make_unique<CurlClient>(hostname)) {}
@@ -167,7 +170,7 @@ std::string SensorHttpImp::auto_detected_udp_dest(
         original_destination = original_destination_in.value();
     } else {
         original_destination =
-            SensorConfig(get_config_params(true, timeout_sec)).udp_dest.value_or("");
+            LidarConfig(get_config_params(true, timeout_sec)).udp_dest.value_or("");
     }
 
     std::string json;
@@ -178,7 +181,7 @@ std::string SensorHttpImp::auto_detected_udp_dest(
                        timeout_sec);
 
     // todo maybe speed in future by only parsing udp_dest
-    auto udp_auto = SensorConfig(get_config_params(false, timeout_sec));
+    auto udp_auto = LidarConfig(get_config_params(false, timeout_sec));
 
     json = "";
     root["udp_dest"] = original_destination;
@@ -272,16 +275,16 @@ void SensorHttpImp::apply_zone_monitor_staged_config_to_active(int timeout_sec) 
     http_client_->post("api/v1/" + api_prefix_ + "zone_monitor/apply", std::string{}, timeout_sec);
 }
 
-std::vector<uint8_t> SensorHttpImp::get_zone_monitor_live_ids(int timeout_sec) const {
+std::vector<uint16_t> SensorHttpImp::get_zone_monitor_live_ids(int timeout_sec) const {
     if (firmware_version() < MINIMUM_ZM_VERSION) {
         throw std::runtime_error("zone monitor only available on fw versions 3.2+");
     }
     auto resp = jsoncons::json::parse(
         http_client_->get("api/v1/" + api_prefix_ + "zone_monitor/live_ids", timeout_sec));
-    return resp.as<std::vector<uint8_t>>();
+    return resp.as<std::vector<uint16_t>>();
 }
 
-void SensorHttpImp::set_zone_monitor_live_ids(const std::vector<uint8_t>& zone_ids,
+void SensorHttpImp::set_zone_monitor_live_ids(const std::vector<uint16_t>& zone_ids,
                                               int timeout_sec) const {
     if (firmware_version() < MINIMUM_ZM_VERSION) {
         throw std::runtime_error("zone monitor only available on fw versions 3.2+");
@@ -333,6 +336,27 @@ void SensorHttpImp::delete_static_ip(int timeout_sec) const {
     http_client_->del("api/v1/" + api_prefix_ + "system/network/ipv4/override", timeout_sec);
 }
 
+void SensorHttpImp::set_mtu(unsigned int mtu, int timeout_sec) const {
+    // throw if unsupported
+    if (firmware_version() < MINIMUM_MTU_VERSION) {
+        throw std::runtime_error("setting MTU not supported on this FW version");
+    }
+
+    std::string json;
+    jsoncons::json root = mtu;
+    root.dump(json);
+    http_client_->put("api/v1/" + api_prefix_ + "system/network/mtu_override", json, timeout_sec);
+}
+
+void SensorHttpImp::delete_mtu(int timeout_sec) const {
+    // throw if unsupported
+    if (firmware_version() < MINIMUM_MTU_VERSION) {
+        throw std::runtime_error("setting MTU not supported on this FW version");
+    }
+
+    http_client_->del("api/v1/" + api_prefix_ + "system/network/mtu_override", timeout_sec);
+}
+
 std::vector<uint8_t> SensorHttpImp::diagnostics_dump(int timeout_sec) const {
     std::string str = http_client_->get("/api/v1/" + api_prefix_ + "diagnostics/dump", timeout_sec);
     return std::vector<uint8_t>(str.begin(), str.end());
@@ -358,3 +382,4 @@ void SensorHttpImp_2_4_or_3::set_user_data(const std::string& /*data*/,
 void SensorHttpImp_2_4_or_3::delete_user_data(int /*timeout_sec*/) const {
     throw std::runtime_error("user data API not supported on this FW version");
 }
+// ENDNOLINT(google-default-arguments)

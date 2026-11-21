@@ -13,10 +13,17 @@
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <typeinfo>
 #include <utility>
 #include <vector>
 
+#include "ouster/core/camera_frame.h"
+#include "ouster/core/camera_info.h"
+#include "ouster/core/frame.h"
+#include "ouster/core/frame_set.h"
 #include "ouster/core/impl/logging.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/collation_stream.h"
 #include "ouster/osf/crc32.h"
@@ -24,9 +31,17 @@
 #include "ouster/osf/impl/fb_utils.h"
 #include "ouster/osf/impl/sensor_info_stream.h"
 #include "ouster/osf/layout_streaming.h"
+#include "ouster/osf/meta_camera_sensor.h"
+#include "ouster/osf/meta_lidar_sensor.h"
+#include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata_stream.h"
+#include "ouster/osf/osf_encoder.h"
+#include "ouster/osf/stream_camera_frame.h"
 #include "ouster/osf/stream_lidar_frame.h"
-#include "ouster/osf/zpng_lidarframe_encoder.h"
+#include "ouster/osf/zpng_frame_encoder.h"
+
+// Auto-generated flatbuffer headers.
+#include "metadata_generated.h"
 
 using namespace ouster::sdk::core;
 constexpr size_t MAX_CHUNK_SIZE = 500UL * 1024 * 1024;
@@ -39,7 +54,7 @@ Writer::Writer(std::string file_name, uint32_t chunk_size)
     : impl_(std::make_unique<impl::WriterImpl>()),
       filename_(std::move(file_name)),
       metadata_id_{"ouster_sdk"},
-      encoder_{std::make_shared<Encoder>(std::make_shared<ZPngLidarFrameEncoder>(
+      encoder_{std::make_shared<Encoder>(std::make_shared<ZPngFrameEncoder>(
           ouster::sdk::osf::DEFAULT_ZPNG_OSF_COMPRESSION_LEVEL))} {
     // chunks STREAMING_LAYOUT
     chunks_writer_ = std::make_shared<StreamingLayoutCW>(*this, chunk_size);
@@ -60,22 +75,21 @@ Writer::Writer(std::string file_name, uint32_t chunk_size)
     }
 }
 
-Writer::Writer(const std::string& filename, const SensorInfo& info,
+Writer::Writer(const std::string& filename, const LidarInfo& info,
                const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
                std::shared_ptr<Encoder> encoder)
-    : Writer(filename, std::vector<SensorInfo>{info}, fields_to_write, chunk_size,
+    : Writer(filename, std::vector<LidarInfo>{info}, fields_to_write, chunk_size,
              std::move(encoder)) {}
 
-Writer::Writer(const std::string& filename, const std::vector<SensorInfo>& info,
+Writer::Writer(const std::string& filename, const std::vector<LidarInfo>& info,
                const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
                std::shared_ptr<Encoder> encoder)
     : Writer(filename, chunk_size) {
-    // NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
-    sensor_info_ = info;
     for (uint32_t i = 0; i < info.size(); i++) {
         lidar_meta_id_[i] = add_metadata(ouster::sdk::osf::LidarSensor(info[i]));
         field_types_.emplace_back();
         desired_fields_.push_back(fields_to_write);
+        stream_order_.push_back(StreamSlot{false, i});
     }
     if (encoder) {
         // set encoder if one is specified
@@ -83,17 +97,107 @@ Writer::Writer(const std::string& filename, const std::vector<SensorInfo>& info,
     }
 }
 
-const std::vector<SensorInfo>& Writer::sensor_info() const {
-    return sensor_info_;
+Writer::Writer(const std::string& filename, const std::vector<std::shared_ptr<SensorInfo>>& info,
+               const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
+               std::shared_ptr<Encoder> encoder)
+    : Writer(filename, chunk_size) {
+    if (encoder) {
+        // set encoder before registering sensors so any immediate writes use the
+        // requested encoder.
+        encoder_ = std::move(encoder);
+    }
+    for (const auto& si : info) {
+        if (auto lidar = std::dynamic_pointer_cast<LidarInfo>(si)) {
+            add_sensor(*lidar, fields_to_write);
+        } else if (auto camera = std::dynamic_pointer_cast<CameraInfo>(si)) {
+            add_sensor(*camera, fields_to_write);
+        } else {
+            throw std::runtime_error(
+                "ERROR: Writer received a SensorInfo that is neither a "
+                "LidarInfo nor a CameraInfo");
+        }
+    }
 }
 
-uint32_t Writer::add_sensor(const SensorInfo& info,
+uint32_t Writer::add_sensor(const LidarInfo& info,
                             const std::vector<std::string>& fields_to_write) {
     lidar_meta_id_[lidar_meta_id_.size()] = add_metadata(ouster::sdk::osf::LidarSensor(info));
     field_types_.emplace_back();
     desired_fields_.push_back(fields_to_write);
-    sensor_info_.push_back(info);
-    return lidar_meta_id_.size() - 1;
+    const auto lidar_index = static_cast<uint32_t>(lidar_meta_id_.size() - 1);
+    stream_order_.push_back(StreamSlot{false, lidar_index});
+    // Return the unified (registration-order) stream index, which is what
+    // save() expects. For a lidar-only writer this equals the lidar index.
+    return static_cast<uint32_t>(stream_order_.size() - 1);
+}
+
+uint32_t Writer::add_sensor(const ouster::sdk::core::CameraInfo& info,
+                            const std::vector<std::string>& fields_to_write) {
+    // Cameras store their CameraInfo in a dedicated CameraSensor footer entry
+    // (a distinct OSF type from LidarSensor) and the CameraFrameStream references
+    // it by id. Using a separate type means SDK versions that predate camera
+    // support skip it as an unknown metadata entry instead of trying (and
+    // failing) to validate it as a lidar, so they can still read the lidar
+    // streams from a mixed file.
+    auto sensor_meta_id = add_metadata(ouster::sdk::osf::CameraSensor(info));
+
+    auto camera_stream_index = static_cast<uint32_t>(camera_meta_id_.size());
+    // fields_to_write restricts which fields are written from each camera frame
+    // (empty = all fields), mirroring the lidar add_sensor() overload.
+    auto stream = std::make_unique<ouster::sdk::osf::CameraFrameStream>(*this, sensor_meta_id,
+                                                                        fields_to_write);
+    auto stream_meta_id = stream->meta().id();
+
+    camera_meta_id_[camera_stream_index] = stream_meta_id;
+    camera_streams_[camera_stream_index] = std::move(stream);
+    stream_order_.push_back(StreamSlot{true, camera_stream_index});
+
+    // Return the unified (registration-order) stream index, which is what
+    // save() expects, so cameras are addressed consistently with lidars even
+    // when the two are interleaved.
+    return static_cast<uint32_t>(stream_order_.size() - 1);
+}
+
+void Writer::save_camera_internal(uint32_t camera_stream_index,
+                                  const ouster::sdk::core::CameraFrame& frame, const ts_t time) {
+    auto it = camera_streams_.find(camera_stream_index);
+    if (it == camera_streams_.end()) {
+        throw std::logic_error("ERROR: Bad camera stream index");
+    }
+
+    // add_sensor() already wrote this stream's CameraInfo to a CameraSensor
+    // footer entry, but the footer only reaches disk on finalize. Duplicate it
+    // into the data section on the first frame, exactly as the lidar path does,
+    // so the metadata is recoverable from a file that was never finalized.
+    if (camera_info_saved_.find(camera_stream_index) == camera_info_saved_.end()) {
+        save_sensor_info_message(
+            get_metadata<ouster::sdk::osf::CameraSensor>(it->second->meta().sensor_meta_id())
+                ->sensor_info(),
+            it->second->meta().sensor_meta_id(), it->second->meta().id(), time);
+        camera_info_saved_.insert(camera_stream_index);
+    }
+
+    it->second->save(time, ts_t{frame.timestamp()[0]}, frame);
+}
+
+void Writer::save_sensor_info_message(std::shared_ptr<ouster::sdk::core::SensorInfo> sensor_info,
+                                      uint32_t sensor_meta_id, uint32_t frame_stream_id,
+                                      const ts_t time) {
+    if (!sensor_info_stream_) {
+        sensor_info_stream_ = std::make_unique<ouster::sdk::osf::SensorInfoStream>(this);
+    }
+
+    ouster::sdk::osf::SensorInfoMessage msg;
+    msg.sensor_info = std::move(sensor_info);
+    msg.sensor_meta_id = sensor_meta_id;
+    msg.frame_stream_id = frame_stream_id;
+    if (info_ts_ == ts_t::min()) {
+        info_ts_ = time;
+    }
+    sensor_info_stream_->save(msg, info_ts_);
+    // todo don't actually need to flush for every single sensor just need to
+    // flush after them all
+    chunks_writer_->flush(sensor_info_stream_->meta().id());
 }
 
 void Writer::save_internal(uint32_t stream_index, const LidarFrame& frame, const ts_t time) {
@@ -130,21 +234,12 @@ void Writer::save_internal(uint32_t stream_index, const LidarFrame& frame, const
             *this, lidar_meta_id_[stream_index], field_types);
 
         // save meta
-        if (!sensor_info_stream_) {
-            sensor_info_stream_ = std::make_unique<ouster::sdk::osf::SensorInfoStream>(this);
-        }
-
-        ouster::sdk::osf::SensorInfoMessage msg;
-        msg.sensor_info = sensor_info_[stream_index];
-        msg.frame_stream_id = lidar_streams_[stream_index]->meta().id();
-        msg.lidar_sensor_id = lidar_meta_id_[stream_index];
-        if (info_ts_ == ts_t::min()) {
-            info_ts_ = time;
-        }
-        sensor_info_stream_->save(msg, info_ts_);
-        // todo dont actually need to flush for every single sensor just need to
-        // flush after them all
-        chunks_writer_->flush(sensor_info_stream_->meta().id());
+        // Read this lidar stream's LidarInfo back from the LidarSensor footer
+        // entry that was written for it.
+        save_sensor_info_message(
+            get_metadata<ouster::sdk::osf::LidarSensor>(lidar_meta_id_[stream_index])
+                ->sensor_info(),
+            lidar_meta_id_[stream_index], lidar_streams_[stream_index]->meta().id(), time);
     }
 
     // register any not yet registered field types so we can check if they
@@ -170,7 +265,7 @@ void Writer::save_internal(uint32_t stream_index, const LidarFrame& frame, const
             if (is_desired && field_type.field_class == FieldClass::FRAME_FIELD) {
                 field_types_[stream_index].push_back(field_type);
             } else if (is_desired) {
-                // non-frame field was added after starting, thats an error
+                // non-frame field was added after starting, that's an error
                 throw std::invalid_argument(
                     "Field '" + field_type.name +
                     "' added after recording started. Only FrameFields can be "
@@ -180,7 +275,7 @@ void Writer::save_internal(uint32_t stream_index, const LidarFrame& frame, const
     }
 
     // enforce that this frame meets our expected field types and that
-    // dimensions didnt change when required to be the same
+    // dimensions didn't change when required to be the same
     for (const auto& field_type : field_types_[stream_index]) {
         const auto& field = frame.fields().find(field_type.name);
         // error if any non-frame field is missing
@@ -225,60 +320,102 @@ void Writer::save_internal(uint32_t stream_index, const LidarFrame& frame, const
     lidar_streams_[stream_index]->save(time, timestamp, frame, field_types_[stream_index]);
 }
 
-void Writer::save(uint32_t stream_index, const LidarFrame& frame) {
+void Writer::save_frame_to_slot(uint32_t stream_index, const ouster::sdk::core::Frame& frame,
+                                const ts_t time) {
+    // stream_index is the unified (registration-order) index into stream_order_
+    // - the same order as sensor_info() on read - so lidar and camera streams
+    // are addressed identically. Translate it to the concrete per-type stream
+    // and verify the frame kind matches the registered slot.
+    if (stream_index >= stream_order_.size()) {
+        throw std::logic_error("ERROR: Bad Stream ID");
+    }
+    const auto& slot = stream_order_[stream_index];
+
+    if (const auto* lidar = dynamic_cast<const LidarFrame*>(&frame)) {
+        if (slot.is_camera) {
+            throw std::invalid_argument(
+                "ERROR: LidarFrame saved to a stream index registered for a camera");
+        }
+        save_internal(slot.index, *lidar, time);
+    } else if (const auto* camera = dynamic_cast<const CameraFrame*>(&frame)) {
+        if (!slot.is_camera) {
+            throw std::invalid_argument(
+                "ERROR: CameraFrame saved to a stream index registered for a lidar");
+        }
+        save_camera_internal(slot.index, *camera, time);
+    } else {
+        throw std::invalid_argument("ERROR: Unsupported frame type passed to Writer::save");
+    }
+}
+
+void Writer::save(uint32_t stream_index, const ouster::sdk::core::Frame& frame) {
     if (is_closed()) {
         throw std::logic_error("ERROR: Writer is closed");
     }
 
-    ts_t time;
+    // Derive the timestamp uniformly through the Frame interface so lidar and
+    // camera frames are handled identically; only the stream write differs.
+    ts_t time{0};
     try {
-        time = ts_t(frame.get_max_valid_packet_timestamp());
+        time = ts_t(frame.get_max_valid_receive_timestamp());
     } catch (const std::runtime_error& /*e*/) {
         time = ts_t(0);
     }
-    save_internal(stream_index, frame, time);
+
+    save_frame_to_slot(stream_index, frame, time);
 }
 
-void Writer::save(uint32_t stream_index, const LidarFrame& frame, const ts_t timestamp) {
+void Writer::save(uint32_t stream_index, const ouster::sdk::core::Frame& frame,
+                  const ts_t timestamp) {
     if (is_closed()) {
         throw std::logic_error("ERROR: Writer is closed");
     }
-    save_internal(stream_index, frame, timestamp);
+
+    save_frame_to_slot(stream_index, frame, timestamp);
 }
 
+// Collation validation and dispatch is inherently sequential; splitting
+// obscures it.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void Writer::save(const FrameSet& collation) {
     if (is_closed()) {
         throw std::logic_error("ERROR: Writer is closed");
     }
-    if (collation.size() != lidar_meta_id_.size()) {
+    // The collation's frame order must match the order sensors were registered
+    // (via the constructor or add_sensor()); lidar and camera
+    // streams may be interleaved. stream_order_ maps each collation position to
+    // its registered stream.
+    if (collation.size() != stream_order_.size()) {
         throw std::logic_error(
             "ERROR: Frames passed in to writer "
-            "does not match number of sensor infos");
+            "does not match number of registered lidar + camera streams");
     }
     if (!collation_stream_) {
         collation_stream_ = std::make_unique<CollationStream>(*this);
     }
 
-    std::vector<FrameUniqueId> frame_uids;
-    frame_uids.reserve(collation.size());
+    const auto& frames = collation.frames();
 
-    std::vector<uint64_t> timestamps;
-    timestamps.reserve(collation.size());
+    // Per-slot message index, positionally aligned to the collation frames.
+    // Slot k corresponds to the k-th registered sensor (its unified sensor
+    // index), and this value is the message index within that sensor's frame
+    // stream. INVALID_COLLATION_FRAME_INDEX marks a null slot. Written to the
+    // file as index-based scan_ids{sensor_id=k, scan_idx=frame_indices[k]}.
+    std::vector<uint64_t> frame_indices(stream_order_.size(), INVALID_COLLATION_FRAME_INDEX);
 
+    // First pass: derive every frame's timestamp uniformly through the Frame
+    // interface, independent of whether it originated from a lidar or a camera.
     uint64_t min_ts = std::numeric_limits<uint64_t>::max();
-
-    // first pass, get data and checks sorted before saving
-    // NOLINTNEXTLINE
-    for (uint32_t i = 0; i < collation.size(); i++) {
-        if (!collation[i]) {
-            timestamps.push_back(0);
+    std::vector<uint64_t> slot_timestamps(stream_order_.size(), 0);
+    for (size_t slot = 0; slot < stream_order_.size(); ++slot) {
+        const auto& frame = frames[slot];
+        if (!frame) {
             continue;
         }
 
         uint64_t timestamp = 0;
-
         try {
-            timestamp = collation[i]->get_max_valid_packet_timestamp();
+            timestamp = frame->get_max_valid_receive_timestamp();
         } catch (const std::runtime_error& /*e*/) {
         }
 
@@ -297,31 +434,96 @@ void Writer::save(const FrameSet& collation) {
                 "timestamps");
         }
 
+        slot_timestamps[slot] = timestamp;
         min_ts = std::min(timestamp, min_ts);
-        timestamps.push_back(timestamp);
     }
 
-    for (uint32_t i = 0; i < collation.size(); i++) {
-        if (!collation[i]) {
-            frame_uids.push_back(INVALID_FRAME_UID);
+    // Second pass: save each frame to its registered stream using its own
+    // timestamp. Only the concrete stream write differs between lidar and
+    // camera; everything else is type-independent.
+    for (size_t slot = 0; slot < stream_order_.size(); ++slot) {
+        const auto& stream = stream_order_[slot];
+        const auto& frame = frames[slot];
+
+        if (!stream.is_camera) {
+            auto lidar = std::dynamic_pointer_cast<LidarFrame>(frame);
+            if (!lidar) {
+                if (frame) {
+                    throw std::invalid_argument(
+                        "ERROR: expected a LidarFrame at collation position " +
+                        std::to_string(slot) + " for the registered lidar stream");
+                }
+                continue;  // null slot -> INVALID_COLLATION_FRAME_INDEX
+            }
+            save_internal(stream.index, *lidar, ts_t{slot_timestamps[slot]});
+            try {
+                StreamingLayoutCW* stream_cw =
+                    dynamic_cast<StreamingLayoutCW*>(chunks_writer_.get());
+                const StreamStats& stats =
+                    stream_cw->get_stats(lidar_streams_[stream.index]->meta().id());
+                frame_indices[slot] = stats.message_count - 1;
+            } catch (const std::bad_cast&) {
+                throw std::runtime_error(
+                    "Could not get streaming stats when saving collation. "
+                    "Are we using the streaming layout?");
+            }
+        } else {
+            auto camera = std::dynamic_pointer_cast<CameraFrame>(frame);
+            if (!camera) {
+                if (frame) {
+                    throw std::invalid_argument(
+                        "ERROR: expected a CameraFrame at collation position " +
+                        std::to_string(slot) + " for the registered camera stream");
+                }
+                continue;  // null slot -> INVALID_COLLATION_FRAME_INDEX
+            }
+            save_camera_internal(stream.index, *camera, ts_t{slot_timestamps[slot]});
+            try {
+                StreamingLayoutCW* stream_cw =
+                    dynamic_cast<StreamingLayoutCW*>(chunks_writer_.get());
+                const StreamStats& stats =
+                    stream_cw->get_stats(camera_streams_[stream.index]->meta().id());
+                frame_indices[slot] = stats.message_count - 1;
+            } catch (const std::bad_cast&) {
+                throw std::runtime_error(
+                    "Could not get streaming stats when saving collation camera "
+                    "frames. Are we using the streaming layout?");
+            }
+        }
+    }
+
+    // Build the legacy, lidar-only collation list for backward compatibility
+    // with SDK versions that predate camera support. Such readers build their
+    // sensor table from lidar frame streams only (in per-lidar index order) and
+    // resolve collation entries against it, so a unified list that references a
+    // camera slot would index past the end of that table and crash. Emitting a
+    // lidar-only list lets them reconstruct a valid lidar FrameSet and silently
+    // ignore the cameras.
+    //
+    // A lidar slot's stream.index is exactly its per-lidar index (lidars are
+    // registered with sequential indices, and older readers order their lidar
+    // streams by metadata id == registration order), so it doubles as the
+    // legacy sensor_id. Camera slots are omitted entirely; null lidar slots use
+    // the LEGACY_INVALID_SCAN_ID sentinel those readers understand.
+    std::vector<FrameUniqueId> legacy_scan_ids;
+    for (size_t slot = 0; slot < stream_order_.size(); ++slot) {
+        const auto& stream = stream_order_[slot];
+        if (stream.is_camera) {
             continue;
         }
-
-        save_internal(i, *collation[i], ts_t{timestamps[i]});
-        try {
-            // get message index from stats
-            StreamingLayoutCW* stream_cw = dynamic_cast<StreamingLayoutCW*>(chunks_writer_.get());
-            const StreamStats& stats = stream_cw->get_stats(lidar_streams_[i]->meta().id());
-            uint64_t msg_count = stats.message_count;
-            frame_uids.emplace_back(i, msg_count - 1);
-        } catch (const std::bad_cast&) {
-            throw std::runtime_error(
-                "Could not get streaming stats when saving collation. "
-                "Are we using the streaming layout?");
+        if (frame_indices[slot] == INVALID_COLLATION_FRAME_INDEX) {
+            legacy_scan_ids.push_back(LEGACY_INVALID_SCAN_ID);
+        } else {
+            legacy_scan_ids.emplace_back(stream.index, frame_indices[slot]);
         }
     }
 
-    collation_stream_->save(ts_t{min_ts}, ts_t{}, collation, frame_uids);
+    // min_ts is always valid here: any non-null frame contributes a non-zero
+    // timestamp (zero-timestamp frames trigger OsfDropFrameError above), so a
+    // camera-only collation no longer records a bogus UINT64_MAX receive time.
+    const ts_t collation_ts =
+        (min_ts != std::numeric_limits<uint64_t>::max()) ? ts_t{min_ts} : ts_t{0};
+    collation_stream_->save(collation_ts, ts_t{}, collation, frame_indices, legacy_scan_ids);
 }
 
 uint32_t Writer::add_metadata(MetadataEntry&& entry) {

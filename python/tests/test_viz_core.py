@@ -1,12 +1,15 @@
 import numpy as np
 import copy
+import gc
+import weakref
 from .conftest import MockPointViz
-from ouster.sdk.core import (ChanField, LidarFrame, SensorInfo, LidarMode, Version, FieldClass, FrameSet,
+from ouster.sdk.core import (ChanField, LidarFrame, LidarInfo, LidarMode, Version, FieldClass, FrameSet,
                              Object, Pose, pose_at_timestamp)
 from ouster.sdk.viz import WindowCtx, MouseButtonEvent, MouseButton, EventModifierKeys
 from ouster.sdk.viz.model import (LidarFrameVizModel, SensorModel, Palettes, ObjectViewMode,
                                   _object_for_overlay_cuboid, _sync_object_pose_from_frame)
 from ouster.sdk.viz.core import LidarFrameViz, _Seekable
+from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
 from ouster.sdk.viz.view_mode import SimpleMode, RGBMode, HDRRGBMode
 from ouster.sdk.viz.widgets import ToggleLabel
 
@@ -49,7 +52,7 @@ def test_enum_bitmask():
 def test_use_default_view_modes_1():
     """It will pick sensible default view modes depending on what's in the first frame."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     frame = LidarFrame(meta)
     model._amend_view_modes_all([frame])
@@ -61,7 +64,7 @@ def test_use_default_view_modes_1():
 def test_use_default_view_modes_prefers_rgb_for_second_image():
     """It will prefer the RGB field for the second image when available."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     frame = LidarFrame(meta)
     frame.add_field("RGB", np.zeros((meta.h, meta.w, 3), dtype=np.uint8))
@@ -76,7 +79,7 @@ def test_use_default_view_modes_prefers_rgb_for_second_image():
 def test_use_default_view_modes_rgb_without_reflectivity():
     """It will use RGB for the second image even when reflectivity is unavailable."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     frame = LidarFrame(meta, [])
     frame.add_field("customfield", np.zeros((meta.h, meta.w), dtype=np.uint8))
@@ -92,7 +95,7 @@ def test_use_default_view_modes_rgb_without_reflectivity():
 def test_use_default_view_modes_2():
     """It won't try to initialize default view modes until a frame with fields has been added."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     frame = LidarFrame(meta, [])
     model._amend_view_modes_all([frame])
@@ -103,7 +106,7 @@ def test_use_default_view_modes_2():
 def test_use_default_view_modes_3():
     """It'll pick whatever's available if REFLECTIVITY/REFLECTIVITY2/NEAR_IR aren't present."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     frame = LidarFrame(meta, [])
     frame.add_field("customfield", np.ndarray((meta.h, meta.w), dtype=np.uint8))
@@ -116,7 +119,7 @@ def test_create_view_mode_for_field_1():
     """Because the view mode depends on the frame dimensions,
     it should not add a view mode for a field that doesn't exist in the provided frame."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
     frame = LidarFrame(meta, [])
     assert not frame.fields
@@ -130,7 +133,7 @@ def test_create_view_mode_for_field_2():
     handled by the view modes of the 1st-return fields. While this may sound weird,
     it's because the first and second return fields share autoexposure state."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
     frame = LidarFrame(meta, [])
     assert sensor._create_view_mode_for_field(ChanField.FLAGS2, frame) is None
@@ -142,7 +145,7 @@ def test_create_view_mode_for_field_2():
 def test_create_view_mode_for_field_3():
     """It should add a SimpleMode with BeamUniformityCorrector for a NEAR_IR field."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
     frame = LidarFrame(meta, [])
     assert not frame.fields
@@ -157,7 +160,7 @@ def test_create_view_mode_for_field_3():
 def test_create_view_mode_for_field_4():
     """It should add an RGBMode for a field with a 3rd dimension of length 3."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
     frame = LidarFrame(meta, [])
     assert not frame.fields
@@ -170,7 +173,7 @@ def test_create_view_mode_for_field_5():
     """It should add a regular SimpleMode with AutoExposure but without
     BeamUniformityCorrector for a 2d field."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
     frame = LidarFrame(meta, [])
     assert not frame.fields
@@ -187,7 +190,7 @@ def test_amend_view_modes_1():
     for each new field name (provided as a list) and the given frame.
     """
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
 
     # By default it has only the default cloud modes and no image modes.
@@ -232,9 +235,9 @@ def test_amend_view_modes_2():
     given a list of frames.
     """
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
-    meta2 = SensorInfo.from_default(LidarMode._1024x10)
+    meta2 = LidarInfo.from_default(LidarMode._1024x10)
     sensor2 = SensorModel(viz, meta2)
     model = LidarFrameVizModel(viz, [meta, meta2], _img_aspect_ratio = 0)
     model._sensors = [sensor, sensor2]
@@ -265,9 +268,9 @@ def test_amend_view_modes_3():
     """It should add image and cloud view modes to a sensor
     even if a previous frame didn't have the necessary fields."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
-    meta2 = SensorInfo.from_default(LidarMode._1024x10)
+    meta2 = LidarInfo.from_default(LidarMode._1024x10)
     sensor2 = SensorModel(viz, meta2)
     model = LidarFrameVizModel(viz, [meta, meta2], _img_aspect_ratio = 0)
     model._sensors = [sensor, sensor2]
@@ -393,7 +396,7 @@ def test_lidar_frame_viz_update_sets_default_view_mode():
     """
     It should set a default view mode when update is called.
     """
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     frame = LidarFrame(meta)
     assert ChanField.REFLECTIVITY in frame.fields  # a precondition
     viz = LidarFrameViz([meta], MockPointViz())
@@ -423,7 +426,7 @@ def test_lidar_frame_viz_cycle_img_mode_updates_images():
         def set_image(self, *args, **kwargs):
             self.set_image_called = True
 
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     frame = LidarFrame(meta)
     assert ChanField.REFLECTIVITY in frame.fields  # a precondition
     viz = LidarFrameViz([meta], MockPointViz())
@@ -447,7 +450,7 @@ def test_lidar_frame_viz_highlight_second_doesnt_crash_with_no_frame():
     """
     Highlighting the second return should not cause a crash if there is no frame yet.
     """
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     viz = LidarFrameViz([meta], MockPointViz())
     # check preconditions
     assert not viz._frame_set
@@ -458,7 +461,7 @@ def test_lidar_frame_viz_highlight_second_doesnt_crash_with_no_second_return():
     """
     Highlighting the second return should not cause a crash if there is no second return.
     """
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     frame = LidarFrame(meta)
     # check preconditions
     assert ChanField.REFLECTIVITY in frame.fields
@@ -470,7 +473,7 @@ def test_lidar_frame_viz_highlight_second_doesnt_crash_with_no_second_return():
 
 def test_osd_state():
     """Hiding the help should reset the OSD to its previous state."""
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     viz = LidarFrameViz([meta], MockPointViz())
     assert viz.osd_state == LidarFrameViz.OsdState.DEFAULT
     viz.toggle_osd()
@@ -496,7 +499,7 @@ def test_osd_state():
 def test_create_view_mode_for_field_6():
     """It should only create a view mode for pixel fields."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
 
     frame = LidarFrame(meta, [])
@@ -510,7 +513,7 @@ def test_create_view_mode_for_field_6():
 def test_create_view_mode_for_field_7():
     """It should add an HDRRGBMode for a 3-channel float16 RGB field."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     sensor = SensorModel(viz, meta)
     frame = LidarFrame(meta, [])
     assert not frame.fields
@@ -524,21 +527,42 @@ def test_setup_sensor_toggle_keys():
 
     # there's only one toggle key for a single sensor
     mockviz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     viz = LidarFrameViz([meta], MockPointViz())
     sensor_model_1 = [SensorModel(mockviz, meta)]
-    key_bindings = {}
-    viz._setup_sensor_toggle_keys(sensor_model_1, key_bindings)
-    assert list(key_bindings.keys()) == [(ord('1'), 2)]
+    viz.config.options.clear()
+    viz._setup_sensor_toggle_keys(sensor_model_1)
+
+    def get_sensor_keys(viz):
+        out = []
+        for item in viz.config.options:
+            out.append((ord(item.key), item.mod))
+        return out
+    assert get_sensor_keys(viz) == [(ord('1'), 2)]
 
     # there's only MAX_SENSOR_TOGGLE_KEYS for > MAX_SENSOR_TOGGLE_KEYS sensors
     sensor_model_2 = [SensorModel(mockviz, meta) for _ in range(LidarFrameViz.MAX_SENSOR_TOGGLE_KEYS + 1)]
     viz = LidarFrameViz([meta] * (LidarFrameViz.MAX_SENSOR_TOGGLE_KEYS + 1), MockPointViz())
-    viz._setup_sensor_toggle_keys(sensor_model_2, key_bindings)
-    assert len(key_bindings.keys()) == LidarFrameViz.MAX_SENSOR_TOGGLE_KEYS
+    viz.config.options.clear()
+    viz._setup_sensor_toggle_keys(sensor_model_2)
+    assert len(get_sensor_keys(viz)) == LidarFrameViz.MAX_SENSOR_TOGGLE_KEYS
 
-    for i, key in enumerate(key_bindings.keys()):
+    for i, key in enumerate(get_sensor_keys(viz)):
         assert key == (ord('1') + i, 2)
+
+
+def test_frame_viz_is_freed_without_garbage_collection():
+    """LidarFrameViz must not form reference cycles, e.g. via its config option callbacks."""
+    meta = LidarInfo.from_default(LidarMode._1024x10)
+    for accumulators_config in (None, LidarFrameVizAccumulatorsConfig()):
+        gc.disable()
+        try:
+            viz = LidarFrameViz([meta, meta], MockPointViz(), accumulators_config)
+            ref = weakref.ref(viz)
+            del viz
+            assert ref() is None
+        finally:
+            gc.enable()
 
 
 def test_update_model_even_for_sensors_not_enabled():
@@ -557,7 +581,7 @@ def test_update_model_even_for_sensors_not_enabled():
         update_image_called = True
 
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     frame = LidarFrame(meta)
     sensor = model._sensors[0]
@@ -576,7 +600,7 @@ def test_update_model_even_for_sensors_not_enabled():
 
 def test_viz_doesnt_crash_when_image_sizes_zero():
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     image = model._sensors[0]._images[0]
     image.set_position(0, 0, 0, 0)
@@ -592,7 +616,7 @@ def test_viz_doesnt_crash_when_image_sizes_zero():
 def test_viz_doesnt_crash_when_frames_none():
     # OSDK-108: don't crash if no frames have been received yet
     # and some element (e.g. the OSD) is redrawn.
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     viz = LidarFrameViz([meta], MockPointViz())
     assert viz._frame_set == FrameSet()
     viz._draw_update_camera_pose()
@@ -600,7 +624,7 @@ def test_viz_doesnt_crash_when_frames_none():
 
 def test_viz_imu_when_a_frame_is_none():
     # OSDK-300: don't crash if a frame is None
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     viz = LidarFrameViz([meta], MockPointViz())
     viz.imu_plot([[None]], viz._imu_viz_config)
 
@@ -608,20 +632,46 @@ def test_viz_imu_when_a_frame_is_none():
 def test_viz_safe_gif(tmp_path):
     from ouster.sdk.viz import SimpleViz
     """It should not crash when the duration between frames is negative or zero."""
-    import PIL.Image as PILImage
     from unittest.mock import patch
     with patch('ouster.sdk.viz.core.add_default_controls'):
-        test_image = PILImage.new('RGB', (10, 10))
-        meta = SensorInfo.from_default(LidarMode._1024x10)
+        test_image = np.zeros((10, 10, 3), dtype=np.uint8)
+        meta = LidarInfo.from_default(LidarMode._1024x10)
         viz = SimpleViz([meta], _override_pointviz=MockPointViz())
         viz._images = [(test_image, 100), (test_image, 50)]
         viz._save_gif(str(tmp_path / 'test.gif'))  # should not crash
 
 
+def test_viz_save_gif_scales_frames_to_first_frame_size(tmp_path):
+    """A resolution change while recording scales later frames to the first frame's size."""
+    from ouster.sdk.viz import SimpleViz
+    from unittest.mock import patch
+
+    class InlineThread:
+        def __init__(self, target):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    with patch('ouster.sdk.viz.core.add_default_controls'):
+        meta = LidarInfo.from_default(LidarMode._1024x10)
+        viz = SimpleViz([meta], _override_pointviz=MockPointViz())
+        viz._images = [(np.full((10, 12, 3), 40, dtype=np.uint8), 0.0),
+                       (np.full((20, 24, 3), 200, dtype=np.uint8), 0.1)]
+        path = tmp_path / 'test.gif'
+        with patch('ouster.sdk.viz.core.threading.Thread', InlineThread):
+            viz._save_gif(str(path))
+        data = path.read_bytes()
+        assert data[:6] == b'GIF89a'
+        assert int.from_bytes(data[6:8], 'little') == 12
+        assert int.from_bytes(data[8:10], 'little') == 10
+        assert data[-1:] == b'\x3b'
+
+
 def test_object_labels_follow_object_visibility():
     """Object labels should be visible only when objects are shown in the main 3D view."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
     frame = LidarFrame(meta)
     frame_set = FrameSet([frame])
@@ -651,7 +701,7 @@ def test_object_labels_follow_object_visibility():
 def test_object_selection_label_moves_with_object():
     """The selection label should follow the object when its position changes."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta], _img_aspect_ratio=0)
 
     def make_object(position):
@@ -684,7 +734,7 @@ def test_object_selection_label_moves_with_object():
 
 
 def test_sync_object_pose_from_frame_updates_body_to_world():
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     frame = LidarFrame(meta)
     frame.status[:] = 1
     frame.timestamp[:] = np.array([100, 200, 300, 400] + [400] * (frame.w - 4), dtype=np.uint64)
@@ -708,7 +758,7 @@ def test_sync_object_pose_from_frame_updates_body_to_world():
 
 def test_overlay_cuboid_returns_object_unchanged_when_timestamp_zero():
     """An object without a timestamp is used as-is for the overlay."""
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     frame = LidarFrame(meta)
     frame.status[:] = 1
     ref_pose = np.eye(4)
@@ -728,7 +778,7 @@ def test_overlay_cuboid_returns_object_unchanged_when_timestamp_zero():
 def test_overlay_cuboid_uses_first_valid_column_pose():
     """The overlay cuboid pose comes from the frame's first valid column pose,
     not the object's own body_to_world."""
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     frame = LidarFrame(meta)
     # make the first valid column something other than column 0 so we can tell
     # that the first *valid* column pose is the one being used
@@ -757,7 +807,7 @@ def test_overlay_cuboid_uses_first_valid_column_pose():
 def test_frameset_objects_use_matching_sensor_frame_for_overlay():
     """Each sensor's overlay uses that sensor's own frame pose."""
     viz = MockPointViz()
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(viz, [meta, meta], _img_aspect_ratio=0)
 
     def make_frame(x_offset: float) -> LidarFrame:
@@ -793,7 +843,7 @@ def test_frameset_objects_use_matching_sensor_frame_for_overlay():
 def test_overlay_pose_same_for_frameset_and_lidarframe_objects():
     """Overlay pose should not depend on whether the object is attached to the
     FrameSet or to an individual LidarFrame."""
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
 
     def make_frame(x_offset: float) -> LidarFrame:
         frame = LidarFrame(meta)
@@ -819,6 +869,7 @@ def test_overlay_pose_same_for_frameset_and_lidarframe_objects():
         overlay_obj = next(iter(model._objects.keys()))
         frame = frame_set[sensor_idx]
         assert frame is not None
+        assert isinstance(frame, LidarFrame)
         return _overlay_cuboid_matrix(overlay_obj, frame)
 
     for sensor_idx in (0, 1):
@@ -844,7 +895,7 @@ def test_update_object_cuboids_does_not_copy_main_view_cuboids(monkeypatch):
 
     monkeypatch.setattr(copy, "copy", fail_copy)
 
-    meta = SensorInfo.from_default(LidarMode._1024x10)
+    meta = LidarInfo.from_default(LidarMode._1024x10)
     model = LidarFrameVizModel(MockPointViz(), [meta], _img_aspect_ratio=0)
 
     frame = LidarFrame(meta)

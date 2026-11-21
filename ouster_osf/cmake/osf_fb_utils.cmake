@@ -1,7 +1,7 @@
 # =======================================================================
-# ======== Flatbuffers Generators for C++/Python/Javasctipt =============
+# ======== Flatbuffers Generators for C++/Python/JavaScript =============
 
-# This file provides three generator functions that makes rules for convertion
+# This file provides three generator functions that make rules for conversion
 # of Flatbuffer's specs (*.fbs) to the corresponding language stubs:
 #  - 'build_cpp_fb_modules' - for C++ include headers
 #  - 'build_ts_fb_modules' - for Typescript modules
@@ -27,7 +27,7 @@
 #                      - laser_eye
 #                        - photons_stream.fbs
 #                        - neutrino_extrinsics.fbs
-#             default: if ommited defaults to 'current-project/fb'
+#             default: if omitted defaults to 'current-project/fb'
 #                      (i.e. "${CMAKE_CURRENT_SOURCE_DIR}/fb")
 
 #  FB_MODULES  - (OPTIONAL) List of modules (i.e. subdirectories of FB_DIR)
@@ -44,21 +44,21 @@
 
 #  SOURCE_GEN_DIR  - (OPTIONAL) Location of the generated source files.
 #                    It's also available as TARGET property by SOURCE_GEN_DIR
-#                    name which is usefull if using default SOURCE_GEN_DIR
+#                    name which is useful if using default SOURCE_GEN_DIR
 #                    location.
 #                    default: "${CMAKE_CURRENT_BINARY_DIR}/fb_source_generated"
 
 #  BINARY_SCHEMA_DIR  - (OPTIONAL) Location of the generated binary schemas
 #                        files (*.bfbs).
 #                        It's also available as property BINARY_SCHEMA_DIR
-#                        for generated TARGET.                     
+#                        for generated TARGET.
 #                     default: "${CMAKE_CURRENT_BINARY_DIR}/fb_binary_schemas"
 
 
 # ======= Common Initializer =============================================
 
 macro(initialize_osf_fb_utils_defaults)
-  # Use flatc reolve from flatbuffers/CMake/BuildFlatBuffers.cmake source
+  # Use flatc resolve from flatbuffers/CMake/BuildFlatBuffers.cmake source
   # Test if including from FindFlatBuffers
   if(FLATBUFFERS_FLATC_EXECUTABLE)
     set(FLATC ${FLATBUFFERS_FLATC_EXECUTABLE})

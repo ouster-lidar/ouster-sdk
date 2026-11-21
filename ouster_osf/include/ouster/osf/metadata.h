@@ -93,9 +93,9 @@ inline const std::string metadata_type() {
  * @endcode
  *
  * `buffer` - byte representation of the metadata content whatever it is defined
- * by concrete metadata type. Every metadata object should have a recipe how
- * to serialize itself to the bytes buffer by overwriting the buffer() function.
- * And the recipe how to recover itserf by providing static
+ * by concrete metadata type. Every metadata object should have a recipe for how
+ * to serialize itself to the byte buffer by overriding the buffer() function,
+ * and a recipe for how to recover itself by providing a static
  * from_buffer(buf, type) function.
  *
  */
@@ -132,7 +132,7 @@ class OUSTER_API_CLASS MetadataEntry {
     virtual std::unique_ptr<MetadataEntry> clone() const = 0;
 
     /**
-     * Byte represantation of the internal derived metadata type, used as
+     * Byte representation of the internal derived metadata type, used as
      * serialization function when saving to OSF file.
      *
      * @return The byte vector representation of the metadata.
@@ -259,7 +259,7 @@ class OUSTER_API_CLASS MetadataEntry {
 
 /**
  * Safe and convenient cast of shared_ptr<MetadataEntry> to concrete derived
- * class using either shortcut (dynamic_pointer_cast) when it's save to do so
+ * class using either shortcut (dynamic_pointer_cast) when it's safe to do so
  * or reconstructs a new copy of the object from underlying data.
  *
  * @tparam MetadataDerived The cpp type of the derived object.
@@ -408,13 +408,17 @@ struct RegisterMetadata {
 /**
  * This line is incredibly IMPORTANT. This will statically
  * run the registration for all derived classes before the class
- * constructer is run.
+ * constructor is run.
  *
  * @tparam MetadataDerived The derived subclass cpp type.
  */
 template <typename MetadataDerived>
+#ifdef SKIP_OSF_METADATA_AUTO_REGISTRATION
+const bool RegisterMetadata<MetadataDerived>::REGISTERED = true;
+#else
 const bool RegisterMetadata<MetadataDerived>::REGISTERED =
     RegisterMetadata<MetadataDerived>::register_type_decoder();
+#endif
 
 /**
  * Helper class used as base class for concrete derived metadata types
@@ -463,7 +467,7 @@ class MetadataEntryHelper : public MetadataEntry, RegisterMetadata<DerivedMetada
  *
  * Reconstructs itself to the concrete metadata type with:
  *
- *  as_type() - using the stored type() to recofer deserialization function
+ *  as_type() - using the stored type() to recover deserialization function
  *
  *  as<MetadataDerived>() OR metadata_pointer_as<MetadataDerived>() - using the
  *  specified derived metadata class.
@@ -692,7 +696,7 @@ class OUSTER_API_CLASS MetadataStore {
     /**
      * Return the entire map of MetadataEntry.
      *
-     * @return The entire map of MetadataEnty objects.
+     * @return The entire map of MetadataEntry objects.
      */
     OUSTER_API_FUNCTION
     const MetadataEntriesMap& entries() const;

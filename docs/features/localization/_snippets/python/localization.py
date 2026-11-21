@@ -48,13 +48,13 @@ def run_localization_once(source_file: str, map_file: str) -> None:
             yaw   = angles[2] * rad2deg
 
             print(
-                f"idx = {frame.frame_id}; ts = {frame_ts}; "
+                f"ts = {frame_ts}; "
                 f"XYZ: {t[0]:.2f}, {t[1]:.2f}, {t[2]:.2f} "
                 f"(R: {roll:.1f}, P: {pitch:.1f}, Y: {yaw:.1f})"
             )
 
         # [doc-etag-localization-loop-printpose]
-    
+
     # [doc-etag-localization-loop]
 
 

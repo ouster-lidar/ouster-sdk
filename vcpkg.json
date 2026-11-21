@@ -47,6 +47,10 @@
             "version": "4.2.2#0"
         }
     ],
-    "builtin-baseline": "f3e10653cc27d62a37a3763cd84b38bca07c6075",
+    "$comment": "vcpkg-overlay-ports/curl pins curl 8.23.0 for a security fix; remove it once builtin-baseline provides curl >= 8.23.0.",
+    "vcpkg-configuration": {
+        "overlay-ports": ["./vcpkg-overlay-ports"]
+    },
+    "builtin-baseline": "879fb16d16efd28730627c2774e007da388731bc",
     "version": "1.0.0"
 }

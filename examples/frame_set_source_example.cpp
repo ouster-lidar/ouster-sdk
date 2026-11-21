@@ -37,10 +37,7 @@ int main(int argc, char* argv[]) {
     // read all frames in timestamp order
     std::cout << "Printing out all frames..." << std::endl;
     for (const auto& frame_set : source) {
-        for (const auto& frame : frame_set) {
-            if (!frame) {
-                continue;
-            }
+        for (const auto& frame : frame_set.valid_frames()) {
             std::cout << "frame = " << ouster::sdk::core::to_string(*frame) << std::endl;
         }
     }
@@ -48,10 +45,7 @@ int main(int argc, char* argv[]) {
     // read all frames in timestamp order from the first sensor
     std::cout << std::endl << "Printing out all frames from sensor 0..." << std::endl;
     for (const auto& frame_set : source.single(0)) {
-        for (const auto& frame : frame_set) {
-            if (!frame) {
-                continue;
-            }
+        for (const auto& frame : frame_set.valid_frames()) {
             std::cout << "frame = " << ouster::sdk::core::to_string(*frame) << std::endl;
         }
     }
@@ -59,10 +53,7 @@ int main(int argc, char* argv[]) {
     // read only the middle 8 frames, skipping every other
     std::cout << std::endl << "Printing out some frames..." << std::endl;
     for (const auto& frame_set : source[{2, 10, 2}]) {
-        for (const auto& frame : frame_set) {
-            if (!frame) {
-                continue;
-            }
+        for (const auto& frame : frame_set.valid_frames()) {
             std::cout << "frame = " << ouster::sdk::core::to_string(*frame) << std::endl;
         }
     }
@@ -70,10 +61,7 @@ int main(int argc, char* argv[]) {
     // read only the last frame
     std::cout << std::endl << "Printing out last frames..." << std::endl;
     auto frame_set = source[-1];
-    for (const auto& frame : frame_set) {
-        if (!frame) {
-            continue;
-        }
+    for (const auto& frame : frame_set.valid_frames()) {
         std::cout << "frame = " << ouster::sdk::core::to_string(*frame) << std::endl;
     }
 }

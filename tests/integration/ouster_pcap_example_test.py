@@ -12,7 +12,7 @@ TEST_DATA_DIR = os.getenv("TEST_DATA_DIR", default="./")
 
 def test_simple_packet_record(tmpdir):
     """Simple example code snippet to record data using packet objects
-       The buffers can be of variable size, you dont have to use
+       The buffers can be of variable size, you don't have to use
        pf.lidar_packet_size
        Args:
             tmpdir: Temporary directory to use
@@ -21,9 +21,9 @@ def test_simple_packet_record(tmpdir):
     sensor_info_path = os.path.join(TEST_DATA_DIR,
                                     "lib-osf/OS1_128_sample_legacy.json")
     with open(sensor_info_path, 'r') as f:
-        # SensorInfo accepts the string contents of the sensor info
+        # LidarInfo accepts the string contents of the sensor info
         # metadata rather than a path
-        metadata = core.SensorInfo(f.read())
+        metadata = core.LidarInfo(f.read())
 
     # Set up our packet sizes
     pf = PacketFormat.from_info(metadata)

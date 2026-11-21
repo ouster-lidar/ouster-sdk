@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/frame.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/types.h"
 #include "ouster/core/visibility.h"
@@ -13,6 +14,10 @@
 namespace ouster {
 namespace sdk {
 namespace core {
+/**
+ * @namespace ouster::sdk::core::frame_ops
+ * @brief Frame-level operations on lidar and camera frames.
+ */
 namespace frame_ops {
 
 /**
@@ -21,7 +26,8 @@ namespace frame_ops {
  * For each resolved pixel field, values outside [lower, upper] are replaced
  * with the invalid value. If fields is empty, all pixel fields are clipped.
  *
- * @param[in,out] frame The lidar frame whose fields will be modified in place.
+ * @param[in,out] frame The frame whose fields will be modified in place. Works
+ *            for any Frame subtype (LidarFrame, CameraFrame, ...).
  * @param[in] fields List of field names to clip. If empty, all pixel fields
  *            are used.
  * @param[in] lower Lower bound of the valid range (inclusive).
@@ -29,7 +35,7 @@ namespace frame_ops {
  * @param[in] invalid Value to assign to out-of-range elements. Defaults to 0.
  */
 OUSTER_API_FUNCTION
-void clip(LidarFrame& frame, const std::vector<std::string>& fields, double lower, double upper,
+void clip(Frame& frame, const std::vector<std::string>& fields, double lower, double upper,
           double invalid = 0);
 
 /**
@@ -39,7 +45,8 @@ void clip(LidarFrame& frame, const std::vector<std::string>& fields, double lowe
  * pass, then applies that mask to all resolved pixel fields. Pixels that
  * fail the mask are set to the invalid value.
  *
- * @param[in,out] frame The lidar frame to filter in place.
+ * @param[in,out] frame The frame to filter in place. Works for any Frame
+ *            subtype (LidarFrame, CameraFrame, ...).
  * @param[in] field Name of the field used to build the filter mask. Must be a
  *            pixel field with shape (h, w).
  * @param[in] lower Lower bound of the filter range (inclusive).
@@ -50,17 +57,20 @@ void clip(LidarFrame& frame, const std::vector<std::string>& fields, double lowe
  * @throws std::invalid_argument If the filter field does not have shape (h, w).
  */
 OUSTER_API_FUNCTION
-void filter_field(LidarFrame& frame, const std::string& field, double lower, double upper,
+void filter_field(Frame& frame, const std::string& field, double lower, double upper,
                   double invalid = 0, const std::vector<std::string>* filtered_fields = nullptr);
 
 /**
  * @brief Filter frame fields by zeroing out rows or columns in UV coordinates.
  *
  * When coord_2d is "u", rows in [lower, upper) are invalidated directly.
- * When coord_2d is "v", columns in [lower, upper) are invalidated in the
- * destaggered domain and then re-staggered.
+ * When coord_2d is "v", columns in [lower, upper) are invalidated. For lidar
+ * frames (staggered data) this is done in the destaggered domain and then
+ * re-staggered; for non-lidar frames (e.g. CameraFrame, rectified images) a
+ * plain column mask is applied directly.
  *
- * @param[in,out] frame The lidar frame to filter in place.
+ * @param[in,out] frame The frame to filter in place. Works for any Frame
+ *            subtype (LidarFrame, CameraFrame, ...).
  * @param[in] coord_2d Coordinate axis to filter along: "u" for rows or "v"
  *            for columns.
  * @param[in] lower Start index of the range to invalidate (inclusive).
@@ -72,7 +82,7 @@ void filter_field(LidarFrame& frame, const std::string& field, double lower, dou
  *         are out of range.
  */
 OUSTER_API_FUNCTION
-void filter_uv(LidarFrame& frame, const std::string& coord_2d, size_t lower, size_t upper,
+void filter_uv(Frame& frame, const std::string& coord_2d, size_t lower, size_t upper,
                double invalid = 0, const std::vector<std::string>* filtered_fields = nullptr);
 
 /**
@@ -81,7 +91,8 @@ void filter_uv(LidarFrame& frame, const std::string& coord_2d, size_t lower, siz
  * Pixels where the mask is 0 are set to 0 in the specified fields. The mask
  * dimensions must match the frame dimensions.
  *
- * @param[in,out] frame The lidar frame to mask in place.
+ * @param[in,out] frame The frame to mask in place. Works for any Frame subtype
+ *            (LidarFrame, CameraFrame, ...).
  * @param[in] fields List of field names to apply the mask to. If empty, all
  *            pixel fields are used.
  * @param[in] mask Binary mask data as a 2D Eigen array (row-major).
@@ -90,7 +101,7 @@ void filter_uv(LidarFrame& frame, const std::string& coord_2d, size_t lower, siz
  * dimensions.
  */
 OUSTER_API_FUNCTION
-void mask(LidarFrame& frame, const std::vector<std::string>& fields,
+void mask(Frame& frame, const std::vector<std::string>& fields,
           Eigen::Ref<const ouster::sdk::core::img_t<uint8_t>> mask);
 
 /**
@@ -109,20 +120,20 @@ OUSTER_API_FUNCTION
 std::vector<size_t> reduce_factor_to_indices(size_t factor, size_t height);
 
 /**
- * @brief Create updated SensorInfo for a subset of beam indices.
+ * @brief Create updated LidarInfo for a subset of beam indices.
  *
- * Produces a new SensorInfo with beam angles, pixel shifts, and zone
+ * Produces a new LidarInfo with beam angles, pixel shifts, and zone
  * boundaries adjusted to match the selected beam indices.
  *
  * @param[in] metadata Original sensor metadata.
  * @param[in] indices Beam row indices to select. Must be unique and within
  *            [0, metadata height).
- * @return New SensorInfo reflecting the selected beams.
+ * @return New LidarInfo reflecting the selected beams.
  * @throws std::invalid_argument If indices are empty, contain duplicates, or
  *         are out of range.
  */
 OUSTER_API_FUNCTION
-SensorInfo select_by_index_metadata(const SensorInfo& metadata, const std::vector<size_t>& indices);
+LidarInfo select_by_index_metadata(const LidarInfo& metadata, const std::vector<size_t>& indices);
 
 /**
  * @brief Create a new LidarFrame containing only selected beam rows.
@@ -144,7 +155,7 @@ LidarFrame select_by_index(const LidarFrame& frame, const std::vector<size_t>& i
                            bool update_metadata = false);
 
 /**
- * @brief Create updated SensorInfo for downsampling by a given factor.
+ * @brief Create updated LidarInfo for downsampling by a given factor.
  *
  * Equivalent to calling select_by_index_metadata with indices generated by
  * reduce_factor_to_indices.
@@ -152,12 +163,12 @@ LidarFrame select_by_index(const LidarFrame& frame, const std::vector<size_t>& i
  * @param[in] metadata Original sensor metadata.
  * @param[in] factor Downsampling factor. Must be a non-zero divisor of the
  *            metadata height.
- * @return New SensorInfo reflecting the downsampled beams.
+ * @return New LidarInfo reflecting the downsampled beams.
  * @throws std::invalid_argument If factor is 0 or does not evenly divide the
  *         metadata height.
  */
 OUSTER_API_FUNCTION
-SensorInfo reduce_by_factor_metadata(const SensorInfo& metadata, size_t factor);
+LidarInfo reduce_by_factor_metadata(const LidarInfo& metadata, size_t factor);
 
 /**
  * Downsample a LidarFrame by selecting every Nth beam row.

@@ -15,8 +15,8 @@ from ouster.sdk._bindings.client import frame_to_packets as _frame_to_packets
 def tohex(data: core.BufferT) -> str:
     """Makes a hex string for debug print outs of buffers.
 
-    Selects the biggest devisor of np.uint32, np.uint16 or np.uint8 for making
-    a hex output of the provided data. (clunky but usefull for debugging)
+    Selects the biggest divisor of np.uint32, np.uint16 or np.uint8 for making
+    a hex output of the provided data. (clunky but useful for debugging)
 
     """
     if len(data):
@@ -24,7 +24,7 @@ def tohex(data: core.BufferT) -> str:
             data_cont = np.ascontiguousarray(data)
         else:
             data_cont = cast(np.ndarray[Any, Any], data)
-        # selecting the biggest dtype that devides num bytes exactly, because
+        # selecting the biggest dtype that divides num bytes exactly, because
         # vectorized hex can't work with data if it's not a multiple of element
         # type
         bytes_len = np.frombuffer(data_cont, dtype=np.uint8).size
@@ -40,7 +40,7 @@ def tohex(data: core.BufferT) -> str:
 
 
 def frame_to_packets(lf: core.LidarFrame,
-                    info: core.SensorInfo) -> List[Union[LidarPacket, ZonePacket, ImuPacket]]:
+                    info: core.LidarInfo) -> List[Union[LidarPacket, ZonePacket, ImuPacket]]:
     """Converts LidarFrame to a lidar_packet buffers
 
     Args:
@@ -57,7 +57,7 @@ def frame_to_packets(lf: core.LidarFrame,
 
 def packets_to_frame(
         packets: List[Union[LidarPacket, ZonePacket, ImuPacket]],
-        info: core.SensorInfo,
+        info: core.LidarInfo,
         *,
         fields: Optional[List[core.FieldType]] = None) -> core.LidarFrame:
     """Batch buffers that belongs to a single frame into a LidarFrame object."""
@@ -67,7 +67,7 @@ def packets_to_frame(
         lf = core.LidarFrame(info, fields)
     batch = core.FrameBatcher(info)
     for packet in packets:
-        batch(packet, lf)
+        batch.batch(packet, lf)
     # frame finalisation is not necessary as frame is freshly created here
 
     return lf

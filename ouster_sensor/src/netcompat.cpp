@@ -11,7 +11,7 @@
  *operating system specific function call that we have to use.
  *
  *   (hicpp-deprecated-headers,modernize-deprecated-headers): Need to use the
- *posix version, of std::sterror due to issues around thread safety.
+ *posix version, of std::strerror due to issues around thread safety.
  *
  **/
 

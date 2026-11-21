@@ -81,10 +81,10 @@ def osf_slice_frames(osf_file: str) -> str:
     # Read frames and write back
     for frame_set in frames:
         for idx, frame in enumerate(frame_set):
-            if frame is None:
+            if not isinstance(frame, core.LidarFrame):
                 continue
             print(f"writing sliced frame with ts = \
-                   {frame.get_first_valid_packet_timestamp()}")
+                   {frame.get_first_valid_receive_timestamp()}")
             writer.save(idx, frame)
     writer.close()
     # [doc-etag-osf-slice-frames]
@@ -99,7 +99,7 @@ def add_objects_to_frame(frame=None):
     """
     if frame is None:
         from ouster.sdk import core
-        sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x10)
+        sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x10)
         frame = core.LidarFrame(sensor_info)
 
     print(f"Original frame = {frame}, WxH={frame.w}x{frame.h}")
@@ -176,8 +176,8 @@ def write_classmaps(osf_path, sensor_info=None):
     metadata = core.FrameSetSourceMetadataSet()
     metadata['class_maps'] = class_maps
     metadata['additional_info'] = "Test additional info"
-    
-    
+
+
     writer.save(metadata)
     # [doc-etag-write-classmaps]
     print(f"Wrote class map metadata to {output_path}")

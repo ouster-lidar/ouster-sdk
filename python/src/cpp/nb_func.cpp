@@ -9,7 +9,7 @@
 // clang-format off
 // NOLINTBEGIN
 // BEGINNOLINT
-// OUSTER: Modified to include additional informations about ndarray types on
+// OUSTER: Modified to include additional information about ndarray types on
 //         failure to match a function overload
 #include "nb_internals.h"
 #include "buffer.h"

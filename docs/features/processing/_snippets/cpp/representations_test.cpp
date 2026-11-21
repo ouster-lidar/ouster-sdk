@@ -55,7 +55,7 @@ FixturePaths test_fixture() {
 core::LidarFrame load_full_frame(const FixturePaths& paths) {
     auto source = ouster::sdk::open_source(paths.pcap);
     auto it = source.begin();
-    return *(*it)[0];
+    return *std::dynamic_pointer_cast<core::LidarFrame>((*it)[0]);
 }
 
 }  // namespace
@@ -65,7 +65,7 @@ TEST(ProcessingRepresentationsCpp, MetadataProjectionDoesNotThrow) {
     auto info = core::metadata_from_json(paths.json);
     auto frame = load_full_frame(paths);
 
-    ASSERT_NO_THROW(ouster::docs::project_with_metadata_extrinsics(*frame.sensor_info, frame));
+    ASSERT_NO_THROW(ouster::docs::project_with_metadata_extrinsics(*frame.sensor_info(), frame));
 }
 
 TEST(ProcessingRepresentationsCpp, MetadataTransformMatchesManualComputation) {
@@ -73,19 +73,18 @@ TEST(ProcessingRepresentationsCpp, MetadataTransformMatchesManualComputation) {
     auto frame = load_full_frame(paths);
 
     const auto transformed =
-        ouster::docs::apply_metadata_transform_xyzlut(*frame.sensor_info, frame);
+        ouster::docs::apply_metadata_transform_xyzlut(*frame.sensor_info(), frame);
 
     core::mat4d transform = core::mat4d::Identity();
     transform(2, 2) = -1.0;
     transform(1, 1) = -1.0;
-    transform(2, 3) = 20000;  // millimetres
-    transform(0, 3) = 1500;   // millimetres
+    transform(2, 3) = 20.0;  // metres
+    transform(0, 3) = 1.5;   // metres
 
     const Eigen::Matrix3d rotation = transform.topLeftCorner<3, 3>().transpose();
-    const Eigen::Vector3d translation_m = transform.topRightCorner<3, 1>() * core::RANGE_UNIT;
+    const Eigen::Vector3d translation_m = transform.topRightCorner<3, 1>();
 
-    auto base_lut = core::XYZLut(*frame.sensor_info, /*use_extrinsics=*/false);
-    core::PointCloudXYZd manual = base_lut(frame);
+    core::PointCloudXYZd manual = (*frame.sensor_info()->xyzlut<double>())(frame);
     manual = manual * rotation;
     manual.rowwise() += translation_m.transpose();
 
@@ -122,8 +121,7 @@ TEST(ProcessingRepresentationsCpp, FilterPointsByRangeAndAzimuth) {
     auto frame = load_full_frame(paths);
 
     const double range_min_m = 2.0;
-    auto filtered =
-        ouster::docs::filter_points_by_range_and_azimuth(*frame.sensor_info, frame, range_min_m);
+    auto filtered = ouster::docs::filter_points_by_range_and_azimuth(frame, range_min_m);
 
     // 1. Verify we have output data
     ASSERT_GT(filtered.rows(), 0);

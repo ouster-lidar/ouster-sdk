@@ -12,8 +12,6 @@ from ouster.sdk.core import Version
 import requests
 import time
 
-from packaging import version
-
 logger = logging.getLogger("HIL")
 
 # http takes a long time to start after reboot, esp on FW 2.1
@@ -32,7 +30,7 @@ def test_config_noop(hil_sensor_hostname, hil_sensor_firmware) -> None:
         metadata0 = src.sensor_info[0]
 
     logger.debug("Noop set_config")
-    sensor.set_config(hil_sensor_hostname, core.SensorConfig(), force_reinit=True)
+    sensor.set_config(hil_sensor_hostname, core.LidarConfig(), force_reinit=True)
 
     logger.debug("Grabbing new config and metadata")
     cfg1 = sensor.get_config(hil_sensor_hostname)
@@ -74,7 +72,7 @@ def test_config_operating_mode(hil_sensor_hostname, hil_initial_config) -> None:
     # initial config sets it to OperatingMode.NORMAL
     sensor.set_config(hil_sensor_hostname, hil_initial_config)
 
-    cfg0 = core.SensorConfig()
+    cfg0 = core.LidarConfig()
     cfg0.operating_mode = core.OperatingMode.STANDBY
     sensor.set_config(hil_sensor_hostname, cfg0)
 
@@ -100,7 +98,7 @@ def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
 
     logger.debug("Setting UDP dest to auto")
     sensor.set_config(hil_sensor_hostname,
-                      core.SensorConfig(),
+                      core.LidarConfig(),
                       udp_dest_auto=True)
 
     logger.debug(f"Sleeping for {reinit_time} seconds after reinit..")
@@ -113,7 +111,7 @@ def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
     logger.debug(f"Sanity check new config (New UDP dest: {cfg1.udp_dest})")
     assert no_udp_cfg.udp_dest != cfg1.udp_dest
     cfg1.udp_dest = ""
-    # clear out extra options so we dont compare them unnecessarily
+    # clear out extra options so we don't compare them unnecessarily
     # this is likely to break the test on new/odd FW
     no_udp_cfg.extra_options = {}
     cfg1.extra_options = {}
@@ -127,7 +125,7 @@ def test_config_persist(hil_sensor_hostname, hil_initial_config) -> None:
     def reboot_sensor():
         version = SensorHttp.create(hil_sensor_hostname).firmware_version()
         reboot_endpoint = "http://" + hil_sensor_hostname + "/api/v1/system/cmd/reboot"
-        if version.major >= 3 and version.minor >= 1:
+        if version >= Version.from_string("3.1.0-rc3"):
             reboot_endpoint = "http://" + hil_sensor_hostname + "/api/v1/system/restart"
 
         response = requests.post(reboot_endpoint)
@@ -141,7 +139,7 @@ def test_config_persist(hil_sensor_hostname, hil_initial_config) -> None:
     sensor.set_config(hil_sensor_hostname, hil_initial_config, persist=True)
 
     # Set one parameter differently
-    cfg0 = core.SensorConfig()
+    cfg0 = core.LidarConfig()
     cfg0.azimuth_window = (583, 39402)
     sensor.set_config(hil_sensor_hostname, cfg0)
 
@@ -176,7 +174,7 @@ def skip_by_fw(request, hil_sensor_firmware, signal_multiplier, lowest_signal_mu
             pytest.skip(f"Skip signal multiplier test as FW version {hil_sensor_firmware} lt {lowest_signal_multiplier_fw} which added signal multiplier")
         if hil_sensor_firmware < lowest_signal_multiplier_double_fw and int(
                 signal_multiplier) != signal_multiplier:
-            pytest.skip(f"Skipped signal_multiplier {signal_multiplier} as FW version {hil_sensor_firmware} lt {lowest_signal_multiplier_double_fw} which added support for non-intenger signal multiplier")
+            pytest.skip(f"Skipped signal_multiplier {signal_multiplier} as FW version {hil_sensor_firmware} lt {lowest_signal_multiplier_double_fw} which added support for non-integer signal multiplier")
 
 
 @pytest.mark.skip_under_fw()
@@ -185,7 +183,7 @@ def test_good_signal_multiplier_values(hil_sensor_hostname,
                                   signal_multiplier, gen1_sensor, vlp_sensor) -> None:
     """Test that all valid values of signal multiplier can be get and set using SDK for FW 3.0+"""
 
-    cfg0 = core.SensorConfig()
+    cfg0 = core.LidarConfig()
     # make sure azimuth window is small enough for everything
     cfg0.azimuth_window = (0, 10000)
     # make sure lidar mode is not "full res" in case it is a Rev 6 or under sensor
@@ -207,7 +205,7 @@ def test_good_signal_multiplier_values(hil_sensor_hostname,
 
 @pytest.mark.parametrize('signal_multiplier', [0.3, 1.2, 5, 5.5]) # sig mult value < 1 that isn't .25 or .5, double sig mult between 1 and 3, int sig mult > 3, double sig int > 3
 def test_bad_signal_multiplier_values(hil_sensor_hostname, signal_multiplier) -> None:
-    cfg0 = core.SensorConfig()
+    cfg0 = core.LidarConfig()
     # even though these aren't valid signal multipliers, set lidar_mode and azimuth_window so they don't cause other errors
     # make sure azimuth window is small enough for everything
     cfg0.azimuth_window = (0, 10000)

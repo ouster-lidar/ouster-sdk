@@ -7,6 +7,13 @@ Lidar sensors like Ouster's OS1-64 do not capture the entire 360-degree environm
 instant in time, thus distortions manifest during both the translation (linear movement) and rotation
 (turning) of the sensor.
 
+.. note::
+
+   Motion compensation applies to rolling-shutter lidar frames. A (global-shutter) camera frame
+   captures all pixels at a single instant, so it carries a single pose and needs no deskewing — the
+   SLAM/localization engines treat deskewing as a no-op for camera frames and apply that single pose
+   rigidly.
+
 When a sensor is mounted to a moving vehicle, the physical position of the sensor changes between the
 time the frame starts and the time it finishes (typically 100 milliseconds for a 10 Hz spin rate). The
 collected lidar data will have a distortion effect similar to the one shown in the following image:
@@ -48,7 +55,7 @@ time.
 **Pros**:
 - Works well for predictable motions (no sudden changes in velocity or direction).
 - Does not require additional hardware (IMU).
-   
+
 **Cons**: Fails completely during erratic movement such as sudden braking, hitting a pothole, or making
 sharp turns.
 
@@ -95,3 +102,11 @@ The ``--deskew-method`` option has one of the following:
 
 
 To learn about how to use :doc:`Motion Compensation via API  </features/mapping/using-the-api>` refer to the next section.
+
+Initial Pose and Gravity Validation
+-----------------------------------
+
+With IMU deskewing, plumbing the first registered frame sets the initial gravity, and for ``slam``
+also the first anchor when no ``--initial-pose`` is given (``localize`` then starts at identity);
+``slam`` with ``--initial-pose`` takes gravity as world -Z and runs only the IMU plumb, to check the
+pose. See :ref:`mapping-initial-pose-gravity` for how a supplied pose is used and checked.

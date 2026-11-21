@@ -85,6 +85,7 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/metadata_impl.cpp
                               src/metadata_stream.cpp
                               src/meta_lidar_sensor.cpp
+                              src/meta_camera_sensor.cpp
                               src/meta_extrinsics.cpp
                               src/meta_streaming_info.cpp
                               src/stream_lidar_frame.cpp
@@ -102,10 +103,11 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/writer.cpp
                               src/async_writer.cpp
                               src/sensor_info_stream.cpp
-                              src/png_lidarframe_encoder.cpp
-                              src/zpng_lidarframe_encoder.cpp
+                              src/png_frame_encoder.cpp
+                              src/zpng_frame_encoder.cpp
                               src/fb_common.cpp
                               src/collation_stream.cpp
+                              src/stream_camera_frame.cpp
                               src/offset.cpp
                               src/callback_osf_file.cpp
 )

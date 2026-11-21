@@ -7,7 +7,6 @@
 
 #include <ouster/core/open_source.h>
 #include <ouster/core/packet_source.h>
-#include <ouster/pcap/indexed_pcap_reader.h>
 
 #include <cstdint>
 #include <functional>
@@ -52,6 +51,8 @@ struct OUSTER_API_CLASS PcapPacketSourceOptions : private ouster::sdk::PacketSou
     PcapPacketSourceOptions();
 };
 
+class IndexedPcapReader;
+
 class PcapFrameSetSource;
 class PcapPacketIteratorImpl;
 class PcapFrameSetIteratorImpl;
@@ -59,10 +60,7 @@ class PcapFrameSetIteratorImpl;
 class OUSTER_API_CLASS PcapPacketSource
     : public ouster::sdk::core::PacketSource,
       ouster::sdk::impl::PacketSourceBuilder<ouster::sdk::core::IoType::PCAP, PcapPacketSource> {
-    OUSTER_DIAGNOSTIC_PUSH
-    OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
     std::unique_ptr<ouster::sdk::pcap::IndexedPcapReader> reader_;
-    OUSTER_DIAGNOSTIC_POP
     friend class PcapPacketIteratorImpl;
     friend class PcapFrameSetSource;
     friend class PcapFrameSetIteratorImpl;
@@ -77,7 +75,7 @@ class OUSTER_API_CLASS PcapPacketSource
     // maps from port + serial number to sensor index
     std::map<uint16_t, std::map<uint64_t, int>> port_info_;
     std::vector<std::shared_ptr<ouster::sdk::core::PacketFormat>> packet_formats_;
-    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> sensor_info_;
+    std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>> sensor_info_;
 
     ouster::sdk::core::PacketIterator begin_frame(uint64_t frame_index) const;
 
@@ -96,21 +94,24 @@ class OUSTER_API_CLASS PcapPacketSource
     );
 
     OUSTER_API_FUNCTION
+    ~PcapPacketSource();
+
+    OUSTER_API_FUNCTION
     ouster::sdk::core::PacketIterator begin() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& sensor_info() const override;
+    const std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>>& sensor_info() const override;
 
     OUSTER_API_FUNCTION
     bool is_live() const override;
 
     /// Get number of id errors that occurred while retrieving packets
-    /// @return numer of id errors
+    /// @return number of id errors
     OUSTER_API_FUNCTION
     uint64_t id_error_count() const;
 
     /// Get number of size errors that occurred while retrieving packets
-    /// @return numer of size errors
+    /// @return number of size errors
     OUSTER_API_FUNCTION
     uint64_t size_error_count() const;
 

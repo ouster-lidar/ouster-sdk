@@ -25,7 +25,7 @@ class TabbedAPILink(nodes.inline):
 
 class TabbedClassRole(SphinxRole):
     """
-    Role that captures a single reference target (``.SensorInfo``) and
+    Role that captures a single reference target (``.LidarInfo``) and
     defers resolving it for each language variant until the doctree is
     fully resolved.
     """

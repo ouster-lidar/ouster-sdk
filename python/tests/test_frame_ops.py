@@ -58,7 +58,7 @@ def test_reduce_raises_exception_on_invalid_factor_values(frame_set_source_path,
     with pytest.raises(ValueError) as ex:
         _ = ReducedFrameSetSource(normal_src, [beams])
     assert (str(ex.value) == f"beams {beams} must be divisor of "
-            f"{normal_src.sensor_info[0].format.pixels_per_column}")
+            f"{cast(core.LidarInfo, normal_src.sensor_info[0]).format.pixels_per_column}")
 
 
 @pytest.mark.parametrize("beams", [
@@ -71,7 +71,7 @@ def test_reduce(frame_set_source_path, beams) -> None:
     normal_src = open_source(frame_set_source_path)
     normal_src = cast(FrameSetSource, normal_src)
     reduced_src = ReducedFrameSetSource(normal_src, [beams])
-    assert reduced_src.sensor_info[0].format.pixels_per_column == beams
+    assert cast(core.LidarInfo, reduced_src.sensor_info[0]).format.pixels_per_column == beams
 
     normal_frames = [s[0] for s in normal_src if s]
     reduced_frames = [s[0] for s in reduced_src if s]
@@ -110,7 +110,7 @@ def test_select(frame_set_source_path) -> None:
     normal_src = open_source(frame_set_source_path)
     normal_src = cast(FrameSetSource, normal_src)
     selected_src = SelectedFrameSetSource(normal_src, [indices])
-    assert selected_src.sensor_info[0].format.pixels_per_column == len(indices)
+    assert cast(core.LidarInfo, selected_src.sensor_info[0]).format.pixels_per_column == len(indices)
 
     normal_scans = [s[0] for s in normal_src if s]
     selected_scans = [s[0] for s in selected_src if s]
@@ -163,8 +163,8 @@ def test_clip(frame_set_source_path, fields, lower, upper) -> None:
 def test_mask_raises_exception_on_factors_mismatch_sensor_count(frame_set_source_path) -> None:
     normal_src = open_source(frame_set_source_path)
     normal_src = cast(FrameSetSource, normal_src)
-    H = normal_src.sensor_info[0].format.pixels_per_column
-    W = normal_src.sensor_info[0].format.columns_per_frame
+    H = cast(core.LidarInfo, normal_src.sensor_info[0]).format.pixels_per_column
+    W = cast(core.LidarInfo, normal_src.sensor_info[0]).format.columns_per_frame
 
     mask = np.vstack(
         (
@@ -180,8 +180,8 @@ def test_mask_raises_exception_on_factors_mismatch_sensor_count(frame_set_source
 def test_mask(frame_set_source_path) -> None:
     normal_src = open_source(frame_set_source_path)
     normal_src = cast(FrameSetSource, normal_src)
-    H = normal_src.sensor_info[0].format.pixels_per_column
-    W = normal_src.sensor_info[0].format.columns_per_frame
+    H = cast(core.LidarInfo, normal_src.sensor_info[0]).format.pixels_per_column
+    W = cast(core.LidarInfo, normal_src.sensor_info[0]).format.columns_per_frame
 
     mask = np.vstack(
         (
@@ -217,7 +217,7 @@ def test_collate(input_osf_file):
             w = osf.Writer(f.name, [frame.sensor_info, frame.sensor_info])
             for idx in range(10):
                 frame.frame_id = idx
-                frame.packet_timestamp[:] = 100000001 * idx + 1
+                frame.receive_timestamp[:] = 100000001 * idx + 1
                 if idx >= 5:
                     w.save(1, frame)
                 else:
@@ -279,7 +279,7 @@ def test_chain(frame_set_source_path) -> None:
 def test_lidar_frame_field_types_writable(frame_set_source_path) -> None:
     """Create LidarFrame, add all supported field types, verify they are writable."""
     src = open_source(frame_set_source_path)
-    info = src.sensor_info[0]
+    info = cast(core.LidarInfo, src.sensor_info[0])
 
     ls = LidarFrame(info)
 
@@ -366,3 +366,138 @@ def test_filter_xyz_dewarp_points_changes_spatial_mask(frame_set_source_path) ->
 
     assert body_zeroed == 0
     assert world_zeroed == frame.h * (frame.w // 2)
+
+
+def _make_projectable_camera_info(w=4, h=3, fx=100.0, fy=200.0, cx=1.5, cy=1.0):
+    """Build a CameraInfo with pinhole intrinsics + a range scaling map.
+
+    The shared XYZLut derives per-pixel direction/offset from the pinhole model,
+    so no beam angles are stored on the CameraInfo. The returned scaling map |o|
+    converts planar depth into radial RANGE.
+    """
+    ci = core.CameraInfo()
+    ci.model = core.CameraModel(fx, fy, cx, cy)
+    ci.format.columns_per_frame = w
+    ci.format.pixels_per_column = h
+    u, v = np.meshgrid(np.arange(w), np.arange(h))
+    x_cam = (u - cx) / fx
+    y_cam = (v - cy) / fy
+    z_cam = np.ones_like(x_cam)
+    # ZED image space -> Ouster sensor space (X forward, Y left, Z up).
+    ox, oy, oz = z_cam, -x_cam, -y_cam
+    mag = np.sqrt(ox ** 2 + oy ** 2 + oz ** 2)
+    return ci, mag
+
+
+def _make_camera_frame(ci, mag, rng_m=2.0):
+    frame = core.CameraFrame()
+    frame.w = ci.format.columns_per_frame
+    frame.h = ci.format.pixels_per_column
+    frame.sensor_info = ci
+    frame.add_field(ChanField.RANGE, np.round(rng_m * mag * 1000.0).astype(np.uint32))
+    return frame
+
+
+def test_valid_column_accessors_on_camera_frame() -> None:
+    """get_first/last_valid_column are Frame-base methods usable on a CameraFrame."""
+    ci, mag = _make_projectable_camera_info()
+    cam = _make_camera_frame(ci, mag)
+
+    # A CameraFrame has a single status entry defaulted to valid, so both
+    # accessors (now hoisted onto the Frame base) return 0.
+    assert cam.get_first_valid_column() == 0
+    assert cam.get_last_valid_column() == 0
+
+    # No valid columns -> both raise, exactly like a LidarFrame.
+    cam.status[:] = 0
+    with pytest.raises(RuntimeError):
+        cam.get_first_valid_column()
+    with pytest.raises(RuntimeError):
+        cam.get_last_valid_column()
+
+
+def test_camera_frame_generic_field_ops() -> None:
+    """clip / filter_field / filter_uv operate on CameraFrame (Frame& generalization)."""
+    ci, mag = _make_projectable_camera_info()
+
+    # clip: values outside [200, 800] are zeroed, values inside are kept
+    f = _make_camera_frame(ci, mag)
+    f.field(ChanField.RANGE)[:] = np.arange(f.h * f.w, dtype=np.uint32).reshape(f.h, f.w) * 100
+    frame_ops.clip(f, [ChanField.RANGE], 200, 800)
+    vals = f.field(ChanField.RANGE).ravel()
+    assert vals[0] == 0 and vals[1] == 0 and vals[2] == 200
+    assert vals[8] == 800 and vals[9] == 0
+
+    # filter_field: pixels whose RANGE is inside [200, 400] are invalidated
+    g = _make_camera_frame(ci, mag)
+    g.field(ChanField.RANGE)[:] = np.arange(g.h * g.w, dtype=np.uint32).reshape(g.h, g.w) * 100
+    frame_ops.filter_field(g, ChanField.RANGE, 200, 400, 0)
+    gvals = g.field(ChanField.RANGE).ravel()
+    assert gvals[2] == 0 and gvals[3] == 0 and gvals[4] == 0
+    assert gvals[1] == 100 and gvals[5] == 500
+
+    # filter_uv 'u' zeroes rows; 'v' zeroes columns (plain mask, no destagger for cameras)
+    u_frame = _make_camera_frame(ci, mag)
+    u_frame.field(ChanField.RANGE)[:] = 500
+    frame_ops.filter_uv(u_frame, 'u', 0, 1, 0)
+    assert np.all(u_frame.field(ChanField.RANGE)[0] == 0)
+    assert np.all(u_frame.field(ChanField.RANGE)[1:] == 500)
+
+    v_frame = _make_camera_frame(ci, mag)
+    v_frame.field(ChanField.RANGE)[:] = 500
+    frame_ops.filter_uv(v_frame, 'v', 0, 2, 0)
+    assert np.all(v_frame.field(ChanField.RANGE)[:, :2] == 0)
+    assert np.all(v_frame.field(ChanField.RANGE)[:, 2:] == 500)
+
+
+def test_filter_uv_3d(frame_set_source_path) -> None:
+    """Test that filter uv works on 3d fields"""
+    ci, mag = _make_projectable_camera_info()
+    frame = _make_camera_frame(ci, mag)
+    assert frame is not None
+    frame.add_field("custom_float16", np.ones((frame.h, frame.w, 3), dtype=np.float16))
+    frame.add_field("custom_float32", np.ones((frame.h, frame.w, 3), dtype=np.float32))
+    frame.add_field("custom_float64", np.ones((frame.h, frame.w, 3), dtype=np.float64))
+    frame_ops.filter_uv(frame, 'v', 0, 2, 0)
+    for name in ["custom_float16", "custom_float32", "custom_float64"]:
+        assert np.all(frame.field(name)[:, :2] == [0, 0, 0])
+        assert np.all(frame.field(name)[:, 2:] == [1, 1, 1])
+
+
+def test_camera_filter_xyz_single_pose_transform() -> None:
+    """filter_xyz on a camera uses a single-pose rigid transform (no dewarp) for WORLD."""
+    ci, mag = _make_projectable_camera_info()
+    s2b = np.eye(4, dtype=np.float64)
+    s2b[0, 3] = 1.0  # non-identity extrinsics
+    ci.sensor_to_body = s2b
+
+    lut_body = core.XYZLut(ci)
+
+    v, u = 1, 2
+    pose = np.eye(4, dtype=np.float64)
+    pose[1, 3] = 50.0  # large, distinct world translation in +y
+
+    def build_frame():
+        # CameraFrame doesn't support copy.deepcopy, so build fresh frames.
+        fr = _make_camera_frame(ci, mag, rng_m=0.0)
+        fr.field(ChanField.RANGE)[v, u] = int(round(2.0 * mag[v, u] * 1000.0))
+        fr.body_to_world[0] = pose
+        return fr
+
+    # Expected world y for the single valid pixel via the same single-pose math.
+    pts_body = lut_body(build_frame().field(ChanField.RANGE))
+    world = pts_body @ pose[:3, :3].T + pose[:3, 3]
+    y = float(world[v, u, 1])
+
+    # In-range WORLD y filter zeroes the valid pixel. This must not raise even
+    # though body_to_world holds a single pose while w=4 (no per-column dewarp).
+    in_range = build_frame()
+    frame_ops.filter_xyz(in_range, lut_body, axis_idx=1, lower=y - 0.05, upper=y + 0.05,
+                         invalid=0, dewarp_points=True)
+    assert in_range.field(ChanField.RANGE)[v, u] == 0
+
+    # Out-of-range WORLD y filter leaves the valid pixel untouched.
+    out_range = build_frame()
+    frame_ops.filter_xyz(out_range, lut_body, axis_idx=1, lower=y + 10.0, upper=y + 11.0,
+                         invalid=0, dewarp_points=True)
+    assert out_range.field(ChanField.RANGE)[v, u] != 0

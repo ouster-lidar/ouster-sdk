@@ -12,6 +12,15 @@
 #include "ouster/osf/impl/fb_utils.h"
 #include "ouster/osf/offset.h"
 
+namespace {
+template <typename T>
+struct ArrayDeleter {
+    void operator()(T const* ptr) {
+        delete[] ptr;
+    }
+};
+}  // namespace
+
 namespace ouster {
 namespace sdk {
 namespace osf {
@@ -31,7 +40,9 @@ StreamOsfFile::~StreamOsfFile() {
 }
 
 StreamOsfFile::StreamOsfFile(StreamOsfFile&& other)
-    : OsfFile(std::move(other)), file_stream_(std::move(other.file_stream_)) {
+    : OsfFile(std::move(other)),
+      file_stream_(std::move(other.file_stream_)),
+      size_(std::exchange(other.size_, 0)) {
     other.state_ = FileState::BAD;
 }
 
@@ -39,6 +50,7 @@ StreamOsfFile& StreamOsfFile::operator=(StreamOsfFile&& other) {
     OsfFile::operator=(std::move(other));
     if (this != &other) {
         file_stream_ = std::move(other.file_stream_);
+        size_ = std::exchange(other.size_, 0);
         other.state_ = FileState::BAD;
     }
     return *this;
@@ -86,16 +98,16 @@ OsfBuffer StreamOsfFile::read(OsfOffset base_offset, OsfOffset offset) {
         throw std::logic_error("bad osf file");
     }
 
-    std::vector<uint8_t> data(offset.size());
+    std::shared_ptr<uint8_t> data(new uint8_t[offset.size()], ArrayDeleter<uint8_t>());
     seek(base_offset.offset() + offset.offset());
 
-    file_stream_.read(reinterpret_cast<char*>(data.data()),
+    file_stream_.read(reinterpret_cast<char*>(data.get()),
                       static_cast<std::streamsize>(offset.size()));
     if (file_stream_.gcount() != static_cast<std::streamsize>(offset.size())) {
         check_stream_bits();
     }
     OsfBuffer buffer;
-    buffer.load_data(std::move(data));
+    buffer.load_data(data, offset.size());
 
     return buffer;
 }

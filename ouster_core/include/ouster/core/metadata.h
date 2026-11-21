@@ -25,7 +25,7 @@ namespace core {
  * Parse and validate a metadata stream.
  *
  * @param[in] json_data The metadata data.
- * @param[out] issues The issues that occured during parsing.
+ * @param[out] issues The issues that occurred during parsing.
  *
  * @return If parsing was successful(no critical issues)
  */
@@ -36,18 +36,17 @@ bool parse_and_validate_metadata(const std::string& json_data, ValidatorIssues& 
  * Parse and validate a metadata stream.
  *
  * @param[in] json_data The metadata data.
- * @param[in] sensor_info The optional SensorInfo to populate.
+ * @param[in] sensor_info The optional LidarInfo to populate.
  * @param[in] issues The issues that occurred during parsing.
  *
  * @return If parsing was successful(no critical issues)
  */
 OUSTER_API_FUNCTION
 bool parse_and_validate_metadata(const std::string& json_data,
-                                 nonstd::optional<SensorInfo>& sensor_info,
-                                 ValidatorIssues& issues);
+                                 nonstd::optional<LidarInfo>& sensor_info, ValidatorIssues& issues);
 
 /**
- * Parse config text blob from the sensor into a SensorConfig struct.
+ * Parse config text blob from the sensor into a LidarConfig struct.
  *
  * All fields are optional, and will only be set if found.
  *
@@ -60,10 +59,10 @@ bool parse_and_validate_metadata(const std::string& json_data,
  * @return If parsing was successful(no critical issues)
  */
 OUSTER_API_FUNCTION
-bool parse_and_validate_config(const std::string& config, SensorConfig& sensor_config);
+bool parse_and_validate_config(const std::string& config, LidarConfig& sensor_config);
 
 /**
- * Parse config text blob from the sensor into a SensorConfig struct.
+ * Parse config text blob from the sensor into a LidarConfig struct.
  *
  * All fields are optional, and will only be set if found.
  *
@@ -77,7 +76,7 @@ bool parse_and_validate_config(const std::string& config, SensorConfig& sensor_c
  * @return If parsing was successful(no critical issues)
  */
 OUSTER_API_FUNCTION
-bool parse_and_validate_config(const std::string& config, SensorConfig& sensor_config,
+bool parse_and_validate_config(const std::string& config, LidarConfig& sensor_config,
                                ValidatorIssues& issues);
 }  // namespace core
 }  // namespace sdk

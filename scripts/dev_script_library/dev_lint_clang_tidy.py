@@ -201,7 +201,7 @@ class ClangTidy(AbstractClangTidy):
                 from tqdm import tqdm
                 bar = tqdm(total=len(self._files))
             except ImportError:
-                print("tqdm not found, cant display progress bar. please install tqdm")
+                print("tqdm not found, can't display progress bar. please install tqdm")
                 self._progress_bar = False
         else:
             print(f"Files Remaining: {len(self._files)}")
@@ -857,7 +857,7 @@ def clang_tidy(ctx, clang_tidy_bin, clang_apply_replacements_bin,
         if fix:
             raise click.ClickException("Error: --fix is not supported with clangd-tidy.")
         if timing_json:
-            print("Warning: --timing-json is is not supported with clangd-tidy. Ignoring.")
+            print("Warning: --timing-json is not supported with clangd-tidy. Ignoring.")
         tidy = ClangdTidy(clang_tidy_bin, paths,
                           ctx.obj.build_options.threads,
                           compile_commands_json,

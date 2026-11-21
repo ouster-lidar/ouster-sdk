@@ -4,10 +4,10 @@ from ouster.sdk import core
 
 
 def test_sensor_info_client_version_write():
-    """It adds client_version to SensorInfo JSON."""
+    """It adds client_version to LidarInfo JSON."""
 
-    # Create a default SensorInfo
-    info = core.SensorInfo.from_default(core.LidarMode._1024x10)
+    # Create a default LidarInfo
+    info = core.LidarInfo.from_default(core.LidarMode._1024x10)
 
     # Get current client version from core
     expected_version = core.client_version()
@@ -21,16 +21,16 @@ def test_sensor_info_client_version_write():
     assert "client_version" in json_data["ouster-sdk"]
     assert json_data["ouster-sdk"]["client_version"] == expected_version
 
-    # Parse back to SensorInfo
-    info2 = core.SensorInfo(json_str)
+    # Parse back to LidarInfo
+    info2 = core.LidarInfo(json_str)
 
     # Ensure client_version was updated
     assert info2.client_version == expected_version
 
 
 def test_sensor_info_client_version_read():
-    """It reads a previously added client_version from SensorInfo JSON."""
-    # Create a SensorInfo with a specific client_version, then parse it
+    """It reads a previously added client_version from LidarInfo JSON."""
+    # Create a LidarInfo with a specific client_version, then parse it
     test_version = "ouster_core 0.0.0-test"
     json_data = {
         "ouster-sdk": {
@@ -41,7 +41,7 @@ def test_sensor_info_client_version_read():
         "beam_azimuth_angles": [0.0] * 64,
     }
 
-    info = core.SensorInfo(json.dumps(json_data))
+    info = core.LidarInfo(json.dumps(json_data))
     assert info.client_version == test_version
 
 
@@ -55,5 +55,5 @@ def test_sensor_info_client_version_legacy():
         "lidar_to_sensor_transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
     }
 
-    info = core.SensorInfo(json.dumps(legacy_json))
+    info = core.LidarInfo(json.dumps(legacy_json))
     assert info.client_version == "ouster_core 0.0.0-test"

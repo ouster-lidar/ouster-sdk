@@ -13,12 +13,14 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/camera_info.h"
 #include "ouster/core/frame_set_source.h"
 #include "ouster/core/impl/build.h"
 #include "ouster/core/impl/open_source_impl.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/open_source.h"
 #include "ouster/core/types.h"
+#include "ouster/osf/file.h"
 #include "ouster/osf/reader.h"
 
 namespace ouster {
@@ -48,19 +50,28 @@ class OUSTER_API_CLASS OsfFrameSetSourceOptions : private ouster::sdk::FrameSetS
     OsfFrameSetSourceOptions();
 };
 
-/// FrameSetSource that produces LidarFrames from a given OSF file
+/// FrameSetSource that produces Frames (LidarFrame and/or CameraFrame) from a
+/// given OSF file
 class OUSTER_API_CLASS OsfFrameSetSource
     : public ouster::sdk::core::FrameSetSource,
       ouster::sdk::impl::FrameSetSourceBuilder<ouster::sdk::core::IoType::OSF, OsfFrameSetSource> {
     friend class OsfFrameSetIteratorImpl;
     friend class OsfCollationIteratorImpl;
     std::unique_ptr<ouster::sdk::osf::Reader> reader_;
-    // should match stream id to sensor info
-    std::map<uint32_t, std::shared_ptr<ouster::sdk::core::SensorInfo>> sensor_info_;
-    // map stream id to sensor index
-    std::map<int, uint32_t> sensor_ids_;
-    std::vector<uint32_t> valid_ids_;
-    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> sensor_infos_;
+    // Unified sensor state. LidarInfo/CameraInfo and LidarFrame/CameraFrame are
+    // treated identically here: a sensor is addressed by its registration-order
+    // index (the same order exposed by sensor_info()), which is also the
+    // collation slot index.
+    //
+    // Frame stream metadata id for each sensor, in registration order (index ==
+    // unified sensor index). UINT32_MAX for a registered sensor that never
+    // produced a frame stream.
+    std::vector<uint32_t> stream_ids_;
+    // Frame stream metadata id -> SensorInfo (LidarInfo or CameraInfo).
+    std::map<uint32_t, std::shared_ptr<ouster::sdk::core::SensorInfo>> info_by_stream_;
+    // Per-sensor SensorInfo in registration order (parallel to stream_ids_);
+    // this is exactly what sensor_info() returns.
+    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> all_info_;
     std::vector<size_t> frames_num_;
     std::vector<std::pair<uint64_t, uint64_t>> index_;
     std::vector<uint64_t> collation_index_;
@@ -96,6 +107,14 @@ class OUSTER_API_CLASS OsfFrameSetSource
     OUSTER_API_FUNCTION
     OsfFrameSetSource(const std::string& file,          ///< [in] OSF file to open
                       OsfFrameSetSourceOptions options  ///< [in] frame set source options
+    );
+
+    /// Constructor from raw OSF file
+    OUSTER_API_FUNCTION
+    OsfFrameSetSource(
+        std::unique_ptr<OsfFile> osf_file,      ///< [in] OSF file to use
+        OsfFrameSetSourceOptions options = {},  ///< [in] frame set source options
+        bool read_collations = true  ///< [in] read_collations if true, read collations from file
     );
 
     OUSTER_API_FUNCTION
@@ -152,20 +171,6 @@ class OUSTER_API_CLASS OsfFrameSetSource
                                                         const FrameSetSourceOptions& options,
                                                         bool collate, int sensor_idx = -1);
 };
-
-}  // namespace osf
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace osf {
-
-OUSTER_DEPRECATED_TYPE(OsfScanSource, OsfFrameSetSource, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(OsfScanSourceOptions, OsfFrameSetSourceOptions,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
 
 }  // namespace osf
 }  // namespace sdk

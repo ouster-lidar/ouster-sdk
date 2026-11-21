@@ -82,7 +82,7 @@ struct test_fixture {
 };
 
 /*
- * PrintTo is a Gtest hook thatenables GTest to emit the pcap
+ * PrintTo is a Gtest hook that enables GTest to emit the pcap
  * filename in XML/JSON value_param instead of a raw hex dump.
  */
 inline void PrintTo(const test_fixture& f, std::ostream* os) {

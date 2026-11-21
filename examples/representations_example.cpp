@@ -34,15 +34,16 @@ using namespace ouster::sdk;
 // clang-format off
 //! [docs-stag-x-image-form]
 core::img_t<double> get_x_in_image_form(const core::LidarFrame& frame,
-                                        const core::SensorInfo& info,
+                                        const core::LidarInfo& info,
                                         bool destaggered = false) {
     // For convenience, save w and h to variables
     const size_t w = info.format.columns_per_frame;
     const size_t h = info.format.pixels_per_column;
 
-    // Get the XYZ in ouster::Points (n x 3 Eigen array) form
-    core::XYZLut xyzlut(info, /*use_extrinsics=*/ false);
-    auto cloud = xyzlut(frame);
+    // Get the XYZ in ouster::Points (n x 3 Eigen array) form, using the LUT
+    // cached on the sensor info so repeated calls don't rebuild it
+    const auto xyzlut = info.xyzlut<double>();
+    auto cloud = (*xyzlut)(frame);
 
     // Access x and reshape as needed, not that the values in cloud.col(0) are ordered
     auto x_image = Eigen::Map<const core::img_t<double>>(cloud.col(0).data(), h, w);
@@ -82,7 +83,7 @@ int main(int argc, char* argv[]) {
     // sensor::SensorFrameSetSource source(sensor_hostname);
     // auto sensor_info = source.sensor_info()[0];
     // auto frame = LidarFrame(sensor_info);
-    auto xyzlut = core::XYZLut(info, /*use_extrinsics=*/ false);
+    auto xyzlut = core::XYZLut(info);
     auto range = frame.field(core::ChanField::RANGE);
     auto cloud = xyzlut(range);
     //! [doc-etag-cpp-xyz]
@@ -91,7 +92,7 @@ int main(int argc, char* argv[]) {
               << cloud(2000, 0) << ", " << cloud(2000, 1) << ", "
               << cloud(2000, 2) << ")" << std::endl;
 
-    // 2. Providing a transfomration to XYZ
+    // 2. Providing a transformation to XYZ
     // You can also make an XYZLut by specifying a special transform if you
     // have a different frame you would like to be in, say if you have an
     // extrinsics matrix:
@@ -103,13 +104,15 @@ int main(int argc, char* argv[]) {
     transformation(1, 1) = -1;
     transformation(2, 3) = 20;  // unit is meters
     transformation(0, 3) = 1.5; // unit is meters
-    info.sensor_to_body = transformation;
+    // XYZLut always applies sensor_to_body, so set it on a copy of the metadata
+    auto info_with_extrinsics = info;
+    info_with_extrinsics.sensor_to_body = transformation;
     std::cout
         << "2. Now we will apply this transformation to the look-up table:\n"
         << transformation << std::endl;
     // Remember to apply the lidar_to_sensor_transform if your extrinsics
     // matrix was between sensor coordinate system and some stable point, say a vehicle center
-    auto lut_extrinsics = core::XYZLut(info, /*use_extrinsics=*/true);
+    auto lut_extrinsics = core::XYZLut(info_with_extrinsics);
     std::cout << "Calculating 3d Points of with special transform provided.." << std::endl;
     auto cloud_adjusted = lut_extrinsics(range);
     //! [doc-etag-extrinsics-to-xyzlut]

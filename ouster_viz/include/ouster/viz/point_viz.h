@@ -18,6 +18,8 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/core/camera_info.h"
+#include "ouster/core/deprecation.h"
 #include "ouster/core/mesh.h"
 #include "ouster/core/object.h"
 #include "ouster/core/types.h"
@@ -91,7 +93,6 @@ struct OUSTER_API_CLASS Vertex3f {
 
 // TODO: messes up lidar_frame_viz
 namespace impl {
-struct CameraData;
 class Framebuffer;
 class GLCloud;
 class GLImage;
@@ -101,6 +102,26 @@ class GLLabel;
 class GLRings;
 class GLLines;
 class GLObjectOverlay;
+
+/**
+ * Number of live entries in the cache that lets Clouds built from the same LUT
+ * share their GPU buffers: one per LUT whose buffers some Cloud still holds.
+ * Intended for tests.
+ *
+ * @return the number of live cache entries.
+ */
+OUSTER_API_FUNCTION
+size_t cloud_lut_cache_size();
+
+/**
+ * Number of cache misses for cache that lets Clouds built from the same LUT
+ * share their GPU buffers.
+ * Intended for tests.
+ *
+ * @return the number of cache misses
+ */
+OUSTER_API_FUNCTION
+size_t cloud_lut_cache_misses();
 }  // namespace impl
 
 /**
@@ -320,6 +341,14 @@ class OUSTER_API_CLASS PointViz {
      */
     OUSTER_API_FUNCTION
     void cursor_visible(bool state);
+
+    /**
+     * Set the window title.
+     *
+     * @param[in] title new window title
+     */
+    OUSTER_API_FUNCTION
+    void set_title(const std::string& title);
 
     /**
      * Add a callback for handling keyboard input
@@ -621,6 +650,14 @@ class OUSTER_API_CLASS PointViz {
     void set_background_color(const vec4f& rgba);
 
     /**
+     * Enable or disable eye-dome lighting for pointclouds.
+     *
+     * @param[in] enable enable eye-dome lighting
+     */
+    OUSTER_API_FUNCTION
+    void enable_eye_dome_lighting(bool enable);
+
+    /**
      * @brief Gets a screenshot with the specified size
      * @param[in] width Screenshot width in pixels.
      * @param[in] height Screenshot height in pixels.
@@ -683,7 +720,7 @@ class OUSTER_API_CLASS PointViz {
     bool toggle_screen_recording(double scale_factor = 1.0);
 
     /**
-     * @brief Computes the width and height that result from muliplying the
+     * @brief Computes the width and height that result from multiplying the
      * current window viewport width and height for a scale_factor.
      * @param[in] scale_factor A multiplier to the current window viewport
      * width and height
@@ -837,6 +874,25 @@ struct OUSTER_API_CLASS WindowCtx {
     void check_invariants() const;
 };
 
+/// Struct containing camera matrices
+struct OUSTER_API_CLASS CameraData {
+// Add the exports to the Eigen added allocators
+#pragma push_macro("EIGEN_DEVICE_FUNC")
+#undef EIGEN_DEVICE_FUNC
+#define EIGEN_DEVICE_FUNC OUSTER_API_FUNCTION
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+#pragma pop_macro("EIGEN_DEVICE_FUNC")
+
+    /// Camera projection matrix
+    core::Matrix4dR proj;
+
+    /// Camera view matrix
+    core::Matrix4dR view;
+
+    /// Camera target matrix
+    core::Matrix4dR target;
+};
+
 /**
  * @brief Controls the camera view and projection.
  */
@@ -871,7 +927,7 @@ class OUSTER_API_CLASS Camera {
      * @return projection, view matrices and target location.
      */
     OUSTER_API_FUNCTION
-    impl::CameraData matrices(double aspect) const;
+    CameraData matrices(double aspect) const;
 
     /**
      * Reset the camera view and fov.
@@ -1019,7 +1075,7 @@ class OUSTER_API_CLASS Camera {
     void set_fov(float degrees);
 
     /**
-     * Get field of fiew of a camera in degrees
+     * Get field of view of a camera in degrees
      *
      * @return fov in degrees
      */
@@ -1045,8 +1101,8 @@ class OUSTER_API_CLASS Camera {
     /**
      * Set the 2d position of camera target in the viewport.
      *
-     * @param[in] x horizontal position in in normalized coordinates [-1, 1]
-     * @param[in] y vertical position in in normalized coordinates [-1, 1]
+     * @param[in] x horizontal position in normalized coordinates [-1, 1]
+     * @param[in] y vertical position in normalized coordinates [-1, 1]
      */
     OUSTER_API_FUNCTION
     void set_proj_offset(float x, float y);
@@ -1083,6 +1139,7 @@ class OUSTER_API_CLASS TargetDisplay {
     int ring_size_{1};
     bool rings_enabled_{false};
     int ring_line_width_{1};
+    bool rings_in_world_{false};
 
    public:
     /**
@@ -1092,6 +1149,14 @@ class OUSTER_API_CLASS TargetDisplay {
      */
     OUSTER_API_FUNCTION
     void enable_rings(bool state);
+
+    /**
+     * If true, show rings at world origin rather than camera target
+     *
+     * @param[in] state true to put rings at world origin
+     */
+    OUSTER_API_FUNCTION
+    void set_ring_anchor_in_world(bool state);
 
     /**
      * Set the distance between rings.
@@ -1202,6 +1267,8 @@ class OUSTER_API_CLASS Cloud : public Selectable {
 
     Cloud(size_t w, size_t h, const mat4d& extrinsic);
 
+    void set_offset(const float* offset);
+
    public:
     /**
      * Unstructured point cloud for visualization.
@@ -1236,18 +1303,27 @@ class OUSTER_API_CLASS Cloud : public Selectable {
      *
      * Call set_range() to update
      *
+     * Clouds built from the same LidarInfo (until its LUT cache is cleared)
+     * share their direction and offset buffers on the GPU.
+     *
      * @param[in] sensor_info information of sensor the range data came from
      */
     OUSTER_API_FUNCTION
-    Cloud(const ouster::sdk::core::SensorInfo& sensor_info);
+    explicit Cloud(const ouster::sdk::core::LidarInfo& sensor_info);
 
     /**
      * Structured point cloud for visualization.
      *
      * Call set_range() to update
      *
+     * @deprecated Unlike the LidarInfo and shared_ptr XYZLut constructors, this
+     * can't share GPU buffers with other clouds built from the same LUT, so each
+     * cloud uploads its own copy. Use one of those constructors instead.
+     *
      * @param[in] xyz_lut XYZLut to transform from range data to 3D
      */
+    OUSTER_DEPRECATED_MSG(Cloud(const LidarInfo&) or Cloud(const std::shared_ptr<const XYZLut>&),
+                          OUSTER_DEPRECATED_LAST_SUPPORTED_2_0)
     OUSTER_API_FUNCTION
     Cloud(const ouster::sdk::core::XYZLut& xyz_lut);
 
@@ -1256,10 +1332,27 @@ class OUSTER_API_CLASS Cloud : public Selectable {
      *
      * Call set_range() to update
      *
+     * Clouds built from the same LUT instance share their direction and offset
+     * buffers on the GPU.
+     *
      * @param[in] xyz_lut XYZLut to transform from range data to 3D
      */
     OUSTER_API_FUNCTION
-    Cloud(const std::shared_ptr<ouster::sdk::core::XYZLut>& xyz_lut);
+    Cloud(const std::shared_ptr<const ouster::sdk::core::XYZLut>& xyz_lut);
+
+    /**
+     * Structured point cloud for visualization.
+     *
+     * Call set_range() to update
+     *
+     * Clouds built from the same LUT instance share their direction and offset
+     * buffers on the GPU. Prefer this over the double precision overload, since
+     * the GPU buffers are single precision.
+     *
+     * @param[in] xyz_lut XYZLut to transform from range data to 3D
+     */
+    OUSTER_API_FUNCTION
+    explicit Cloud(const std::shared_ptr<const ouster::sdk::core::XYZLutT<float>>& xyz_lut);
 
     /**
      * Updates this cloud's state with the state of other,
@@ -1268,7 +1361,7 @@ class OUSTER_API_CLASS Cloud : public Selectable {
      * @param[in] other the object to update the state from.
      */
     OUSTER_API_FUNCTION
-    void update_from(const Cloud& other);
+    void update_from(Cloud& other);
 
     /**
      * Clear dirty flags.
@@ -1311,6 +1404,8 @@ class OUSTER_API_CLASS Cloud : public Selectable {
      *
      * @param[in] range pointer to array of at least as many elements as there
      * are points, representing the range of the points
+     *
+     * @throw std::logic_error if used on an unordered pointcloud
      */
     OUSTER_API_FUNCTION
     void set_range(const uint32_t* range);
@@ -1392,20 +1487,11 @@ class OUSTER_API_CLASS Cloud : public Selectable {
      *
      * @param[in] xyz pointer to array of exactly 3n where n is number of
      * points, so that the xyz position of the ith point is i, i + 3, i + 6
+     *
+     * @throw std::logic_error if used on an ordered pointcloud
      */
     OUSTER_API_FUNCTION
     void set_xyz(const float* xyz);
-
-    /**
-     * Set the offset values.
-     *
-     * TODO: no real reason to have this. Set in constructor, if at all
-     *
-     * @param[in] offset pointer to array of exactly 3n where n is number of
-     * points, so that the xyz position of the ith point is i, i + 3, i + 6
-     */
-    OUSTER_API_FUNCTION
-    void set_offset(const float* offset);
 
     /**
      * Set the ith point cloud pose.
@@ -1434,6 +1520,8 @@ class OUSTER_API_CLASS Cloud : public Selectable {
      * @param[in] translation translation vector array, column major, where each
      * row is a translation vector. That is, the vth translation is t[v], t[w +
      * v], t[2 * w + v]
+     *
+     * @throw std::logic_error if used on an unordered pointcloud
      */
     OUSTER_API_FUNCTION
     void set_column_poses(const float* rotation, const float* translation);
@@ -1445,6 +1533,8 @@ class OUSTER_API_CLASS Cloud : public Selectable {
      *
      * @param[in] column_poses array of 4x4 pose elements and length w
      * (i.e. [wx4x4]) column-storage
+     *
+     * @throw std::logic_error if used on an unordered pointcloud
      */
     OUSTER_API_FUNCTION
     void set_column_poses(const float* column_poses);
@@ -1723,7 +1813,14 @@ class OUSTER_API_CLASS ObjectOverlay {
     float hshift_{0};
     mat4d view_matrix_{IDENTITY4D};
     std::vector<Cuboid> cuboids_{};
-    ouster::sdk::core::SensorInfo sensor_info_{};
+    ouster::sdk::core::LidarInfo sensor_info_{};
+
+    // Pinhole (camera) projection state. When pinhole_ is true the overlay
+    // projects through the camera intrinsics below instead of the lidar
+    // panorama model derived from sensor_info_. See set_camera_info().
+    bool pinhole_{false};
+    float fx_{0}, fy_{0}, cx_{0}, cy_{0};
+    float img_width_{0}, img_height_{0};
 
    public:
     /**
@@ -1771,7 +1868,28 @@ class OUSTER_API_CLASS ObjectOverlay {
      * @param[in] info sensor information
      */
     OUSTER_API_FUNCTION
-    void set_sensor_info(const ouster::sdk::core::SensorInfo& info);
+    void set_sensor_info(const ouster::sdk::core::LidarInfo& info);
+
+    /**
+     * Get the sensor information used for panorama (lidar) projection.
+     *
+     * @return sensor information
+     */
+    OUSTER_API_FUNCTION
+    const ouster::sdk::core::LidarInfo& sensor_info() const;
+
+    /**
+     * Set camera intrinsics for a pinhole (perspective) projection.
+     *
+     * Switches the overlay from the lidar panorama projection to a pinhole
+     * projection using the CameraModel on @p info. Use this for camera
+     * streams; the view matrix should be the (static) world->sensor transform
+     * for the frame, with no rolling-shutter / motion compensation.
+     *
+     * @param[in] info camera information (uses model, width and height)
+     */
+    OUSTER_API_FUNCTION
+    void set_camera_info(const ouster::sdk::core::CameraInfo& info);
 
     /**
      * Set the view matrix for panorama projection (world-to-sensor).
@@ -2108,7 +2226,7 @@ class OUSTER_API_CLASS Label {
     OUSTER_API_FUNCTION
     Label(const std::string& text, const vec3d& position);
     /**
-     * Sets the 2D position of the lavel
+     * Sets the 2D position of the label
      *
      * @param[in] text Label text to display
      * @param[in] x horizontal position [0, 1]
@@ -2228,11 +2346,11 @@ extern OUSTER_API_VAR const size_t SPEZIA_CAL_REF_N;
 extern OUSTER_API_VAR const float SPEZIA_CAL_REF_PALETTE[][3];
 
 /**
- * Calibrated reflectifiy palette size in number of colors.
+ * Calibrated reflectivity palette size in number of colors.
  */
 extern OUSTER_API_VAR const size_t CALREF_N;
 /**
- * Calibrated reflectifiy, RGB values per element.
+ * Calibrated reflectivity, RGB values per element.
  */
 extern OUSTER_API_VAR const float CALREF_PALETTE[][3];
 

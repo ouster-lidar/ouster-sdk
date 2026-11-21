@@ -17,9 +17,12 @@ namespace mapping {
  */
 class OUSTER_API_CLASS Node {
    public:
-#ifndef OUSTER_CHECK_EXPORTS
+// Add the exports to the Eigen added allocators
+#pragma push_macro("EIGEN_DEVICE_FUNC")
+#undef EIGEN_DEVICE_FUNC
+#define EIGEN_DEVICE_FUNC OUSTER_API_FUNCTION
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-#endif
+#pragma pop_macro("EIGEN_DEVICE_FUNC")
 
     /** Timestamp of the node (nanoseconds). */
     uint64_t ts;

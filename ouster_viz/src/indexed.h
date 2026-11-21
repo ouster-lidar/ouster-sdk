@@ -68,7 +68,7 @@ class Indexed {
         return back_.erase(obj);
     }
 
-    void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
+    void draw(const WindowCtx& ctx, const CameraData& camera) {
         auto& state = global_state();
         GL::beginDraw(state);
         for (auto& obj : front_) {
@@ -81,7 +81,7 @@ class Indexed {
         GL::endDraw();
     }
 
-    void draw_select(const WindowCtx& ctx, const impl::CameraData& camera, uint32_t& start_index,
+    void draw_select(const WindowCtx& ctx, const CameraData& camera, uint32_t& start_index,
                      std::vector<std::pair<Selectable*, uint32_t>>& ranges) {
         auto& state = global_state();
         GL::beginDraw(state);

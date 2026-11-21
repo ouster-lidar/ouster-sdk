@@ -17,6 +17,14 @@ namespace ouster {
 namespace sdk {
 namespace core {
 
+/// Output to trigger on the sensor when a zone is triggered.
+enum class ZoneTriggerOutput {
+    NONE = 0,   ///< No output on trigger
+    OSSD_DUAL,  ///< Output OSSD on trigger
+    GPIO_0,     ///< Output on GPIO 0 on trigger
+    GPIO_1      ///< Output on GPIO 1 on trigger
+};
+
 /**
  * This class represents a physical area defined by a Mesh, along with
  * metadata and rendered products associated with that area.
@@ -32,8 +40,9 @@ class OUSTER_API_CLASS Zone {
     nonstd::optional<Zrb> zrb;
 
     // Trigger Config
-    uint32_t point_count{};  ///< Minimum area (in points) to trigger an alert
-    uint32_t frame_count{};  ///< Minimum time (in frames) to trigger an alert
+    uint32_t point_count{};              ///< Minimum area (in points) to trigger an alert
+    uint32_t frame_count{};              ///< Minimum time (in frames) to trigger an alert
+    ZoneTriggerOutput trigger_output{};  ///< Output trigger type when this zone is triggered
 
     /// Zone operation mode
     enum class ZoneMode : uint8_t {
@@ -47,7 +56,7 @@ class OUSTER_API_CLASS Zone {
     ZoneMode mode{ZoneMode::NONE};  ///< The current operation mode of the zone
 
     /**
-     * Converts a ZoneMode enum value to its corresponding string
+     * Converts to a ZoneMode enum value from its corresponding string
      * representation.
      * @param[in] str The string to convert.
      * @param[out] mode The resulting ZoneMode enum value.
@@ -76,6 +85,24 @@ class OUSTER_API_CLASS Zone {
     OUSTER_API_IGNORE
     void check_invariants() const;  ///< Checks the invariants of the Zone
 };
+
+/**
+ * Converts a ZoneTriggerOutput enum value to its corresponding string representation.
+ * @param[in] zone_trigger The ZoneTriggerOutput enum value to convert.
+ * @return The string representation of the ZoneTriggerOutput.
+ */
+OUSTER_API_FUNCTION
+std::string to_string(ZoneTriggerOutput zone_trigger);
+
+/**
+ * Converts to a ZoneTriggerOutput enum value from its corresponding string
+ * representation.
+ * @param[in] str The string to convert.
+ * @param[out] mode The resulting ZoneTriggerOutput enum value.
+ * @return true if the conversion was successful, false otherwise.
+ */
+OUSTER_API_FUNCTION
+bool string_to_zonetriggeroutput(const std::string& str, ZoneTriggerOutput& mode);
 
 /**
  * Converts a ZoneMode enum value to its corresponding string representation.

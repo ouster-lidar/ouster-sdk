@@ -6,10 +6,12 @@
  * configure UDP output for zone states, and read them from a sensor.
  */
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "cxxopts.hpp"
+#include "ouster/core/lidar_config.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/open_source.h"
 #include "ouster/core/types.h"
@@ -54,7 +56,7 @@ int main(int argc, char* argv[]) {
 
         // clang-format off
         // [doc-stag-set-zm-udp-dest]
-        core::SensorConfig config{};
+        core::LidarConfig config{};
         config.udp_dest_zm = "169.254.100.204";
         config.udp_port_zm = 7504;
         std::cout << "Setting Zone Monitor UDP destination to "
@@ -69,8 +71,11 @@ int main(int argc, char* argv[]) {
         std::cout << "Connecting to sensor and reading zone states..." << std::endl;
         auto source = open_source(hostname);
         for (const auto& frame_set : source) {
-            if (frame_set.size() > 0 && frame_set[0]) {
-                const auto& frame = *(frame_set[0]);
+            auto lidar = frame_set.size() > 0
+                             ? std::dynamic_pointer_cast<core::LidarFrame>(frame_set[0])
+                             : nullptr;
+            if (lidar) {
+                const auto& frame = *lidar;
                 if (frame.has_field(core::ChanField::ZONE_STATES)) {
                     auto zone_states = frame.zones();
                     std::cout << "Frame ID: " << frame.frame_id

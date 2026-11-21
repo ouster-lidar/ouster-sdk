@@ -16,6 +16,7 @@ pcap_path = str(Path(sys.argv[1]).expanduser())
 # open a FrameSetSource directly from the PCAP/metadata pair
 source = pcap.PcapFrameSetSource(pcap_path)
 metadata = source.sensor_info[0]
+assert isinstance(metadata, core.LidarInfo)
 # pull the 84th frame set (adjust the index for your dataset)
 frame_set = nth(source, 84)
 if frame_set is None:

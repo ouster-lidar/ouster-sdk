@@ -547,7 +547,7 @@ unknown/unspecified value.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``LidarMode`` changed from an enum class to a struct to support arbitrary
-sensor modes. 
+sensor modes.
 
 ``UNSPECIFIED`` values are also removed from ``LidarMode``,
 ``TimestampMode`` and ``OperatingMode``. Check for parse failures with
@@ -1294,7 +1294,7 @@ Viz utility changes
 
 * ``push_point_viz_handler`` and ``BoundMethod`` are removed. Use push functions
   on ``PointViz`` directly.
-  
+
 .. code-block:: python
 
    # Before (0.16.x) — inside SimpleViz
@@ -1360,7 +1360,7 @@ Use ``ouster::sdk::pcap::RecordHandle`` instead.
    // Finalize
    ouster::sdk::pcap::record_uninitialize(*handle);
 
-Deprecated ``core::cartesian()`` 
+Deprecated ``core::cartesian()``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Use ``XYZLut`` call syntax instead.
@@ -1958,7 +1958,7 @@ removed in a future release.
    from ouster.sdk.viz import ls_show
    ls_show(frames)
 
-   # After (1.1)
+   # After (1.0)
    from ouster.sdk.viz import lf_show
    lf_show(frames)
 
@@ -1996,6 +1996,6 @@ in a future release. Update any direct module-path imports to the new names.
    import ouster.sdk.core.scan_ops as so
    from ouster.sdk.bag.bag_scan_source import BagFrameSetSource
 
-   # After (1.1)
+   # After (1.0)
    import ouster.sdk.core.frame_ops as so
    from ouster.sdk.bag.bag_frame_set_source import BagFrameSetSource

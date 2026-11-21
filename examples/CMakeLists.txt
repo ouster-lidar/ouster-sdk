@@ -1,5 +1,5 @@
 # sensor_hostname needed for below tests so below are available with RUN_HIL_EXAMPLES and will run in HIL
-# client_example, 
+# client_example,
 # client_packet_example
 # config_example
 # Viz examples skipped in CI and HIL
@@ -59,7 +59,7 @@ if(TARGET OusterSDK::ouster_osf)
   if(BUILD_TESTING)
     add_test(NAME osf_reader_example COMMAND osf_reader_example ${EXAMPLE_OSF})
   endif()
-  
+
   add_executable(osf_writer_example osf_writer_example.cpp)
   target_link_libraries(osf_writer_example PRIVATE OusterSDK::ouster_osf)
   if(BUILD_TESTING)
@@ -103,6 +103,18 @@ function(link_sdk_libraries_conditionally target_name)
       target_link_libraries(${target_name} PRIVATE OusterSDK::ouster_sensor)
     endif()
 endfunction()
+
+add_executable(voxel_hash_map_example voxel_hash_map_example.cpp)
+target_link_libraries(voxel_hash_map_example PRIVATE OusterSDK::ouster_core)
+if(BUILD_TESTING)
+  add_test(NAME voxel_hash_map_example COMMAND voxel_hash_map_example)
+endif()
+
+add_executable(voxel_downsample_example voxel_downsample_example.cpp)
+target_link_libraries(voxel_downsample_example PRIVATE OusterSDK::ouster_core)
+if(BUILD_TESTING)
+  add_test(NAME voxel_downsample_example COMMAND voxel_downsample_example)
+endif()
 
 add_executable(frame_set_source_example frame_set_source_example.cpp)
 link_sdk_libraries_conditionally(frame_set_source_example)

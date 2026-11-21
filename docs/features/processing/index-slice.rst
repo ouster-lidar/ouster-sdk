@@ -1,7 +1,7 @@
 Indexing & Slicing
 ------------------
 
-One of the features of the FrameSetSource API, is the ability to use indexing and slicing when accessing the stored frames within the ``LidarFrame`` source. Currently, this
+One of the features of the FrameSetSource API, is the ability to use indexing and slicing when accessing the stored frames (``LidarFrame`` and/or ``CameraFrame``) within the source. Currently, this
 capability is only supported for indexable sources. That is to say, the functionality we are discussing can only be used
 when accessing a pcap or an OSF file with indexing turned on. To turn on indexing simply add the ``index`` flag and set
 it ``True`` when opening a pcap or OSF file:
@@ -66,10 +66,10 @@ Depending on the file size and the underlying file format there can be some dela
 file take much less time than pcap file to index). A progress bar will appear to indicate progress of the indexing.
 
 Once the index is built up, then we can start using utilizing and interact with the ``FrameSetSource`` object to access frames
-in the same manner we are dealing with a python list that holds reference to LidarFrame objects. 
+in the same manner we are dealing with a python list that holds references to ``Frame`` objects (``LidarFrame`` or ``CameraFrame``).
 
 
-To access the 10th LidarFrame and print its frame id, we can do the following:
+To access the 10th frame and print its frame id, we can do the following:
 
 .. tab-set::
    :sync-group: api-lang
@@ -96,14 +96,14 @@ To access the 10th LidarFrame and print its frame id, we can do the following:
          :caption: `View on GitHub <|github-src|docs/features/processing/_snippets/cpp/slicing.cpp>`__
          :dedent: 4
 
-One can access a specific frame and sensor in one go — e.g., ``source[-1][0].frame_id`` picks the last frame and the first sensor.
+One can access a specific frame and sensor in one go — e.g., ``source[-1][0].timestamp[0]`` picks the last frame and the first sensor's measurement time.
 
 
 In C++, write ``source[{start, stop, step}]``— leaving any entry out with ``nonstd::nullopt``— to get a  ``FrameSetSource`` restricted to that window but
 keeping the same iterators, indexes, and metadata. Negative steps are not allowed; for reverse iteration, collect indices first and iterate backwards manually.
 
 
-Similarly we can access the last LidarFrame object and print its frame_id using:
+Similarly we can access the last frame object and print its timestamp using:
 
 .. tab-set::
    :sync-group: api-lang
@@ -132,7 +132,7 @@ Similarly we can access the last LidarFrame object and print its frame_id using:
 
 
 Alternatively we can instead request a range of frames using the python slice operator. For example, to request the first 9
-frames from a FrameSetSource and print their frame ids, we can do the following:
+frames from a FrameSetSource and print their timestamps, we can do the following:
 
 .. tab-set::
    :sync-group: api-lang
@@ -160,9 +160,9 @@ frames from a FrameSetSource and print their frame ids, we can do the following:
          :dedent: 4
 
 
-**Note:** we don't need to add any break here since the operation `source[0:9]` will only yield the first 9 ``LidarFrame(s)``.
+**Note:** we don't need to add any break here since the operation `source[0:9]` will only yield the first 9 frames.
 
-To print ``frame_id`` of the last 8 LidarFrames we do:
+To print the timestamp of the last 8 frames we do:
 
 .. tab-set::
    :sync-group: api-lang
@@ -218,8 +218,8 @@ iteration is not supported.
          :caption: `View on GitHub <|github-src|docs/features/processing/_snippets/cpp/slicing.cpp>`__
          :dedent: 4
 
-.. note:: 
-   
+.. note::
+
    Reverse iteration (negative step sizes) is not supported by FrameSetSource such as ``source[10:0:-1]``.
    Collect indices into a vector and iterate in reverse order if needed.
 
@@ -227,7 +227,7 @@ Slicing operator as a FrameSetSource
 --------------------------------
 
 The FrameSetSource slice operator ``[::]`` returns a ``FrameSetSource`` scoped to the indicated slice range. This means that the users can pass the object returned by
-the slice operator ``[::]`` to any function or code that expects a ``FrameSetSource`` object. 
+the slice operator ``[::]`` to any function or code that expects a ``FrameSetSource`` object.
 
 The following snippet shows few examples to demonstrate this capability:
 
@@ -258,33 +258,34 @@ The following snippet shows few examples to demonstrate this capability:
 
 .. note::
 
-   Invoking ``source2[10][0].frame_id`` would result in an `out of range exception`` since ``source2`` is scoped to 5 frames.
-   Also, invoking ``source2[4].frame_id`` would result in an `AttributeError`` since ``source2`` is a list of LidarFrame objects.
+   Invoking ``source2[10][0].timestamp[0]`` would result in an `out of range exception`` since ``source2`` is scoped to 5 frames.
+   Also, invoking ``source2[4].timestamp[0]`` would result in an `AttributeError`` since ``source2`` is a list of ``FrameSet`` objects.
 
-Validating LidarFrames
----------------------
+Validating Frames
+-----------------
 
 The SDK provides utilities to validate data integrity at both the high-level (assembled frames) and low-level (packet streams).
 
-These functions help validate the integrity of an assembled ``LidarFrame``, allowing you to programmatically identify issues like empty columns or missing poses.
+These functions help validate the integrity of an assembled ``Frame`` (``LidarFrame`` or ``CameraFrame``), allowing you to programmatically identify issues like empty columns or missing poses.
 
 **Python**
 
-The ``ouster.sdk.core`` module provides helpers that return the pose directly:
+The ``ouster.sdk.core`` module provides helpers that return the pose directly. They operate on any
+``Frame`` (``LidarFrame`` or ``CameraFrame``):
 
 - **first_valid_column_pose(frame)**: Returns the 4x4 pose matrix of the first valid column.
 - **last_valid_column_pose(frame)**: Returns the 4x4 pose matrix of the last valid column.
 - **frame.body_to_world[column_index]**: Returns the 4x4 body-to-world matrix for the given column.
-- **frame.body_to_world**: Returns the full ``(W, 4, 4)`` array of per-column body-to-world transforms.
+- **frame.body_to_world**: Returns the full ``(N, 4, 4)`` array of body-to-world transforms — one pose per column for a ``LidarFrame`` (``N == W``), or a single pose for a ``CameraFrame`` (``N == 1``).
 
 **C++**
 
-The ``core::LidarFrame`` class provides methods to find the indices, which can then be used to look up the pose:
+The ``core::Frame`` base class provides methods to find the indices, which can then be used to look up the pose (so no downcast to a concrete frame type is needed):
 
-- **frame.get_first_valid_column()**: Returns the index of the first valid column. Raises ``std::runtime_error`` / ``RuntimeError`` if no valid columns are available.
-- **frame.get_last_valid_column()**: Returns the index of the last valid column. Raises ``std::runtime_error`` / ``RuntimeError`` if no valid columns are available.
+- **frame.get_first_valid_column()**: Returns the index of the first valid column. Raises ``std::runtime_error`` / ``RuntimeError`` if no valid columns are available. Returns ``0`` for a single-pose camera frame.
+- **frame.get_last_valid_column()**: Returns the index of the last valid column. Raises ``std::runtime_error`` / ``RuntimeError`` if no valid columns are available. Returns ``0`` for a single-pose camera frame.
 - **frame.get_column_pose(index)**: Returns the body-to-world matrix for the given column.
-- **frame.body_to_world()**: Returns a reference to the full per-column body-to-world field.
+- **frame.body_to_world()**: Returns a reference to the full body-to-world field.
 
 
 .. tab-set::

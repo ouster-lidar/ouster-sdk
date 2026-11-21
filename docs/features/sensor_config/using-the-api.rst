@@ -1,7 +1,7 @@
 Using the API
 =============
 
-In this example we show various ways to work with the sensor configuration interface. 
+In this example we show various ways to work with the sensor configuration interface.
 
 .. rubric:: Imports
 
@@ -20,7 +20,7 @@ First let's add the necessary imports to work with the sensor configuration API.
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/core.py>`__
          :dedent: 0
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -51,7 +51,7 @@ Let’s look at the first step, where we get the configuration of the sensor as 
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/core.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -66,7 +66,7 @@ Let’s look at the first step, where we get the configuration of the sensor as 
 
 :ouster:func:`get_config <py=ouster.sdk.sensor.get_config|cpp=ouster::sdk::sensor::get_config>`
 takes the sensor hostname and returns a
-:ouster:class:`SensorConfig <py=ouster.sdk.core.SensorConfig|cpp=ouster::sdk::core::SensorConfig>` directly;
+:ouster:class:`LidarConfig <py=ouster.sdk.core.LidarConfig|cpp=ouster::sdk::core::LidarConfig>` directly;
 it throws if it can't connect to the sensor or retrieve the config.
 
 In the full C++ example (click the "View on GitHub" on the top-right corner of the code snippet above), this is the first of five numbered
@@ -109,7 +109,7 @@ sensor to use dual returns by setting the config parameter
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/core.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -146,7 +146,7 @@ NMEA Baud Rate: The ``nmea_baud_rate`` parameter sets the serial speed for the N
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/core.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -159,7 +159,7 @@ NMEA Baud Rate: The ``nmea_baud_rate`` parameter sets the serial speed for the N
          :dedent: 4
 
 
-For a complete list of configurable options view API reference :ouster:class:`SensorConfig <py=ouster.sdk.core.SensorConfig|cpp=ouster::sdk::core::SensorConfig>`.
+For a complete list of configurable options view API reference :ouster:class:`LidarConfig <py=ouster.sdk.core.LidarConfig|cpp=ouster::sdk::core::LidarConfig>`.
 To view the complete code for above example please refer to the github repository. The github icon on the top-right corner on each code snippet will redirect you to the actual code on the repository.
 
 .. _set-configuration:
@@ -169,7 +169,7 @@ Set Configuration
 
 :ouster:func:`set_config <py=ouster.sdk.sensor.set_config|cpp=ouster::sdk::sensor::set_config>`  can be used to apply sensor configuration parameters.
 
-The :ouster:class:`SensorConfig <py=ouster.sdk.core.SensorConfig|cpp=ouster::sdk::core::SensorConfig>` struct consists of several optional members, which can be set
+The :ouster:class:`LidarConfig <py=ouster.sdk.core.LidarConfig|cpp=ouster::sdk::core::LidarConfig>` struct consists of several optional members, which can be set
 directly. Members which are not set will not set sensor configuration parameters when sent to the
 sensor.
 
@@ -189,7 +189,7 @@ To work with your sensor, you should configure the ports, the :ouster:enum:`Oper
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/core.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -217,7 +217,7 @@ Once defined, one can now call :ouster:func:`set_config <py=ouster.sdk.sensor.se
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/core.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -231,7 +231,7 @@ Once defined, one can now call :ouster:func:`set_config <py=ouster.sdk.sensor.se
 
 
 .. note::
-   
+
    The automatic udp destination flag cannot be set via CONFIG_UDP_DEST_AUTO when
    ``config.udp_dest`` is set, as those conflict.
 

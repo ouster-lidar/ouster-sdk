@@ -19,7 +19,7 @@ def test_run_slam_once_prints_pose():
     with redirect_stdout(buf):
         run_slam_once(str(OSF_PATH))
     output = buf.getvalue()
-    assert "idx =" in output
+    assert "ts =" in output
     assert "Translation:" in output
     assert "Roll:" in output
     assert "Pitch:" in output

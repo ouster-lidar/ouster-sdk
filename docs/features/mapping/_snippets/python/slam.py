@@ -1,10 +1,10 @@
 # mypy: ignore-errors
-from scipy.spatial.transform import Rotation as R
+import numpy as np
 
 # [doc-stag-slam-imports]
-# Other imports
 from ouster.sdk import open_source
 from ouster.sdk import mapping
+from ouster.sdk.core import matrix_to_euler, LidarFrame
 # [doc-etag-slam-imports]
 
 
@@ -31,21 +31,22 @@ def run_slam_once(source_file: str) -> None:
         # [doc-etag-slam-loop-update]
         # [doc-stag-slam-loop-printpose]
         frame = frame_set[0]
-        # Get last valid column (closest to the current pose)
+        # Last valid column (scan end for lidar; column 0 for camera).
         col = frame.get_last_valid_column()
-        # Get timestamp and pose for the column
         frame_pose = frame.body_to_world[col]
         frame_ts = frame.timestamp[col]
         # [doc-etag-slam-loop-printpose]
         # Extract translation (top-right 3x1)
         t = frame_pose[:3, 3]
-        # ZYX euler (yaw, pitch, roll)
+        # ZYX euler (roll, pitch, yaw) in degrees
         rot = frame_pose[:3, :3]
-        angles = R.from_matrix(rot).as_euler('zyx', degrees=True)
-        yaw = angles[0]
+        angles = np.degrees(matrix_to_euler(rot))
+        roll = angles[0]
         pitch = angles[1]
-        roll = angles[2]
-        print(f"idx = {frame.frame_id}; frame_ts = {frame_ts};"
+        yaw = angles[2]
+        # frame_id is a LidarFrame attribute; a camera frame has no id to print.
+        frame_id = frame.frame_id if isinstance(frame, LidarFrame) else -1
+        print(f"idx = {frame_id}; frame_ts = {frame_ts};"
               f"; Translation: "
               f"{t[0]:.2f}, {t[1]:.2f}, {t[2]:.2f} "
               f" (Roll: {roll:.1f} "

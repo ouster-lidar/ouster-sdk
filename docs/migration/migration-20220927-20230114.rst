@@ -12,7 +12,7 @@ Signal Multiplier
 -----------------
 
 FW 3.0 allows setting the signal multiplier to non-int values 0.25 and 0.5. As such, we have changed
-the type of the ``sensor_config`` struct member ``signal_multiplier`` to double. 
+the type of the ``sensor_config`` struct member ``signal_multiplier`` to double.
 
 Old saved config jsons will continue to load properly.
 
@@ -26,7 +26,7 @@ between the beam coordinate frame and lidar coordinate frame. The double
 
 The ``make_xyz_lut`` function now takes a ``mat4d`` transformation specifying the relation between
 the beam and lidar coordinate frames, as opposed to the  previous double which assumed an Identity
-rotation. 
+rotation.
 
 Users using pre-FW3.0 sensors with the latest SDK ``make_xyz_lut`` overload which accepts a
 ``sensor_info`` need not change anything, as the ``sensor_info`` struct automatically derives and

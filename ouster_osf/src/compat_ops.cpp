@@ -105,7 +105,7 @@ std::string get_last_error() {
 #endif
 }
 
-/// Checking the the path is it directory or not.
+/// Checks whether the path is a directory.
 bool is_dir(const std::string& path) {
 #ifdef _WIN32
     DWORD attrs = GetFileAttributesA(path.c_str());
@@ -302,7 +302,7 @@ uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
     (void)memmap_handle;
 
     // Have to use var arg open due to the memory-mapped file API
-    // Also technically we are not using the var arg portionion of the API
+    // Also technically we are not using the var arg portion of the API
     int fd = open(path.c_str(),
                   O_RDONLY);  // NOLINT(cppcoreguidelines-pro-type-vararg)
     if (fd < 0) {

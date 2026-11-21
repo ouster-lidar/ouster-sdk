@@ -76,7 +76,7 @@ struct OUSTER_API_CLASS FrameSetSourceOptions {
     impl::Parameter<unsigned int> queue_size = 2;
 
     /// Override sensor info. If provided used instead of talking to the sensor.
-    impl::Parameter<std::vector<core::SensorInfo>> sensor_info;
+    impl::Parameter<std::vector<core::LidarInfo>> sensor_info;
 
     /// If true, batch raw_headers into each frame
     impl::Parameter<bool> raw_headers = false;
@@ -85,13 +85,13 @@ struct OUSTER_API_CLASS FrameSetSourceOptions {
     impl::Parameter<bool> raw_fields = false;
 
     /// Configuration to apply to the sensors
-    impl::Parameter<std::vector<core::SensorConfig>> sensor_config;
+    impl::Parameter<std::vector<core::LidarConfig>> sensor_config;
 
     /// An optional error handler
     impl::Parameter<core::error_handler_t> error_handler{core::default_error_handler};
 
-    /// Receive buffer size in bytes
-    impl::Parameter<uint32_t> rcvbuf_size = 1024 * 1024;
+    /// Receive buffer size in bytes. 0 to determine automatically.
+    impl::Parameter<uint32_t> rcvbuf_size = 0;
 
     /// Check if any parameters are unused
     /// @throw std::runtime_error if any parameters are unused
@@ -158,7 +158,7 @@ struct OUSTER_API_CLASS PacketSourceOptions {
     impl::Parameter<bool> index = false;
 
     /// Override sensor info. If provided used instead of talking to the sensor.
-    impl::Parameter<std::vector<core::SensorInfo>> sensor_info;
+    impl::Parameter<std::vector<core::LidarInfo>> sensor_info;
 
     /// If true, do not change any settings on the sensor or reinitialize it
     impl::Parameter<bool> do_not_reinitialize = false;
@@ -167,15 +167,15 @@ struct OUSTER_API_CLASS PacketSourceOptions {
     impl::Parameter<bool> no_auto_udp_dest = false;
 
     /// Configuration to apply to the sensors
-    impl::Parameter<std::vector<core::SensorConfig>> sensor_config;
+    impl::Parameter<std::vector<core::LidarConfig>> sensor_config;
 
     /// if true, enable reuse ports on the sensor client sockets
     /// this enables multiple programs on the same computer to bind these ports
     /// which is useful for multi/broadcast but can lead to conflicts otherwise
     impl::Parameter<bool> reuse_ports = false;
 
-    /// Receive buffer size in bytes
-    impl::Parameter<uint32_t> rcvbuf_size = 1024 * 1024;
+    /// Receive buffer size in bytes. 0 to determine automatically.
+    impl::Parameter<uint32_t> rcvbuf_size = 0;
 
     /// Construct given the options in a FrameSetSourceOptions
     OUSTER_API_FUNCTION
@@ -216,6 +216,21 @@ void populate_extrinsics(
     const std::string& extrinsics_file,  ///< [in] optional extrinsics file name
     std::vector<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>
         extrinsics,  ///< [in] optional extrinsics list
+    std::vector<std::shared_ptr<LidarInfo>>&
+        sensor_infos  ///< [out] SensorInfos to fill with extrinsics
+);
+
+/// Populate the extrinsics in the sensor infos (lidar and/or camera)
+///
+/// Overload accepting the SensorInfo base type so extrinsics can be applied to
+/// any sensor (e.g. cameras as well as lidars). Extrinsics from a file are
+/// matched to sensors by serial number; the extrinsics list is applied by
+/// index.
+OUSTER_API_FUNCTION
+void populate_extrinsics(
+    const std::string& extrinsics_file,  ///< [in] optional extrinsics file name
+    std::vector<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>
+        extrinsics,  ///< [in] optional extrinsics list
     std::vector<std::shared_ptr<SensorInfo>>&
         sensor_infos  ///< [out] SensorInfos to fill with extrinsics
 );
@@ -225,24 +240,13 @@ void populate_extrinsics(
 /// @throw std::runtime_error if field name not in list of default fields
 OUSTER_API_FUNCTION
 std::vector<std::vector<FieldType>> resolve_field_types(
-    const std::vector<std::shared_ptr<SensorInfo>>& sensor_infos,  ///< [in] SensorInfos
-    bool raw_headers,  ///< [in] if true, add raw headers
-    bool raw_fields,   ///< [in] if true, add raw fields
+    const std::vector<std::shared_ptr<LidarInfo>>& sensor_infos,  ///< [in] SensorInfos
+    bool raw_headers,                                             ///< [in] if true, add raw headers
+    bool raw_fields,                                              ///< [in] if true, add raw fields
     const nonstd::optional<std::vector<std::string>>&
         field_names  ///< [in] names of fields to include from list of defaults,
                      ///< if empty all default fields are added
 );
 }  // namespace core
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-
-OUSTER_DEPRECATED_TYPE(ScanSourceOptions, FrameSetSourceOptions,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-
 }  // namespace sdk
 }  // namespace ouster

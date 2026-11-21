@@ -30,7 +30,7 @@ def test_replay_data_osf_prints_frame():
         snippet.replay_data(str(OSF_PATH), limit=1)
     output = buf.getvalue()
     assert "frame" in output
-    assert "id=" in output
+    assert "ts=" in output
 
 
 def test_replay_pcap_with_metadata_prints_frame():
@@ -43,7 +43,7 @@ def test_replay_pcap_with_metadata_prints_frame():
         )
     output = buf.getvalue()
     assert "frame" in output
-    assert "id=" in output
+    assert "ts=" in output
 
 
 def test_replay_pcap_with_pcap_frame_set_source_prints_frame():
@@ -56,7 +56,7 @@ def test_replay_pcap_with_pcap_frame_set_source_prints_frame():
         )
     output = buf.getvalue()
     assert "frame" in output
-    assert "id=" in output
+    assert "ts=" in output
 
 
 def test_replay_data_pcap_with_metadata_discovery():
@@ -103,14 +103,14 @@ def test_replay_pcap_with_missing_json_file():
         )
 
 
-def test_select_single_sensor_prints_frame_id():
+def test_select_single_sensor_prints_timestamp():
     """sensor_idx=0 and .single(0) are equivalent and yield a frame."""
     buf = io.StringIO()
     with redirect_stdout(buf):
         snippet.select_single_sensor(str(OSF_PATH))
     output = buf.getvalue()
-    assert "via sensor_idx: frame_id=" in output
-    assert "via single():   frame_id=" in output
+    assert "via sensor_idx: ts=" in output
+    assert "via single():   ts=" in output
 
 
 

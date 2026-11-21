@@ -4,7 +4,7 @@ XYZLut & Destaggering
 Once you have acquired a ``LidarFrame`` object, from a ``FrameSetSource`` as shown in the :doc:`consumption section <../consumption/using-the-api>`, you can perform numerous processing tasks.
 
 As a reminder, the :ouster:class:`LidarFrame <py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>` class batches lidar
-packets by full rotations into accessible fields of the appropriate type. 
+packets by full rotations into accessible fields of the appropriate type.
 
 The ``LidarFrame`` object holds data in 2D fields (like ``RANGE``, ``SIGNAL``, ``REFLECTIVITY``), and the SDK provides utilities to:
 
@@ -26,7 +26,7 @@ The most common processing task is converting the 2D RANGE field into a 3D point
 
    .. tab-item:: Python
       :sync: py
-      
+
       .. literalinclude:: /../python/src/ouster/sdk/examples/core.py
          :language: python
          :start-after: [doc-stag-plot-xyz-imports]
@@ -34,7 +34,7 @@ The most common processing task is converting the 2D RANGE field into a 3D point
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|docs/features/processing/_snippets/python/representations.py>`__
          :dedent:
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -53,10 +53,10 @@ To convert 2D lidar data into a 3D point cloud,
 
 The process involves two steps:
 
-- **Build the lookup once**: run :ouster:class:`XYZLut <py=ouster.sdk.core.data.XYZLut|cpp=ouster::sdk::core::XYZLutT>` with your SensorInfo; it precomputes the per-pixel direction vectors.
+- **Build the lookup once**: run :ouster:class:`XYZLut <py=ouster.sdk.core.data.XYZLut|cpp=ouster::sdk::core::XYZLutT>` with your LidarInfo; it precomputes the per-pixel direction vectors.
 - **Reuse it for every frame**: feed the LUT and a ``RANGE`` field into :ouster:func:`cartesian <cpp=ouster::sdk::core::cartesian>` (C++) or call the Python LUT object; it multiplies each range value by its direction vector and returns the XYZ coordinates (Eigen::Matrix in C++, (H, W, 3) array in Python).
 
-For guidance on loading ``SensorInfo`` metadata when replaying a PCAP file, see the :ref:`get-sensor-info`.
+For guidance on loading ``LidarInfo`` metadata when replaying a PCAP file, see the :ref:`get-sensor-info`.
 Once you have the sensor info, you are ready to create the XYZ look up table:
 
 .. tab-set::
@@ -64,7 +64,7 @@ Once you have the sensor info, you are ready to create the XYZ look up table:
 
    .. tab-item:: Python
       :sync: py
-      
+
       .. literalinclude:: /../python/src/ouster/sdk/examples/core.py
          :language: python
          :start-after: [doc-stag-plot-xyz-points]
@@ -72,7 +72,7 @@ Once you have the sensor info, you are ready to create the XYZ look up table:
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|python/src/ouster/sdk/examples/core.py>`__
          :dedent:
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -94,22 +94,31 @@ Now, you have your x, y, and z values, you can plot them easily to get something
 You can find the complete code by clicking on the github icon on the code snippet or
 on our `GitHub repository <https://github.com/ouster-lidar/ouster-sdk>`_.
 
-For a fast way to use a sensor to run :py:class:`~ouster.sdk.core.XYZLut` and visualize a similar image, refer to the pre-built Python example included in the SDK.  
+For a fast way to use a sensor to run :py:class:`~ouster.sdk.core.XYZLut` and visualize a similar image, refer to the pre-built Python example included in the SDK.
 Follow the instructions in the :ref:`Python LidarFrame examples<ex-python-lidarframe>` section.
+
+Building a LUT takes time and memory, so if you project frames from the same sensor repeatedly, use the LUT cached on the sensor info instead of
+constructing a new one each time: ``sensor_info.xyzlut_double`` / ``sensor_info.xyzlut_float`` in Python, or ``sensor_info.xyzlut<double>()`` /
+``sensor_info.xyzlut<float>()`` in C++. The cache is built on first use. It is not updated automatically, so call ``sensor_info.clear_cache()``
+after changing ``sensor_to_body`` (or any other calibration field) on that sensor info. A LUT obtained earlier stays valid after
+``clear_cache()``, but keeps projecting with the old calibration, so fetch it again afterwards. In C++, ``xyzlut()`` returns a
+``std::shared_ptr`` that shares ownership of the LUT; keep the pointer (not a reference to the LUT) for as long as you use it.
 
 Using Sensor Extrinsics in the LUT
 ++++++++++++++++++++++++++++++++++
 
-``use_extrinsics=True`` tells :py:class:`~ouster.sdk.core.XYZLut` to apply ``sensor_info.sensor_to_body`` with ``sensor_info.lidar_to_sensor_transform``
-and use that combined 4×4 transform when building the lookup table (i.e., the LUT outputs points in the extrinsics frame rather than the sensor frame).
-The ``sensor_info.sensor_to_body`` matrix still comes straight from the sensor metadata and defaults to the identity matrix if the JSON omits it.
+:ouster:class:`XYZLut <py=ouster.sdk.core.data.XYZLut|cpp=ouster::sdk::core::XYZLutT>` always applies ``sensor_info.sensor_to_body`` together with ``sensor_info.lidar_to_sensor_transform``
+and uses that combined 4×4 transform when building the lookup table, so the LUT outputs points in the body (extrinsics) frame.
+The ``sensor_info.sensor_to_body`` matrix comes straight from the sensor metadata and defaults to the identity matrix if the JSON omits it,
+in which case the body frame and the sensor frame coincide. To get points in the sensor frame, build the LUT from a copy of the sensor info
+whose ``sensor_to_body`` is set to the identity matrix.
 
 .. tab-set::
    :sync-group: api-lang
 
    .. tab-item:: Python
       :sync: py
-      
+
       .. literalinclude:: _snippets/python/representations.py
          :language: python
          :start-after: [doc-stag-transform-extrinsics]
@@ -135,7 +144,7 @@ Applying External Transforms to the LUT
 
 Users may find that they wish to apply an extra transform while projecting to Cartesian coordinates.
 Such a transform, likely an extrinsics matrix of some sort, can be baked directly into
-:ouster:class:`XYZLut <py=ouster.sdk.core.data.XYZLut|cpp=ouster::sdk::core::XYZLutT>` constructor, which internally uses the :ouster:func:`make_xyz_lut <cpp=ouster::sdk::core::make_xyz_lut>` function. 
+:ouster:class:`XYZLut <py=ouster.sdk.core.data.XYZLut|cpp=ouster::sdk::core::XYZLutT>` constructor, which internally uses the :ouster:func:`make_xyz_lut <cpp=ouster::sdk::core::make_xyz_lut>` function.
 This is more efficient than transforming every point cloud after projection.
 
 In the following code, ``transform`` represents the external transformation matrix:
@@ -145,7 +154,7 @@ In the following code, ``transform`` represents the external transformation matr
 
    .. tab-item:: Python
       :sync: py
-      
+
       .. literalinclude:: _snippets/python/representations.py
          :language: python
          :start-after: [doc-stag-repr-transform-metadata]
@@ -165,8 +174,9 @@ In the following code, ``transform`` represents the external transformation matr
          :caption: `View on GitHub <|github-src|features/processing/_snippets/cpp/representations_example.cpp>`__
          :dedent:
 
-Using the ``use_extrinsics=False`` returns the sensor-frame directions/offsets with no extra transform.
-Hence, to apply external transform, we retrieve the `SensorInfo`, multiply in their custom 4×4 matrix, and then build the LUT—so the LUT bakes in the pose we supplied instead of applying it afterward.
+Because the LUT always applies ``sensor_to_body``, we copy the ``LidarInfo``, multiply the custom 4×4 matrix into the copy's ``sensor_to_body``, and then build the LUT,
+so the LUT bakes in the pose we supplied instead of applying it afterward. Note that ``sensor_to_body`` translations are in meters.
+Working on a copy leaves the original sensor info, and the LUT cached on it, unchanged.
 
 **NOTE** The SDK also provides a  :py:class::`ouster.sdk.core.XYZLutFloat` in Python, which can be used when one needs to save memory or work in float32.
 
@@ -257,7 +267,7 @@ Reshaping XYZ to 2D
 
 Users may find that they wish to access the ``x``, ``y``, and ``z`` coordinates of a single return
 in a similar way. As the conversion to Cartesian coordinates returns an ``Eigen::Array`` ``n x 3``,
-with ``n = w * h``, reshaping the resulting array is necessary. 
+with ``n = w * h``, reshaping the resulting array is necessary.
 
 We can combine our knowledge in projecting into Cartesian coordinates and destaggering using the
 following function:
@@ -294,7 +304,7 @@ Correlating 2D and 3D Data
 ---------------------------
 
 The direct correlation between 2D and 3D representations in an Ouster sensor provides a powerful
-framework for working with the data. 
+framework for working with the data.
 
 Destaggering allows you to use 2D and 3D representations simultaneously. After destaggering, the pixel at (row, col) in a 2D field (like RANGE) corresponds to the 3D point at (row, col) in a destaggered XYZ point cloud.
 
@@ -404,7 +414,7 @@ The example below filters a point cloud based on both RANGE (distance) and azimu
          :end-before: [doc-etag-filter-3d]
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|docs/features/processing/_snippets/cpp/representations.cpp>`__
-         :dedent:   
+         :dedent:
 
 Since we’d like to filter on azimuth angles, first we first destagger both the 2D and 3D points, so that our columns in the HxW representation correspond to azimuth angle, not timestamp.
 
@@ -412,7 +422,7 @@ Then we filter the 3D points xyz_destaggered by comparing the range measurement 
 
 Finally, we select only the azimuth columns we’re interested in. In this case, we’ve arbitrarily chosen ``azimuth_fraction = 0.75``, which keeps the first 75% of the frame (~270° of rotation).
 
-For a fast way to use a sensor to run the above examples and visualize the output, refer to the pre-built Python example included in the SDK.  
+For a fast way to use a sensor to run the above examples and visualize the output, refer to the pre-built Python example included in the SDK.
 Follow the instructions in the :ref:`Python LidarFrame examples<ex-python-lidarframe>` section.
 
 
@@ -441,14 +451,14 @@ Follow the instructions in the :ref:`Python LidarFrame examples<ex-python-lidarf
          :end-before: [doc-etag-filter-3d-full]
          :class: doc-snippet scroll-snippet
          :caption: `View on GitHub <|github-src|docs/features/processing/_snippets/cpp/representations.cpp>`__
-         :dedent:   
+         :dedent:
 
 Populating LidarFrames
 ---------------------
 
 This reference has covered how to access, project, and destagger ``LidarFrame``
 contents. But in order for ``LidarFrames`` to be useful, we need a way to populate them with packet
-data! 
+data!
 
 For convenience, the Ouster Python SDK provides batching helpers for both live and recorded data.
 
@@ -459,7 +469,7 @@ Adding custom fields to a LidarFrame
 -----------------------------------
 
 It's possible to add custom fields to a ``LidarFrame``. This is especially useful if you
-want to add custom data to an OSF file for visualization purposes. 
+want to add custom data to an OSF file for visualization purposes.
 
 You can find more information about this in the documentation :ref:`custom-fields`.
 

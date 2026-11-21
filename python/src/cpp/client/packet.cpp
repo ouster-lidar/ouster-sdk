@@ -31,22 +31,22 @@ using ouster::sdk::core::ChanFieldType;
 using ouster::sdk::core::DataFormat;
 using ouster::sdk::core::ImuPacket;
 using ouster::sdk::core::LidarFrame;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::core::LidarPacket;
 using ouster::sdk::core::Packet;
 using ouster::sdk::core::PacketFormat;
 using ouster::sdk::core::PacketType;
 using ouster::sdk::core::PacketValidationFailure;
-using ouster::sdk::core::SensorInfo;
 using ouster::sdk::core::ZonePacket;
 
 void init_client_packet(py::module_& module, py::module_& /*unused*/) {
     // Packet Format
     py::class_<PacketFormat>(module, "PacketFormat")
-        .def(py::init<const SensorInfo&>())
+        .def(py::init<const LidarInfo&>())
         .def(py::init<const DataFormat&>())
         .def_static(
             "from_metadata",
-            [](const SensorInfo& info) -> const PacketFormat& {
+            [](const LidarInfo& info) -> const PacketFormat& {
                 PyErr_WarnEx(PyExc_FutureWarning,
                              "from_metadata is deprecated, use from_info instead", 1);
                 return ouster::sdk::core::get_format(info);
@@ -54,7 +54,7 @@ void init_client_packet(py::module_& module, py::module_& /*unused*/) {
             py::rv_policy::reference)
         .def_static(
             "from_info",
-            [](const SensorInfo& info) -> const PacketFormat& {
+            [](const LidarInfo& info) -> const PacketFormat& {
                 return ouster::sdk::core::get_format(info);
             },
             py::rv_policy::reference)
@@ -369,33 +369,31 @@ void init_client_packet(py::module_& module, py::module_& /*unused*/) {
         "frame_to_packets",
         [](const LidarFrame& lidar_frame, const std::shared_ptr<PacketFormat>& packet_format,
            uint32_t init_id, uint64_t prod_sn) {
-            std::vector<py::object> packets;
+            auto in_packets =
+                ouster::sdk::core::frame_to_packets(lidar_frame, packet_format, init_id, prod_sn);
 
-            auto append_pypacket = [&](Packet& packet) {
+            // Downcast and convert each packet to a shared pointer
+            std::vector<py::object> out_packets;
+            for (auto& packet : in_packets) {
                 auto copy = new Packet(std::move(packet));
                 if (copy->type() == PacketType::Lidar) {
                     std::shared_ptr<LidarPacket> shared(
                         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
                         static_cast<LidarPacket*>(copy));
-                    packets.push_back(py::cast(shared));
+                    out_packets.push_back(py::cast(shared));
                 } else if (copy->type() == PacketType::Zone) {
                     std::shared_ptr<ZonePacket> shared(
                         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
                         static_cast<ZonePacket*>(copy));
-                    packets.push_back(py::cast(shared));
+                    out_packets.push_back(py::cast(shared));
                 } else {
                     std::shared_ptr<ImuPacket> shared(
                         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
                         static_cast<ImuPacket*>(copy));
-                    packets.push_back(py::cast(shared));
+                    out_packets.push_back(py::cast(shared));
                 }
-            };
-
-            auto iter = make_lambda_iter(append_pypacket);
-            ouster::sdk::core::impl::frame_to_packets(lidar_frame, packet_format, iter, init_id,
-                                                      prod_sn);
-
-            return packets;
+            }
+            return out_packets;
         },
         py::sig("def frame_to_packets(lidar_frame: LidarFrame, packet_format: "
                 "PacketFormat, init_id: int, prod_sn: int) -> "
@@ -429,10 +427,10 @@ void init_client_packet(py::module_& module, py::module_& /*unused*/) {
                                                                       py::handle());
             },
             py::keep_alive<0, 1>())
-        .def("validate", [](const Packet& self, const SensorInfo& info,
+        .def("validate", [](const Packet& self, const LidarInfo& info,
                             const PacketFormat& format) { return self.validate(info, format); })
         .def("validate",
-             [](const Packet& self, const SensorInfo& info) { return self.validate(info); });
+             [](const Packet& self, const LidarInfo& info) { return self.validate(info); });
 
     py::enum_<PacketType>(module, "PacketType", py::is_arithmetic())
         .value("Unknown", PacketType::Unknown)
@@ -446,32 +444,12 @@ void init_client_packet(py::module_& module, py::module_& /*unused*/) {
         .value("ID", PacketValidationFailure::ID);
 
     py::class_<LidarPacket, Packet>(module, "LidarPacket")
-        .def(
-            "__init__",
-            [](LidarPacket* self, int size = 65536) {
-                PyErr_WarnEx(PyExc_FutureWarning,
-                             "LidarPacket(size: int) is deprecated, use "
-                             "LidarPacket(fmt: PacketFormat) instead",
-                             1);
-                new (self) LidarPacket(size);
-            },
-            py::arg("size") = 65536)
         .def(py::init<std::shared_ptr<PacketFormat>>())
         .def("__copy__", [](const LidarPacket& self) { return LidarPacket(self); })
         .def("__deepcopy__",
              [](const LidarPacket& self, const py::dict&) { return LidarPacket(self); });
 
     py::class_<ImuPacket, Packet>(module, "ImuPacket")
-        .def(
-            "__init__",
-            [](ImuPacket* self, int size = 65536) {
-                PyErr_WarnEx(PyExc_FutureWarning,
-                             "ImuPacket(size: int) is deprecated, use "
-                             "ImuPacket(fmt: PacketFormat) instead",
-                             1);
-                new (self) ImuPacket(size);
-            },
-            py::arg("size") = 65536)
         .def(py::init<std::shared_ptr<PacketFormat>>())
         .def("__copy__", [](const ImuPacket& self) { return ImuPacket(self); })
         .def("__deepcopy__",

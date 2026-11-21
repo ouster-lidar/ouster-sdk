@@ -58,7 +58,7 @@ It's easy to record data to a pcap file from a sensor programmatically. Let's tr
 This will capture the :class:`.core.LidarPacket`'s and :class:`.core.ImuPacket`'s data for 10
 seconds and store the pcap file along with the metadata json file into the current directory.
 
-.. note:: 
+.. note::
 
     TODO: Link to pcap write to file in MR 2
 

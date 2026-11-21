@@ -121,7 +121,7 @@ struct OUSTER_API_CLASS StreamStats {
     std::vector<uint64_t> sensor_timestamps;
 
     /**
-     * Default constructor, sets everthing to 0.
+     * Default constructor, sets everything to 0.
      */
     OUSTER_API_FUNCTION
     StreamStats() = default;
@@ -231,7 +231,7 @@ class OUSTER_API_CLASS StreamingInfo : public MetadataEntryHelper<StreamingInfo>
     /**
      * Create a StreamingInfo object from a byte array.
      *
-     * @todo Figure out why this wasnt just done as a constructor overload.
+     * @todo Figure out why this wasn't just done as a constructor overload.
      *
      * @relates MetadataEntry::from_buffer
      *

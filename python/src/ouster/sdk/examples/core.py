@@ -58,8 +58,10 @@ def configure_dual_returns(hostname: str) -> None:
     print("Retrieving sensor info..")
     with closing(sensor.SensorFrameSetSource(hostname)) as source:
         # print some useful info from
+        info = source.sensor_info[0]
+        assert isinstance(info, core.LidarInfo)
         print(
-            f"udp profile lidar: {str(source.sensor_info[0].format.udp_profile_lidar)}"
+            f"udp profile lidar: {str(info.format.udp_profile_lidar)}"
         )
 
 
@@ -70,7 +72,7 @@ def configure_sensor_params(sensor_hostname: str) -> None:
         hostname: hostname of the sensor
     """
     # [doc-stag-get-config]
-    config: core.SensorConfig = sensor.get_config(sensor_hostname)
+    config: core.LidarConfig = sensor.get_config(sensor_hostname)
     print(f"Sensor config of {sensor_hostname}:\n" +
           f"{str(config)}")
     # [doc-etag-get-config]
@@ -112,6 +114,7 @@ def fetch_sensor_info(sensor_hostname: str) -> None:
     # [doc-stag-fetch-sensor-info]
     with closing(sensor.SensorFrameSetSource(sensor_hostname)) as source:
         sensor_info = source.sensor_info[0]
+        assert isinstance(sensor_info, core.LidarInfo)
         print("Retrieved sensor info:\n")
         print(f"  serial no:        {sensor_info.sn}")
         print(f"  firmware version: {sensor_info.fw_rev}")
@@ -156,8 +159,9 @@ def filter_3d_by_range_and_azimuth(hostname: str,
     plt.title("Filtered 3D Points from {}".format(hostname))
     source = sensor.SensorFrameSetSource(hostname, lidar_port=lidar_port)
     info = source.sensor_info[0]
+    assert isinstance(info, core.LidarInfo)
     frame = next(iter(source))[0]
-    assert frame is not None
+    assert isinstance(frame, core.LidarFrame)
     source.close()
 
     # [doc-stag-filter-3d-setup]
@@ -167,8 +171,8 @@ def filter_3d_by_range_and_azimuth(hostname: str,
     range_destaggered = core.destagger(info,
                                        range_field)
 
-    # obtain destaggered xyz representation
-    xyzlut = core.XYZLut(info, use_extrinsics=True)
+    # obtain destaggered xyz representation from the LUT cached on the info
+    xyzlut = info.xyzlut_double
     cloud = xyzlut(frame)
     # [doc-etag-filter-3d-setup]
     # [doc-stag-filter-3d-destagger]
@@ -225,6 +229,8 @@ def live_plot_reflectivity(hostname: str, lidar_port: int = 7502) -> None:
                              collate=False,
                              sensor_idx=0,
                              lidar_port=lidar_port)) as stream:
+        info = stream.sensor_info[0]
+        assert isinstance(info, core.LidarInfo)
         show = True
         while show:
             for frames in stream:
@@ -233,7 +239,7 @@ def live_plot_reflectivity(hostname: str, lidar_port: int = 7502) -> None:
                     continue
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(frame.frame_id))
-                reflectivity = core.destagger(stream.sensor_info[0],
+                reflectivity = core.destagger(info,
                                               frame.field(core.ChanField.REFLECTIVITY))
                 reflectivity = (reflectivity / np.max(reflectivity) * 255).astype(np.uint8)
                 cv2.imshow("scaled reflectivity", reflectivity)
@@ -258,7 +264,7 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     # get single frame
     source = sensor.SensorFrameSetSource(hostname, lidar_port=lidar_port)
     frame = next(iter(source))[0]
-    assert frame is not None
+    assert isinstance(frame, core.LidarFrame)
     sensor_info = source.sensor_info[0]
     source.close()
 
@@ -293,7 +299,7 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     plt.show()
 
 
-def get_fname_base(info: core.SensorInfo) -> str:
+def get_fname_base(info: core.LidarInfo) -> str:
     from datetime import datetime
     time_part = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"{info.prod_line}_{info.sn}_{info.config.lidar_mode}_{time_part}"

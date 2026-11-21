@@ -26,7 +26,9 @@
 
 #include "ouster/core/defaults.h"
 #include "ouster/core/impl/logging.h"
-#include "ouster/core/metadata.h"
+#include "ouster/core/json_tools.h"
+#include "ouster/core/lidar_config.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/sensor/sensor_frame_set_source.h"
 
 using ouster::sdk::sensor::SensorHttp;
@@ -34,7 +36,7 @@ using namespace ouster::sdk::core;
 namespace ouster {
 namespace sdk {
 namespace core {
-bool parse_and_validate_metadata(const jsoncons::json& json_data, SensorInfo& sensor_info,
+bool parse_and_validate_metadata(const jsoncons::json& json_data, LidarInfo& sensor_info,
                                  ValidatorIssues& issues);
 }  // namespace core
 namespace sensor {
@@ -46,7 +48,8 @@ jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec);
 SOCKET mtp_data_socket(int port, const std::set<std::string>& udp_dest_hosts,
                        const std::string& mtp_dest_host = "", bool reuse_ports = true,
                        uint32_t rcvbuf_size = 1024 * 1024);
-void set_config(SensorHttp& sensor_http, const SensorConfig& config, uint8_t config_flags,
+void set_rcvbuf_size(SOCKET socket, uint32_t rcvbuf_size);
+void set_config(SensorHttp& sensor_http, const LidarConfig& config, uint8_t config_flags,
                 int timeout_sec);
 
 void add_socket_to_groups(SOCKET sock_fd, const std::set<std::string>& udp_dest_hosts,
@@ -68,15 +71,15 @@ void add_socket_to_groups(SOCKET sock_fd, const std::set<std::string>& udp_dest_
     }
 }
 
-Sensor::Sensor(std::string hostname, SensorConfig config)
+Sensor::Sensor(std::string hostname, LidarConfig config)
     : hostname_(std::move(hostname)), config_(std::move(config)) {}
 
-SensorInfo Sensor::fetch_metadata(int timeout) const {
+LidarInfo Sensor::fetch_metadata(int timeout) const {
     // TODO[tws] dedupe this method's logic with legacy iface
     auto http_client_ptr = http_client();
     auto data = collect_metadata(*http_client_ptr, timeout);
 
-    SensorInfo result;
+    LidarInfo result;
     ValidatorIssues issues;
     core::parse_and_validate_metadata(data, result, issues);
     if (!issues.critical.empty()) {
@@ -131,14 +134,14 @@ std::vector<Sensor> calculate_sensors(const std::vector<std::string>& sources,
     for (const auto& hostname : sources) {
         i++;
         if (!options.sensor_info.retrieve().empty()) {
-            sensors.emplace_back(hostname, SensorConfig());
+            sensors.emplace_back(hostname, LidarConfig());
             continue;
         }
-        // todo make it so I dont have to create this twice per sensor
+        // todo make it so I don't have to create this twice per sensor
         // could theoretically pass it into the Sensor constructor
         auto http_client = SensorHttp::create(hostname, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
-        auto orig_config = SensorConfig(http_client->get_config_params(true));
+        auto orig_config = LidarConfig(http_client->get_config_params(true));
 
         // calculate the correct ports for this sensor
         nonstd::optional<uint16_t> desired_lidar;
@@ -154,7 +157,7 @@ std::vector<Sensor> calculate_sensors(const std::vector<std::string>& sources,
             desired_lidar = options.lidar_port.retrieve();
         }
 
-        SensorConfig config;
+        LidarConfig config;
         if (!do_not_reinitialize) {
             if (i < static_cast<int>(input_configs.size())) {
                 config = input_configs[i];
@@ -316,8 +319,11 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
                                        double config_timeout_sec, double buffer_time_sec)
     : SensorPacketSource(sensors, {}, config_timeout_sec, buffer_time_sec) {}
 
+// Sensor setup and port/config negotiation is inherently sequential; splitting
+// obscures it.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
-                                       const std::vector<SensorInfo>& infos, double config_timeout,
+                                       const std::vector<LidarInfo>& infos, double config_timeout,
                                        double buffer_time, bool reuse_ports, uint32_t rcvbuf_size) {
     // if we need an ephemeral port, create it now
     int ephemeral_port = -1;
@@ -328,8 +334,7 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
             config.udp_port_lidar == 0 || config.udp_port_imu == 0 || config.udp_port_zm == 0;
 
         if (need_ephemeral_port) {
-            // todo this probably needs to support multicast
-            SOCKET sock = mtp_data_socket(0, {}, "", reuse_ports, rcvbuf_size);
+            SOCKET sock = mtp_data_socket(0, {}, "", reuse_ports, 0);
             if (sock == SOCKET_ERROR) {
                 close();
                 throw std::runtime_error("failed to obtain a UDP socket");
@@ -345,7 +350,7 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
     // infos
     if (!infos.empty()) {
         for (const auto& info : infos) {
-            sensor_info_.emplace_back(new SensorInfo(info));
+            sensor_info_.emplace_back(new LidarInfo(info));
         }
         if (infos.size() != sensors.size()) {
             throw std::invalid_argument(
@@ -375,7 +380,7 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         }
     } else {
         // configure sensors if necessary for the new ports
-        SensorConfig empty_config;
+        LidarConfig empty_config;
         for (const auto& sensor : sensors) {
             auto desired_config = sensor.desired_config();
 
@@ -394,10 +399,10 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         }
 
         // fetch metadata
-        // do this last so we dont wait N*reinit time to reconfigure lidars
+        // do this last so we don't wait N*reinit time to reconfigure lidars
         for (const auto& sensor : sensors) {
             sensor_info_.emplace_back(
-                new SensorInfo(sensor.fetch_metadata(static_cast<int>(config_timeout))));
+                new LidarInfo(sensor.fetch_metadata(static_cast<int>(config_timeout))));
         }
     }
 
@@ -427,7 +432,7 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
 
         // Set up the hints structure to specify the desired options (IPv4, TCP)
         memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;      // IPv4, todo dont care
+        hints.ai_family = AF_UNSPEC;      // IPv4, todo don't care
         hints.ai_socktype = SOCK_STREAM;  // TCP socket
 
         // Use getaddrinfo to resolve the address.
@@ -491,6 +496,17 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         zone_packets_.emplace_back(format_ptr);
     }
 
+    // calculate a default rcvbuf size as half the maximum frame size
+    if (rcvbuf_size == 0) {
+        for (size_t i = 0; i < formats_.size(); i++) {
+            auto frame_size =
+                sensor_info_[i]->format.lidar_packets_per_frame() * formats_[i]->lidar_packet_size;
+            rcvbuf_size = std::max<uint32_t>(rcvbuf_size, frame_size);
+        }
+        rcvbuf_size = std::max<uint32_t>(rcvbuf_size / 2, 1024 * 1024);
+        logger().info("Using default rcvbuf size of: {}", rcvbuf_size);
+    }
+
     // now open sockets
     for (auto port : ports) {
         if (port.first == ephemeral_port) {
@@ -510,9 +526,10 @@ SensorPacketSource::SensorPacketSource(const std::vector<Sensor>& sensors,
         logger().info("Opening port: {}", port.first);
     }
 
-    // if we have an ephemeral socket, add it to multicast groups
+    // if we have an ephemeral socket, add it to multicast groups and set rcvbuf size
     if (ephemeral_port > 0) {
         add_socket_to_groups(sockets_[0], multicast_addrs);
+        set_rcvbuf_size(sockets_[0], rcvbuf_size);
     }
 
     // finally create our buffer thread if requested
@@ -689,7 +706,7 @@ SensorPacketSource::InternalEvent SensorPacketSource::get_packet_internal(
         data.resize(size);
         return {source, packet_type, ClientEvent::PACKET};
     }
-    return {-1, PacketType::Unknown, ClientEvent::ERR};  // this shouldnt happen
+    return {-1, PacketType::Unknown, ClientEvent::ERR};  // this shouldn't happen
 }
 
 ClientEvent SensorPacketSource::get_packet(double timeout_sec) {
@@ -746,7 +763,7 @@ uint64_t SensorPacketSource::dropped_packets() {
     return dropped_packets_;
 }
 
-const std::vector<std::shared_ptr<SensorInfo>>& SensorPacketSource::sensor_info() const {
+const std::vector<std::shared_ptr<LidarInfo>>& SensorPacketSource::sensor_info() const {
     return sensor_info_;
 }
 
@@ -771,7 +788,7 @@ class SensorPacketIteratorImpl : public core::PacketIteratorImpl {
         int64_t timeout_ns = static_cast<int64_t>(client_->iterator_timeout_ * 1e9);
         double current_timeout_s = client_->iterator_timeout_;
         for (size_t i = 0; i < offset; i++) {
-            // get packet can return spurriously if we got bad packets
+            // get packet can return spuriously if we got bad packets
             // so need to check for timeout independently
             auto event = client_->get_packet(current_timeout_s);
             if (event.type != ClientEvent::PACKET) {
@@ -799,7 +816,7 @@ class SensorPacketIteratorImpl : public core::PacketIteratorImpl {
             current_timeout_s = client_->iterator_timeout_;
             packet_ = std::pair<int, std::shared_ptr<Packet>>(
                 event.source,
-                std::make_shared<Packet>(event.packet()));  // todo dont copy
+                std::make_shared<Packet>(event.packet()));  // todo don't copy
         }
         return false;
     }

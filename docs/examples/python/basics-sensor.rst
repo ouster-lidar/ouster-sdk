@@ -48,7 +48,7 @@ Obtaining Sensor Metadata
 ==========================
 
 Ouster sensors require metadata to interpret the readings of the sensor. Represented by the object
-:py:class:`.core.SensorInfo`, metadata fields include configuration parameters such as ``lidar_mode`` and
+:py:class:`.core.LidarInfo`, metadata fields include configuration parameters such as ``lidar_mode`` and
 sensor intrinsics like ``beam_azimuth_angles``.
 
 When you work with a sensor, the client will automatically fetch the metadata. Recorded

@@ -11,9 +11,13 @@
 #include <exception>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
+#include "ouster/core/camera_frame.h"
+#include "ouster/core/camera_info.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/frame_set.h"
 #include "ouster/core/frame_set_source.h"
 #include "ouster/core/lidar_frame.h"
@@ -29,6 +33,7 @@ namespace sdk {
 namespace osf {
 
 class LidarFrameStream;
+class CameraFrameStream;
 class CollationStream;
 class SensorInfoStream;
 class FrameSetSourceMetadataStream;
@@ -46,10 +51,6 @@ class OUSTER_API_CLASS OsfDropFrameError : public std::logic_error {
     OUSTER_API_FUNCTION
     OsfDropFrameError(const std::string& what) : std::logic_error(what) {}
 };
-
-/// @deprecated Use OsfDropFrameError instead
-OUSTER_DEPRECATED_TYPE(OsfDropScanError, OsfDropFrameError, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-typedef OsfDropFrameError OsfDropScanError;
 
 /**
  * Chunks writing strategy that decides when and how exactly write chunks
@@ -92,7 +93,7 @@ class OUSTER_API_CLASS ChunksWriter {
     virtual uint32_t chunk_size() const = 0;
 
     /**
-     * Default deconstructor.
+     * Default destructor.
      */
     OUSTER_API_FUNCTION
     virtual ~ChunksWriter() = default;
@@ -110,8 +111,6 @@ class WriterImpl;
  */
 class OUSTER_API_CLASS Writer {
     friend class StreamingLayoutCW;
-    friend class AsyncWriter;  // TODO[tws] provide access to necessary
-                               // internals through public iface
 
    public:
     /**
@@ -145,7 +144,7 @@ class OUSTER_API_CLASS Writer {
      *                            Writer should encode the OSF.
      */
     OUSTER_API_FUNCTION
-    Writer(const std::string& filename, const ouster::sdk::core::SensorInfo& info,
+    Writer(const std::string& filename, const ouster::sdk::core::LidarInfo& info,
            const std::vector<std::string>& fields_to_write = std::vector<std::string>(),
            uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
 
@@ -163,7 +162,28 @@ class OUSTER_API_CLASS Writer {
      *                            Writer should encode the OSF.
      */
     OUSTER_API_FUNCTION
-    Writer(const std::string& filename, const std::vector<ouster::sdk::core::SensorInfo>& info,
+    Writer(const std::string& filename, const std::vector<ouster::sdk::core::LidarInfo>& info,
+           const std::vector<std::string>& fields_to_write = std::vector<std::string>(),
+           uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
+
+    /**
+     * @param[in] filename The file name to output to.
+     * @param[in] info The sensor info vector to use for a multi stream OSF
+     *                 file. Each entry may be a LidarInfo or CameraInfo; the
+     *                 corresponding lidar or camera stream is created in the
+     *                 order the infos are provided.
+     * @param[in] fields_to_write The fields from frames to actually save into
+     *                            the OSF. If not provided uses the fields from
+     *                            the first saved lidar frame for this sensor.
+     *                            This parameter is optional.
+     * @param[in] chunk_size The chunksize to use for the OSF file, this
+     *                       parameter is optional.
+     * @param[in] encoder An optional Encoder instance for configuring how the
+     *                            Writer should encode the OSF.
+     */
+    OUSTER_API_FUNCTION
+    Writer(const std::string& filename,
+           const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& info,
            const std::vector<std::string>& fields_to_write = std::vector<std::string>(),
            uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
 
@@ -268,7 +288,7 @@ class OUSTER_API_CLASS Writer {
 
     /**
      * Adds info about a sensor to the OSF and returns the stream index to
-     * to write frames to it's stream.
+     * write frames to its stream.
      *
      * @param[in] info The info of the sensor to add to the file.
      * @param[in] fields_to_write The fields from frames to actually save into
@@ -276,78 +296,112 @@ class OUSTER_API_CLASS Writer {
      *                            the first saved lidar frame for this sensor.
      *                            This parameter is optional.
      *
-     * @return The stream index for the newly added sensor.
+     * @return The unified stream index for the newly added sensor (its position
+     *         in registration order; see save()).
      */
     OUSTER_API_FUNCTION
     uint32_t add_sensor(
-        const ouster::sdk::core::SensorInfo& info,
+        const ouster::sdk::core::LidarInfo& info,
+        const std::vector<std::string>& fields_to_write = std::vector<std::string>());
+
+    /**
+     * Adds a camera to the OSF and returns the unified stream index used to
+     * address it in subsequent save() calls. The CameraInfo is written to the
+     * OSF footer via a CameraSensor metadata entry and the created
+     * CameraFrameStream references that entry by id.
+     *
+     * @param[in] info The CameraInfo describing the camera.
+     * @param[in] fields_to_write The fields from camera frames to actually save
+     *                            into the OSF. If not provided, all fields on
+     *                            each saved camera frame are written. This
+     *                            parameter is optional.
+     * @return The unified stream index for the newly added camera (its position
+     *         in registration order; see save()).
+     */
+    OUSTER_API_FUNCTION
+    uint32_t add_sensor(
+        const ouster::sdk::core::CameraInfo& info,
         const std::vector<std::string>& fields_to_write = std::vector<std::string>());
 
     /**
      * Save a single frame to the specified stream_index in an OSF
      * file.
      *
-     * The concept of the stream_index is related to the SensorInfo vector.
+     * The frame may be a LidarFrame or a CameraFrame; the correct stream type
+     * is selected based on the concrete frame type. The stream_index is the
+     * unified stream index: the sensor's position in registration order (the
+     * order sensors were passed to the constructor and/or added via
+     * add_sensor()), which is also the order exposed by
+     * FrameSetSource::sensor_info() on read. Lidar and camera streams share this
+     * single index space, so a save() to slot i writes to whichever sensor
+     * (lidar or camera) was registered at position i; the frame's concrete type
+     * must match that slot's kind.
+     *
      * Consider the following:
      @code{.cpp}
-     SensorInfo info1; // The first sensor in this OSF file
-     SensorInfo info2; // The second sensor in this OSF file
-     SensorInfo info3; // The third sensor in this OSF file
+     LidarInfo lidar1;   // registered at index 0
+     CameraInfo camera;  // registered at index 1
+     LidarInfo lidar2;   // registered at index 2
 
-     Writer output = Writer(filename, {info1, info2, info3});
+     Writer output = Writer(filename, {lidar1, camera, lidar2});
 
-     LidarFrame frame = RANDOM_FRAME_HERE;
+     // Save a LidarFrame to lidar1 (index 0):
+     output.save(0, lidar_frame);
 
-     // To save the LidarFrame to the first sensor, you would do the
-     // following
-     output.save(0, frame);
+     // Save a CameraFrame to camera (index 1):
+     output.save(1, camera_frame);
 
-     // To save the LidarFrame to the second sensor, you would do the
-     // following
-     output.save(1, frame);
-
-     // To save the LidarFrame to the third sensor, you would do the
-     // following
-     output.save(2, frame);
+     // Save a LidarFrame to lidar2 (index 2):
+     output.save(2, lidar_frame);
      @endcode
      *
      * @throws std::logic_error Will throw exception on writer being closed.
      * @throws std::logic_error ///< Will throw exception on
      *                          ///< out of bound stream_index.
+     * @throws std::invalid_argument Will throw exception on an unsupported
+     *                               frame type, or if the frame's kind does not
+     *                               match the sensor registered at stream_index.
      *
-     * @param[in] stream_index The index of the corrosponding SensorInfo to
-     *                         use.
+     * @param[in] stream_index The unified stream index (registration order) of
+     *                         the sensor to write this frame to.
      * @param[in] frame The frame to save.
      */
     OUSTER_API_FUNCTION
-    void save(uint32_t stream_index, const ouster::sdk::core::LidarFrame& frame);
+    void save(uint32_t stream_index, const ouster::sdk::core::Frame& frame);
 
     /**
      * Save a single frame with the specified timestamp to the
      * specified stream_index in an OSF file.
      *
+     * The frame may be a LidarFrame or a CameraFrame; the correct stream type
+     * is selected based on the concrete frame type. See the other save()
+     * overload for the meaning of stream_index (unified registration order).
+     *
      * @throws std::logic_error Will throw exception on writer being closed.
      * @throws std::logic_error ///< Will throw exception on
      *                          ///< out of bound stream_index.
+     * @throws std::invalid_argument Will throw exception on an unsupported
+     *                               frame type, or if the frame's kind does not
+     *                               match the sensor registered at stream_index.
      *
-     * @param[in] stream_index The index of the corrosponding SensorInfo to
-     *                         use.
+     * @param[in] stream_index The unified stream index (registration order) of
+     *                         the sensor to write this frame to.
      * @param[in] frame The frame to save.
      * @param[in] timestamp Receive timestamp to index this frame with.
      */
     OUSTER_API_FUNCTION
-    void save(uint32_t stream_index, const ouster::sdk::core::LidarFrame& frame,
+    void save(uint32_t stream_index, const ouster::sdk::core::Frame& frame,
               ouster::sdk::osf::ts_t timestamp);
 
     /**
      * Save collation of frames to the OSF file.
      *
-     * The concept of the stream_index is related to the SensorInfo vector.
+     * The concept of the stream_index is related to the LidarInfo vector.
      * Consider the following:
      @code{.cpp}
-     SensorInfo info1; // The first sensor in this OSF file
-     SensorInfo info2; // The second sensor in this OSF file
-     SensorInfo info3; // The third sensor in this OSF file
+     LidarInfo info1; // The first sensor in this OSF file
+     LidarInfo info2; // The second sensor in this OSF file
+     LidarInfo info3; // The third sensor in this OSF file
 
      Writer output = Writer(filename, {info1, info2, info3});
 
@@ -426,25 +480,6 @@ class OUSTER_API_CLASS Writer {
      */
     OUSTER_API_FUNCTION
     uint32_t chunk_size() const;
-
-    /**
-     * Return the sensor info vector.
-     * Consider the following:
-     @code{.cpp}
-     SensorInfo info1; // The first sensor in this OSF file
-     SensorInfo info2; // The second sensor in this OSF file
-     SensorInfo info3; // The third sensor in this OSF file
-
-     Writer output = Writer(filename, {info1, info2, info3});
-
-     // The following will be true
-     output.sensor_info() == std::vector<SensorInfo>{info1, info2, info3};
-     @endcode
-     *
-     * @return The sensor info vector.
-     */
-    OUSTER_API_FUNCTION
-    const std::vector<ouster::sdk::core::SensorInfo>& sensor_info() const;
 
     /**
      * Finish file with a proper metadata object, and header.
@@ -536,6 +571,38 @@ class OUSTER_API_CLASS Writer {
     void save_internal(uint32_t stream_index, const ouster::sdk::core::LidarFrame& frame,
                        const ts_t time);
 
+    void save_camera_internal(uint32_t camera_stream_index,
+                              const ouster::sdk::core::CameraFrame& frame, ts_t time);
+
+    /**
+     * Duplicate a sensor's metadata into the data section, so that it can be
+     * recovered from a file whose metadata footer never reached disk (e.g. the
+     * writing process died mid-recording). Written once per stream, on the
+     * first frame saved to it, for both lidars and cameras.
+     *
+     * @param[in] sensor_info The LidarInfo/CameraInfo to duplicate.
+     * @param[in] sensor_meta_id Id of the LidarSensor/CameraSensor footer entry
+     *                           holding this metadata.
+     * @param[in] frame_stream_id Id of the frame stream the metadata describes.
+     * @param[in] time Timestamp to index the message by, if it is the first.
+     */
+    void save_sensor_info_message(std::shared_ptr<ouster::sdk::core::SensorInfo> sensor_info,
+                                  uint32_t sensor_meta_id, uint32_t frame_stream_id, ts_t time);
+
+    /**
+     * Save a frame addressed by its unified (registration-order) stream index.
+     * Translates the unified index to the concrete per-type stream, validates
+     * that the frame kind matches the registered slot, and dispatches to
+     * save_internal()/save_camera_internal(). Shared by the public save()
+     * overloads.
+     *
+     * @param[in] stream_index Unified stream index (into stream_order_).
+     * @param[in] frame The frame to save.
+     * @param[in] time Timestamp to use to index the frame.
+     */
+    void save_frame_to_slot(uint32_t stream_index, const ouster::sdk::core::Frame& frame,
+                            ts_t time);
+
     void ensure_lidar_stream(uint32_t stream_index, const ouster::sdk::core::LidarFrame& frame,
                              const ts_t time);
 
@@ -547,14 +614,14 @@ class OUSTER_API_CLASS Writer {
 
     /**
      * Writes buf to the file with CRC32 appended and return the number of
-     * bytes writen to the file
+     * bytes written to the file
      *
      * @throws std::logic_error Exception on bad file position.
      * @throws std::logic_error Exception on a closed writer object.
      *
      * @param[in] buf The buffer to append.
      * @param[in] size The size of the buffer to append.
-     * @return The number of bytes writen to the OSF file.
+     * @return The number of bytes written to the OSF file.
      */
     uint64_t append(const uint8_t* buf, uint64_t size);
 
@@ -608,7 +675,7 @@ class OUSTER_API_CLASS Writer {
     ts_t end_ts_{ts_t::min()};
 
     /**
-     * The timestamp we save all SensorInfo messages at.
+     * The timestamp we save all LidarInfo messages at.
      * Determined by time of first saved frame.
      */
     ts_t info_ts_{ts_t::min()};
@@ -629,7 +696,7 @@ class OUSTER_API_CLASS Writer {
     MetadataStore meta_store_{};
 
     /**
-     * ChunksWriter is reponsible for chunking strategy.
+     * ChunksWriter is responsible for chunking strategy.
      */
     std::shared_ptr<ChunksWriter> chunks_writer_{nullptr};
 
@@ -663,9 +730,39 @@ class OUSTER_API_CLASS Writer {
     std::unique_ptr<ouster::sdk::osf::CollationStream> collation_stream_;
 
     /**
-     * The internal SensorInfo store ordered by stream_index.
+     * Camera stream index to CameraFrameStream metadata id map.
      */
-    std::vector<ouster::sdk::core::SensorInfo> sensor_info_;
+    std::map<uint32_t, uint32_t> camera_meta_id_;
+
+    /**
+     * Camera stream index to CameraFrameStream map.
+     */
+    std::map<uint32_t, std::unique_ptr<ouster::sdk::osf::CameraFrameStream>> camera_streams_;
+
+    /**
+     * Camera stream indices whose CameraInfo has already been duplicated into
+     * the data section for recovery. Cameras register their stream up front in
+     * add_sensor(), so unlike lidars the stream's own presence can't be used to
+     * tell whether that has happened yet.
+     */
+    std::set<uint32_t> camera_info_saved_;
+
+    /**
+     * Describes a single registered stream slot in registration order.
+     */
+    struct StreamSlot {
+        bool is_camera;  ///< true for a camera stream, false for a lidar stream
+        uint32_t index;  ///< index into the per-type stream map (lidar or camera)
+    };
+
+    /**
+     * Registration order of sensor streams (as passed to the constructor or
+     * added via add_sensor()), lidar and camera possibly
+     * interleaved. save(FrameSet) uses this to map each position in a collation
+     * to its registered stream, so the collation's frame order only needs to
+     * match the order sensors were registered - not "all lidar then all camera".
+     */
+    std::vector<StreamSlot> stream_order_;
 
     // TODO[tws] make private, access from LidarFrameStream via "friend class"
     std::shared_ptr<Encoder> encoder_;
@@ -674,7 +771,7 @@ class OUSTER_API_CLASS Writer {
 class ChunkBuilderImpl;
 
 /**
- * Encapsulate chunk seriualization operations.
+ * Encapsulate chunk serialization operations.
  */
 class OUSTER_API_CLASS ChunkBuilder {
    public:

@@ -1,9 +1,9 @@
-"""Miscellaneous utilites."""
+"""Miscellaneous utilities."""
 
 import os.path
 from pathlib import Path
 from typing import Optional, List
-from ouster.sdk.core import SensorInfo
+from ouster.sdk.core import LidarInfo
 
 
 data_must_be_a_file_err = "The source parameter must be a path to a file."
@@ -22,10 +22,10 @@ def _check_sensor_metadata_for_duplicates(data_path, metas):
     """
     serial_numbers = set()
     for meta in metas:
-        # Open each file, read its content, and create a SensorInfo object
+        # Open each file, read its content, and create a LidarInfo object
         with open(meta) as file:
             meta_content = file.read()
-            si = SensorInfo(meta_content)
+            si = LidarInfo(meta_content)
         if si.sn in serial_numbers:
             s = ["The following metadata files identified for "
                  f"{data_path} contain configuration for the same sensor {si.sn}. Files: "

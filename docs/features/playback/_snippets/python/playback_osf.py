@@ -8,7 +8,7 @@ def osf_create_frames(osf_file: str) -> None:
     # [doc-etag-osf-create-imports]
     # [doc-stag-osf-create]
     # Create sensor info (single sensor) and writer
-    info = core.SensorInfo.from_default(core.LidarMode._512x10)
+    info = core.LidarInfo.from_default(core.LidarMode._512x10)
     writer = osf.Writer(osf_file, info)
     # Allocate an empty frame that matches the metadata
     frame = core.LidarFrame(info)
@@ -28,15 +28,16 @@ def osf_write_frames(hostname: str, output_file: str, n_frames: int = 100) -> No
     # [doc-etag-osf-write-imports]
     # [doc-stag-osf-write-setup]
     source = open_source(hostname)
-    info = source.sensor_info[0]
+    infos = source.sensor_info
     # [doc-etag-osf-write-setup]
     # [doc-stag-osf-write]
-    writer = osf.Writer(output_file, info)
+    writer = osf.Writer(output_file, infos)
     written = 0
 
     for frame_set in source:
         for idx, frame in enumerate(frame_set):
-            if frame is None: continue # noqa
+            if frame is None:
+                continue
             writer.save(idx, frame)
         written += 1
         if written >= n_frames: break # noqa

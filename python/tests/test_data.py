@@ -6,18 +6,18 @@ Tests for lidar data parsing.
 
 Checks that the output of parsing hasn't changed unexpectedly.
 """
-from copy import deepcopy
+from copy import copy, deepcopy
 
 import numpy as np
 import pytest
 
-from ouster.sdk import core
+from ouster.sdk import core, open_source
 from ouster.sdk._bindings.client import frame_to_packets
 from ouster.sdk.core import PacketValidationFailure, PacketFormat, FieldType, LidarFrame
 
 
 def fake_sensor_info(h: int, w: int, profile = core.UDPProfileLidar.LEGACY):
-    info = core.SensorInfo()
+    info = core.LidarInfo()
     info.format.columns_per_packet = 16
     info.format.pixels_per_column = h
     info.format.columns_per_frame = w
@@ -28,7 +28,7 @@ def fake_sensor_info(h: int, w: int, profile = core.UDPProfileLidar.LEGACY):
     return info
 
 
-def test_make_packets(meta: core.SensorInfo) -> None:
+def test_make_packets(meta: core.LidarInfo) -> None:
     pf = PacketFormat.from_info(meta)
 
     p1 = core.ImuPacket(pf)
@@ -40,7 +40,7 @@ def test_make_packets(meta: core.SensorInfo) -> None:
     assert p3.validate(meta) == PacketValidationFailure.NONE
 
 
-def test_imu_packet(meta: core.SensorInfo) -> None:
+def test_imu_packet(meta: core.LidarInfo) -> None:
     pf = PacketFormat.from_info(meta)
 
     p = core.ImuPacket(pf)
@@ -56,7 +56,7 @@ def test_imu_packet(meta: core.SensorInfo) -> None:
     assert pf.imu_la_z(p.buf) == 0.0
 
 
-def test_lidar_packet(meta: core.SensorInfo) -> None:
+def test_lidar_packet(meta: core.LidarInfo) -> None:
     """Test reading and writing values from empty packets."""
     pf = PacketFormat(meta)
     p = core.LidarPacket(pf)
@@ -191,7 +191,7 @@ def test_frame_field_ref() -> None:
 @pytest.mark.parametrize(
     'field',
     ['status', "timestamp", "alert_flags", "body_to_world",
-     "measurement_id", "packet_timestamp"])
+     "measurement_id", "receive_timestamp"])
 def test_frame_header_ref(field: str) -> None:
     """Test that header references keep frames alive."""
 
@@ -425,6 +425,115 @@ def test_frame_eq_fields() -> None:
     assert ls5 != ls4
 
 
+def test_frame_eq_covers_every_member() -> None:
+    """Every LidarFrame member participates in equality.
+
+    Each case perturbs exactly one member of an otherwise identical pair.
+    """
+    def pair():
+        info = fake_sensor_info(32, 1024)
+        return core.LidarFrame(info), core.LidarFrame(info)
+
+    a, b = pair()
+    assert a == b
+    b.status[0] = 1  # bit 0 = valid
+    assert a != b
+
+    a, b = pair()
+    b.alert_flags[0] = 7
+    assert a != b
+
+    a, b = pair()
+    b.shutdown_countdown = 3
+    assert a != b
+
+    a, b = pair()
+    b.shot_limiting_countdown = 5
+    assert a != b
+
+    a, b = pair()
+    b.measurement_id[0] = 42
+    assert a != b
+
+    a, b = pair()
+    b.frame_id = 9
+    assert a != b
+
+    a, b = pair()
+    b.frame_status = 9
+    assert a != b
+
+    a, b = pair()
+    b.timestamp[0] = 1234
+    assert a != b
+
+    a, b = pair()
+    b.body_to_world[0][0, 3] = 1.0
+    assert a != b
+
+    a, b = pair()
+    b.field(core.ChanField.RANGE)[0, 0] = 1
+    assert a != b
+
+
+def test_frame_eq_of_copy() -> None:
+    """A copy of a fully perturbed frame still compares equal."""
+    frame = core.LidarFrame(fake_sensor_info(32, 1024))
+    frame.frame_id = 7
+    frame.frame_status = 3
+    frame.shutdown_countdown = 2
+    frame.shot_limiting_countdown = 1
+    frame.status[0] = 1
+    frame.alert_flags[0] = 4
+    frame.measurement_id[1] = 5
+    frame.timestamp[1] = 99
+    frame.field(core.ChanField.RANGE)[1, 1] = 1234
+
+    assert copy(frame) == frame
+    assert deepcopy(frame) == frame
+    assert not (copy(frame) != frame)
+
+
+def test_camera_frame_eq() -> None:
+    """CameraFrame compares by value, not by identity."""
+    assert core.CameraFrame() == core.CameraFrame()
+    assert not (core.CameraFrame() != core.CameraFrame())
+
+    sized = core.CameraFrame()
+    sized.w, sized.h = 4, 3
+    assert sized != core.CameraFrame()
+    assert copy(sized) == sized
+    assert deepcopy(sized) == sized
+
+    # field contents are compared
+    with_field = core.CameraFrame()
+    with_field.w, with_field.h = 4, 3
+    with_field.add_field("RANGE", np.full((3, 4), 2000, dtype=np.uint32))
+    same = copy(with_field)
+    assert with_field == same
+    same.field("RANGE")[0, 0] = 1
+    assert with_field != same
+
+    # timestamps are compared
+    stamped = core.CameraFrame()
+    stamped.timestamp[0] = 1234
+    assert stamped != core.CameraFrame()
+
+
+def test_frame_eq_across_types() -> None:
+    """Frames of different concrete types are never equal."""
+    lidar = core.LidarFrame(fake_sensor_info(32, 1024))
+    camera = core.CameraFrame()
+
+    assert lidar != camera
+    assert camera != lidar
+    assert not (lidar == camera)
+
+    # and comparison against a non-frame is False rather than an error
+    assert lidar != 5
+    assert camera != "not a frame"
+
+
 def test_frame_zero_init() -> None:
     """Test that frame fields and headers are zero initialized."""
     ls = core.LidarFrame(fake_sensor_info(
@@ -600,7 +709,7 @@ def test_frame_copy() -> None:
         ls1.field("custom4") == 123) == ls1.h * ls1.w
 
 
-def test_packet_writer_bindings(meta: core.SensorInfo) -> None:
+def test_packet_writer_bindings(meta: core.LidarInfo) -> None:
     pf = PacketFormat.from_info(meta)
     packet = core.LidarPacket(pf)
 
@@ -793,32 +902,32 @@ def test_lidar_frame_min_max_timestamp() -> None:
     ls = core.LidarFrame(fake_sensor_info(
         64, 1024,
         core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL))
-    assert len(ls.packet_timestamp) > 6  # just to make sure the logic of this test doesnt break
+    assert len(ls.receive_timestamp) > 6  # just to make sure the logic of this test doesn't break
 
-    cpp = ls.w // len(ls.packet_timestamp)
+    cpp = ls.w // len(ls.receive_timestamp)
     # set all packets as valid except packet 1
     ls.status[:] = 1
     ls.status[cpp:cpp + cpp] = 0
 
-    ls.packet_timestamp[:] = 5
-    ls.packet_timestamp[0] = 10
-    ls.packet_timestamp[1] = 1000
-    ls.packet_timestamp[5] = 100
+    ls.receive_timestamp[:] = 5
+    ls.receive_timestamp[0] = 10
+    ls.receive_timestamp[1] = 1000
+    ls.receive_timestamp[5] = 100
 
     # make sure it picks 100 as max despite it not being the "last valid"
-    assert ls.get_max_valid_packet_timestamp() == 100
+    assert ls.get_max_valid_receive_timestamp() == 100
     # make sure it picks 5 as min despite it not being the "first valid"
-    assert ls.get_min_valid_packet_timestamp() == 5
+    assert ls.get_min_valid_receive_timestamp() == 5
 
     # validate that it checks zm packets
     zpt = np.zeros((1,), np.uint64)
     zpt[0] = 101
     ls.add_field("ZONE_PACKET_TIMESTAMP", zpt, core.FieldClass.FRAME_FIELD)
-    assert ls.get_max_valid_packet_timestamp() == 101
-    assert ls.get_min_valid_packet_timestamp() == 5
+    assert ls.get_max_valid_receive_timestamp() == 101
+    assert ls.get_min_valid_receive_timestamp() == 5
     ls.field("ZONE_PACKET_TIMESTAMP")[0] = 4
-    assert ls.get_max_valid_packet_timestamp() == 100
-    assert ls.get_min_valid_packet_timestamp() == 4
+    assert ls.get_max_valid_receive_timestamp() == 100
+    assert ls.get_min_valid_receive_timestamp() == 4
 
     # validate that it checks imu packets
     ipt = np.zeros((8,), np.uint64)
@@ -830,8 +939,40 @@ def test_lidar_frame_min_max_timestamp() -> None:
     istat[2 * mpp] = 1
     istat[4 * mpp] = 3
     ls.add_field("IMU_STATUS", istat, core.FieldClass.FRAME_FIELD)
-    assert ls.get_max_valid_packet_timestamp() == 102
-    assert ls.get_min_valid_packet_timestamp() == 3
+    assert ls.get_max_valid_receive_timestamp() == 102
+    assert ls.get_min_valid_receive_timestamp() == 3
+
+    # empty IMU fields should not crash timestamp helpers
+    empty_imu_ls = core.LidarFrame(fake_sensor_info(
+        64, 1024,
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL))
+    empty_imu_ls.status[:] = 1
+    empty_imu_ls.receive_timestamp[:] = 5
+    empty_imu_ls.add_field("IMU_PACKET_TIMESTAMP", np.zeros((0,), np.uint64),
+                           core.FieldClass.FRAME_FIELD)
+    empty_imu_ls.add_field("IMU_STATUS", np.zeros((0,), np.uint16),
+                           core.FieldClass.FRAME_FIELD)
+    assert empty_imu_ls.get_first_valid_receive_timestamp() == 5
+    assert empty_imu_ls.get_last_valid_receive_timestamp() == 5
+    assert empty_imu_ls.get_min_valid_receive_timestamp() == 5
+    assert empty_imu_ls.get_max_valid_receive_timestamp() == 5
+
+
+def test_get_field_types_requires_imu_enabled() -> None:
+    """Non-legacy IMU fields are only exposed when the IMU stream is enabled."""
+    info = fake_sensor_info(
+        64, 1024,
+        core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL)
+    info.format.udp_profile_imu = core.UDPProfileIMU.ACCEL32_GYRO32_NMEA
+    info.format.imu_packets_per_frame = 8
+    info.format.imu_measurements_per_packet = 8
+
+    field_names = {ft.name for ft in core.get_field_types(info)}
+    assert core.ChanField.IMU_PACKET_TIMESTAMP not in field_names
+
+    info.format.imu_enabled = True
+    field_names = {ft.name for ft in core.get_field_types(info)}
+    assert core.ChanField.IMU_PACKET_TIMESTAMP in field_names
 
 
 def test_lidar_frame_fieldtype_extra_dims() -> None:
@@ -907,3 +1048,16 @@ def test_lidar_frame_zones_access():
     assert frame.zones is not None
     assert frame.zones.shape == (0,)
     assert frame.zones.dtype == ZoneState.dtype()
+
+
+def test_string_field_gps(test_data_dir):
+    """Validate that string fields are mutable and have the right shape/content"""
+    src = open_source(str(test_data_dir / "osfs" / "gps_data.osf"))
+    scan = next(iter(src))[0]
+    strings = scan.field("POSITION_STRING")
+    assert strings.shape == (8, )
+    assert strings[0] == "$GPRMC,035722,A,3745.8353,N,12224.8498,W,000.0,299.6,101225,013.9,E,D*05\r\n".encode('utf-8')
+
+    new_content = "test".encode('utf-8')
+    strings[0] = new_content
+    assert strings[0] == new_content

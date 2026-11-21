@@ -8,6 +8,7 @@ docs
 examples
 ouster_algorithm
 ouster_core
+ouster_io
 ouster_library
 ouster_mapping
 ouster_osf

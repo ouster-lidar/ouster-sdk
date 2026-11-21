@@ -3,14 +3,14 @@ import atexit
 import click
 import os
 import time
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
 import numpy as np
 from typing import (cast, Dict, Union, Tuple, List, Iterator, Iterable, Optional, Set)
 from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
-from ouster.sdk.core import (LidarFrame, FrameSet, ChanField, XYZLut,
-                             destagger, SensorInfo, LidarPacket, ImuPacket,
+from ouster.sdk.core import (Frame, LidarFrame, FrameSet, ChanField,
+                             destagger, LidarInfo, SensorInfo, LidarPacket, ImuPacket,
                              PacketSource, ZonePacket, UDPProfileIMU, FieldClass)
 from ouster.sdk import osf, open_packet_source
 from ouster.sdk.core import (io_type_from_extension, OusterIoType)
@@ -21,6 +21,8 @@ import ouster.sdk._bindings.pcap as _pcap
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
                           source_multicommand,
+                          warn_if_camera_streams,
+                          sensor_frame_xyzlut,
                           _join_with_conjunction)
 from .source_bag import _source_to_bag_iter  # type: ignore[attr-defined]
 
@@ -35,7 +37,8 @@ _file_exists_error = lambda filename: (f"Error: File '{filename}' already exists
 ))
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
-@click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('-d', '--dir', 'directory', default="", type=click.Path(file_okay=False, dir_okay=True),
+              help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option('--duration', '-D', default=None, type=float, help="Duration to record")
 @click.option('--ros2', is_flag=True, default=False, help="If true, save this as a ROS2 bag file.")
@@ -43,10 +46,10 @@ _file_exists_error = lambda filename: (f"Error: File '{filename}' already exists
               help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED)
-def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
+def source_save_raw(ctx: SourceCommandContext, prefix: str, directory: str, filename: str,
                     overwrite: bool, duration: Optional[float], ros2: bool,
                     split: Optional[int], **kwargs) -> None:
-    """ Save raw packets from the source. Does not support chaining. Supports Bag and PCAP formats."""
+    """ Save raw packets from the source. Does not support chaining. Supports BAG and PCAP formats."""
     uri = ctx.source_uri
     if uri is None:
         raise RuntimeError("Unexpected condition")
@@ -71,11 +74,11 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     packets = open_packet_source(source_list, **ctx.source_options)  # type: ignore
 
     if extension == "pcap":
-        save_pcap_impl(packets, filename, prefix, dir, raw=True, overwrite=overwrite,
+        save_pcap_impl(packets, filename, prefix, directory, raw=True, overwrite=overwrite,
                        metadata=packets.sensor_info, duration=duration, split=split)
     elif extension == "bag":
         _source_to_bag_iter(packets, raw=True, metadata=packets.sensor_info,
-                           prefix=prefix, dir=dir, filename=filename,
+                           prefix=prefix, dir=directory, filename=filename,
                            overwrite=overwrite, duration=duration, ros2=ros2, split=split)
 
 
@@ -85,19 +88,22 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 ))
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
-@click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('-d', '--dir', 'directory', default="", type=click.Path(file_okay=False, dir_okay=True),
+              help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option("--split", default=None, type=int,
               help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
-def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
+def source_save_pcap(ctx: SourceCommandContext, prefix: str, directory: str, filename: str,
                      overwrite: bool, split: Optional[int], **kwargs) -> None:
     """Save source as a PCAP"""
     if ctx.frame_set_iter is None or ctx.frame_set_source is None:
         raise RuntimeError("unexpected condition")
 
-    ctx.frame_set_iter = save_pcap_impl(ctx.frame_set_iter, filename, prefix, dir, False,
+    warn_if_camera_streams(ctx.frame_set_source.sensor_info, "save (pcap)")
+
+    ctx.frame_set_iter = save_pcap_impl(ctx.frame_set_iter, filename, prefix, directory, False,
                                    overwrite, ctx.frame_set_source.sensor_info, split=split)
 
 
@@ -107,7 +113,8 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 ))
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
-@click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('-d', '--dir', 'directory', default="", type=click.Path(file_okay=False, dir_okay=True),
+              help="Output directory.")
 @click.option('-c', '--continue-anyways', is_flag=True, default=False, help="Continue saving "
               "frames after an error is encountered, dropping bad data if necessary.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
@@ -115,14 +122,14 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 @click.option("--compression-level", default=1, help="Specifies the level of compression for OSF files. Higher values "
     "are slower but more space-efficient; lower values are faster but less space-efficient.", type=click.IntRange(0, 9))
 @click.option("--png", is_flag=True, default=False, help="Save using PNG compression instead of the default ZPNG. "
-              "See --legacy for older SDK compatibility.")
+              "See '--legacy' for older SDK compatibility.")
 @click.option("--legacy", is_flag=True, default=False, help="Save in a format compatible with older SDKs (0.12-0.15). "
               "Uses PNG compression and drops unsupported field types (e.g. CHAR, ZONE_STATE).")
 @click.option("--split", default=None, type=int,
               help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
-def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
+def source_save_osf(ctx: SourceCommandContext, prefix: str, directory: str, filename: str,
                     overwrite: bool, ts: str, continue_anyways: bool, compression_level: int,
                     png: bool, legacy: bool, split: Optional[int], **kwargs) -> None:
     """Save source as an OSF"""
@@ -130,10 +137,17 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     if ctx.frame_set_source is None:
         raise RuntimeError("Internal error: expected frame source to be set in context")
     frames = ctx.frame_set_iter
+    # The writer registers a stream per SensorInfo (lidar or camera) so the
+    # FrameSet size matches the number of registered streams on save().
     info = ctx.frame_set_source.sensor_info
+    lidar_info = [i for i in info if isinstance(i, LidarInfo)]
 
-    # Automatic file naming
-    filename = determine_filename(filename=filename, info=info[0], extension=".osf", prefix=prefix, dir=dir)
+    # Automatic file naming. Camera-only sources (e.g. a ZED camera) have no
+    # lidar sensors; fall back to the first sensor info in that case (naming
+    # only relies on lidar-specific fields when no explicit filename is given).
+    naming_info = lidar_info[0] if lidar_info else info[0]
+    filename = determine_filename(filename=filename, info=naming_info, extension=".osf",
+                                  prefix=prefix, dir=directory)
     originalfilename = filename
     create_directories_if_missing(filename)
 
@@ -146,9 +160,9 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     # Initialize osf writer
     # --legacy implies PNG compression
     if png or legacy:
-        encoder = osf.Encoder(osf.PngLidarFrameEncoder(compression_level))
+        encoder = osf.Encoder(osf.PngFrameEncoder(compression_level))
     else:
-        encoder = osf.Encoder(osf.ZPngLidarFrameEncoder(compression_level))
+        encoder = osf.Encoder(osf.ZPngFrameEncoder(compression_level))
 
     osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
 
@@ -163,8 +177,8 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     file_number = 1
     dropped_fields: Set[str] = set()
 
-    use_packet_timestamps = (ts == "packet")
-    if not use_packet_timestamps:
+    use_receive_timestamps = (ts == "packet")
+    if not use_receive_timestamps:
         print("WARNING: Saving OSF with lidar timestamps. This option should only be used"
               " to salvage legacy osf recordings with missing packet timestamps.")
 
@@ -183,17 +197,14 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         # Older versions only support standard numeric ChanFieldTypes (UINT*, INT*, FLOAT*).
         # Drop fields with newer types like CHAR (kind 'S') or ZONE_STATE (kind 'V').
         if legacy:
-            for frame in frames:
-                if frame is None:
-                    continue
-
-                for ft in frame.field_types:
+            for lf in frames.valid_lidar_frames():
+                for ft in lf.field_types:
                     if np.dtype(ft.element_type).kind in LEGACY_DTYPE_KINDS:
                         continue
 
                     name = ft.name
-                    if frame.has_field(name):
-                        frame.del_field(name)
+                    if lf.has_field(name):
+                        lf.del_field(name)
                         dropped_fields.add(name)
 
         if need_split:
@@ -209,10 +220,13 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
             osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
 
         try:
-            if use_packet_timestamps:
+            if use_receive_timestamps:
                 if ctx.save_collations:
                     future_queue.append(osf_writer.save(frames))
                 else:
+                    # save any frame type (LidarFrame or CameraFrame); the
+                    # writer dispatches on the concrete Frame type. idx matches
+                    # the stream registered for each SensorInfo.
                     for idx, frame in enumerate(frames):
                         if frame is not None:
                             future_queue.append(osf_writer.save(idx, frame))
@@ -220,7 +234,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
             else:
                 # handling lidar timestamps manually
                 for index, frame in enumerate(frames):
-                    if frame is None:
+                    if not isinstance(frame, LidarFrame):
                         continue
                     else:
                         try:
@@ -257,7 +271,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                     os.remove(filename)
                 print("ERROR: Cannot save frames because of the following error:")
                 print(str(ex))
-                print("Try with `--ts lidar` instead or `-c` to continue anyways.")
+                print("Try with '--ts lidar' instead or '-c' to continue anyways.")
                 return False
 
         if split is not None:
@@ -280,8 +294,6 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                     ctx.terminate_evt.set()
                     return
                 yield s
-        except (KeyboardInterrupt):
-            pass
         finally:
             saved = True
             osf_writer.close()
@@ -300,7 +312,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                 click.echo(f"WARNING: Dropped {dropped_frames} frames because missing or decreasing timestamps.")
             else:
                 click.echo(f"WARNING: Dropped {dropped_frames} frames because missing or decreasing "
-                           "packet timestamps. Try with `--ts lidar` instead.")
+                           "packet timestamps. Try with '--ts lidar' instead.")
         if not wrote_frames:
             click.echo("WARNING: No frames saved.")
     atexit.register(handle_termination)
@@ -312,20 +324,21 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 ))
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
-@click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('-d', '--dir', 'directory', default="", type=click.Path(file_okay=False, dir_okay=True),
+              help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_csv(ctx: SourceCommandContext, prefix: str,
-                    dir: str, filename: str, overwrite: bool, **kwargs) -> None:
+                    directory: str, filename: str, overwrite: bool, **kwargs) -> None:
     """Save source as one CSV file per LidarFrame."""
     ctx.frame_set_iter = source_to_csv_iter(ctx.frame_set_iter, ctx.frame_set_source.sensor_info,  # type: ignore
-                                       prefix=prefix, dir=dir, filename=filename,
+                                       prefix=prefix, dir=directory, filename=filename,
                                        overwrite=overwrite)
 
 
 # [doc-stag-pcap-to-csv]
-def source_to_csv_iter(frame_set_iter: Iterator[FrameSet], infos: List[SensorInfo],
+def source_to_csv_iter(frame_set_iter: Iterator[FrameSet], infos: List[LidarInfo],
                        prefix: str = "", dir: str = "", overwrite: bool = True,
                        filename: str = "") -> Iterable[FrameSet]:
     """Create a CSV saving iterator from a LidarFrame iterator
@@ -419,7 +432,7 @@ def source_to_csv_iter(frame_set_iter: Iterator[FrameSet], infos: List[SensorInf
     row_layer = []
     column_layer_staggered = []
     for info in infos:
-        xyzlut.append(XYZLut(info, False))
+        xyzlut.append(sensor_frame_xyzlut(info))
 
         row_layer.append(np.fromfunction(lambda i, j: i,
                 (info.format.pixels_per_column,
@@ -510,8 +523,6 @@ def source_to_csv_iter(frame_set_iter: Iterator[FrameSet], infos: List[SensorInf
                             header=header)
 
                 yield frame
-        except (KeyboardInterrupt, StopIteration):
-            pass
         finally:
             saved = True
 
@@ -525,15 +536,22 @@ def source_to_csv_iter(frame_set_iter: Iterator[FrameSet], infos: List[SensorInf
 ))
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
-@click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('-d', '--dir', 'directory', default="", type=click.Path(file_okay=False, dir_okay=True),
+              help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
-def source_save_png(ctx: SourceCommandContext, prefix: str, dir: str,
+def source_save_png(ctx: SourceCommandContext, prefix: str, directory: str,
                     filename: str, overwrite: bool, **kwargs) -> None:
-    """Save frame source as a series of png files per LidarFrame per field (represented as 8-bit)."""
-    from PIL import Image
+    """Save frame source as a series of png files per frame per field (represented as 8-bit).
+
+    Lidar and camera frames are both saved. A camera's 8-bit color image is
+    written as-is; every other field is scaled to 8-bit greyscale or RGB.
+    """
     from ouster.sdk.core.data import destagger
+    from ouster.sdk.core import LocalToneMapper
+    from ouster.sdk.io import write_png
+    tone_mappers: Dict[int, LocalToneMapper] = {}
     frame_set_iter = ctx.frame_set_iter
     filename_no_ext = os.path.splitext(filename)[0]
 
@@ -544,8 +562,8 @@ def source_save_png(ctx: SourceCommandContext, prefix: str, dir: str,
             return np.zeros_like(image)
         return (image - min_val) / (max_val - min_val)
 
-    def compose_path(frame: LidarFrame, dir: str, prefix: str, field_name: str) -> str:
-        output_path = f"{frame.sensor_info.sn}_{frame.frame_id}_{field_name}.png"
+    def compose_path(frame: Frame, dir: str, prefix: str, field_name: str, frame_label: int) -> str:
+        output_path = f"{frame.sensor_info.sn}_{frame_label}_{field_name}.png"
         if filename_no_ext:
             output_path = f"{filename_no_ext}_{output_path}"
         if prefix:
@@ -554,26 +572,43 @@ def source_save_png(ctx: SourceCommandContext, prefix: str, dir: str,
             output_path = os.path.join(dir, output_path)
         return output_path
 
-    def save_field(frame: LidarFrame, f: str):
+    def save_field(frame: Frame, f: str, frame_label: int):
         field_data = frame.field(f)
+        if (field_data.ndim == 3 and field_data.shape[-1] == 3 and
+                field_data.dtype == np.float16 and "RGB" in f.upper()):
+            if frame.sensor_info.sn not in tone_mappers:
+                tone_mappers[frame.sensor_info.sn] = LocalToneMapper()
+            field_data = tone_mappers[frame.sensor_info.sn].update(field_data)
         img = destagger(frame.sensor_info, field_data)
-        img = normalize(img) * (2**8 - 1)
-        img = np.nan_to_num(img, nan=0)
-        img = img.astype(np.uint8)
-        pil_img = Image.fromarray(img)
-        output_path = compose_path(frame, dir, prefix, f)
+        if img.dtype == np.uint8 and img.ndim == 3 and img.shape[-1] in (3, 4):
+            # A camera's color image is already 8-bit display data. Rescaling it
+            # to its own min/max would shift its colors and make the brightness
+            # jump from frame to frame, so write it through as it is.
+            img = np.ascontiguousarray(img)
+        else:
+            img = normalize(img) * (2**8 - 1)
+            img = np.nan_to_num(img, nan=0)
+            img = img.astype(np.uint8)
+        output_path = compose_path(frame, directory, prefix, f, frame_label)
         create_directories_if_missing(output_path)
         if os.path.isfile(output_path) and not overwrite:
             print(_file_exists_error(output_path))
             exit(1)
-        pil_img.save(output_path)
+        write_png(output_path, img)
 
     def png_save_iter():
+        # Only a lidar frame carries a sensor-assigned frame id to name its files
+        # after; for any other frame kind, count the frames seen per sensor.
+        frame_counts: Dict[int, int] = defaultdict(int)
         for frames in frame_set_iter():
-            for frame in frames:
-                if frame:
-                    for f in frame.fields:
-                        save_field(frame, f)
+            for frame in frames.valid_frames():
+                frame_label = getattr(frame, "frame_id", None)
+                if frame_label is None:
+                    frame_label = frame_counts[frame.sensor_info.sn]
+                    frame_counts[frame.sensor_info.sn] += 1
+                for f in frame.fields:
+                    if frame.field_class(f) == FieldClass.PIXEL_FIELD:
+                        save_field(frame, f, frame_label)
             yield frames
 
     ctx.frame_set_iter = png_save_iter    # type: ignore
@@ -590,9 +625,12 @@ def determine_filename(prefix: str, dir: str, filename: str, extension: str, inf
 
     if filename != "":
         filename = str(outpath / f"{prefix}{filename}")
-    else:
+    elif isinstance(info, LidarInfo):
         filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_"
                        f"{info.config.lidar_mode}_{time_str}{extension}")
+    else:
+        # Non-lidar sensor (e.g. a camera) with automatic naming.
+        filename = str(outpath / f"{prefix}sensor_{info.sn}_{time_str}{extension}")
 
     return filename
 
@@ -610,22 +648,27 @@ def create_directories_if_missing(filename: str):
 ))
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
-@click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('-d', '--dir', 'directory', default="", type=click.Path(file_okay=False, dir_okay=True),
+              help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option('--ros2', is_flag=True, default=False, help="If true, save this as a ROS2 bag file.")
 @click.option("--split", default=None, type=int,
               help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
-def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
+def source_save_bag(ctx: SourceCommandContext, prefix: str, directory: str, filename: str,
                     overwrite: bool, ros2: bool, split: Optional[int], **kwargs) -> None:
     """Save source as a packet rosbag."""
     if ctx.frame_set_iter is None or ctx.frame_set_source is None:
         raise RuntimeError("unexpected condition")
 
+    warn_if_camera_streams(ctx.frame_set_source.sensor_info, "save (bag)")
+
     ctx.frame_set_iter = _source_to_bag_iter(ctx.frame_set_iter, raw=False, split=split,
-                                        prefix=prefix, dir=dir, filename=filename,
-                                        overwrite=overwrite, metadata=ctx.frame_set_source.sensor_info,
+                                        prefix=prefix, dir=directory, filename=filename,
+                                        overwrite=overwrite,
+                                        metadata=[i for i in ctx.frame_set_source.sensor_info
+                                                  if isinstance(i, LidarInfo)],
                                         ros2=ros2)
 
 
@@ -711,14 +754,12 @@ def save_pcap_impl(source: Union[Iterable[FrameSet], PacketSource],
                         end_time = packet.host_timestamp + duration * 1e9
                     if packet.host_timestamp > end_time:
                         break
-        except (KeyboardInterrupt, StopIteration):
-            pass
         finally:
             # Finish pcap_recording when this generator is garbage collected
             _pcap.record_uninitialize(pcap_record_handle)
     else:
         for meta in metadata:
-            if meta.config.udp_profile_imu == UDPProfileIMU.LEGACY:
+            if isinstance(meta, LidarInfo) and meta.config.udp_profile_imu == UDPProfileIMU.LEGACY:
                 click.echo("Warning: Saving pcap without save_raw will not save LEGACY IMU packets.")
                 break
 
@@ -733,7 +774,11 @@ def save_pcap_impl(source: Union[Iterable[FrameSet], PacketSource],
                 should_split = False
                 for c in source():
                     for idx, frame in enumerate(c):
-                        if frame is not None:
+                        # Skip camera frames: they have no sensor packet form
+                        # (frame_to_packets only supports lidar). metadata is the
+                        # full, ordered sensor_info, so metadata[idx] aligns with
+                        # each frame slot.
+                        if frame is not None and isinstance(frame, LidarFrame):
                             if should_split:
                                 do_split()
                                 should_split = False
@@ -751,8 +796,6 @@ def save_pcap_impl(source: Union[Iterable[FrameSet], PacketSource],
                             # ending up between two files
                             should_split = check_split()
                     yield c
-            except (KeyboardInterrupt, StopIteration):
-                pass
             finally:
                 # Finish pcap_recording when this generator is garbage collected
                 if pcap_record_handle is not None:

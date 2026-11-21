@@ -112,51 +112,115 @@ class MapAccumulator(AccumulatorBase):
         overwrite from the beginning rather than randomly is
         ``map_overflow_from_start``.
         """
-        assert len(self._frame) == len(self._model._sensors)
-        for sensor, frame in zip(self._model._sensors, self._frame):
+        assert len(self._frame) >= len(self._model._sensors)
+        for sensor, frame in zip(self._model._sensors,
+                                 self._model._lidar_frames(self._frame)):
             if frame is None:
                 return
 
             # get random xyz points using map select ratio
-            range_field = frame.field(ChanField.RANGE)
-            sel_flag = range_field != 0
-            nzi, nzj = np.nonzero(sel_flag)
-            nzc = np.random.choice(len(nzi),
-                                   min(int(self._map_select_ratio * len(nzi)), self._map_max_points),
-                                   replace=False)
-            row_sel, col_sel = nzi[nzc], nzj[nzc]
-            xyz = sensor._xyzlut(range_field)
-            xyz = cast(np.ndarray, dewarp(xyz, frame.body_to_world))[row_sel, col_sel]
-            xyz_num = xyz.shape[0]
+            for return_idx in range(len(sensor._clouds)):
+                field_name = "RANGE" if return_idx < 1 else f"RANGE{return_idx + 1}"
+                if not frame.has_field(field_name):
+                    continue
+                range_field = frame.field(field_name)
+                sel_flag = range_field != 0
+                nzi, nzj = np.nonzero(sel_flag)
+                nzc = np.random.choice(len(nzi),
+                                       min(int(self._map_select_ratio * len(nzi)), self._map_max_points),
+                                       replace=False)
+                row_sel, col_sel = nzi[nzc], nzj[nzc]
+                xyz = sensor._xyzlut(range_field)
+                xyz = cast(np.ndarray, dewarp(xyz, frame.body_to_world))[row_sel, col_sel]
+                xyz_num = xyz.shape[0]
 
-            # TODO[tws] previously protected by "with self._lock" - do we still need this?
-            self._ensure_structs_map(xyz_num)
+                # TODO[tws] previously protected by "with self._lock" - do we still need this?
+                self._ensure_structs_map(xyz_num)
 
-            idxs: Union[List[int], np.ndarray]
-            if not self._map_overflow or self._map_overflow_start:
-                idxs = list(range(self._map_idx, self._map_idx + xyz_num))  # type: ignore
+                idxs: Union[List[int], np.ndarray]
+                if not self._map_overflow or self._map_overflow_start:
+                    idxs = list(range(self._map_idx, self._map_idx + xyz_num))  # type: ignore
+                else:
+                    idxs = np.random.choice(self._map_xyz.shape[0],
+                                            xyz_num,
+                                            replace=False)  # type: ignore
+                self._map_xyz[idxs] = xyz
+
+                for mode in sensor._cloud_modes.values():
+                    if mode.enabled(frame, return_idx):
+                        field_colors = mode._prepare_data(frame, return_num=return_idx)
+                    else:
+                        field_colors = mode._prepare_data(frame, return_num=0)
+                    if field_colors is not None:
+                        key = field_colors[row_sel, col_sel]
+                        if mode.name not in self._map_keys:
+                            self._map_keys[mode.name] = np.zeros(
+                                (self._map_xyz.shape[0], *key.shape[1:]), dtype=key.dtype)
+                        self._map_keys[mode.name][idxs] = key
+
+                self._map_idx += xyz_num
+
+    def _map_indices(self, xyz_num: int) -> Union[List[int], np.ndarray]:
+        """Return the destination indices in the map for ``xyz_num`` new points."""
+        if not self._map_overflow or self._map_overflow_start:
+            return list(range(self._map_idx, self._map_idx + xyz_num))
+        return np.random.choice(self._map_xyz.shape[0], xyz_num, replace=False)
+
+    def _update_map_cameras(self) -> None:
+        """Add a random selection of camera RANGE points (in world frame) to the map."""
+        camera_frames = self._model._camera_frames(self._frame)
+        if len(camera_frames) != len(self._model._cameras):
+            return
+        for camera, frame in zip(self._model._cameras, camera_frames):
+            if frame is None or not frame.has_field("RANGE"):
+                continue
+            self._update_map_camera(camera, frame)
+
+    def _update_map_camera(self, camera, frame) -> None:
+        local = camera.local_xyz(frame)
+        if local is None:
+            return
+        rng = np.asarray(frame.field("RANGE")).reshape(-1)
+        valid = np.nonzero(rng != 0)[0]
+        if len(valid) == 0:
+            return
+        num_select = min(int(self._map_select_ratio * len(valid)), self._map_max_points)
+        if num_select <= 0:
+            return
+        sel = valid[np.random.choice(len(valid), num_select, replace=False)]
+
+        pose = camera.camera_to_world(frame)
+        xyz = (local[sel] @ pose[:3, :3].T + pose[:3, 3]).astype(np.float32)
+        xyz_num = xyz.shape[0]
+
+        self._ensure_structs_map(xyz_num)
+        idxs = self._map_indices(xyz_num)
+        self._map_xyz[idxs] = xyz
+
+        for mode in camera._cloud_modes.values():
+            if not mode.enabled(frame, 0):
+                continue
+            field_colors = mode._prepare_data(frame, return_num=0)
+            if field_colors is None:
+                continue
+            field_colors = np.asarray(field_colors)
+            if field_colors.ndim == 3:
+                key = field_colors.reshape(-1, field_colors.shape[-1])[sel]
             else:
-                idxs = np.random.choice(self._map_xyz.shape[0],
-                                        xyz_num,
-                                        replace=False)  # type: ignore
-            self._map_xyz[idxs] = xyz
+                key = field_colors.reshape(-1)[sel]
+            if mode.name not in self._map_keys:
+                self._map_keys[mode.name] = np.zeros(
+                    (self._map_xyz.shape[0], *key.shape[1:]), dtype=key.dtype)
+            self._map_keys[mode.name][idxs] = key
 
-            for mode in sensor._cloud_modes.values():
-                field_colors = mode._prepare_data(frame, return_num=0)
-                if field_colors is not None:
-                    key = field_colors[row_sel, col_sel]
-                    if mode.name not in self._map_keys:
-                        self._map_keys[mode.name] = np.zeros(
-                            (self._map_xyz.shape[0], *key.shape[1:]), dtype=key.dtype)
-                    self._map_keys[mode.name][idxs] = key
-
-            self._map_idx += xyz_num
+        self._map_idx += xyz_num
 
     def update(self,
                frame: FrameSet,
                frame_num: Optional[int] = None) -> None:
         super().update(frame, frame_num)
         self._update_map()
+        self._update_map_cameras()
 
     def _update_cloud_mode(self):
         self._draw_map()

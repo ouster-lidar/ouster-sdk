@@ -21,7 +21,7 @@ constexpr char FILE_SEP = '\\';
 constexpr char FILE_SEP = '/';
 #endif
 
-/// Checking the the path is it directory or not.
+/// Checks whether the path is a directory.
 /// @TODO Change up tests to not use this stuff
 OUSTER_API_FUNCTION
 bool is_dir(const std::string& path);

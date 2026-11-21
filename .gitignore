@@ -1,3 +1,5 @@
+.mr-responder/
+
 __pycache__/
 python/build/
 python/dist/

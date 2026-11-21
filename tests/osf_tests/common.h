@@ -114,7 +114,7 @@ void set_random(Eigen::Ref<ouster::sdk::core::img_t<float>> field_dest, size_t /
         double sr = static_cast<double>(std::rand()) / RAND_MAX;
         return static_cast<float>(sr * static_cast<double>(std::numeric_limits<float>::max()));
     });
-    // mask bits arent supported for floats
+    // mask bits aren't supported for floats
 }
 
 template <typename T>
@@ -123,7 +123,7 @@ void set_random(Eigen::Ref<ouster::sdk::core::img_t<double>> field_dest, size_t 
         double sr = static_cast<double>(std::rand()) / RAND_MAX;
         return static_cast<double>(sr * static_cast<double>(std::numeric_limits<double>::max()));
     });
-    // mask bits arent supported for doubles
+    // mask bits aren't supported for doubles
 }
 
 // set field to random values, with mask_bits specifying the number of
@@ -149,11 +149,11 @@ inline void random_lidar_frame_data(ouster::sdk::core::LidarFrame& ls) {
 
     ls.frame_id = 5;
 
-    const int32_t columns_per_packet = ls.w / ls.packet_timestamp().size();
+    const int32_t columns_per_packet = ls.w / ls.receive_timestamp().size();
     const int64_t t_start = 100;
     const int64_t t_start_p = 100000000000;
     const int64_t dt = 100 * 1000 / (ls.w - 1);
-    const int64_t dt_p = 100 * 1000 / (ls.packet_timestamp().size() - 1);
+    const int64_t dt_p = 100 * 1000 / (ls.receive_timestamp().size() - 1);
     for (size_t i = 0; i < ls.w; ++i) {
         if (i == 0)
             ls.timestamp()[i] = t_start;
@@ -168,21 +168,21 @@ inline void random_lidar_frame_data(ouster::sdk::core::LidarFrame& ls) {
 
         const int32_t pi = i / columns_per_packet;
         if (pi == 0)
-            ls.packet_timestamp()[pi] = t_start_p;
+            ls.receive_timestamp()[pi] = t_start_p;
         else
-            ls.packet_timestamp()[pi] = ls.packet_timestamp()[pi - 1] + dt_p;
+            ls.receive_timestamp()[pi] = ls.receive_timestamp()[pi - 1] + dt_p;
     }
 }
 
-inline core::LidarFrame get_random_lidar_frame(const core::SensorInfo& si) {
-    core::LidarFrame ls{si};
+inline core::LidarFrame get_random_lidar_frame(const core::LidarInfo& si) {
+    core::LidarFrame ls{std::make_shared<core::LidarInfo>(si)};
     random_lidar_frame_data(ls);
     return ls;
 }
 
-inline core::LidarFrame get_random_lidar_frame(const core::SensorInfo& si,
+inline core::LidarFrame get_random_lidar_frame(const core::LidarInfo& si,
                                                core::LidarFrameFieldTypes field_types) {
-    core::LidarFrame ls{si, field_types};
+    core::LidarFrame ls{std::make_shared<core::LidarInfo>(si), field_types};
     random_lidar_frame_data(ls);
     return ls;
 }

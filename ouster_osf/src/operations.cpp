@@ -5,24 +5,30 @@
 
 #include "ouster/osf/operations.h"
 
-#include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <jsoncons/json.hpp>
 #include <jsoncons/json_parser.hpp>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <vector>
 
+#include "ouster/core/camera_info.h"
 #include "ouster/core/impl/logging.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/sensor_info.h"
+#include "ouster/core/signals.h"
 #include "ouster/core/types.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/impl/basics.h"
 #include "ouster/osf/impl/compat_ops.h"
 #include "ouster/osf/impl/fb_utils.h"
+#include "ouster/osf/meta_camera_sensor.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/reader.h"
@@ -35,6 +41,28 @@ namespace sdk {
 namespace osf {
 namespace {
 /**
+ * Internal helper turning a SensorInfo into the footer metadata entry that
+ * stores it: lidars live in LidarSensor entries and cameras in CameraSensor
+ * entries, matching what Writer::add_sensor() writes.
+ *
+ * @throws std::invalid_argument if the sensor kind is not lidar or camera.
+ *
+ * @param[in] info The sensor metadata to wrap
+ * @return The metadata entry holding @p info
+ */
+std::unique_ptr<MetadataEntry> make_sensor_entry(const ouster::sdk::core::SensorInfo& info) {
+    if (const auto* lidar = dynamic_cast<const ouster::sdk::core::LidarInfo*>(&info)) {
+        return std::make_unique<LidarSensor>(*lidar);
+    }
+    if (const auto* camera = dynamic_cast<const ouster::sdk::core::CameraInfo*>(&info)) {
+        return std::make_unique<CameraSensor>(*camera);
+    }
+    throw std::invalid_argument(
+        "osf_file_modify_metadata: received a SensorInfo that is neither a "
+        "LidarInfo nor a CameraInfo");
+}
+
+/**
  * Internal simplification function for generating modified
  * metadata flatbuffer blobs.
  *
@@ -43,7 +71,8 @@ namespace {
  * @return The generated flatbuffer metadata blob
  */
 flatbuffers::FlatBufferBuilder generate_modify_metadata_fbb(
-    const std::string& file_name, const std::vector<ouster::sdk::core::SensorInfo>& new_metadata) {
+    const std::string& file_name,
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& new_metadata) {
     auto metadata_fbb = flatbuffers::FlatBufferBuilder(32768);
     Reader reader(file_name);
 
@@ -55,19 +84,29 @@ flatbuffers::FlatBufferBuilder generate_modify_metadata_fbb(
     MetadataStore new_meta_store;
     auto old_meta_store = reader.meta_store();
     ouster::sdk::core::logger().info("Looking for non sensor info metadata in old metastore");
+    // Sensor metadata is stored in LidarSensor (lidars) and CameraSensor
+    // (cameras) footer entries; both kinds are replaced wholesale, everything
+    // else is carried over untouched.
+    std::vector<uint32_t> replaced_ids;
     for (const auto& entry : old_meta_store.entries()) {
-        std::cout << "Found: " << entry.second->type() << " ";
-        /// @todo figure out why there isnt an easy def for this
-        if (entry.second->type() != "ouster/v1/os_sensor/LidarSensor") {
+        const std::string type = entry.second->type();
+        if (type == metadata_type<LidarSensor>() || type == metadata_type<CameraSensor>()) {
+            replaced_ids.push_back(entry.first);
+        } else {
             new_meta_store.add(*entry.second);
             ouster::sdk::core::logger().info("Is non sensor_info, adding");
-        } else {
-            std::cout << std::endl;
         }
     }
 
-    for (const auto& entry : new_metadata) {
-        new_meta_store.add(LidarSensor(entry));
+    for (size_t i = 0; i < new_metadata.size(); i++) {
+        auto entry = make_sensor_entry(*new_metadata[i]);
+        // Frame streams and Extrinsics reference their sensor by footer id, so
+        // hand each new entry the id of the entry it replaces rather than
+        // letting the store assign a fresh one.
+        if (i < replaced_ids.size()) {
+            entry->set_id(replaced_ids[i]);
+        }
+        new_meta_store.add(*entry);
     }
     // NOLINTBEGIN(misc-include-cleaner)
     std::vector<flatbuffers::Offset<ouster::sdk::osf::impl::gen::MetadataEntry>> entries =
@@ -86,19 +125,7 @@ flatbuffers::FlatBufferBuilder generate_modify_metadata_fbb(
     return metadata_fbb;
     // NOLINTEND(misc-include-cleaner)
 }
-namespace {
-// Use a static thread_local variable for the quit flag, accessible by the
-// signal handler function.
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-thread_local volatile sig_atomic_t quit_requested{0};
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-// Signal handler function.
-extern "C" void sigint_handler(int /*unused*/) {
-    quit_requested = 1;
-}
 }  // namespace
-};  // namespace
 
 std::string dump_metadata(const std::string& file, bool full) {
     Reader reader(file);
@@ -117,17 +144,18 @@ std::string dump_metadata(const std::string& file, bool full) {
     root["metadata"]["start_ts"] = static_cast<uint64_t>(reader.start_ts().count());
     root["metadata"]["end_ts"] = static_cast<uint64_t>(reader.end_ts().count());
 
-    auto osf_metadata = impl::get_osf_metadata_from_buf(osf_file.get_metadata_chunk().data());
-
     if (full) {
         jsoncons::json chunks(jsoncons::json_array_arg);
-        for (size_t i = 0; i < osf_metadata->chunks()->size(); ++i) {
-            auto osf_chunk = osf_metadata->chunks()->Get(i);
+
+        auto osf_chunk = reader.chunks_.first();
+        while (osf_chunk != nullptr) {
             jsoncons::json chunk;
-            chunk["start_ts"] = osf_chunk->start_ts();
-            chunk["end_ts"] = osf_chunk->end_ts();
-            chunk["offset"] = osf_chunk->offset();
+            chunk["start_ts"] = osf_chunk->start_ts;
+            chunk["end_ts"] = osf_chunk->end_ts;
+            chunk["offset"] = osf_chunk->offset;
             chunks.emplace_back(chunk);
+
+            osf_chunk = reader.chunks_.next(osf_chunk->offset);
         }
         root["metadata"]["chunks"] = chunks;
     }
@@ -176,12 +204,6 @@ void parse_and_print(const std::string& file, bool with_decoding) {
     int ls_c = 0;
     int other_c = 0;
 
-    // TODO[pb]: Remove the SIGINT handlers from C++ wrapped function used in
-    //           Python bindings
-    // https://pybind11.readthedocs.io/en/stable/faq.html#how-can-i-properly-handle-ctrl-c-in-long-running-functions
-    quit_requested = 0;
-    auto sig = std::signal(SIGINT, sigint_handler);
-
     for (const auto msg : reader.messages()) {
         if (msg.is<LidarFrameStream>()) {
             std::cout << "  Ls     ts: " << msg.ts().count() << ", stream_id = " << msg.id();
@@ -204,14 +226,11 @@ void parse_and_print(const std::string& file, bool with_decoding) {
             ++other_c;
         }
 
-        if (quit_requested != 0) {
+        if (ouster::sdk::core::signaled()) {
             std::cout << "Stopped early via SIGINT!" << std::endl;
             break;
         }
     }
-
-    // restore signal handler
-    (void)std::signal(SIGINT, sig);
 
     std::cout << "\nSUMMARY (OSF v2): \n";
     std::cout << "  lidar_frame     (Ls)     count = " << ls_c << std::endl;
@@ -253,13 +272,14 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
     return result;
 }
 
-int64_t osf_file_modify_metadata(const std::string& file_name,
-                                 const std::vector<ouster::sdk::core::SensorInfo>& new_metadata) {
+int64_t osf_file_modify_metadata(
+    const std::string& file_name,
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& new_metadata) {
     int64_t saved_bytes = -2;
     uint64_t metadata_offset = 0;
     ouster::sdk::core::Version version = ouster::sdk::osf::OsfFile::CURRENT_VERSION;
 
-    // Scope the reading portion so that we dont run into read write file
+    // Scope the reading portion so that we don't run into read write file
     // locks
     {
         StreamOsfFile osf_file{file_name};
@@ -274,6 +294,16 @@ int64_t osf_file_modify_metadata(const std::string& file_name,
     impl::finish_osf_file(file_name, metadata_offset, saved_bytes, version);
 
     return saved_bytes;
+}
+
+int64_t osf_file_modify_metadata(const std::string& file_name,
+                                 const std::vector<ouster::sdk::core::LidarInfo>& new_metadata) {
+    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> infos;
+    infos.reserve(new_metadata.size());
+    for (const auto& info : new_metadata) {
+        infos.push_back(std::make_shared<ouster::sdk::core::LidarInfo>(info));
+    }
+    return osf_file_modify_metadata(file_name, infos);
 }
 
 }  // namespace osf

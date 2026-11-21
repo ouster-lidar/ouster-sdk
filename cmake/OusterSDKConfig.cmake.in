@@ -61,9 +61,9 @@ if(OUSTER_SDK_COMPONENT_STATIC)
   # are not penalized.
   find_package(zstd QUIET)
   find_package(Ceres QUIET)
-  # TBB and RobinMap are private deps of ouster_mapping (used by the absorbed
-  # kiss-icp sources).  They must be found before OusterSDKTargets.cmake sets
-  # them on the OusterSDK::ouster_mapping link interface.
+  # TBB and RobinMap are private deps of ouster_mapping. They must be found
+  # before OusterSDKTargets.cmake sets them on the OusterSDK::ouster_mapping
+  # link interface.
   find_package(TBB CONFIG QUIET)
   # OpenMP is needed by ouster_mapping on platforms where it is available.
   find_package(OpenMP QUIET)

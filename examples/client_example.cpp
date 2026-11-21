@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "ouster/core/impl/build.h"
+#include "ouster/core/lidar_config.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/types.h"
 #include "ouster/core/xyzlut.h"
@@ -57,7 +58,7 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Connecting to \"" << sensor_hostname << "\"...\n";
 
-        core::SensorConfig config;
+        core::LidarConfig config;
         config.udp_dest = "@auto";  // autodetect the UDP destination IP
         // config.udp_port_lidar = 0; // If you set any of the ports to 0, an
         // ephemeral port is used
@@ -77,7 +78,10 @@ int main(int argc, char* argv[]) {
     // Now we can print metadata about each sensor since it was collected by the
     // source already While we are at it build necessary lookup tables
     std::vector<core::XYZLut> luts;
-    for (const auto& info : source.sensor_info()) {
+    // sensor_info() is the combined, frame-slot-aligned sensor list; this
+    // example only deals with lidar sensors, so downcast each entry.
+    for (const auto& base_info : source.sensor_info()) {
+        auto info = std::dynamic_pointer_cast<core::LidarInfo>(base_info);
         std::cout << "Sensor " << info->sn << " Information:" << std::endl;
 
         size_t w = info->format.columns_per_frame;
@@ -93,7 +97,7 @@ int main(int argc, char* argv[]) {
 
         // Pre-compute a table for efficiently calculating point clouds from
         // range
-        luts.emplace_back(*info, true /* if extrinsics should be used or not */);
+        luts.emplace_back(*info);
     }
 
     std::cout << "Capturing frames... ";

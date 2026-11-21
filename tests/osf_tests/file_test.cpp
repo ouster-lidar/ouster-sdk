@@ -88,18 +88,36 @@ void testMoveSemantics(const std::string& path) {
     // OSF v2 OsfFile should be OK
     EXPECT_TRUE(osf_file.good());
 
-    // Test move semantics
+    const uint64_t expected_size = osf_file.size();
+    EXPECT_GT(expected_size, 0u);
+    const OsfOffset offset = {100, 10};
+    const OsfBuffer before = osf_file.read(offset);
+    const std::vector<uint8_t> expected_bytes(before.data(), before.data() + before.size());
+
+    auto expect_readable = [&](OsfFileT& file) {
+        EXPECT_TRUE(file.good());
+        EXPECT_EQ(file.version(), expected_version);
+        EXPECT_EQ(file.metadata_offset().offset(), 1015824);
+        EXPECT_EQ(file.size(), expected_size);
+        const OsfBuffer after = file.read(offset);
+        EXPECT_EQ(std::vector<uint8_t>(after.data(), after.data() + after.size()), expected_bytes);
+    };
+
+    // Test move construction
     OsfFileT osff(std::move(osf_file));
     EXPECT_FALSE(osf_file.good());
-    EXPECT_EQ(osff.version(), expected_version);
+    expect_readable(osff);
 
-    EXPECT_EQ(osff.metadata_offset().offset(), 1015824);
-    EXPECT_TRUE(osff.good());
-
-    // Close copied out
-    osff.close();
+    // Test move assignment onto an already open file
+    OsfFileT assigned(path);
+    assigned = std::move(osff);
     EXPECT_FALSE(osff.good());
-    EXPECT_FALSE(osff);
+    expect_readable(assigned);
+
+    // Close moved-to file
+    assigned.close();
+    EXPECT_FALSE(assigned.good());
+    EXPECT_FALSE(assigned);
 }
 
 TEST_F(OsfFileTest, OsfFileFullMoveSemantics) {

@@ -13,8 +13,7 @@
 #include "ouster/mapping/icp_registration.h"
 
 using ouster::sdk::core::Matrix4dR;
-using ouster::sdk::core::VoxelHashMap3d;
-using ouster::sdk::core::VoxelHashMapXd;
+using ouster::sdk::core::VoxelHashMap;
 using ouster::sdk::mapping::AdaptiveThreshold;
 using ouster::sdk::mapping::ICPRegistration;
 
@@ -49,8 +48,7 @@ void init_mapping_registration(py::module_& module) {
 
         This class implements frame-to-map registration used by the LIO SLAM and localization
         pipelines. Given a LidarFrame (source points) and a pre-built
-        :class:`ouster.sdk.core.VoxelHashMap3d` or :class:`ouster.sdk.core.VoxelHashMapXd` map,
-        it iteratively estimates the SE(3) transform that best aligns the LidarFrame to the map
+        :class:`ouster.sdk.core.VoxelHashMap` map, it iteratively estimates the SE(3) transform that best aligns the LidarFrame to the map
         using point-to-point correspondences and a Geman-McClure robust kernel.
     )pbdoc")
         .def(py::init<int, double, int>(), py::arg("max_num_iterations") = 50,
@@ -91,7 +89,7 @@ void init_mapping_registration(py::module_& module) {
         .def(
             "align_points_to_map",
             [](const ICPRegistration& self, const ArrayX3Input& frame,
-               const VoxelHashMap3d& voxel_map, double max_distance, double kernel_scale) {
+               const VoxelHashMap& voxel_map, double max_distance, double kernel_scale) {
                 return py::cast(self.align_points_to_map(ndarray_to_vector3d(frame), voxel_map,
                                                          max_distance, kernel_scale));
             },
@@ -101,11 +99,14 @@ void init_mapping_registration(py::module_& module) {
                 Align a point cloud to a voxel hash map using ICP.
 
                 The returned 4×4 homogeneous matrix transforms points from the input frame
-                coordinate system into the map coordinate system.
+                coordinate system into the map coordinate system. Correspondences use only
+                the positions of the map's points, so a map of any strategy, with or without
+                attributes, can be the target.
 
                 Args:
                     frame (numpy.ndarray): Source points as an ``(N, 3)`` array.
-                    voxel_map (VoxelHashMap3d): Target map built from prior scans or a saved map.
+                    voxel_map (VoxelHashMap): Target map built from prior scans or a
+                        saved map.
                     max_distance (float): Maximum correspondence distance in meters. Points
                         without a map neighbor within this radius are ignored.
                     kernel_scale (float): Scale parameter for the Geman-McClure robust kernel
@@ -114,36 +115,10 @@ void init_mapping_registration(py::module_& module) {
                 Returns:
                     numpy.ndarray: ``(4, 4)`` float64 transform matrix. Returns identity when
                     ``voxel_map`` is empty.
-            )pbdoc")
-        .def(
-            "align_points_to_map",
-            [](const ICPRegistration& self, const ArrayX3Input& frame,
-               const VoxelHashMapXd& voxel_map, double max_distance, double kernel_scale) {
-                return py::cast(self.align_points_to_map(ndarray_to_vector3d(frame), voxel_map,
-                                                         max_distance, kernel_scale));
-            },
-            py::arg("frame"), py::arg("voxel_map"), py::arg("max_distance"),
-            py::arg("kernel_scale"),
-            R"pbdoc(
-                Align a point cloud to a dynamic-size voxel hash map using ICP.
-
-                This overload supports :class:`ouster.sdk.core.VoxelHashMapXd` maps that store
-                per-point attributes alongside xyz coordinates. Correspondences use the xyz
-                components of the closest map point returned by the voxel map lookup.
-
-                Args:
-                    frame (numpy.ndarray): Source points as an ``(N, 3)`` array.
-                    voxel_map (VoxelHashMapXd): Target map with optional per-point attributes.
-                    max_distance (float): Maximum correspondence distance in meters.
-                    kernel_scale (float): Geman-McClure robust kernel scale parameter.
-
-                Returns:
-                    numpy.ndarray: ``(4, 4)`` float64 transform matrix. Returns identity when
-                    ``voxel_map`` is empty.
             )pbdoc");
 
     py::class_<AdaptiveThreshold>(module, "AdaptiveThreshold", R"pbdoc(
-        KISS-ICP adaptive correspondence threshold estimator.
+        Adaptive correspondence threshold estimator for ICP registration.
 
         Tracks the deviation between predicted and registered motion to adapt the maximum
         correspondence distance used during frame-to-map ICP. Used internally by the LIO SLAM

@@ -12,7 +12,7 @@ import glob
 import msparser
 from collections import Counter
 
-# Due to the fact that argparse atomatically associates any arguments
+# Due to the fact that argparse automatically associates any arguments
 # containing dashes with itself, we have to manually parse.
 # Without this, trying to run something like:
 # python3 check_valgrind.py --memory-check python3 -m pytest .
@@ -213,7 +213,7 @@ if __name__ == '__main__':
                     # add to error_summary
                     error_summary.append(error_local)
 
-                # Count occurences of unique issues
+                # Count occurrences of unique issues
                 kind_counts = Counter(item["kind"] for item in error_summary)
                 unique_kinds_json = json.dumps(
                     {"unique_count": dict(kind_counts)}, indent=4)

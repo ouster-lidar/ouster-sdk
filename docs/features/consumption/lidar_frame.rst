@@ -282,7 +282,7 @@ want to add custom data to an OSF file for visualization purposes. Like the stan
 
 
 .. note::
-    
+
    Fields can also be removed using the ``del_field`` method. This can be useful for removing unneeded data, thereby
    saving space when saving frames to an OSF file.
 

@@ -3,6 +3,7 @@
 #include <ouster/core/lidar_frame.h>
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 
 #include "ouster/core/types.h"
@@ -21,6 +22,21 @@ namespace impl {
 #pragma message("OUSTER_OMP was defined but openmp is not detected!")
 #endif
 #endif
+
+/**
+ * Converts the range measurement at `index` to a Cartesian point; zero range
+ * yields the origin.
+ */
+template <typename T>
+inline void cartesian_point(T* pts, const uint32_t* rng, const T* dir, const T* ofs,
+                            Eigen::Index index) {
+    const auto raw = rng[index];
+    const T range = static_cast<T>(raw);
+    const Eigen::Index base = index * 3;
+    pts[base + 0] = raw != 0 ? (range * dir[base + 0]) + ofs[base + 0] : static_cast<T>(0.0);
+    pts[base + 1] = raw != 0 ? (range * dir[base + 1]) + ofs[base + 1] : static_cast<T>(0.0);
+    pts[base + 2] = raw != 0 ? (range * dir[base + 2]) + ofs[base + 2] : static_cast<T>(0.0);
+}
 
 /**
  * Converts a staggered range image to Cartesian points.
@@ -45,23 +61,21 @@ void cartesianT(Eigen::Ref<PointCloudXYZ<T>> points, const Eigen::Ref<const img_
     const auto* const dir = direction.data();
     const auto* const ofs = offset.data();
 
-    const auto N = range.size();
+    const Eigen::Index num_points = range.size();
+    const Eigen::Index num_pairs = num_points / 2;
 
+    // Branch-free and two points per iteration: a branchy one-point loop is
+    // front-end bound, and its speed swings by up to ~20% with where the
+    // compiler happens to place it in the binary.
 #ifdef __OUSTER_UTILIZE_OPENMP__
 #pragma omp parallel for schedule(static)
 #endif
-    for (auto i = 0; i < N; ++i) {
-        const auto r = rng[i];
-        const auto idx_x = (i * 3) + 0;
-        const auto idx_y = (i * 3) + 1;
-        const auto idx_z = (i * 3) + 2;
-        if (r == 0) {
-            pts[idx_x] = pts[idx_y] = pts[idx_z] = static_cast<T>(0.0);
-        } else {
-            pts[idx_x] = r * dir[idx_x] + ofs[idx_x];
-            pts[idx_y] = r * dir[idx_y] + ofs[idx_y];
-            pts[idx_z] = r * dir[idx_z] + ofs[idx_z];
-        }
+    for (Eigen::Index pair = 0; pair < num_pairs; ++pair) {
+        cartesian_point<T>(pts, rng, dir, ofs, 2 * pair);
+        cartesian_point<T>(pts, rng, dir, ofs, (2 * pair) + 1);
+    }
+    if (num_points % 2 != 0) {
+        cartesian_point<T>(pts, rng, dir, ofs, num_points - 1);
     }
 }
 

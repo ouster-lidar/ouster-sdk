@@ -64,6 +64,13 @@ template <typename T>
 using MatrixX3R = Eigen::Matrix<T, Eigen::Dynamic, 3, Eigen::RowMajor>;
 
 /**
+ * @brief NxM matrix with row-major storage
+ * @tparam T The data type for the matrix.
+ */
+template <typename T>
+using MatrixXXR = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
+/**
  * @brief Nx3 array with row-major storage.
  * @tparam T The data type for the array.
  */

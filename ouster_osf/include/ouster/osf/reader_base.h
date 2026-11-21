@@ -194,6 +194,7 @@ class OUSTER_API_CLASS ReaderBase {
     friend class ChunkRef;
     friend struct ChunksIter;
     friend struct MessagesStreamingIter;
+    friend std::string dump_metadata(const std::string& file, bool full);
 };
 
 }  // namespace osf

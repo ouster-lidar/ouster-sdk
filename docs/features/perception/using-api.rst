@@ -16,11 +16,12 @@ Using ``DetectionEngine``
 
 To use the API, call :ouster:func:`DetectionEngine.create <py=ouster.sdk.perception.DetectionEngine.create|cpp=ouster::sdk::perception::DetectionEngine::create>` to
 instantiate the engine, passing the ``SensorInfo`` list (even for a single sensor) and an optional
-``ClassicDetectionConfig`` (defaults to ``ClassicDetectionConfig{}``).
+``ClassicDetectionConfig`` (defaults to ``ClassicDetectionConfig{}``). The list may mix ``LidarInfo``
+and ``CameraInfo``, and every sensor whose frames you intend to pass must appear in it.
 Then call
 :ouster:func:`update <py=ouster.sdk.perception.DetectionEngine.update|cpp=ouster::sdk::perception::DetectionEngine::update>`
-method, providing either a ``LidarFrame`` or ``FrameSet`` by reference. The following example describes how to instantiate
-the default ``DetectionEngine`` and use it to add objects representing lidar point clusters to every frame in the first
+method, providing either a ``Frame`` or ``FrameSet`` by reference. The following example describes how to instantiate
+the default ``DetectionEngine`` and use it to add objects representing point clusters to every frame in the first
 sensor stream in the provided source.
 
 .. tab-set::
@@ -99,7 +100,7 @@ s imported from an external source, like an annotated lidar dataset.
 
 ``ClassMaps`` are stored in a :ouster:class:`FrameSetSourceMetadataSet <py=ouster.sdk.core.FrameSetSourceMetadataSet|cpp=ouster::sdk::core::FrameSetSourceMetadataSet>` and associated with a frame source via metadata keys (for example, ``"class_maps"``).
 
-Writing an OSF with ClassMaps is straightforward, since the 
+Writing an OSF with ClassMaps is straightforward, since the
 :ouster:class:`Writer <py=ouster.sdk.osf.Writer|cpp=ouster::sdk::osf::Writer>` and
 :ouster:class:`AsyncWriter <py=ouster.sdk.osf.AsyncWriter|cpp=ouster::sdk::osf::AsyncWriter>` support saving
 ``FrameSetSourceMetadataSet`` like so:

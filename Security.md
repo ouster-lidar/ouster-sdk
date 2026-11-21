@@ -18,7 +18,7 @@ This security policy outlines the security support commitments for ouster-sdk us
 
 Please [email](mailto:security@ouster.io) to report a security vulnerability.
 
-Please include the requested information listed below (as much as you can provide) to help us better understand 
+Please include the requested information listed below (as much as you can provide) to help us better understand
 the nature and scope of the possible issue:
 
 - Type of issue (e.g. buffer overflow, SQL injection, cross-site scripting, etc.)
@@ -33,7 +33,7 @@ Impact of the issue, including how an attacker might exploit the issue
 ### Preferred Languages
 We prefer all communications to be in English.
 
-### Response time 
-You should receive a response within 3 business days. 
+### Response time
+You should receive a response within 3 business days.
 
 If for some reason you do not, please follow up via [email](mailto:security@ouster.io) to ensure we received your original message.

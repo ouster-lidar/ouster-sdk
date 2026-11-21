@@ -22,6 +22,11 @@ if(WIN32 AND BUILD_SHARED_LIBRARY)
   # google::Log* symbols at link time even though ouster_ceres_deps.dll is
   # listed as a dependency.
   set_property(TARGET ouster_ceres_deps PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  # The .def generation reads symbols from the target's own objects, which it
+  # can't do for /GL objects; LTO has nothing to optimize here anyway.
+  set_target_properties(ouster_ceres_deps PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
+    INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL OFF)
   # WHOLE_ARCHIVE does not propagate transitively through CMake's dependency
   # graph — it must be applied to each static lib individually.  Walk the
   # full transitive INTERFACE_LINK_LIBRARIES of Ceres::ceres to collect every
@@ -144,6 +149,7 @@ if(BUILD_SHARED_LIBRARY)
   add_library(shared_library SHARED
     $<TARGET_OBJECTS:ouster_core>
     $<TARGET_OBJECTS:ouster_algorithm>
+    $<TARGET_OBJECTS:ouster_io>
     $<TARGET_OBJECTS:ouster_build>)
   get_target_property(_ALGORITHM_INCLUDE_DIRS ouster_algorithm
     INTERFACE_INCLUDE_DIRECTORIES)
@@ -151,6 +157,13 @@ if(BUILD_SHARED_LIBRARY)
     target_include_directories(shared_library PUBLIC
       $<BUILD_INTERFACE:${_ALGORITHM_INCLUDE_DIRS}>)
   endif()
+  get_target_property(_IO_INCLUDE_DIRS ouster_io INTERFACE_INCLUDE_DIRECTORIES)
+  if(_IO_INCLUDE_DIRS)
+    target_include_directories(shared_library PUBLIC
+      $<BUILD_INTERFACE:${_IO_INCLUDE_DIRS}>)
+  endif()
+  find_package(PNG REQUIRED)
+  target_link_libraries(shared_library PRIVATE PNG::PNG)
   if(TARGET ouster_pcap)
       target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_pcap>)
   endif()
@@ -227,9 +240,8 @@ if(BUILD_SHARED_LIBRARY)
       if(TARGET Ceres::ceres)
         target_link_libraries(shared_library PRIVATE Ceres::ceres)
       endif()
-      # TBB is used directly by icp_registration.cpp (absorbed from kiss-icp into
-      # ouster_mapping). It was previously a transitive dep through kiss_icp_core;
-      # now it must be linked explicitly when absorbing ouster_mapping objects.
+      # TBB is used directly by icp_registration.cpp in ouster_mapping, so it
+      # must be linked explicitly when absorbing ouster_mapping objects.
       find_package(OpenMP QUIET)
       if(TARGET OpenMP::OpenMP_CXX)
         target_link_libraries(shared_library PRIVATE OpenMP::OpenMP_CXX)
@@ -277,7 +289,7 @@ if(BUILD_SHARED_LIBRARY)
     # stay out of the export table; the symbol_scrambler check_symbols gate
     # verifies this and will fail loudly if any private symbol ever leaks.
     foreach(_absorbed_target
-        ouster_build ouster_core ouster_algorithm ouster_pcap ouster_osf
+        ouster_build ouster_core ouster_algorithm ouster_io ouster_pcap ouster_osf
         ouster_viz ouster_sensor ouster_mapping ouster_perception_stub
         ouster_perception_private)
       if(TARGET ${_absorbed_target})

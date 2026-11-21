@@ -1,8 +1,9 @@
 from ouster.sdk.core import dewarp, transform, interp_pose
 from ouster.sdk.util.parsing import frame_to_packets  # type: ignore
 from ouster.sdk import core, open_source
-from ouster.sdk.algorithm import normals
+from ouster.sdk.algorithm import align_clouds, normals, GroundSegEngine
 import pytest
+import os
 import time
 import numpy as np
 import copy
@@ -60,7 +61,7 @@ def profile(request, record_property):
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_destagger(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
+def test_perf_destagger(frame: core.LidarFrame, meta: core.LidarInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
     rng = frame.field(core.ChanField.RANGE)
@@ -78,7 +79,7 @@ def test_perf_destagger(frame: core.LidarFrame, meta: core.SensorInfo, profile) 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_xyz(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
+def test_perf_xyz(frame: core.LidarFrame, meta: core.LidarInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
     xyzlut = core.XYZLut(meta)
@@ -97,7 +98,7 @@ def test_perf_xyz(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> Non
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_dwarp(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
+def test_perf_dwarp(frame: core.LidarFrame, meta: core.LidarInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
     xyzlut = core.XYZLut(meta)
@@ -113,7 +114,7 @@ def test_perf_dwarp(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> N
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_transform(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
+def test_perf_transform(frame: core.LidarFrame, meta: core.LidarInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
     xyzlut = core.XYZLut(meta)
@@ -131,7 +132,7 @@ def test_perf_transform(frame: core.LidarFrame, meta: core.SensorInfo, profile) 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize('happy_packet', [True, False])
 @pytest.mark.performance
-def test_perf_batching(frame: core.LidarFrame, meta: core.SensorInfo, profile, happy_packet) -> None:
+def test_perf_batching(frame: core.LidarFrame, meta: core.LidarInfo, profile, happy_packet) -> None:
     # do setup for batching num_iters frames worth of packets
     num_iters = profile.iterations(400)
     packets = []
@@ -158,7 +159,7 @@ def test_perf_batching(frame: core.LidarFrame, meta: core.SensorInfo, profile, h
 
 def _prepare_destaggered_returns():
     """Return destaggered XYZ/range arrays and sensor origins for first/second returns."""
-    src = open_source(OSFS_DATA_DIR + "/single_scan_016.osf")
+    src = open_source(os.path.join(OSFS_DATA_DIR, "single_scan_016.osf"))
     frames = next(iter(src))
     frame = frames[0]
     info = src.sensor_info[0]
@@ -211,10 +212,63 @@ def test_perf_normals_dual_return(profile) -> None:
     profile.end(num_iters)
 
 
+@pytest.mark.performance
+def test_perf_ground(profile) -> None:
+    src = open_source(os.path.join(OSFS_DATA_DIR, "OS-1-128_v2.3.0_1024x10_lb_n3.osf"))
+    frames = next(iter(src))
+    assert frames[0] is not None
+    ground = GroundSegEngine.create()
+    num_iters = profile.iterations(100)
+
+    profile.start()
+    for _ in range(num_iters):
+        ground.update(frames)
+    profile.end(num_iters)
+
+    # update() writes the mask onto the frame in place and repeats are
+    # identical, so every iteration timed the same work. Check the mask came
+    # out non-empty: an engine that regressed to a no-op, or a fixture with no
+    # segmentable ground, would otherwise still time clean.
+    mask = np.asarray(frames[0].field(core.ChanField.GROUND))
+    assert mask.dtype == np.uint8
+    assert mask.shape == (frames[0].h, frames[0].w)
+    assert np.any(mask)
+
+
+@pytest.mark.performance
+def test_perf_align(profile) -> None:
+    # align_clouds hands back the input extrinsics unchanged when it cannot
+    # align (fewer than two sensors, no usable anchor points, zero pairwise
+    # confidence), so guard the inputs and the result: without that this times
+    # a no-op and still passes.
+    src = open_source(os.path.join(OSFS_DATA_DIR, "pose_delta_2_128.osf"), collate=True)
+    frames = next(iter(src))
+    assert len(frames) >= 2
+    assert frames[0] is not None and frames[1] is not None
+    assert isinstance(frames[1], core.LidarFrame)
+    prior = np.asarray(frames[1].sensor_info.sensor_to_body, dtype=np.float64)
+
+    num_iters = profile.iterations(3)
+    result = None
+    profile.start()
+    for _ in range(num_iters):
+        result = align_clouds(frames)
+    profile.end(num_iters)
+
+    # align_clouds leaves frames untouched and is deterministic, so every
+    # iteration timed the same work and the last result speaks for all of them.
+    output = np.asarray(result, dtype=np.float64)
+    assert output.shape[0] >= 2
+    assert np.all(np.isfinite(output))
+    # The fixture carries identity extrinsics, so a real alignment has to move
+    # the non-anchor sensor; sensor 0 is the anchor and comes back unchanged.
+    assert not np.allclose(output[1], prior, atol=1e-6)
+
+
 # now for each frame source type
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_osf_save(frame: core.LidarFrame, meta: core.SensorInfo, profile, tmp_path) -> None:
+def test_perf_osf_save(frame: core.LidarFrame, meta: core.LidarInfo, profile, tmp_path) -> None:
     # setup the test
     # save N frames to OSF and close
     from ouster.sdk.osf import Writer
@@ -239,7 +293,7 @@ def tmp_osf(tmp_path_factory, request):
     from ouster.sdk.osf import Writer
     from ouster.sdk import open_source
     fn = str(tmp_path_factory.mktemp("data") / "test.osf")
-    src = open_source(OSFS_DATA_DIR + "/OS-1-128_v2.3.0_1024x10_lb_n3.osf")
+    src = open_source(os.path.join(OSFS_DATA_DIR, "OS-1-128_v2.3.0_1024x10_lb_n3.osf"))
     meta = src.sensor_info
     frame = next(iter(src))[0]
     writer = Writer(fn, meta)
@@ -248,7 +302,7 @@ def tmp_osf(tmp_path_factory, request):
         count = int(request.config.getoption("--num-iterations"))
     for i in range(count):
         frame.frame_id = frame.frame_id + 1
-        frame.packet_timestamp[:] = frame.packet_timestamp + 100000000
+        frame.receive_timestamp[:] = frame.receive_timestamp + 100000000
         frame.timestamp[:] = frame.timestamp + 100000000
         writer.save(0, frame)
     writer.close()
@@ -263,7 +317,7 @@ def tmp_pcap(tmp_path_factory, request):
     directory = tmp_path_factory.mktemp("data")
     fn = str(directory / "test.pcap")
     fn_json = str(directory / "test.json")
-    src = open_source(OSFS_DATA_DIR + "/OS-1-128_v2.3.0_1024x10_lb_n3.osf")
+    src = open_source(os.path.join(OSFS_DATA_DIR, "OS-1-128_v2.3.0_1024x10_lb_n3.osf"))
     meta = src.sensor_info[0]
     frame = next(iter(src))[0]
     count = 100 if request.config.getoption("--performance") else 2
@@ -280,7 +334,7 @@ def tmp_pcap(tmp_path_factory, request):
                                 meta.config.udp_port_lidar, packet.buf, packet.host_timestamp / 1e9)
 
         frame.frame_id = frame.frame_id + 1
-        frame.packet_timestamp[:] = frame.packet_timestamp + 100000000
+        frame.receive_timestamp[:] = frame.receive_timestamp + 100000000
         frame.timestamp[:] = frame.timestamp + 100000000
 
     _pcap.record_uninitialize(handle)
@@ -289,7 +343,7 @@ def tmp_pcap(tmp_path_factory, request):
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_osf_read(frame: core.LidarFrame, meta: core.SensorInfo, profile, tmp_osf) -> None:
+def test_perf_osf_read(frame: core.LidarFrame, meta: core.LidarInfo, profile, tmp_osf) -> None:
     # Read all frames in the OSF
     from ouster.sdk import open_source
     num_iters = 0
@@ -340,7 +394,7 @@ def test_perf_pcap_open(profile, tmp_pcap) -> None:
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_pcap_save(frame: core.LidarFrame, meta: core.SensorInfo, profile, tmp_path) -> None:
+def test_perf_pcap_save(frame: core.LidarFrame, meta: core.LidarInfo, profile, tmp_path) -> None:
     # setup the test
     # save N frames to PCAP and close
     num_iters = profile.iterations(40)
@@ -355,7 +409,7 @@ def test_perf_pcap_save(frame: core.LidarFrame, meta: core.SensorInfo, profile, 
         frame2 = copy.copy(frame)
         frames.append(frame2)
         frame.frame_id = frame.frame_id + 1
-        frame.packet_timestamp[:] = frame.packet_timestamp + 100000000
+        frame.receive_timestamp[:] = frame.receive_timestamp + 100000000
         frame.timestamp[:] = frame.timestamp + 100000000
 
     # perform the actual test
@@ -414,7 +468,7 @@ def test_perf_osf_cli_slice(profile, tmp_osf, runner) -> None:
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_interp_pose(frame: core.LidarFrame, meta: core.SensorInfo, profile) -> None:
+def test_perf_interp_pose(frame: core.LidarFrame, meta: core.LidarInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(10)
     num_interp = 4096

@@ -94,7 +94,7 @@ class PyViz : public viz::PointViz {
 };
 
 // Store Python callbacks outside the Cloud to avoid threading issues in their
-// refcounting occuring in the viz as it copies them in a background thread
+// refcounting occurring in the viz as it copies them in a background thread
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 std::mutex select_cb_mutex;
 uint64_t select_cb_id = 0;
@@ -518,6 +518,8 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
             "running", [](PyViz& self, bool state) { self.running(state); },
             "Shut down the visualizer and break out of the rendering loop.")
         .def("update", &PyViz::update, "Show updated data in the next rendered frame.")
+        .def("enable_eye_dome_lighting", &PyViz::enable_eye_dome_lighting,
+             "Enables or disables eye-dome point cloud lighting.")
         .def(
             "pick",
             [](PyViz& self, int x_1, int y_1, int x_2, int y_2) {
@@ -528,6 +530,7 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
         .def("visible", &PyViz::visible, "Toggle if the PointViz window is visible")
         .def("cursor_visible", &PyViz::cursor_visible,
              "Toggle if the cursor is visible when over this window")
+        .def("set_title", &PyViz::set_title, "Set window title.")
         .def(
             "push_key_handler",
             [](PyViz& self, const py::object& handler) {
@@ -821,12 +824,18 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
         .def("__deepcopy__",
              [](const viz::WindowCtx& self, const py::object&) { return viz::WindowCtx{self}; });
 
+    py::class_<viz::CameraData>(module, "CameraData", "Camera matrix data.")
+        .def_ro("proj", &viz::CameraData::proj)
+        .def_ro("view", &viz::CameraData::view)
+        .def_ro("target", &viz::CameraData::target);
+
     py::class_<viz::Camera>(module, "Camera", "Controls the camera view and projection.")
         .def("reset", &viz::Camera::reset, "Reset the camera view and fov.")
         .def("yaw", &viz::Camera::yaw, py::arg("degrees"),
              "Orbit the camera left or right about the camera target.")
         .def("set_yaw", &viz::Camera::set_yaw, py::arg("degrees"), "Set yaw in degrees.")
         .def("get_yaw", &viz::Camera::get_yaw, "Get yaw in degrees.")
+        .def("matrices", &viz::Camera::matrices, py::arg("aspect"), "Get matrices.")
         .def("roll", &viz::Camera::roll, py::arg("degrees"),
              "Roll the camera left or right about the camera target.")
         .def("set_roll", &viz::Camera::set_roll, py::arg("degrees"), "Set roll in degrees.")
@@ -862,8 +871,8 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
              Set the 2d position of camera target in the viewport.
 
              Args:
-                 x: horizontal position in in normalized coordinates [-1, 1]
-                 y: vertical position in in normalized coordinates [-1, 1]
+                 x: horizontal position in normalized coordinates [-1, 1]
+                 y: vertical position in normalized coordinates [-1, 1]
              )")
         .def("get_proj_offset", &viz::Camera::get_proj_offset,
              "Get the 2d position of a camera target in the viewport.")
@@ -897,6 +906,8 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
              "Set the distance between rings.")
         .def("set_ring_line_width", &viz::TargetDisplay::set_ring_line_width, py::arg("line_width"),
              "Set the line width of the rings.")
+        .def("set_ring_anchor_in_world", &viz::TargetDisplay::set_ring_anchor_in_world,
+             py::arg("enable"))
         .def(
             "__copy__", [](viz::TargetDisplay& self) { return &self; }, py::rv_policy::reference)
         .def(
@@ -956,12 +967,12 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
              )")
         .def(
             "__init__",
-            [](PyCloud* self, const ouster::sdk::core::SensorInfo& info) {
+            [](PyCloud* self, const ouster::sdk::core::LidarInfo& info) {
                 new (self) PyCloud{info};
             },
             py::arg("metadata"),
             R"(
-                 ``def __init__(self, si: SensorInfo) -> None:``
+                 ``def __init__(self, si: LidarInfo) -> None:``
 
                  Structured point cloud for visualization.
 
@@ -981,15 +992,35 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
 
                  Structured point cloud for visualization.
 
-                 Call set_range() to update
+                 Call set_range() to update. Clouds built from the same LUT
+                 share their GPU buffers.
 
                  Args:
                     xyzlut: sensor XYZLut
              )")
         .def(
+            "__init__",
+            [](PyCloud* self, const std::shared_ptr<ouster::sdk::core::XYZLutT<float>>& xyz_lut) {
+                new (self) PyCloud{xyz_lut};
+            },
+            py::arg("xyzlut"),
+            R"(
+                 ``def __init__(self, xyzlut: XYZLutFloat) -> None:``
+
+                 Structured point cloud for visualization.
+
+                 Call set_range() to update. Clouds built from the same LUT
+                 share their GPU buffers. Prefer this over ``XYZLut``, since
+                 the GPU buffers are single precision.
+
+                 Args:
+                    xyzlut: sensor XYZLutFloat
+             )")
+        .def(
             "set_range",
             [](PyCloud& self, const py::ndarray<py::ro, py::shape<-1, -1>>& range) {
                 const auto range_c = ensure_c_contig<uint32_t, py::shape<-1, -1>>(range);
+                check_array(range_c, self.get_size(), 0);
                 self.set_range(range_c.data());
             },
             py::arg("range"),
@@ -1017,7 +1048,7 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
 
                  Number of elements defines the type of Cloud coloration:
                  - num elements == cloud.get_size(): MONO with palette
-                 - 3 dimensions with the last dimesion: 3 - RGB, 4 - RGBA,
+                 - 3 dimensions with the last dimension: 3 - RGB, 4 - RGBA,
                    no palette used
 
                  Args:
@@ -1133,7 +1164,7 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
                 self.select_cb = cb_obj;
                 auto callback = py::cast<std::function<void(py::object)>>(cb_obj);
 
-                // store the callback outside the cloud object so it cant get
+                // store the callback outside the cloud object so it can't get
                 // copied
                 select_cb_mutex.lock();
                 self.select_id = ++select_cb_id;
@@ -1463,7 +1494,7 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
                 self.select_cb = cb_obj;
                 auto callback = py::cast<std::function<void(py::object)>>(cb_obj);
 
-                // store the callback outside the cuboid object so it cant get
+                // store the callback outside the cuboid object so it can't get
                 // copied
                 select_cb_mutex.lock();
                 self.select_id = ++select_cb_id;
@@ -1618,7 +1649,7 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
             R"(
                 ``def set_position(self, x: float, y: float, z: float) -> None:``
 
-                 Set label position. Position correspnods to top left (viewer's left) of label.
+                 Set label position. Position corresponds to top left (viewer's left) of label.
 
                  Args:
                     x,y,z: label position in 3D
@@ -1685,8 +1716,14 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
                 self.set_cuboids(cuboids);
             },
             py::arg("cuboids"), "Set the cuboids to be displayed.")
-        .def("set_sensor_info", &viz::ObjectOverlay::set_sensor_info, py::arg("info"),
-             "Set the sensor information for projection.")
+        .def_prop_rw(
+            "sensor_info", [](const viz::ObjectOverlay& self) { return self.sensor_info(); },
+            [](viz::ObjectOverlay& self, const ouster::sdk::core::LidarInfo& info) {
+                self.set_sensor_info(info);
+            },
+            "The LidarInfo used for panorama (lidar) projection.")
+        .def("set_camera_info", &viz::ObjectOverlay::set_camera_info, py::arg("info"),
+             "Set camera intrinsics for pinhole (camera) projection.")
         .def(
             "set_view_matrix",
             [](viz::ObjectOverlay& self, const pymatrixd& mat) {
@@ -1744,6 +1781,16 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
     module.def("voxel_style_mesh_from_zone_image_pair", &viz::voxel_style_mesh_from_zone_image_pair,
                py::arg("zone_image_pair"), py::arg("voxel_vertex_data"), py::arg("sensor_info"));
 
+    module.def("_cloud_lut_cache_size", &viz::impl::cloud_lut_cache_size,
+               "Number of live entries in the cache that lets Clouds built from the same LUT "
+               "share their GPU buffers: one per LUT whose buffers some Cloud still holds. "
+               "For tests.");
+
+    module.def("_cloud_lut_cache_misses", &viz::impl::cloud_lut_cache_misses,
+               "Number of cache misses for cache that lets Clouds built from the same LUT share "
+               "their GPU buffers."
+               "For tests.");
+
     py::class_<viz::VoxelVertexData>(module, "VoxelVertexData")
         .def(py::init<>())
         .def_rw("direction", &viz::VoxelVertexData::direction,
@@ -1765,7 +1812,7 @@ void init_viz(py::module_& module, py::module_& /*unused*/) {
               the same resolution from the same sensor.
 
               Args:
-                  metadata (ouster.sdk.sensor.SensorInfo): The sensor metadata.
+                  metadata (ouster.sdk.sensor.LidarInfo): The sensor metadata.
 
               Returns:
                   list[list[VoxelVertexData]]: A 2D lookup table of geometric data

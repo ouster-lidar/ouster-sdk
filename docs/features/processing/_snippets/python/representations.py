@@ -9,16 +9,15 @@ from ouster.sdk import core, pcap
 
 def _first_frame(source: core.FrameSetSource) -> core.LidarFrame:
     for frame_set in source:
-        for frame in frame_set:
-            if frame is not None:
-                return frame
-    raise RuntimeError("No frames found in source")
+        for frame in frame_set.valid_lidar_frames():
+            return frame
+    raise RuntimeError("No lidar frames found in source")
 
 
 def load_first_frame(pcap_path: str,
-                    metadata_path: str) -> Tuple[core.SensorInfo, core.LidarFrame]:
+                    metadata_path: str) -> Tuple[core.LidarInfo, core.LidarFrame]:
     """Utility helper used by the documentation tests."""
-    sensor_info = core.SensorInfo(Path(metadata_path).read_text())
+    sensor_info = core.LidarInfo(Path(metadata_path).read_text())
     source = pcap.PcapFrameSetSource(pcap_path, sensor_info=[sensor_info])
     return sensor_info, _first_frame(source)
 
@@ -31,21 +30,22 @@ def apply_xyz_transform_via_metadata(pcap_path: str,
     transform = np.eye(4, dtype=np.float64)
     transform[2, 2] = -1.0
     transform[1, 1] = -1.0
-    transform[2, 3] = 20000.0  # millimetres (20 m)
-    transform[0, 3] = 1500.0   # millimetres (1.5 m)
-    # Compose it with the sensor’s existing lidar→sensor transform
+    transform[2, 3] = 20.0  # metres
+    transform[0, 3] = 1.5   # metres
+    # Compose it with the sensor's existing sensor_to_body extrinsics on a copy
+    # of the metadata, so the original info and its cached LUT are untouched.
     adjusted = deepcopy(sensor_info)
-    adjusted.lidar_to_sensor_transform = transform @ sensor_info.lidar_to_sensor_transform
+    adjusted.sensor_to_body = transform @ sensor_info.sensor_to_body
 
     # Build the LUT from the modified metadata and project the frame.
-    xyzlut = core.XYZLut(adjusted, use_extrinsics=False)
+    xyzlut = core.XYZLut(adjusted)
     cloud_adjusted = xyzlut(frame)
     return cloud_adjusted
     # [doc-etag-repr-transform-metadata]
 
 
 def apply_xyz_transform(sensor_info: core.SensorInfo,
-                        frame: core.LidarFrame) -> np.ndarray:
+                        frame: core.Frame) -> np.ndarray:
     """Project RANGE data and then apply a custom 4x4 transform."""
     # [doc-stag-py-repr-transform]
     # Custom pose: flip Z/Y and translate up 20 m and 1.5 m along X.
@@ -54,7 +54,7 @@ def apply_xyz_transform(sensor_info: core.SensorInfo,
     transformation[1, 1] = -1.0
     transformation[2, 3] = 20.0  # metres (20000 mm)
     transformation[0, 3] = 1.5   # metres (1500 mm)
-    base_xyz = core.XYZLut(sensor_info, use_extrinsics=False)(frame)
+    base_xyz = sensor_info.xyzlut_double(frame)
     points = base_xyz.reshape(-1, 3)
     rotation = transformation[:3, :3]
     translation = transformation[:3, 3]
@@ -76,15 +76,16 @@ def apply_xyz_transform(sensor_info: core.SensorInfo,
 
 
 def apply_xyz_transform_w_extrinsics(sensor_info: core.SensorInfo,
-                                     frame: core.LidarFrame) -> np.ndarray:
+                                     frame: core.Frame) -> np.ndarray:
     """Project RANGE data using the metadata extrinsic transform."""
     # [doc-stag-transform-extrinsics]
-    lut_with_extrinsics = core.XYZLut(sensor_info, use_extrinsics=True)
+    lut_with_extrinsics = core.XYZLut(sensor_info)
     return lut_with_extrinsics(frame)
     # [doc-etag-transform-extrinsics]
 
+
 # [doc-stag-py-xyzf-transform]
-def apply_xyzf_transform(sensor_info: core.SensorInfo,
+def apply_xyzf_transform(sensor_info: core.LidarInfo,
                          frame: core.LidarFrame) -> np.ndarray:
     """Transform before range multiplication into the LUT."""
     extra = np.eye(4)
@@ -93,9 +94,9 @@ def apply_xyzf_transform(sensor_info: core.SensorInfo,
     extra[2, 3] = 20.0  # metres (20000 mm)
     extra[0, 3] = 1.5   # metres (1500 mm)
 
-    lut_fn = core.XYZLut(sensor_info, use_extrinsics=False)
-    h = sensor_info.format.pixels_per_column
-    w = sensor_info.format.columns_per_frame
+    lut_fn = sensor_info.xyzlut_double
+    h = sensor_info.h
+    w = sensor_info.w
 
     ones = np.ones((h, w), dtype=np.uint32)
     twos = np.full((h, w), 2, dtype=np.uint32)
@@ -138,7 +139,7 @@ def apply_xyzf_transform(sensor_info: core.SensorInfo,
 # [doc-etag-py-xyzf-transform]
 
 
-def reflectivity_images(sensor_info: core.SensorInfo,
+def reflectivity_images(sensor_info: core.LidarInfo,
                         frame: core.LidarFrame):
 # [doc-stag-destagger]
     """Get staggered and destaggered reflectivity images."""
@@ -151,15 +152,15 @@ def reflectivity_images(sensor_info: core.SensorInfo,
 
 # [doc-stag-py-repr-x-image]
 def get_x_in_image_form(frame: core.LidarFrame,
-                        sensor_info: core.SensorInfo,
+                        sensor_info: core.LidarInfo,
                         destaggered: bool = False):
     """Return the destaggered X coordinate image."""
-    h = sensor_info.format.pixels_per_column
-    w = sensor_info.format.columns_per_frame
+    h = sensor_info.h
+    w = sensor_info.w
 
-    # Get the XYZ in (H, W, 3) numpy array form
-    xyzlut = core.XYZLut(sensor_info, use_extrinsics=False)
-    xyz = xyzlut(frame)
+    # Get the XYZ in (H, W, 3) numpy array form, using the LUT cached on the
+    # sensor info so repeated calls don't rebuild it
+    xyz = sensor_info.xyzlut_double(frame)
 
     # Extract X coordinate (equivalent to cloud.col(0) in C++)
     x_image = xyz[:, :, 0].reshape(h, w)

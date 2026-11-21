@@ -92,35 +92,6 @@ struct SetField {
     }
 };
 
-template <typename Fn>
-struct LambdaIter {
-    Fn lambda;
-
-    // generative output iterators return themselves
-    LambdaIter& operator*() {
-        return *this;
-    }
-    // prefix
-    LambdaIter& operator++() {
-        return *this;
-    }
-    // postfix
-    LambdaIter& operator++(int) {
-        return *this;
-    }
-
-    template <typename T>
-    LambdaIter& operator=(T&& item) {
-        lambda(item);
-        return *this;
-    }
-};
-
-template <typename Fn>
-LambdaIter<Fn> make_lambda_iter(Fn&& f) {
-    return LambdaIter<Fn>{f};
-}
-
 py::object field_to_pyobj(ouster::sdk::core::FieldView& field, py::handle handle);
 
 ouster::sdk::core::FieldDescriptor pyarray_to_descriptor(const py::object& data);

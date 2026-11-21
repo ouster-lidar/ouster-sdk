@@ -39,8 +39,8 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
      * @param[in] ref_meta_id The flat buffer metadata(not sensor_info)
      *                        reference id
      * @param[in] name ///< Named id if needed, to support multiple extrinsics
-     *                 ///< perobject (i.e. LidarSensor, or Gps) with name
-     *                 ///< maybe usedto associate extrinsics to some external
+     *                 ///< per object (i.e. LidarSensor, or Gps) with name
+     *                 ///< maybe used to associate extrinsics to some external
      *                 ///< system of records or just name the source
      *                 ///< originator of the extrinsics information.
      */
@@ -81,7 +81,7 @@ class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
     /**
      * Create an Extrinsics object from a byte array.
      *
-     * @todo Figure out why this wasnt just done as a constructor overload.
+     * @todo Figure out why this wasn't just done as a constructor overload.
      *
      * @relates MetadataEntry::from_buffer
      *

@@ -10,9 +10,9 @@ Quickstart Guide
    viz_init
 
 
-Welcome to the Ouster SDK documentation! 
+Welcome to the Ouster SDK documentation!
 
-This quickstart guide is designed to get you up and running with the Ouster SDK as quickly as possible. 
+This quickstart guide is designed to get you up and running with the Ouster SDK as quickly as possible.
 We'll walk through everything starting from installation to your first visualization.
 
 

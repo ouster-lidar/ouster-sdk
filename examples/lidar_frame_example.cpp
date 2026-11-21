@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
 
     // clang-format off
 
-    // Specifiying only w and h for a lidar frame creates one using the LEGACY udp
+    // Specifying only w and h for a lidar frame creates one using the LEGACY udp
     // profile
     auto source = ouster::sdk::open_packet_source(pcap_path);
     auto sensor_info = source.sensor_info()[0];
@@ -166,7 +166,7 @@ int main(int argc, char* argv[]) {
     auto custom_frame = core::LidarFrame(sensor_info, {});
     custom_frame.add_field("my-custom-field", core::fd_array<uint8_t>(sensor_info->h(), sensor_info->w()));
     custom_frame.field<uint8_t>("my-custom-field") = 1; // set all pixels
-    custom_frame.field<uint8_t>("my-custom-field").block(10, 10, 20, 20) = 255;  // set a block of pixels again 
+    custom_frame.field<uint8_t>("my-custom-field").block(10, 10, 20, 20) = 255;  // set a block of pixels again
     //![doc-etag-cpp-frame-add-field]
     // clang-format on
 

@@ -1,4 +1,4 @@
-"""Minimal examples for iterating LidarFrame frames in Python."""
+"""Minimal examples for iterating frames from a FrameSetSource in Python."""
 from typing import Iterable, Optional
 
 # [doc-stag-opensource-imports]
@@ -9,20 +9,20 @@ from ouster.sdk import open_source
 from ouster.sdk import pcap
 # [doc-etag-pcapframesetsource-imports]
 from ouster.sdk import sensor
-from ouster.sdk.core import LidarFrame
+
 
 def stream_live(hostname: str, limit: int = 10) -> None:
-    """Print a few frame ids from a live sensor."""
+    """Print a few frame timestamps from a live sensor."""
     # [doc-stag-single-sensorframesetsource]
     source = sensor.SensorFrameSetSource(hostname)
     # [doc-etag-single-sensorframesetsource]
     with source:
         # [doc-stag-single-sensorframesetsource-loop]
         for count, frame_set in enumerate(source):
-            frame = next((f for f in frame_set if f), None)
+            frame = next(iter(frame_set.valid_frames()), None)
             if frame:
                 print(f"frame {count}:" +
-                      f"id={frame.frame_id}")
+                      f"ts={frame.timestamp[0]}")
         # [doc-etag-single-sensorframesetsource-loop]
             if count + 1 >= limit:
                 break
@@ -40,9 +40,9 @@ def stream_live_via_open_source_collate(hostname: str, limit: int = 10) -> None:
         # So for a single sensor you still get a one-element frame_set
         for count, frame_set in enumerate(source):
             # collate=True yields a list with one frame for a single sensor
-            frame = frame_set[0] if frame_set and frame_set[0] else None
+            frame = next(iter(frame_set.valid_frames()), None)
             if frame:
-                print(f"frame {count}: id={frame.frame_id}")
+                print(f"frame {count}: ts={frame.timestamp[0]}")
             if count + 1 >= limit:
                 break
 
@@ -53,8 +53,9 @@ def close_source(hostname: str) -> None:
     source = open_source(hostname, sensor_idx=0)
     try:
         frame_set = next(iter(source))
-        if len(frame_set) > 0 and frame_set[0]:
-            print(f"first frame_id: {frame_set[0].frame_id}")
+        frame = next(iter(frame_set.valid_frames()), None)
+        if frame:
+            print(f"first ts: {frame.timestamp[0]}")
     finally:
         # Release the underlying resources: the sensor's UDP sockets for a
         # live source, or file handles for pcap/osf replay. This is the same
@@ -83,23 +84,26 @@ def select_single_sensor(source_url: str) -> None:
         # FrameSet to one entry, accessible the same way: frame_set[0].
         via_open_source_frame_set = next(iter(via_open_source))
         via_single_frame_set = next(iter(via_single))
-        if len(via_open_source_frame_set) > 0 and via_open_source_frame_set[0]:
-            print(f"via sensor_idx: frame_id={via_open_source_frame_set[0].frame_id}")
-        if len(via_single_frame_set) > 0 and via_single_frame_set[0]:
-            print(f"via single():   frame_id={via_single_frame_set[0].frame_id}")
+        via_open_source_frame = next(
+            iter(via_open_source_frame_set.valid_frames()), None)
+        via_single_frame = next(iter(via_single_frame_set.valid_frames()), None)
+        if via_open_source_frame:
+            print(f"via sensor_idx: ts={via_open_source_frame.timestamp[0]}")
+        if via_single_frame:
+            print(f"via single():   ts={via_single_frame.timestamp[0]}")
     # [doc-etag-single-opensource-nocollate-loop]
 
 
 def replay_data(data_path: str, limit: int = 10) -> None:
-    """Print frame ids while replaying from files (pcap/osf/json)."""
+    """Print frame timestamps while replaying from files (pcap/osf/json)."""
     # [doc-stag-pcap-replay]
     source = open_source(data_path)
     # [doc-etag-pcap-replay]
     with source:
         for count, frame_set in enumerate(source):
-            frame = next((s for s in frame_set if s), None)
+            frame = next(iter(frame_set.valid_frames()), None)
             if frame:
-                print(f"frame {count}: id={frame.frame_id}")
+                print(f"frame {count}: ts={frame.timestamp[0]}")
                 if count + 1 >= limit:
                     break
 
@@ -108,16 +112,16 @@ def replay_pcap_with_metadata_input(
     sensor_info_path: str,
     limit: int = 10,
 ) -> None:
-    """Print frame ids while replaying from files (pcap/osf/json)."""
+    """Print frame timestamps while replaying from files (pcap/osf/json)."""
     # [doc-stag-pcap-replay-metadata]
     source = open_source(pcap_path,
                          meta=[sensor_info_path])
     # [doc-etag-pcap-replay-metadata]
     with source:
         for count, frame_set in enumerate(source):
-            frame = next((s for s in frame_set if s), None)
+            frame = next(iter(frame_set.valid_frames()), None)
             if frame:
-                print(f"frame {count}: id={frame.frame_id}")
+                print(f"frame {count}: ts={frame.timestamp[0]}")
                 if count + 1 >= limit:
                     break
 
@@ -134,9 +138,9 @@ def replay_pcap_with_pcap_frame_set_source(
     # [doc-etag-pcapframesetsource-metadata]
     with source:
         for count, frame_set in enumerate(source):
-            frame = next((s for s in frame_set if s), None)
+            frame = next(iter(frame_set.valid_frames()), None)
             if frame:
-                print(f"frame {count}: id={frame.frame_id}")
+                print(f"frame {count}: ts={frame.timestamp[0]}")
                 if count + 1 >= limit:
                     break
 

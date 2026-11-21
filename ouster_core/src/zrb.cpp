@@ -233,8 +233,8 @@ bool Zrb::read_zone_cache(std::istream& file, bool load_bounds,
         far_range_mm = img_t<uint32_t>(header.meta.n_rows, header.meta.n_cols);
         // Read zone map data into near/far images
         float mm_per_bin = m_per_zmbin_ * 1000.f;
+        std::vector<uint32_t> col_buffer(header.meta.n_rows);
         for (uint32_t col_id = 0; col_id < header.meta.n_cols; col_id++) {
-            std::array<uint32_t, C_ZONE_MON_MAX_N_ROWS> col_buffer{};
             if (!file.read(reinterpret_cast<char*>(col_buffer.data()),
                            static_cast<std::streamsize>(sizeof(uint32_t) * header.meta.n_rows))) {
                 std::cerr << "ZoneCache: Cache invalid: file malformed. "

@@ -24,24 +24,33 @@
 #include <vector>
 
 #include "common.h"
+#include "ouster/core/camera_info.h"
 #include "ouster/core/error_handler.h"
+#include "ouster/core/field_type.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/frame_set.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/profile_extension.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/osf/async_writer.h"
 #include "ouster/osf/basics.h"
+#include "ouster/osf/frame_encoder.h"
+#include "ouster/osf/meta_camera_sensor.h"
 #include "ouster/osf/meta_extrinsics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/operations.h"
 #include "ouster/osf/osf_frame_set_source.h"
-#include "ouster/osf/png_lidarframe_encoder.h"
+#include "ouster/osf/png_frame_encoder.h"
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_frame.h"
 #include "ouster/osf/writer.h"
-#include "ouster/osf/zpng_lidarframe_encoder.h"
+#include "ouster/osf/zpng_frame_encoder.h"
 #include "ouster/sensor/client.h"
+
+// Include Python C-API for raising deprecation warnings
+#include <Python.h>  // NOLINT(misc-include-cleaner)
 
 namespace py = nanobind;
 
@@ -171,9 +180,14 @@ to work with OSF files.
     )doc",
                py::arg("file"), py::arg("backup_file_name"));
 
-    module.def("osf_file_modify_metadata", &osf::osf_file_modify_metadata,
+    module.def("osf_file_modify_metadata",
+               static_cast<int64_t (*)(const std::string&,
+                                       const std::vector<std::shared_ptr<core::SensorInfo>>&)>(
+                   &osf::osf_file_modify_metadata),
                R"doc(
         Modify an OSF files sensor_info metadata.
+
+        Accepts ``LidarInfo`` and ``CameraInfo`` entries, in any combination.
 
         :file_name: The OSF file to modify.
         :new_metadata: Array containing sensor infos to write to the file.
@@ -365,7 +379,7 @@ to work with OSF files.
     py::class_<osf::MetadataStore>(module, "MetadataStore", R"(
         Stores `metadata entries` of the file.
 
-        One of information about available sensors, it's configuration,
+        Contains information about available sensors, their configuration,
         available streams, chunks layout method, etc.
     )")
         .def(py::init<>())
@@ -520,17 +534,35 @@ to work with OSF files.
 
     // LidarSensor
     py::class_<osf::LidarSensor, osf::MetadataEntry>(module, "LidarSensor", R"(
-        Ouster Lidar Sensor metadata with sensor intrinsics (i.e. SensorInfo/Metadata)
+        Ouster Lidar Sensor metadata with sensor intrinsics (i.e. LidarInfo/Metadata)
 
         ``type_id`` static property is a `LidarSensor` metadata type identifier.
     )")
-        .def(py::init<core::SensorInfo>(), "Create from ``SensorInfo`` object")
+        .def(py::init<core::LidarInfo>(), "Create from ``LidarInfo`` object")
         .def(py::init<std::string>(), py::arg("metadata_json"),
              "Create from ``metadata_json`` string representation")
-        .def_prop_ro("info", &osf::LidarSensor::info, "SensorInfo stored", py::rv_policy::copy)
+        .def_prop_ro("info", &osf::LidarSensor::info, "LidarInfo stored", py::rv_policy::copy)
         .def_prop_ro("metadata", &osf::LidarSensor::metadata, "metadata_json string stored")
         .def_prop_ro_static(
             "type_id", [](const py::object&) { return osf::metadata_type<osf::LidarSensor>(); });
+
+    // CameraSensor
+    py::class_<osf::CameraSensor, osf::MetadataEntry>(module, "CameraSensor", R"(
+        Ouster Camera Sensor metadata with camera intrinsics (i.e. CameraInfo)
+
+        Stored under a distinct OSF type from `LidarSensor` so that readers which
+        predate camera support skip it as an unknown metadata entry rather than
+        failing to validate it as a lidar.
+
+        ``type_id`` static property is a `CameraSensor` metadata type identifier.
+    )")
+        .def(py::init<core::CameraInfo>(), "Create from ``CameraInfo`` object")
+        .def(py::init<std::string>(), py::arg("metadata_json"),
+             "Create from ``metadata_json`` string representation")
+        .def_prop_ro("info", &osf::CameraSensor::info, "CameraInfo stored", py::rv_policy::copy)
+        .def_prop_ro("metadata", &osf::CameraSensor::metadata, "metadata_json string stored")
+        .def_prop_ro_static(
+            "type_id", [](const py::object&) { return osf::metadata_type<osf::CameraSensor>(); });
 
     // LidarFrameStreamMeta
     py::class_<osf::LidarFrameStreamMeta, osf::MetadataEntry>(module, "LidarFrameStreamMeta")
@@ -626,10 +658,10 @@ to work with OSF files.
         .def(py::init<core::mat4d, uint32_t, std::string&>(), py::arg("extrinsics"),
              py::arg("ref_meta_id") = 0, py::arg("name") = "", "Create Extrinsics object")
         .def_prop_ro("extrinsics", &osf::Extrinsics::extrinsics,
-                     "Extrisnics homogeneous 4x4 matrix")
+                     "Extrinsics homogeneous 4x4 matrix")
         .def_prop_ro("ref_meta_id", &osf::Extrinsics::ref_meta_id,
                      "reference to the metadata entry id of an "
-                     "object which extrisnics is it")
+                     "object these extrinsics belong to")
         .def_prop_ro("name", &osf::Extrinsics::name, "name of the Extrinsics object (optional)")
         .def_prop_ro_static(
             "type_id", [](const py::object&) { return osf::metadata_type<osf::Extrinsics>(); });
@@ -653,7 +685,7 @@ to work with OSF files.
         )")
         .def(
             "__init__",
-            [](osf::Writer* self, const std::string& filename, const core::SensorInfo& info,
+            [](osf::Writer* self, const std::string& filename, const core::LidarInfo& info,
                const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
                std::shared_ptr<osf::Encoder> encoder) {
                 new (self)
@@ -663,13 +695,13 @@ to work with OSF files.
             py::arg("fields_to_write") = std::vector<std::string>{}, py::arg("chunk_size") = 0,
             py::arg("encoder") = nullptr,
             R"(
-        Creates a `Writer` with deafault ``STREAMING`` layout chunks writer.
+        Creates a `Writer` with default ``STREAMING`` layout chunks writer.
 
         Using default ``chunk_size`` of ``2MB``.
 
         Args:
             filename (str): The filename to output to.
-            info (SensorInfo): The sensor info vector to use for a multi stream OSF
+            info (LidarInfo): The sensor info vector to use for a multi stream OSF
                 file.
             chunk_size (int): The chunk size in bytes to use for the OSF file. This arg
                 is optional, and if not provided the default value of 2MB
@@ -690,7 +722,7 @@ to work with OSF files.
         .def(
             "__init__",
             [](osf::Writer* self, const std::string& filename,
-               const std::vector<core::SensorInfo>& info,
+               const std::vector<std::shared_ptr<core::SensorInfo>>& info,
                const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
                std::shared_ptr<osf::Encoder> encoder) {
                 new (self)
@@ -707,7 +739,8 @@ to work with OSF files.
             Args:
             filename (str): The filename to output to.
             info (List[SensorInfo]): The sensor info vector to use for a
-                multi stream OSF file.
+                multi stream OSF file. Each entry may be a LidarInfo or
+                CameraInfo.
             fields_to_write (List[str]): The fields from frames to
                 actually save into the OSF. If not provided uses the fields from
                 the first saved lidar frame for each stream. This parameter is optional.
@@ -717,30 +750,43 @@ to work with OSF files.
         )")
         .def(
             "save",
-            [](osf::Writer& writer, uint32_t stream_index, const core::LidarFrame& frame) {
+            [](osf::Writer& writer, uint32_t stream_index, const core::Frame& frame) {
                 writer.save(stream_index, frame);
             },
             py::arg("stream_index"), py::arg("frame"),
             R"(
-            Save a lidar frame to the OSF file.
+            Save a frame to the OSF file.
+
+            The frame may be a LidarFrame or a CameraFrame; the correct stream
+            type is selected based on the frame type. stream_index is the
+            unified stream index: the sensor's position in registration order
+            (as passed to the constructor and/or add_sensor), which
+            is also the order returned by sensor_info() on read. Lidar and
+            camera streams share this single index space; the frame's kind must
+            match the sensor registered at stream_index.
 
             Args:
-                stream_index (int): The index of the corresponding
-                    sensor_info to use.
-                frame (LidarFrame): The frame to save.
+                stream_index (int): The unified (registration-order) stream
+                    index of the sensor to write this frame to.
+                frame (Frame): The frame to save.
             )")
         .def(
             "save",
-            [](osf::Writer& writer, uint32_t stream_index, const core::LidarFrame& frame,
+            [](osf::Writer& writer, uint32_t stream_index, const core::Frame& frame,
                uint64_t timestamp) { writer.save(stream_index, frame, osf::ts_t(timestamp)); },
             py::arg("stream_index"), py::arg("frame"), py::arg("ts"),
             R"(
-            Save a lidar frame to the OSF file.
+            Save a frame to the OSF file with the specified timestamp.
+
+            The frame may be a LidarFrame or a CameraFrame; the correct stream
+            type is selected based on the frame type. See the other save()
+            overload for the meaning of stream_index (unified registration
+            order).
 
             Args:
-                stream_index (int): The index of the corresponding
-                    sensor_info to use.
-                frame (LidarFrame): The frame to save.
+                stream_index (int): The unified (registration-order) stream
+                    index of the sensor to write this frame to.
+                frame (Frame): The frame to save.
                 ts (int): The timestamp to index the frame with.
             )")
         .def(
@@ -850,7 +896,7 @@ to work with OSF files.
             )")
         .def(
             "add_sensor",
-            [](osf::Writer& writer, const core::SensorInfo& info,
+            [](osf::Writer& writer, const core::LidarInfo& info,
                const std::vector<std::string>& fields_to_write) {
                 return writer.add_sensor(info, fields_to_write);
             },
@@ -859,14 +905,35 @@ to work with OSF files.
                Add a sensor to the OSF file.
 
                Args:
-                   info (SensorInfo): Sensor to add.
+                   info (LidarInfo): Sensor to add.
                    fields_to_write (List[str]): The fields from frames to
                        actually save into the OSF. If not provided uses the fields from
                        the first saved lidar frame for each stream. This parameter is optional.
 
                Returns (int):
-                   The stream index to use to write frames to this sensor.
+                   The unified (registration-order) stream index to use to
+                   write frames to this sensor.
 
+            )")
+        .def(
+            "add_sensor",
+            [](osf::Writer& writer, const ouster::sdk::core::CameraInfo& info,
+               const std::vector<std::string>& fields_to_write) {
+                return writer.add_sensor(info, fields_to_write);
+            },
+            py::arg("info"), py::arg("fields_to_write") = std::vector<std::string>{},
+            R"(
+               Add a camera to the OSF file.
+
+               Args:
+                   info (CameraInfo): Camera to add.
+                   fields_to_write (List[str]): The fields from camera frames to
+                       actually save into the OSF. If not provided, all fields on
+                       each saved camera frame are written. This parameter is optional.
+
+               Returns (int):
+                   The unified (registration-order) stream index to use to
+                   write camera frames to this camera.
             )")
         .def("close", &osf::Writer::close, "Finish OSF file and flush everything to disk.",
              py::arg("fsync") = false)
@@ -877,15 +944,6 @@ to work with OSF files.
 
                  Returns (bool):
                      The closed status of the writer.
-
-            )")
-        .def(
-            "sensor_info", [](osf::Writer& writer) { return writer.sensor_info(); },
-            R"(
-                 Return the sensor info list.
-
-                 Returns (List[SensorInfo]):
-                     The sensor info list.
 
             )")
         .def(
@@ -910,7 +968,7 @@ to work with OSF files.
         .def(
             "__init__",
             [](osf::AsyncWriter* self, const std::string& filename,
-               const std::vector<core::SensorInfo>& info,
+               const std::vector<std::shared_ptr<core::SensorInfo>>& info,
                const std::vector<std::string>& fields_to_write, uint32_t chunk_size,
                std::shared_ptr<osf::Encoder> encoder) {
                 new (self) osf::AsyncWriter(filename, info, fields_to_write, chunk_size,
@@ -927,7 +985,8 @@ to work with OSF files.
              Args:
                 filename (str): The filename to output to.
                 info (List[SensorInfo]): The sensor info vector to use for a
-                    multi stream OSF file.
+                    multi stream OSF file. Each entry may be a LidarInfo or
+                    CameraInfo.
                 fields_to_write (List[str]): The fields from frames to
                     actually save into the OSF. If not provided uses the fields from
                     the first saved lidar frame for each stream. This parameter is optional.
@@ -937,37 +996,51 @@ to work with OSF files.
                     used to configure how writer encodes the OSF.
         )")
         .def("close", &osf::AsyncWriter::close, "Finish OSF file and flush everything to disk.",
-             py::arg("fsync") = false)
+             py::arg("fsync") = false, py::call_guard<py::gil_scoped_release>())
         .def(
             "save",
-            [](osf::AsyncWriter& writer, uint32_t stream_index, const core::LidarFrame& frame) {
+            [](osf::AsyncWriter& writer, uint32_t stream_index, const core::Frame& frame) {
+                py::gil_scoped_release release;
                 return FutureWrapper(writer.save(stream_index, frame));
             },
             py::arg("stream_index"), py::arg("frame"),
             R"(
-            Save a lidar frame to the OSF file.
+            Save a frame to the OSF file.
+
+            The frame may be a LidarFrame or a CameraFrame; the correct stream
+            type is selected based on the frame type. stream_index is the
+            unified stream index: the sensor's position in registration order
+            (which matches sensor_info() order on read). Lidar and camera
+            streams share this single index space; the frame's kind must match
+            the sensor registered at stream_index.
 
             Args:
-                stream_index (int): The index of the corresponding
-                    SensorInfo to use.
-                frame (LidarFrame): The frame to save.
+                stream_index (int): The unified (registration-order) stream
+                    index of the sensor to write this frame to.
+                frame (Frame): The frame to save.
 
             Returns: a future.
             )")
         .def(
             "save",
-            [](osf::AsyncWriter& writer, uint32_t stream_index, const core::LidarFrame& frame,
+            [](osf::AsyncWriter& writer, uint32_t stream_index, const core::Frame& frame,
                uint64_t timestamp) {
+                py::gil_scoped_release release;
                 return FutureWrapper(writer.save(stream_index, frame, osf::ts_t(timestamp)));
             },
             py::arg("stream_index"), py::arg("frame"), py::arg("ts"),
             R"(
-               Save a lidar frame to the OSF file.
+               Save a frame to the OSF file with the specified timestamp.
+
+               The frame may be a LidarFrame or a CameraFrame; the correct
+               stream type is selected based on the frame type. See the other
+               save() overload for the meaning of stream_index (unified
+               registration order).
 
                Args:
-                   stream_index (int): The index of the corresponding
-                       SensorInfo to use.
-                   frame (LidarFrame): The frame to save.
+                   stream_index (int): The unified (registration-order) stream
+                       index of the sensor to write this frame to.
+                   frame (Frame): The frame to save.
                    ts (int): The timestamp to index the frame with.
 
                Returns: a future.
@@ -975,6 +1048,7 @@ to work with OSF files.
         .def(
             "save",
             [](osf::AsyncWriter& writer, const core::FrameSet& frame_set) {
+                py::gil_scoped_release release;
                 return FutureWrapper(writer.save(frame_set));
             },
             py::arg("frames"),
@@ -991,6 +1065,7 @@ to work with OSF files.
             "save",
             [](osf::AsyncWriter& writer,
                const ouster::sdk::core::FrameSetSourceMetadataSet& src_meta) {
+                py::gil_scoped_release release;
                 writer.save(src_meta);
             },
             py::arg("src_meta"),
@@ -1011,8 +1086,10 @@ to work with OSF files.
             "__exit__",
             [](osf::AsyncWriter& writer, py::object& /*exc_type*/, py::object& /*exc_value*/,
                py::object& /*traceback*/) {
-                writer.close();
-
+                {
+                    py::gil_scoped_release release;
+                    writer.close();
+                }
                 return py::none();
             },
             R"(
@@ -1026,53 +1103,103 @@ to work with OSF files.
         .def("done", &FutureWrapper::done)
         .def("wait", &FutureWrapper::wait);
 
-    py::class_<osf::LidarFrameEncoder> lidar_frame_encoder(module, "LidarFrameEncoder");
-    (void)lidar_frame_encoder;
+    py::class_<osf::FrameEncoder> frame_encoder(module, "FrameEncoder");
+    (void)frame_encoder;
 
-    py::class_<osf::PngLidarFrameEncoder, osf::LidarFrameEncoder>(module, "PngLidarFrameEncoder",
-                                                                  R"(Used by the Writer class to
-    encode LidarFrames using PNG compression.)")
+    py::class_<osf::PngFrameEncoder, osf::FrameEncoder>(module, "PngFrameEncoder",
+                                                        R"(Used by the Writer class to
+    encode frames using PNG compression.)")
         .def(py::init<int>(), py::arg("compression_amount"));
 
-    py::class_<osf::ZPngLidarFrameEncoder, osf::LidarFrameEncoder>(module, "ZPngLidarFrameEncoder",
-                                                                   R"(Used by the Writer class to
-    encode LidarFrames using ZPNG compression.)")
+    py::class_<osf::ZPngFrameEncoder, osf::FrameEncoder>(module, "ZPngFrameEncoder",
+                                                         R"(Used by the Writer class to
+    encode frames using ZPNG compression.)")
         .def(py::init<int>(), py::arg("compression_amount"));
 
     py::class_<osf::Encoder>(
         module, "Encoder",
-        R"(Used by the Writer class to encode LidarFrames, depending on configuration.)")
-        .def(py::init<std::shared_ptr<osf::LidarFrameEncoder>>(), py::arg("lidar_frame_encoder"),
-             py::sig("def __init__(self, lidar_frame_encoder: LidarFrameEncoder) "
-                     "-> None"))
+        R"(Used by the Writer class to encode frames, depending on configuration.)")
+        .def(py::init<std::shared_ptr<osf::FrameEncoder>>(), py::arg("frame_encoder"),
+             py::sig("def __init__(self, frame_encoder: FrameEncoder) -> None"))
         .def(
             "__init__",
-            [](osf::Encoder* self, std::shared_ptr<osf::LidarFrameEncoder> lidar_scan_encoder) {
+            [](osf::Encoder* self, const std::shared_ptr<osf::FrameEncoder>& lidar_frame_encoder) {
+                // include-cleaner cannot see these through the Python.h umbrella header
+                // NOLINTNEXTLINE(misc-include-cleaner)
+                PyErr_WarnEx(PyExc_FutureWarning,
+                             "Keyword argument 'lidar_frame_encoder' is "
+                             "deprecated, use 'frame_encoder' instead. "
+                             "The last supported version for this will be 2.0.",
+                             1);
+                new (self) osf::Encoder(lidar_frame_encoder);
+            },
+            py::arg("lidar_frame_encoder"),
+            py::sig("def __init__(self, *, lidar_frame_encoder: FrameEncoder) -> None"))
+        .def(
+            "__init__",
+            [](osf::Encoder* self, const std::shared_ptr<osf::FrameEncoder>& lidar_scan_encoder) {
                 PyErr_WarnEx(PyExc_FutureWarning,
                              "Keyword argument 'lidar_scan_encoder' is "
-                             "deprecated, use 'lidar_frame_encoder' instead. "
+                             "deprecated, use 'frame_encoder' instead. "
                              "The last supported version for this will be 1.0.",
                              1);
                 new (self) osf::Encoder(lidar_scan_encoder);
             },
             py::arg("lidar_scan_encoder"),
-            py::sig("def __init__(self, *, lidar_scan_encoder: LidarFrameEncoder) "
-                    "-> None"));
+            py::sig("def __init__(self, *, lidar_scan_encoder: FrameEncoder) -> None"));
 
-    module.def("slice_and_cast", &osf::slice_and_cast, py::arg("lidar_frame"),
-               py::arg("field_types"), "Copies LidarFrame with new field types");
+    // Field types may also be given as {name: dtype}. A dtype alone says
+    // nothing about a field's class or its dimensions beyond the frame's, so
+    // those are taken from the frame and only the element type is changed.
+    // Otherwise a non-pixel field, or an image with a per-pixel dimension (an
+    // RGB camera field, say), would be rebuilt as a plain 2D pixel field.
+    auto field_types_from_dtypes = [](const core::Frame& frame,
+                                      const std::map<std::string, py::object>& dtypes) {
+        core::LidarFrameFieldTypes field_types{};
+        for (const auto& field : dtypes) {
+            const auto element_type = field_type_of_dtype(field.second);
+            if (frame.has_field(field.first)) {
+                auto field_type = frame.field_type(field.first);
+                field_type.element_type = element_type;
+                field_types.push_back(std::move(field_type));
+            } else {
+                // Let slice_and_cast report the missing field.
+                field_types.emplace_back(field.first, element_type);
+            }
+        }
+        return field_types;
+    };
+
+    // Bound per frame kind, LidarFrame first, so that the Python type of the
+    // result follows the argument instead of widening to Frame.
+    module.def(
+        "slice_and_cast",
+        static_cast<core::LidarFrame (*)(const core::LidarFrame&,
+                                         const core::LidarFrameFieldTypes&)>(&osf::slice_and_cast),
+        py::arg("frame"), py::arg("field_types"), "Copies a LidarFrame with new field types");
 
     module.def(
         "slice_and_cast",
-        [](const core::LidarFrame& lidar_frame,
-           const std::map<std::string, py::object>& field_types) {
-            core::LidarFrameFieldTypes field_types_vec{};
-            for (const auto& field : field_types) {
-                field_types_vec.emplace_back(field.first, field_type_of_dtype(field.second));
-            }
-            return osf::slice_and_cast(lidar_frame, field_types_vec);
+        [field_types_from_dtypes](const core::LidarFrame& frame,
+                                  const std::map<std::string, py::object>& field_types) {
+            return osf::slice_and_cast(frame, field_types_from_dtypes(frame, field_types));
         },
-        py::arg("lidar_frame"), py::arg("field_types"), "Copies LidarFrame with new field types");
+        py::arg("frame"), py::arg("field_types"), "Copies a LidarFrame with new field types");
+
+    module.def("slice_and_cast",
+               static_cast<std::shared_ptr<core::Frame> (*)(
+                   const core::Frame&, const core::LidarFrameFieldTypes&)>(&osf::slice_and_cast),
+               py::arg("frame"), py::arg("field_types"),
+               "Copies a frame of any kind (e.g. a CameraFrame) with new field types");
+
+    module.def(
+        "slice_and_cast",
+        [field_types_from_dtypes](const core::Frame& frame,
+                                  const std::map<std::string, py::object>& field_types) {
+            return osf::slice_and_cast(frame, field_types_from_dtypes(frame, field_types));
+        },
+        py::arg("frame"), py::arg("field_types"),
+        "Copies a frame of any kind (e.g. a CameraFrame) with new field types");
 
     py::class_<osf::OsfFrameSetSource, core::FrameSetSource>(module, "OsfFrameSetSource")
         .def(

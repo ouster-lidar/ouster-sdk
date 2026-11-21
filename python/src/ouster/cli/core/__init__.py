@@ -82,7 +82,8 @@ def print_version(ctx, param, value):
 
 @click.group()
 @click.option('-v', '--version', is_flag=True, callback=print_version,
-              expose_value=False, is_eager=True)
+              expose_value=False, is_eager=True,
+              help="Show version and plugin information.")
 @click.option(TRACEBACK_FLAG,
               "trace",
               is_flag=True,
@@ -102,7 +103,7 @@ def cli(ctx, trace: bool, sdk_log_level: Optional[str]) -> None:
     # runner below on the exception handling path, where context is not
     # available
     TRACEBACK = trace
-    # set the terminal width since click doesnt seem to bother
+    # set the terminal width since click doesn't seem to bother
     try:
         ctx.terminal_width = os.get_terminal_size().columns
     except OSError:

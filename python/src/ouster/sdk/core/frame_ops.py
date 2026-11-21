@@ -1,6 +1,6 @@
 from typing import List, Union, Callable, Optional, cast
 import numpy as np
-from ouster.sdk.core import LidarFrame, SensorInfo, FieldClass, dewarp
+from ouster.sdk.core import Frame, LidarFrame, LidarInfo, FieldClass, dewarp
 from ouster.sdk._bindings.client import clip  # type: ignore[attr-defined]  # noqa: F401
 from ouster.sdk._bindings.client import filter_field  # type: ignore[attr-defined]  # noqa: F401
 from ouster.sdk._bindings.client import _frame_ops_filter_uv
@@ -11,7 +11,7 @@ from ouster.sdk._bindings.client import reduce_by_factor_metadata as _reduce_by_
 from ouster.sdk._bindings.client import reduce_by_factor as _reduce_by_factor
 
 
-def _resolve_pixel_fields(frame: LidarFrame,
+def _resolve_pixel_fields(frame: Frame,
                           filtered_fields: Optional[List[str]]) -> List[str]:
     """Resolve which frame fields to operate on, restricted to PIXEL_FIELD types.
 
@@ -20,9 +20,13 @@ def _resolve_pixel_fields(frame: LidarFrame,
     - If filtered_fields is provided: validate that any present requested fields are
       pixel fields; non-pixel fields raise ValueError.
       (Missing fields are ignored to avoid failing mid-stream when fields vary.)
+
+    Uses the per-field class exposed by the Frame base so this works for any
+    Frame subtype (LidarFrame, CameraFrame, ...), not just LidarFrame's
+    field_types accessor.
     """
-    pixel_fields = {ft.name for ft in frame.field_types
-                    if ft.field_class == FieldClass.PIXEL_FIELD}
+    pixel_fields = {name for name in frame.fields
+                    if frame.field_class(name) == FieldClass.PIXEL_FIELD}
 
     requested = filtered_fields if filtered_fields is not None else list(frame.fields)
     present = [f for f in requested if frame.has_field(f)]
@@ -36,7 +40,7 @@ def _resolve_pixel_fields(frame: LidarFrame,
     return [f for f in present if f in pixel_fields]
 
 
-def filter_uv(frame: LidarFrame, coord_2d: str, lower: Union[int, float], upper: Union[int, float],
+def filter_uv(frame: Frame, coord_2d: str, lower: Union[int, float], upper: Union[int, float],
               invalid: int = 0, filtered_fields: Optional[List[str]] = None) -> None:
     """
     Filters the frame based on the specified image axis ('u' or 'v').
@@ -44,7 +48,7 @@ def filter_uv(frame: LidarFrame, coord_2d: str, lower: Union[int, float], upper:
     are replaced by the supplied invalid value (default is zero).
 
     Parameters:
-    - frame: LidarFrame
+    - frame: Frame (LidarFrame or CameraFrame)
     - coord_2d: str; image axis to filter ('u' rows, 'v' columns)
     - lower: Union[int, float]; lower bound if float it is assumed a percentage
     - upper: Union[int, float]; upper bound if float it is assumed a percentage
@@ -80,7 +84,7 @@ def filter_uv(frame: LidarFrame, coord_2d: str, lower: Union[int, float], upper:
                         filtered_fields or [], filtered_fields is not None)
 
 
-def filter_xyz(frame: LidarFrame, xyzlut: Callable[[Union[LidarFrame, np.ndarray]], np.ndarray],
+def filter_xyz(frame: Frame, xyzlut: Callable[..., np.ndarray],
                axis_idx: int, lower: float = float("-inf"), upper: float = float("inf"),
                invalid: int = 0, filtered_fields: Optional[List[str]] = None,
                dewarp_points: bool = False) -> None:
@@ -92,23 +96,28 @@ def filter_xyz(frame: LidarFrame, xyzlut: Callable[[Union[LidarFrame, np.ndarray
     filtered. Non-spatial fields (IMU, GNSS position, etc.) are preserved.
 
     Parameters:
-    - frame: LidarFrame
-    - xyzlut: Callable[[Union[LidarFrame, np.ndarray]], np.ndarray]
+    - frame: Frame (LidarFrame or CameraFrame)
+    - xyzlut: Callable[[Union[Frame, np.ndarray]], np.ndarray]
     - axis_idx: int; spatial axis to filter (0=X, 1=Y, 2=Z)
     - lower: float; lower bound
     - upper: float; upper bound
     - invalid: int; the invalid value to use (default is 0)
     - filtered_fields: Optional[List[str]]; specific fields to filter (if None, filters all PIXEL_FIELD types)
-    - dewarp_points: bool; if True, dewarp XYZ points using frame.body_to_world
+    - dewarp_points: bool; if True, transform XYZ points into the world frame
+      using frame.body_to_world. Lidar frames carry one pose per column and use
+      rolling-shutter dewarp; camera frames carry a single pose and are
+      transformed rigidly (no motion / rolling-shutter compensation needed).
     """
     if axis_idx < 0 or axis_idx > 2:
         raise ValueError(f"axis_idx == {axis_idx} must be in the range [0, 2]")
 
     def _xyz_points(field_name: str) -> np.ndarray:
         points = xyzlut(frame.field(field_name))
-        if dewarp_points:
-            return cast(np.ndarray, dewarp(points, frame.body_to_world))
-        return points
+        if not dewarp_points:
+            return points
+        # dewarp accepts per-column poses (lidar) or a single pose broadcast
+        # across all columns (camera).
+        return cast(np.ndarray, dewarp(points, frame.body_to_world))
 
     # Compute spatial masks from range fields
     range_mask = None
@@ -161,9 +170,9 @@ def _validate_beam_indices(indices: List[int], height: int) -> None:
             f"beam indices {invalid_indices} must be in the range [0, {height})")
 
 
-def select_by_index_metadata(metadata: SensorInfo, indices: List[int]) -> SensorInfo:
+def select_by_index_metadata(metadata: LidarInfo, indices: List[int]) -> LidarInfo:
     """
-    Generate a SensorInfo matching an arbitrary subset of beam indices.
+    Generate a LidarInfo matching an arbitrary subset of beam indices.
     """
     _validate_beam_indices(indices, metadata.h)
     return _select_by_index_metadata(metadata, indices)
@@ -201,7 +210,7 @@ def _reduce_factor_to_indices(factor: int, height: int) -> List[int]:
     return list(range(height))[factor_slice]
 
 
-def reduce_by_factor_metadata(metadata: SensorInfo, factor: int) -> SensorInfo:
+def reduce_by_factor_metadata(metadata: LidarInfo, factor: int) -> LidarInfo:
     _reduce_factor_to_indices(factor, metadata.h)
     return _reduce_by_factor_metadata(metadata, factor)
 

@@ -3,7 +3,7 @@ Using the CLI
 
 The ``ouster-cli`` tool provides a command line interface to interact with Ouster sensors and data.
 
-Install the ouster-sdk python package to get access to the ``ouster-cli`` utility. 
+Install the ouster-sdk python package to get access to the ``ouster-cli`` utility.
 See :doc:`/getting-started/installation` for installation instructions.
 
 After installation, to verify installation and view command options, open a terminal and run:
@@ -78,7 +78,7 @@ menu tree you are.
     - CLI command ``ouster-cli source <SENSOR HOSTNAME> {info,config}`` are working properly
     - Viz ``ouster-cli source <PCAP FILE> viz`` from the ``tcpdump`` recorded pcap can be played and
       visualized
-    
+
     But ``ouster-cli source <SENSOR HOSTNAME> viz``, or ``ouster-cli source <SENSOR HOSTNAME>
     save`` still can't receive any packets and get the following error::
 

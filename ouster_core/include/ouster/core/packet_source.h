@@ -48,10 +48,10 @@ class OUSTER_API_CLASS PacketSource {
     OUSTER_API_FUNCTION
     virtual bool is_live() const = 0;
 
-    /// Get the SensorInfo for each sensor in the source
+    /// Get the LidarInfo for each sensor in the source
     /// @return info about each sensor
     OUSTER_API_FUNCTION
-    virtual const std::vector<std::shared_ptr<SensorInfo>>& sensor_info() const = 0;
+    virtual const std::vector<std::shared_ptr<LidarInfo>>& sensor_info() const = 0;
 
    protected:
     OUSTER_API_FUNCTION

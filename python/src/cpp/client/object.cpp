@@ -52,7 +52,7 @@ void init_client_object(py::module_& module, py::module_& /*unused*/) {
                 "Transform from the object frame to the body frame.")
         .def_rw("body_to_world", &Object::body_to_world,
                 "Transform from the body frame to the world frame.")
-        .def_rw("velocity", &Object::velocity, "Velocity vector (inside worldframe).")
+        .def_rw("velocity", &Object::velocity, "Velocity vector (inside world frame).")
         .def_rw("dimensions", &Object::dimensions, "Full extents of the object's bounding box.")
         .def_rw("properties", &Object::properties,
                 "Properties dictionary.\n\n"

@@ -262,7 +262,7 @@ class OUSTER_API_CLASS OsfFile {
 
    protected:
     /**
-     * Convenience method to set error and print it's content.
+     * Convenience method to set error and print its content.
      *
      * @todo [pb] Adding more error states will probably extend the set of this
      * function.
@@ -277,7 +277,7 @@ class OUSTER_API_CLASS OsfFile {
     FileState state_;
 
     /**
-     * Path to the OSF as it was passed in contructor.
+     * Path to the OSF as it was passed in constructor.
      */
     std::string path_;
 

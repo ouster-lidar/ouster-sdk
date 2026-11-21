@@ -33,6 +33,7 @@ for setup instructions, launch file examples, and detailed usage guidance.
    features/consumption/index
    features/playback/index
    features/processing/index
+   features/camera/index
    features/mapping/index
    features/pose_optimizer/index
    features/localization/index
@@ -67,6 +68,6 @@ for setup instructions, launch file examples, and detailed usage guidance.
 
 .. toctree::
    :hidden:
-   
+
    python/api_python/ouster.sdk
    cpp/api_cpp/namespace_ouster

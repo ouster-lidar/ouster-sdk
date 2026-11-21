@@ -40,46 +40,26 @@ py::object field_to_pyobj(ouster::sdk::core::FieldView& field, py::handle handle
     if (type.is_string() || type.is_object()) {
         py::module_ numpy = py::module_::import_("numpy");
 
-        // 1. Extract dimensions
-        auto og_shape = shape;
-        size_t str_len = shape.back();
-        shape.pop_back();  // Remove the stride/string-length dim from logical
-                           // shape
-
-        size_t size = str_len;
-        for (auto it : shape) {
-            size *= it;
-        }
-
-        // 2. Create Raw MemoryView
-        PyObject* raw_memview = PyMemoryView_FromMemory(
-            reinterpret_cast<char*>(field.get()),
-            static_cast<Py_ssize_t>(size * field.desc().element_size), PyBUF_WRITE);
-        if (raw_memview == nullptr) {
-            throw std::runtime_error("Failed to create memoryview");
-        }
-        py::object memv = py::steal<py::object>(raw_memview);
-
-        // 3. Determine the Dtype String first
+        // Get type string
         py::object dtype_str;
         if (type.is_string()) {
+            size_t str_len = shape.back();
             dtype_str = py::cast("S" + std::to_string(str_len));
-            og_shape.pop_back();
+            shape.pop_back();
+            shape.back() *= str_len;
         } else {
             dtype_str = type.otype();
+            shape.back() *= field.desc().element_size;
         }
 
-        // 4. Pass dtype to frombuffer
-        // This creates an array of the correct logical size immediately.
-        py::object array = numpy.attr("frombuffer")(memv, dtype_str);
+        // Turn it into a byte array then view it on the python side as the correct dtype
+        py::ndarray<py::numpy> out(field.get(), shape.size(), shape.data(), handle,
+                                   nullptr,  // Contiguous
+                                   py::dtype<uint8_t>());
 
-        // 5. Reshape using a Tuple
-        // Now valid because array.size matches product(shape)
-        array = array.attr("reshape")(py::tuple(py::cast(og_shape)));
-
-        // apply recarray
-        // The python layer (client_common.h / dtype handling) likely maps this
-        // to 'V1' This line casts the byte view to a structured array
+        py::object array = out.cast();
+        array = array.attr("view")(dtype_str);
+        // turn it into a structured array
         array = array.attr("view")(numpy.attr("recarray"));
         return array;
     }

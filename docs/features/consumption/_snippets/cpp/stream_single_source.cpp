@@ -1,7 +1,10 @@
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "ouster/core/frame.h"
+#include "ouster/core/frame_set.h"
 #include "ouster/osf/osf_frame_set_source.h"
 #include "ouster/sensor/sensor_frame_set_source.h"
 
@@ -19,11 +22,8 @@ namespace {
 void print_frames(core::FrameSetSource& source, std::size_t limit = 10) {
     std::size_t count = 0;
     for (const auto& frame_set : source) {
-        for (const auto& frame_ptr : frame_set) {
-            if (!frame_ptr) {
-                continue;
-            }
-            std::cout << "frame " << count << ": id=" << frame_ptr->frame_id << '\n';
+        for (const auto& frame_ptr : frame_set.valid_frames()) {
+            std::cout << "frame " << count << ": ts=" << frame_ptr->timestamp()[0] << '\n';
             if (++count >= limit) {
                 return;
             }
@@ -52,10 +52,11 @@ void close_open_source(const std::string& hostname) {
     {
         auto source = open_source(hostname, {}, /*collate=*/true, /*sensor_idx=*/0);
         for (const auto& frame_set : source) {
-            if (frame_set.size() > 0 && frame_set[0]) {
-                std::cout << "first frame_id=" << frame_set[0]->frame_id << "\n";
-                break;
+            for (const auto& frame : frame_set.valid_frames()) {
+                std::cout << "first ts=" << frame->timestamp()[0] << "\n";
+                return;
             }
+            break;
         }
     }
     // Underlying resources (UDP sockets for live sources, file handles for
@@ -79,13 +80,13 @@ void select_single_sensor(const std::string& source_url) {
     // FrameSet to one entry, accessible the same way: frame_set[0].
     for (const auto& frame_set : via_open_source) {
         if (frame_set.size() > 0 && frame_set[0]) {
-            std::cout << "via sensor_idx: frame_id=" << frame_set[0]->frame_id << "\n";
+            std::cout << "via sensor_idx: ts=" << frame_set[0]->timestamp()[0] << "\n";
             break;
         }
     }
     for (const auto& frame_set : via_single) {
         if (frame_set.size() > 0 && frame_set[0]) {
-            std::cout << "via single():   frame_id=" << frame_set[0]->frame_id << "\n";
+            std::cout << "via single():   ts=" << frame_set[0]->timestamp()[0] << "\n";
             break;
         }
     }
@@ -123,7 +124,7 @@ void replay_open_source_metadata(const std::string& pcap_path,
                                  const std::string& sensor_info_path) {
     // clang-format off
     // [doc-stag-pcap-replay-metadata]
-    auto source = open_source(pcap_path, [&](FrameSetSourceOptions& opt) { 
+    auto source = open_source(pcap_path, [&](FrameSetSourceOptions& opt) {
                               opt.meta = { sensor_info_path }; });
     // [doc-etag-pcap-replay-metadata]
     // clang-format on
@@ -137,9 +138,7 @@ void read_osf_frames(const std::string& osf_path, std::size_t limit) {
     std::size_t count = 0;
 
     for (const auto& frame_set : source) {
-        for (const auto& frame : frame_set) {
-            if (!frame) { 
-                continue; }
+        for (const auto& frame : frame_set.valid_frames()) {
             std::cout << "frame = " << to_string(*frame)
                       << ", WxH=" << frame->w << "x" << frame->h << '\n';
             if (++count >= limit) {

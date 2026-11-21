@@ -56,13 +56,7 @@ std::string current_time_part() {
 
 std::string format_fname_base(const core::SensorInfo& meta, const std::string& time_part) {
     std::ostringstream oss;
-    oss << meta.prod_line << '_' << meta.sn << '_';
-    if (meta.config.lidar_mode) {
-        oss << core::to_string(*meta.config.lidar_mode);
-    } else {
-        oss << "UNKNOWN";
-    }
-    oss << '_' << time_part;
+    oss << meta.sn << '_' << time_part;
     return oss.str();
 }
 
@@ -86,14 +80,10 @@ core::AnyPacketSource open_pcap_source_with_metadata(const std::string& pcap_fil
 
 void record_sensor_session(const std::string& hostname, int lidar_port = 7502, int imu_port = 7503,
                            int n_seconds = 10) {
-    // make a descriptive filename for metadata/pcap files
-    auto get_fname_base = [](const std::shared_ptr<core::SensorInfo>& info) {
-        return format_fname_base(*info, current_time_part());
-    };
     // clang-format off
     //! [doc-stag-pcap-record-setup]
     // connect to sensor and record lidar/imu packets
-    auto source = open_packet_source(hostname, 
+    auto source = open_packet_source(hostname,
                                     [&](auto& options) {
                                         options.lidar_port = lidar_port;
                                         options.imu_port = imu_port;
@@ -102,11 +92,11 @@ void record_sensor_session(const std::string& hostname, int lidar_port = 7502, i
     const auto& info = source.sensor_info()[0];
 
     // make a descriptive filename for metadata/pcap files
-    auto fname_base = get_fname_base(info);
-    
+    auto fname_base = format_fname_base(*info, current_time_part());
+
     std::cout << "Saving sensor info to: " << fname_base << ".json" << std::endl;
     std::ofstream(fname_base + ".json") << info->to_json_string();
-    
+
     std::cout << "Writing to: " << fname_base << ".pcap (Ctrl-C to stop early)" << std::endl;
     //! [doc-etag-pcap-record-setup]
     //! [doc-stag-pcap-record]
@@ -117,16 +107,16 @@ void record_sensor_session(const std::string& hostname, int lidar_port = 7502, i
     std::uint64_t n_packets = 0;
 
     auto sensor_src = std::dynamic_pointer_cast<sensor::SensorPacketSource>(source.child());
-    
+
     while (source_it()) {
         auto event = sensor_src->get_packet(1.0);
-        
+
         if (event.type != sensor::ClientEvent::PACKET) continue;
-        
+
         auto& packet = event.packet();
         const int port = packet.type() == core::PacketType::Lidar ? lidar_port : imu_port;
         auto timestamp = packet.host_timestamp != 0 ? packet.host_timestamp / 1000 : now_in_microseconds();
-        
+
         pcap::record_packet(*handle, "127.0.0.1", "127.0.0.1", port,
                             port, packet.buf.data(), packet.buf.size(), timestamp);
         ++n_packets;
@@ -143,15 +133,18 @@ void record_sensor_session_save_osf(const std::string& hostname, const std::stri
     // clang-format off
     //! [doc-stag-osf-write-setup]
     auto source = open_source(hostname);
-    const auto& infos = source.sensor_info()[0];
+    // sensor_info() is the combined, frame-slot-aligned sensor list (lidar and
+    // camera). Pass it straight through so every stream is registered in the
+    // same order as the FrameSet slots used by save() below.
+    const auto& infos = source.sensor_info();
     //! [doc-etag-osf-write-setup]
     //! [doc-stag-osf-write]
-    osf::Writer writer(output_file, *infos);
+    osf::Writer writer(output_file, infos);
     int written = 0;
 
     for (const auto& frame_set : source) {
         for (size_t idx = 0; idx < frame_set.size(); ++idx) {
-            const auto& frame = frame_set[idx];
+            auto frame = frame_set[idx];
             if (!frame) { continue; }
             writer.save(static_cast<int>(idx), *frame); }
         if (++written >= n_frames) { break; }}
@@ -171,31 +164,24 @@ void osf_slice_frames(const std::string& osf_file) {
         return base + "_sliced.osf";
     };
 
-    auto dereference_infos = [](const auto& ptrs) {
-        std::vector<core::SensorInfo> infos;
-        for (const auto& ptr : ptrs) {
-            if (ptr) infos.push_back(*ptr);
-        }
-        return infos;
-    };
     // clang-format off
     //! [doc-stag-osf-slice-frames]
     osf::OsfFrameSetSource source(osf_file);
     std::vector<std::string> fields_to_write = {
-        "RANGE", 
-        "SIGNAL", 
+        "RANGE",
+        "SIGNAL",
         "REFLECTIVITY"};
-    
+
     osf::Writer writer(make_sliced_fname(osf_file),
-                       dereference_infos(source.sensor_info()),
+                       source.sensor_info(),
                        fields_to_write);
     // Read frames and write back
     for (const auto& frame_set : source) {
         for (size_t idx = 0; idx < frame_set.size(); ++idx) {
-            const auto& frame = frame_set[idx];
+            auto frame = frame_set[idx];
             if (!frame) { continue; }
             std::cout << "writing sliced frame with ts = "
-                      << frame->get_first_valid_packet_timestamp() << std::endl;
+                      << frame->get_first_valid_receive_timestamp() << std::endl;
             writer.save(static_cast<int>(idx), *frame); } }
     writer.close();
     //! [doc-etag-osf-slice-frames]

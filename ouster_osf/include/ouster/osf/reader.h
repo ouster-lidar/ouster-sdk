@@ -38,8 +38,10 @@ class ChunkRef;
 class ChunksPile;
 class ChunksRange;
 struct MessagesStreamingIter;
+struct SequentialMessagesStreamingIter;
 struct MessagesChunkIter;
 class MessagesStreamingRange;
+class SequentialMessagesStreamingRange;
 
 /**
  * Chunk forward iterator in order of offset.
@@ -59,7 +61,7 @@ struct OUSTER_API_CLASS ChunksIter {
     /**
      * Initialize from another ChunksIter object.
      *
-     * @param[in] other The other ChunksIter object to initalize from.
+     * @param[in] other The other ChunksIter object to initialize from.
      */
     OUSTER_API_FUNCTION
     ChunksIter(const ChunksIter& other);
@@ -219,7 +221,7 @@ class OUSTER_API_CLASS ChunksRange {
     ChunksRange(const uint64_t begin_addr, const uint64_t end_addr, Reader* reader);
 
     /**
-     * The internal store of the begining offset into the chunks.
+     * The internal store of the beginning offset into the chunks.
      */
     uint64_t begin_addr_;
 
@@ -264,7 +266,7 @@ class OUSTER_API_CLASS Reader : public ReaderBase {
     Reader(const std::string& file, const error_handler_t& error_handler = default_error_handler);
 
     /**
-     * Reads the messages from the first OSF chunk in sequental order
+     * Reads the messages from the first OSF chunk in sequential order
      * till the end. Doesn't support RandomAccess.
      *
      * @throws std::logic_error Exception on not having sensor_info.
@@ -299,6 +301,22 @@ class OUSTER_API_CLASS Reader : public ReaderBase {
     OUSTER_API_FUNCTION
     MessagesStreamingRange messages(const std::vector<uint32_t>& stream_ids, const ts_t start_ts,
                                     const ts_t end_ts);
+
+    /**
+     * Reads the messages from a given stream from start index to end index.
+     * Supports random access.
+     *
+     * @param[in] stream_id Stream id to read from
+     * @param[in] start_index First message index to read (inclusive).
+     * @param[in] end_index Message index to read up to (not inclusive).
+     * @throws std::logic_error Exception on not having sensor_info.
+     *
+     * @return The SequentialMessagesStreamingRange object to iterate
+     *         through the messages.
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingRange messages_by_index(uint32_t stream_id, uint32_t start_index,
+                                                       uint32_t end_index);
 
     /**
      * Find the timestamp of the message by its index and stream_id.
@@ -338,6 +356,7 @@ class OUSTER_API_CLASS Reader : public ReaderBase {
     friend class ChunkRef;
     friend struct ChunksIter;
     friend struct MessagesStreamingIter;
+    friend struct SequentialMessagesStreamingIter;
 };  // Reader
 
 /**
@@ -389,7 +408,7 @@ class OUSTER_API_CLASS MessageRef {
      * @return The OsfBuffer to the underlying data.
      */
     OUSTER_API_FUNCTION
-    OsfBuffer buf() const;
+    const OsfBuffer& buf() const;
 
     /**
      * Debug string representation.
@@ -412,7 +431,7 @@ class OUSTER_API_CLASS MessageRef {
     }
 
     /**
-     * Checks whether the message belongs to the specified Strean type.
+     * Checks whether the message belongs to the specified Stream type.
      *
      * @param[in] type_str The data type in string form to check against.
      * @return If the current MessageRef is of type type_str.
@@ -471,12 +490,49 @@ class OUSTER_API_CLASS MessageRef {
     }
 
     /**
+     * Two-context decode overload. Used by streams whose decode_msg accepts
+     * multiple external context objects (e.g. CollationStream which resolves
+     * both lidar frames and camera frames).
+     *
+     * @tparam Stream Type of the target stream.
+     * @tparam T Type of the first context object passed to the decoder.
+     * @tparam U Type of the second context object passed to the decoder.
+     * @param[in] first First context object.
+     * @param[in] second Second context object.
+     * @return Smart pointer to the decoded object of type Stream::obj_type,
+     *         or nullptr on failure.
+     */
+    template <typename Stream, typename T, typename U>
+    std::unique_ptr<typename Stream::obj_type> decode_msg(T& first, U& second) const {
+        auto meta = meta_provider_.get<typename Stream::meta_type>(id());
+
+        if (meta == nullptr) {
+            return nullptr;
+        }
+
+        try {
+            return Stream::decode_msg(*this, *meta, meta_provider_, first, second);
+        } catch (const std::runtime_error& error) {
+            error_handler_(Severity::OUSTER_WARNING, error.what());
+            return nullptr;
+        }
+    }
+
+    /**
      * Get the underlying raw message byte vector.
      *
      * @return Return the underlying raw message byte vector.
      */
     OUSTER_API_FUNCTION
     std::vector<uint8_t> buffer() const;
+
+    /**
+     * Get a pointer to the start of the message for decoding.
+     *
+     * @return Pointer to the start of the message.
+     */
+    OUSTER_API_FUNCTION
+    const uint8_t* data() const;
 
     /**
      * Check if two MessageRefs are equal.
@@ -746,7 +802,7 @@ struct OUSTER_API_CLASS MessagesChunkIter {
      * Initialize the MessagesChunkIter from another
      * MessageChunkIter object.
      *
-     * @param[in] other The other MessagesChunkIter to initalize from.
+     * @param[in] other The other MessagesChunkIter to initialize from.
      */
     OUSTER_API_FUNCTION
     MessagesChunkIter(const MessagesChunkIter& other);
@@ -910,7 +966,7 @@ class OUSTER_API_CLASS MessagesStreamingRange {
      *
      * @param[in] start_ts The lowest timestamp to start with.
      * @param[in] end_ts The highest timestamp to end with.
-     * @param[in] stream_ids The stream indicies to use with the streaming
+     * @param[in] stream_ids The stream indices to use with the streaming
      *                       range.
      * @param[in] reader The reader object to use for reading the OSF file.
      */
@@ -928,7 +984,7 @@ class OUSTER_API_CLASS MessagesStreamingRange {
     ts_t end_ts_;
 
     /**
-     * The set of stream indicies in the range.
+     * The set of stream indices in the range.
      */
     std::vector<uint32_t> stream_ids_;
 
@@ -937,6 +993,64 @@ class OUSTER_API_CLASS MessagesStreamingRange {
      */
     Reader* reader_;
     friend class Reader;
+};  // MessagesStreamingRange
+
+/**
+ * Range class for iterating through all messages in Streaming Layout order
+ * for specified sequence range.
+ */
+class OUSTER_API_CLASS SequentialMessagesStreamingRange {
+   public:
+    /**
+     * Begin function for std iterator support.
+     *
+     * @return A MessagesStreamingIter object for iteration.
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingIter begin() const;
+
+    /**
+     * End function for std iterator support.
+     *
+     * @return A MessagesStreamingIter object for signifying
+     *         the end of iteration.
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingIter end() const;
+
+    /**
+     * Debug string representation.
+     *
+     * @return The string representation of a MessagesStreamingRange.
+     */
+    OUSTER_API_FUNCTION
+    std::string to_string() const;
+
+   private:
+    /**
+     * Initialize from Reader on a set of filters in message order rather than time order.
+     * \note Using range [start_index, end_index] (not inclusive)
+     *
+     * @param[in] stream_id The stream index to iterate over.
+     * @param[in] start_index The lowest index to start reading from.
+     * @param[in] end_index The highest index to read up to.
+     * @param[in] reader The reader object to use for reading the OSF file.
+     */
+    SequentialMessagesStreamingRange(uint32_t stream_id, uint32_t start_index, uint32_t end_index,
+                                     Reader* reader);
+
+    /**
+     * The set of stream indices in the range.
+     */
+    uint32_t stream_id_;
+
+    /**
+     * The reader object to use to read the OSF file.
+     */
+    Reader* reader_;
+    friend class Reader;
+
+    uint32_t start_index_, end_index_;
 };  // MessagesStreamingRange
 
 /**
@@ -985,7 +1099,7 @@ struct OUSTER_API_CLASS MessagesStreamingIter {
      * Initialize the MessagesStreamingIter from another
      * MessagesStreamingIter object.
      *
-     * @param[in] other The other MessagesStreamingIter to initalize from.
+     * @param[in] other The other MessagesStreamingIter to initialize from.
      */
     OUSTER_API_FUNCTION
     MessagesStreamingIter(const MessagesStreamingIter& other);
@@ -1061,7 +1175,7 @@ struct OUSTER_API_CLASS MessagesStreamingIter {
      *
      * @param[in] start_ts The lowest timestamp to start with.
      * @param[in] end_ts The highest timestamp to end with.
-     * @param[in] stream_ids The stream indicies to use with the streaming
+     * @param[in] stream_ids The stream indices to use with the streaming
      *                       range.
      * @param[in] reader The reader object to use for reading the OSF file.
      */
@@ -1110,6 +1224,173 @@ struct OUSTER_API_CLASS MessagesStreamingIter {
     friend class Reader;
     friend class MessagesStreamingRange;
 };  // MessagesStreamingIter
+
+/**
+ * Iterator over all messages in Streaming Layout order for specified index range.
+ */
+struct OUSTER_API_CLASS SequentialMessagesStreamingIter {
+    /// Iterator category for forward iteration.
+    using iterator_category = std::forward_iterator_tag;
+    /// Type of value pointed to by the iterator.
+    using value_type = MessageRef;
+    /// Difference type between iterators.
+    using difference_type = std::ptrdiff_t;
+    /// Pointer type returned by operator->.
+    using pointer = std::unique_ptr<MessageRef>;
+    /// Reference type returned by operator*.
+    using reference = MessageRef&;
+
+    /// Pair of ChunkRef and timestamp used for chunk queuing.
+    using opened_chunk_type = std::pair<ChunkRef, uint64_t>;
+
+    /**
+     * Comparison struct used for determining which chunk is greater.
+     */
+    struct OUSTER_API_CLASS GreaterChunkType {
+        /**
+         * Comparison operator used for determining if the first is greater
+         * than the second. The comparison is based on the timestamps.
+         *
+         * @param[in] a The first chunk to compare.
+         * @param[in] b The second chunk to compare.
+         * @return If the first chunk is greater than the second chunk.
+         */
+        OUSTER_API_FUNCTION
+        bool operator()(const opened_chunk_type& a, const opened_chunk_type& b);
+    };
+
+    /**
+     * Default SequentialMessagesStreamingIter constructor that just zeros
+     * the internal fields.
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingIter();
+
+    /**
+     * Initialize the MessagesStreamingIter from another
+     * MessagesStreamingIter object.
+     *
+     * @param[in] other The other SequentialMessagesStreamingIter to initialize from.
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingIter(const SequentialMessagesStreamingIter& other);
+
+    /**
+     * Default assignment operation.
+     *
+     * @param[in] other The other SequentialMessagesStreamingIter to assign to.
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingIter& operator=(const SequentialMessagesStreamingIter& other) =
+        default;
+
+    /**
+     * Gets the current MessageRef via value.
+     *
+     * @return The current MessageRef value.
+     */
+    OUSTER_API_FUNCTION
+    MessageRef operator*() const;
+
+    /**
+     * Gets the current MessageRef via smart pointer.
+     *
+     * @return The current MessageRef smart pointer.
+     */
+    OUSTER_API_FUNCTION
+    std::unique_ptr<const MessageRef> operator->() const;
+
+    /**
+     * Advance to the next message.
+     *
+     * @return *this
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingIter& operator++();
+
+    /**
+     * @copydoc operator++()
+     */
+    OUSTER_API_FUNCTION
+    SequentialMessagesStreamingIter operator++(int);
+
+    /**
+     * Check if two SequentialMessagesStreamingIter are equal.
+     *
+     * @param[in] other The other SequentialMessagesStreamingIter to check against.
+     * @return If the two SequentialMessagesStreamingIter are equal.
+     */
+    OUSTER_API_FUNCTION
+    bool operator==(const SequentialMessagesStreamingIter& other) const;
+
+    /**
+     * Check if two SequentialMessagesStreamingIter are not equal.
+     *
+     * @param[in] other The other SequentialMessagesStreamingIter to check against.
+     * @return If the two SequentialMessagesStreamingIter are not equal.
+     */
+    OUSTER_API_FUNCTION
+    bool operator!=(const SequentialMessagesStreamingIter& other) const;
+
+    /**
+     * Debug string representation.
+     *
+     * @return The string representation of a SequentialMessagesStreamingIter.
+     */
+    OUSTER_API_FUNCTION
+    std::string to_string() const;
+
+   private:
+    /**
+     * Initialize from Reader on a set of filters in message order rather than time order.
+     * \note Using range [start_index, end_index] (not inclusive)
+     *
+     * @param[in] stream_id The stream index to iterate over.
+     * @param[in] start_index The lowest index to start reading from.
+     * @param[in] end_index The highest index to read up to.
+     * @param[in] reader The reader object to use for reading the OSF file.
+     */
+    SequentialMessagesStreamingIter(uint32_t stream_id, uint32_t start_index, uint32_t end_index,
+                                    Reader* reader);
+
+    /**
+     * Advance to the next message.
+     */
+    void next();
+
+    uint32_t curr_index_;
+
+    uint32_t end_index_;
+
+    uint32_t chunk_start_index_;
+    uint32_t chunk_end_index_;
+
+    /**
+     * The stream to iterate on.
+     */
+    uint32_t stream_id_;
+
+    /**
+     * The reader object used to read the OSF file.
+     */
+    Reader* reader_;
+
+    /**
+     * Priority queue used to hold the chunks in timestamp order.
+     *
+     * @relates greater_chunk_type
+     */
+    std::priority_queue<opened_chunk_type, std::vector<opened_chunk_type>, GreaterChunkType>
+        curr_chunks_{};
+    friend class Reader;
+    friend class SequentialMessagesStreamingRange;
+};  // MessagesStreamingIter
+
+/// Creates an OSF file from a given URI with default file implementations
+/// @return the created file
+OUSTER_API_FUNCTION
+std::unique_ptr<OsfFile> make_file(const std::string& file  ///< [in] file URI to open
+);
 
 }  // namespace osf
 }  // namespace sdk

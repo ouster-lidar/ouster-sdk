@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -42,17 +43,28 @@ def test_apply_xyz_transform_shapes(frame_data):
 
 def test_apply_xyz_transform_differs_from_default(frame_data):
     sensor_info, frame = frame_data
-    default_xyz = core.XYZLut(sensor_info, use_extrinsics=False)(frame)
+    default_xyz = core.XYZLut(sensor_info)(frame)
     adjusted_xyz = snippet.apply_xyz_transform(sensor_info, frame)
     assert not np.allclose(default_xyz, adjusted_xyz)
 
 
 def test_apply_xyz_transform_with_extrinsics(frame_data):
-    """Mirror the C++ convenience make_xyz_lut(info, true) snippet."""
+    """The LUT applies the metadata sensor_to_body transform."""
     sensor_info, frame = frame_data
-    extrinsic_xyz = snippet.apply_xyz_transform_w_extrinsics(sensor_info, frame)
-    direct_xyz = core.XYZLut(sensor_info, use_extrinsics=True)(frame)
-    assert np.allclose(extrinsic_xyz, direct_xyz)
+    sensor_frame_info = deepcopy(sensor_info)
+    sensor_frame_info.sensor_to_body = np.eye(4)
+    extrinsics = np.eye(4)
+    extrinsics[:3, :3] = [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
+    extrinsics[:3, 3] = [1.0, 2.0, 3.0]
+    body_frame_info = deepcopy(sensor_info)
+    body_frame_info.sensor_to_body = extrinsics
+
+    extrinsic_xyz = snippet.apply_xyz_transform_w_extrinsics(body_frame_info, frame)
+    sensor_xyz = core.XYZLut(sensor_frame_info)(frame)
+    expected = sensor_xyz @ extrinsics[:3, :3].T + extrinsics[:3, 3]
+    expected[frame.field(core.ChanField.RANGE) == 0] = 0.0
+    assert np.count_nonzero(frame.field(core.ChanField.RANGE)) > 0
+    assert np.allclose(extrinsic_xyz, expected)
 
 
 def test_reflectivity_images_destagger(frame_data):

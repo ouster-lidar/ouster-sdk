@@ -19,7 +19,7 @@ std::vector<uint8_t> EmptyMeta::buffer() const {
 }
 
 std::unique_ptr<MetadataEntry> EmptyMeta::from_buffer(const ouster::sdk::osf::OsfBuffer& /*buf*/) {
-    // the metadata is empty, dont bother trying to decode
+    // the metadata is empty, don't bother trying to decode
     return std::make_unique<EmptyMeta>();
 }
 

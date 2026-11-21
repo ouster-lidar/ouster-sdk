@@ -86,12 +86,12 @@ class OUSTER_API_CLASS MemoryMappedOsfFile : public OsfFile {
     OUSTER_API_FUNCTION
     uint8_t* buf_raw_ptr(OsfOffset& base_offset, OsfOffset& offset);
     /**
-     * Mmaped memory address pointed to the beginning of the file (byte 0)
+     * Mmapped memory address pointed to the beginning of the file (byte 0)
      */
     uint8_t* file_buf_{nullptr};
     uint64_t size_{0};
     /**
-     * Mmaped view handle to keep while the memmap is open on Windows
+     * Mmapped view handle to keep while the memmap is open on Windows
      * This is not used on Linux, where the mmap is done with a file descriptor
      * and the file descriptor is closed after the mmap is done.`
      */

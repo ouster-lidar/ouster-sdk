@@ -13,6 +13,14 @@
 #include "gltext.h"
 #include "ouster/viz/point_viz.h"
 
+#ifdef __APPLE__
+#include "macos_icon.h"
+#else
+#include <vector>
+
+#include "ouster_icon.h"
+#endif
+
 namespace ouster {
 namespace sdk {
 namespace viz {
@@ -189,6 +197,8 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect, int window_wi
 
     // avoid chdir to resources dir on macos
 #ifdef __APPLE__
+    // Must precede glfwInit(): GLFW reads the program name to label its menu items.
+    set_macos_app_name();
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, false);
 #endif
     if (glfwInit() == 0) {
@@ -207,13 +217,37 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect, int window_wi
     if (maximized) {
         glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     }
+
+    // Application identity used by Linux window managers for the taskbar label,
+    // window grouping, and (on Wayland) matching the .desktop icon. Ignored on
+    // platforms that don't use these hints. This is the stable app name, not the
+    // per-window title (which carries the sensor info).
+    glfwWindowHintString(GLFW_X11_CLASS_NAME, "Ouster Viz");
+    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, "ouster-viz");
+    // GLFW_WAYLAND_APP_ID is GLFW 3.4+; guard it so builds against older GLFW
+    // (e.g. 3.3 on Ubuntu 22.04) still compile.
+#if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
+    glfwWindowHintString(GLFW_WAYLAND_APP_ID, "ouster-viz");
+#endif
+
     GLFWmonitor* monitor = fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
     // open a window and create its OpenGL context
-    window = glfwCreateWindow(window_width, window_height, name.c_str(), monitor, nullptr);
+    // todo add an environment variable to change this
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    auto force_glfw = getenv("OUSTER_FORCE_OPENGLES");
+    if (force_glfw == nullptr || strcmp(force_glfw, "0") == 0) {
+        window = glfwCreateWindow(window_width, window_height, name.c_str(), monitor, nullptr);
+        if (window == nullptr) {
+            std::cerr << "Failed to open OpenGL 3.3 context. Trying OpenGL ES 3.1" << std::endl;
+        }
+    } else {
+        std::cerr << "Forcing OpenGL ES Mode" << std::endl;
+        window = nullptr;
+    }
 
     if (window == nullptr) {
-        std::cerr << "Failed to open OpenGL 3.3 context. Trying OpenGL ES 3.1" << std::endl;
+        // fallback to OpenGL ES
         glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
@@ -224,6 +258,30 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect, int window_wi
         glfwTerminate();
         throw std::runtime_error("Failed to create GLFW window");
     }
+
+    // Set the Ouster logo as the window/application icon.
+#ifdef __APPLE__
+    set_macos_app_icon();
+    set_macos_menu_name();
+#else
+    // Windows and Linux/X11 take the icon per window. Wayland has no
+    // programmatic window-icon API (the icon comes from a matching .desktop
+    // file), so glfwSetWindowIcon would emit GLFW_FEATURE_UNAVAILABLE there;
+    // skip it to keep the error log clean.
+#if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
+    const bool wayland = glfwGetPlatform() == GLFW_PLATFORM_WAYLAND;
+#else
+    const bool wayland = false;  // runtime platform query is GLFW 3.4+
+#endif
+    if (!wayland) {
+        // 128 px covers taskbar/title-bar icon sizes and keeps startup fast.
+        const int dim = 128;
+        std::vector<unsigned char> rgba = impl::render_ouster_icon(dim);
+        // glfwSetWindowIcon copies the pixels before returning.
+        GLFWimage image{dim, dim, rgba.data()};
+        glfwSetWindowIcon(window, 1, &image);
+    }
+#endif
 
 #ifdef __APPLE__
     set_window_color_space(window);
@@ -330,6 +388,12 @@ void GLFWContext::visible(bool state) {
     } else {
         glfwHideWindow(window);
     }
+}
+
+// Mutates GLFW window state; not logically const despite no member writes.
+// NOLINTNEXTLINE(readability-make-member-function-const)
+void GLFWContext::set_title(const std::string& title) {
+    glfwSetWindowTitle(window, title.c_str());
 }
 
 bool GLFWContext::is_opengl_es() {

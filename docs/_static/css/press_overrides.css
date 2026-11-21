@@ -110,7 +110,7 @@ body {
     overflow: hidden;
     min-height: 0;
 }
-  
+
 .content-with-rail {
     flex: 1;
     min-height: 0;
@@ -659,7 +659,7 @@ body.sidebar-show-level2-toggles .sidebar-links .sidebar-toggle.no-children {
 .sidebar-links li > a:hover,
 .sidebar-links li > a:focus {
     box-shadow: inset var(--sidebar-border-width) 0 0 var(--ou-accent);
-    
+
 }
 
 
@@ -670,7 +670,7 @@ a {
 
 a:visited {
     color: #333337 !important;
-}   
+}
 
 /* Underline inline links within the main article content (skip header anchors/toctrees) */
 .content :is(p, li, dd, td, th, blockquote, figcaption) a:not(.headerlink):not(.toc-backref) {
@@ -869,7 +869,7 @@ header.navbar a:visited {
     color: var(--solid-white) !important;
 }
 
-header.navbar { 
+header.navbar {
     height: 4rem !important;
 }
 
@@ -1123,7 +1123,7 @@ html[data-page^="modules/"] .vp-sidebar .searchbox {
 
 .vp-sidebar .toctree-l1 a.current,
 .vp-sidebar .toctree-l2 a.current {
-    border-left-color: transparent !important; 
+    border-left-color: transparent !important;
 }
 
 .page-nav {
@@ -1331,7 +1331,7 @@ body[data-page-name*="features/"][data-page-name*="/index"] .content ul.simple l
 /* Keep original margin-top for features index pages */
 body[data-page-name*="features/"][data-page-name*="/index"] .content li > p {
     margin-top: 1em; /* Original default margin-top */
-} 
+}
 
 
 .sd-tab-content .highlight {
@@ -1588,7 +1588,7 @@ header.navbar .github-link-header .nav-dropdown-menu a + a {
 }
 
 .sd-tab-set>input:checked+label {
-    border-color: var(--ou-accent); 
+    border-color: var(--ou-accent);
 }
 
 .sd-tab-set label.sd-tab-label:hover,

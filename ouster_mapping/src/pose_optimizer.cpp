@@ -120,10 +120,7 @@ std::shared_ptr<ouster::sdk::core::LidarFrame> load_frame_for_timestamp(
 
     auto part_osf = source[{start_index, end_index + 1u}];
     for (const auto& frame_set : part_osf) {
-        for (const auto& frame_ptr : frame_set) {
-            if (!frame_ptr) {
-                continue;
-            }
+        for (const auto& frame_ptr : frame_set.valid_lidar_frames()) {
             try {
                 const uint64_t first_ts =
                     frame_ptr->timestamp()[frame_ptr->get_first_valid_column()];
@@ -143,7 +140,7 @@ std::shared_ptr<ouster::sdk::core::LidarFrame> load_frame_for_timestamp(
 /// Compute the IMU-derived gravity plumb rotation for a frame. Returns
 /// Identity if IMU data is absent or invalid.
 Eigen::Matrix3d compute_imu_plumb(const ouster::sdk::core::LidarFrame& frame) {
-    if (!frame.sensor_info) {
+    if (!frame.sensor_info()) {
         return Eigen::Matrix3d::Identity();
     }
     if (!frame.has_field(ouster::sdk::core::ChanField::IMU_STATUS) ||
@@ -171,7 +168,7 @@ Eigen::Matrix3d compute_imu_plumb(const ouster::sdk::core::LidarFrame& frame) {
     if (valid_count == 0) {
         return Eigen::Matrix3d::Identity();
     }
-    const auto& info = *frame.sensor_info;
+    const auto& info = *frame.sensor_info();
     const Eigen::Vector3d acc_avg = info.sensor_to_body.block<3, 3>(0, 0) *
                                     info.imu_to_sensor_transform.block<3, 3>(0, 0) *
                                     (acc_sum / static_cast<double>(valid_count));
@@ -186,14 +183,14 @@ Eigen::Matrix3d compute_imu_plumb(const ouster::sdk::core::LidarFrame& frame) {
 ouster::sdk::core::LidarFrame apply_imu_plumb(const ouster::sdk::core::LidarFrame& frame,
                                               const Eigen::Matrix3d& plumb) {
     ouster::sdk::core::LidarFrame plumbed = frame;
-    if (plumb.isIdentity(1e-10) || !frame.sensor_info) {
+    if (plumb.isIdentity(1e-10) || !frame.sensor_info()) {
         return plumbed;
     }
     core::Matrix4dR plumb_pose = core::Matrix4dR::Identity();
     plumb_pose.block<3, 3>(0, 0) = plumb;
-    auto updated_info = std::make_shared<ouster::sdk::core::SensorInfo>(*frame.sensor_info);
-    updated_info->sensor_to_body = plumb_pose * frame.sensor_info->sensor_to_body;
-    plumbed.sensor_info = updated_info;
+    auto updated_info = std::make_shared<ouster::sdk::core::LidarInfo>(*frame.sensor_info());
+    updated_info->sensor_to_body = plumb_pose * frame.sensor_info()->sensor_to_body;
+    plumbed.set_sensor_info(updated_info);
     return plumbed;
 }
 
@@ -1432,11 +1429,7 @@ class PoseOptimizer::Impl {
         auto part_osf = source[{start_index, end_index + 1u}];
 
         for (const auto& frame_set : part_osf) {
-            for (auto& frame_ptr : frame_set) {
-                if (!frame_ptr) {
-                    continue;
-                }
-
+            for (auto& frame_ptr : frame_set.valid_lidar_frames()) {
                 uint64_t ls_ts = 0;
                 try {
                     ls_ts = frame_ptr->timestamp()[frame_ptr->get_first_valid_column()];
@@ -1469,7 +1462,7 @@ class PoseOptimizer::Impl {
                     // Build cloud like trajectory path: cartesian on
                     // LidarFrame using the selected return's range for
                     // consistency across constraints
-                    core::ArrayX3dR cloud_pts = (*traj.xyz_lut)(range);
+                    core::ArrayX3dR cloud_pts = (*traj.info.xyzlut<double>())(range);
 
                     const int first_col = frame_ptr->get_first_valid_column();
                     const PoseH first_pose(frame_ptr->get_column_pose(first_col));
@@ -1986,7 +1979,8 @@ size_t PoseOptimizer::add_absolute_gps_constraints(double min_space_m,
         if (frame_set.size() == 0) {
             continue;
         }
-        const auto& frame_ptr = frame_set[0];
+        const auto frame_ptr =
+            std::dynamic_pointer_cast<ouster::sdk::core::LidarFrame>(frame_set[0]);
         if (!frame_ptr) {
             continue;
         }

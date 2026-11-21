@@ -121,7 +121,7 @@ class OUSTER_API_CLASS SensorHttp {
         bool active, int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
-     * Set the value of a specfic configuration on the sensor, the changed
+     * Set the value of a specific configuration on the sensor, the changed
      * configuration is not active until the sensor is restarted.
      *
      * @param[in] key name of the config to change.
@@ -215,12 +215,12 @@ class OUSTER_API_CLASS SensorHttp {
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
-     * Gets the calibaration status of the sensor.
+     * Gets the calibration status of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      * @throws std::runtime_error if an HTTP error occurs or if timeout occurs.
      *
-     * @return json string ofcalibration status received from sensor
+     * @return json string of calibration status received from sensor
      */
     OUSTER_API_FUNCTION
     virtual std::string calibration_status(
@@ -322,7 +322,7 @@ class OUSTER_API_CLASS SensorHttp {
         nonstd::optional<std::string> original_destination = {}) const = 0;
 
     /**
-     * Set's the sensor's static IP address and subnet mask.
+     * Sets the sensor's static IP address and subnet mask.
      *
      * @param[in] ip_address The static IP to set on the sensor in CIDR form
      * @param[in] timeout_sec The timeout for the request in seconds.
@@ -334,7 +334,7 @@ class OUSTER_API_CLASS SensorHttp {
                                int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
-     * Set's the sensor's static IP address, subnet mask and gateway address.
+     * Sets the sensor's static IP address, subnet mask and gateway address.
      *
      * @param[in] ip_address The static IP to set on the sensor in CIDR form.
      * @param[in] gateway_address The gateway IP to set on the sensor.
@@ -355,6 +355,28 @@ class OUSTER_API_CLASS SensorHttp {
      */
     OUSTER_API_FUNCTION
     virtual void delete_static_ip(int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Sets the sensor's network MTU.
+     *
+     * @param[in] mtu The network MTU to set on the sensor.
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void set_mtu(unsigned int mtu,
+                         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Deletes any network MTU override on the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     * @throws std::runtime_error if this endpoint is not supported on the FW,
+     * if an HTTP error occurs, or if timeout occurs.
+     */
+    OUSTER_API_FUNCTION
+    virtual void delete_mtu(int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
      * Deletes the user data stored on the sensor.
@@ -422,7 +444,7 @@ class OUSTER_API_CLASS SensorHttp {
      * @return A vector ids of the active zones.
      */
     OUSTER_API_FUNCTION
-    virtual std::vector<uint8_t> get_zone_monitor_live_ids(
+    virtual std::vector<uint16_t> get_zone_monitor_live_ids(
         int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -437,7 +459,7 @@ class OUSTER_API_CLASS SensorHttp {
      */
     OUSTER_API_FUNCTION
     virtual void set_zone_monitor_live_ids(
-        const std::vector<uint8_t>& zone_ids,
+        const std::vector<uint16_t>& zone_ids,
         int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**

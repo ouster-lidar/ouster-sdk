@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # [doc-etag-set-live-zones]
 
     # [doc-stag-set-zm-udp-dest]
-    config = core.SensorConfig()
+    config = core.LidarConfig()
     config.udp_dest_zm = destination_ip
     config.udp_port_zm = 7504
     print(f"Setting Zone Monitor UDP destination to "
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     print("Connecting to sensor and reading zone states...")
     source = open_source(hostname)
     for frame_set in source:
-        if len(frame_set) > 0 and frame_set[0] is not None:
+        if len(frame_set) > 0 and isinstance(frame_set[0], core.LidarFrame):
             frame = frame_set[0]
             if frame.has_field("ZONE_STATES"):
                 zone_states = frame.zones

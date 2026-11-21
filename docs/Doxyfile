@@ -167,7 +167,7 @@ SHORT_NAMES            = NO
 # description.)
 # The default value is: NO.
 
-# We dont always use @brief
+# We don't always use @brief
 JAVADOC_AUTOBRIEF      = YES
 
 # If the JAVADOC_BANNER tag is set to YES then doxygen will interpret a line
@@ -532,9 +532,9 @@ HIDE_UNDOC_MEMBERS     = NO
 
 HIDE_UNDOC_CLASSES     = NO
 
-# If the HIDE_UNDOC_NAMESPACES tag is set to YES, Doxygen will hide all 
-# undocumented namespaces that are normally visible in the namespace hierarchy. 
-# If set to NO, these namespaces will be included in the various overviews. This option 
+# If the HIDE_UNDOC_NAMESPACES tag is set to YES, Doxygen will hide all
+# undocumented namespaces that are normally visible in the namespace hierarchy.
+# If set to NO, these namespaces will be included in the various overviews. This option
 # has no effect if EXTRACT_ALL is enabled.
 # The default value is: YES.
 HIDE_UNDOC_NAMESPACES  = NO
@@ -824,8 +824,8 @@ WARN_IF_INCOMPLETE_DOC = "$enhanced_warnings"
 
 WARN_NO_PARAMDOC       = "$enhanced_warnings"
 
-# If WARN_IF_UNDOC_ENUM_VAL option is set to YES, Doxygen will warn about undocumented 
-# enumeration values. If set to NO, Doxygen will accept undocumented enumeration values. 
+# If WARN_IF_UNDOC_ENUM_VAL option is set to YES, Doxygen will warn about undocumented
+# enumeration values. If set to NO, Doxygen will accept undocumented enumeration values.
 # If EXTRACT_ALL is set to YES then this flag will automatically be disabled.
 # The default value is: NO.
 
@@ -859,6 +859,7 @@ WARN_LOGFILE           = "$warn_log_file"
 
 INPUT                  = ../ouster_core \
                          ../ouster_algorithm \
+                         ../ouster_io \
                          ../ouster_pcap \
                          ../ouster_viz \
                          ../ouster_osf \
@@ -989,7 +990,8 @@ EXCLUDE_PATTERNS       = */impl/* \
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories use the pattern */test/*
 
-EXCLUDE_SYMBOLS        =  *::impl*
+EXCLUDE_SYMBOLS        =  *::impl* \
+                          EIGEN_DEVICE_FUNC
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include
@@ -2236,6 +2238,7 @@ PREDEFINED             = "OUSTER_API_FUNCTION= " \
                          "DOXYGEN_SHOULD_SKIP_THIS= " \
                          "OUSTER_DEPRECATED_LAST_SUPPORTED_0_16=0.16.0" \
                          "OUSTER_DEPRECATED_LAST_SUPPORTED_1_0=1.0.0" \
+                         "OUSTER_DEPRECATED_LAST_SUPPORTED_2_0=2.0.0" \
                          "OUSTER_DEPRECATED_MSG(new_symbol,deprecation_version)=/** \deprecated Use new_symbol instead. The last supported version for this will be deprecation_version. */" \
                          "OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(old_symbol,new_symbol,deprecation_version)=/** \deprecated Use new_symbol instead. The last supported version for this will be deprecation_version. */ old_symbol = new_symbol"
 

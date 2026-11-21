@@ -8,6 +8,8 @@
  * Note: the type annotations in `client.pyi` need to be updated whenever this
  * file changes. See the mypy documentation for details.
  */
+#include "ouster/core/frame_set_source.h"
+
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/bind_map.h>
@@ -23,15 +25,28 @@
 #include <pyerrors.h>
 #include <warnings.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "common.h"
-#include "eigen_dense.h"
+#include "ouster/core/class_map.h"
 #include "ouster/core/defaults.h"
+#include "ouster/core/field_type.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/frame_set.h"
+#include "ouster/core/frame_set_source_utils.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/open_source.h"
 #include "ouster/core/packet_source.h"
-#include "ouster/core/types.h"
-#include "ouster/osf/osf_frame_set_source.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/pcap/pcap_frame_set_source.h"
 #include "ouster/sensor/sensor_frame_set_source.h"
 #include "ouster/sensor/sensor_packet_source.h"
@@ -44,20 +59,36 @@ using ouster::sdk::core::ClassMapSet;
 using ouster::sdk::core::FieldType;
 using ouster::sdk::core::FrameSet;
 using ouster::sdk::core::FrameSetSource;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::core::SensorInfo;
 using ouster::sdk::sensor::Sensor;
 using ouster::sdk::sensor::SensorFrameSetSource;
 using ouster::sdk::sensor::SensorPacketSource;
 
 namespace {
+// Module-level registry that keeps Python object holders alive for the lifetime
+// of the module.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::map<void*, py::object> holders;
+
+// Serial number of the sensor that produced a frame, regardless of whether the
+// frame is a LidarFrame or a CameraFrame (0 if unknown). Keeps single-sensor
+// selection independent of the frame's origin.
+uint64_t frame_serial_number(const std::shared_ptr<ouster::sdk::core::Frame>& frame) {
+    // The serial number is a shared SensorInfo base field, so this works for
+    // any frame kind (lidar or camera) without downcasting.
+    if (frame && frame->sensor_info()) {
+        return frame->sensor_info()->sn;
+    }
+    return 0;
+}
 }  // namespace
 
 class PyPacketSource : public ouster::sdk::core::PacketSource {
    public:
     NB_TRAMPOLINE(ouster::sdk::core::PacketSource, 1);
 
-    mutable std::vector<std::shared_ptr<SensorInfo>>
+    mutable std::vector<std::shared_ptr<LidarInfo>>
         sensor_info_;  // NOLINT(readability-identifier-naming)
 
     PyPacketSource() = default;
@@ -78,11 +109,11 @@ class PyPacketSource : public ouster::sdk::core::PacketSource {
         return py::cast<bool>(res);
     }
 
-    const std::vector<std::shared_ptr<SensorInfo>>& sensor_info() const override {
+    const std::vector<std::shared_ptr<LidarInfo>>& sensor_info() const override {
         py::gil_scoped_acquire acquire;
         py::object self = py::cast(static_cast<const ouster::sdk::core::PacketSource*>(this));
         auto res = self.attr("sensor_info");
-        sensor_info_ = py::cast<std::vector<std::shared_ptr<SensorInfo>>>(res);
+        sensor_info_ = py::cast<std::vector<std::shared_ptr<LidarInfo>>>(res);
         return sensor_info_;
     }
 };
@@ -116,9 +147,11 @@ class PythonFrameSetIteratorImpl : public ouster::sdk::core::FrameSetIteratorImp
                 throw std::runtime_error("Must only yield arrays of 1 frame.");
             }
 
-            // skip data from undesired sensors
-            if (desired_sn_ != 0 && frame_set_[0]->sensor_info->sn != desired_sn_) {
-                offset++;
+            // skip data from undesired sensors (lidar or camera)
+            if (desired_sn_ != 0) {
+                if (frame_serial_number(frame_set_[0]) != desired_sn_) {
+                    offset++;
+                }
             }
         }
         return false;
@@ -148,7 +181,13 @@ class PyFrameSetSource : public ouster::sdk::core::FrameSetSource {
         py::gil_scoped_acquire acquire;
         py::object self = py::cast(static_cast<const ouster::sdk::core::FrameSetSource*>(this));
         auto it = self.attr("__iter__")();
-        auto serial_num = sensor_info()[sensor_idx]->sn;
+        // Index the unified sensor list so single-sensor selection works for
+        // any sensor kind (lidar or camera), not just lidar sensors.
+        const auto& infos = sensor_info();
+        if (sensor_idx < 0 || static_cast<size_t>(sensor_idx) >= infos.size()) {
+            throw std::out_of_range("sensor_index out of range for single sensor selection");
+        }
+        auto serial_num = infos[sensor_idx]->sn;
         return ouster::sdk::core::FrameSetIterator(
             this, new PythonFrameSetIteratorImpl(py::cast<py::iterator>(it), serial_num));
     }
@@ -196,6 +235,9 @@ class MultiWrapper : public ouster::sdk::core::MultiFrameSetSource {
     }
 };
 
+// External linkage is intentional (declared in client/main.cpp); the many
+// nanobind .def() bindings are inherently a single long registration routine.
+// NOLINTNEXTLINE(misc-use-internal-linkage,readability-function-cognitive-complexity)
 void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) {
     py::bind_map<std::unordered_map<std::string, ouster::sdk::core::ClassMap>>(module,
                                                                                "ClassMapDict");
@@ -210,7 +252,7 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
             PacketSource is a base class for reading packet data from various sources.
 
             Attributes:
-                SensorInfo (List[SensorInfo]): Metadata about the sensors providing the packets.
+                LidarInfo (List[LidarInfo]): Metadata about the sensors providing the packets.
                 is_live (bool): Indicates whether the packet source is live (actively receiving data).
 
             Methods:
@@ -223,7 +265,7 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
                             Retrieve sensor information for all sensors in the packet source.
 
                             Returns:
-                                A list of `SensorInfo` objects, each containing metadata
+                                A list of `LidarInfo` objects, each containing metadata
                                 about a sensor, such as serial number, firmware version,
                                 and calibration details.
                             )")
@@ -233,7 +275,8 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
              [](ouster::sdk::core::PacketSource* self) {
                  static_cast<PacketSourceHack*>(self)->close();
              })
-        .def("__enter__", [](ouster::sdk::core::PacketSource& /*self*/) {})
+        .def("__enter__",
+             [](ouster::sdk::core::PacketSource& self) -> py::object { return py::cast(&self); })
         .def(
             "__exit__",
             [](ouster::sdk::core::PacketSource* self, py::object& /*exc_type*/,
@@ -354,7 +397,7 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
         .def(
             "__init__",
             [](SensorPacketSource* self, const std::vector<Sensor>& sensors,
-               const std::vector<SensorInfo>& metadata, double config_timeout, double buffer_size) {
+               const std::vector<LidarInfo>& metadata, double config_timeout, double buffer_size) {
                 new (self) SensorPacketSource(sensors, metadata, config_timeout, buffer_size);
             },
             py::arg("sensors"), py::arg("metadata"),
@@ -393,7 +436,14 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
                 return py::cast(it->second);
             },
             py::arg("key"), py::arg("default_value") = py::none())
-        .def("__getitem__", [](const ClassMap& self, int key) { return self.class_map.at(key); })
+        .def("__getitem__",
+             [](const ClassMap& self, int key) {
+                 auto it = self.class_map.find(key);
+                 if (it == self.class_map.end()) {
+                     throw py::key_error(("Key not found: " + std::to_string(key)).c_str());
+                 }
+                 return it->second;
+             })
         .def("__eq__",
              [](const ClassMap& left, const py::object& right) {
                  if (!py::isinstance<ClassMap>(right)) {
@@ -432,8 +482,14 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
                 return py::cast(it->second);
             },
             py::arg("key"), py::arg("default_value") = py::none())
-        .def("__getitem__", [](const ClassMapSet& self,
-                               const std::string& key) { return self.class_maps.at(key); })
+        .def("__getitem__",
+             [](const ClassMapSet& self, const std::string& key) {
+                 auto it = self.class_maps.find(key);
+                 if (it == self.class_maps.end()) {
+                     throw py::key_error(("Key not found: " + key).c_str());
+                 }
+                 return it->second;
+             })
         .def("__eq__",
              [](const ClassMapSet& left, const py::object& right) {
                  if (!py::isinstance<ClassMapSet>(right)) {
@@ -454,8 +510,10 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
              [](ouster::sdk::core::FrameSetSourceMetadataSet& self, const std::string& key,
                 const py::object& value) {
                  if (py::isinstance<py::str>(value)) {
+                     self.entries.erase(key);
                      self.entries.emplace(key, py::cast<std::string>(value));
                  } else if (py::isinstance<ClassMapSet>(value)) {
+                     self.entries.erase(key);
                      self.entries.emplace(key, py::cast<ClassMapSet>(value));
                  } else {
                      throw std::invalid_argument("Value must be either a string or ClassMapSet.");
@@ -499,12 +557,19 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
             "sensor_info",
             [](const ouster::sdk::core::FrameSetSource& self) { return self.sensor_info(); },
             R"(
-        Retrieve sensor information for all sensors in the frame set source.
+        Retrieve the combined sensor information for all sensors in the frame set source.
+
+        The returned list is index-aligned with the frame slots of the FrameSets
+        produced by this source: element ``i`` describes the sensor whose frame
+        occupies slot ``i``. Concrete entries are ``LidarInfo`` for lidar sensors
+        and ``CameraInfo`` for cameras. Do not filter this list by type and then
+        use the filtered position as a frame-slot index; that breaks the index
+        alignment.
 
         Returns:
-            A list of `SensorInfo` objects, each containing metadata
-            about a sensor, such as serial number, firmware version,
-            and calibration details.
+            A list of `SensorInfo` objects (concrete `LidarInfo` for lidar
+            sensors and `CameraInfo` for cameras), each containing metadata such
+            as serial number, firmware version, and calibration details.
         )")
         .def_prop_ro(
             "is_live", [](const ouster::sdk::core::FrameSetSource& self) { return self.is_live(); },
@@ -524,12 +589,6 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
         .def_prop_ro(
             "frames_num",
             [](const ouster::sdk::core::FrameSetSource& self) { return self.frames_num(); })
-        .def_prop_ro("scans_num",
-                     [](const ouster::sdk::core::FrameSetSource& self) {
-                         PyErr_WarnEx(PyExc_FutureWarning,
-                                      "scans_num is deprecated, use frames_num instead.", 2);
-                         return self.frames_num();
-                     })
         .def("__enter__", [](py::object self) -> py::object { return self; })
         .def(
             "__exit__",
@@ -645,7 +704,8 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
         Args:
             key (str): The key of the metadata entry to retrieve.
         Returns:
-            The `FrameSetSourceMetadata` object corresponding to the provided key.
+            The metadata value corresponding to the provided key, either a `str`
+            or a `ClassMapSet`.
         )",
             py::sig("def metadata(self, key: str) -> Union[str, ClassMapSet]"));
 
@@ -680,7 +740,7 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
         .def(
             "__init__",
             [](SensorFrameSetSource* self, const std::vector<Sensor>& sensors,
-               const std::vector<SensorInfo>& metadata, double timeout, unsigned int queue_size,
+               const std::vector<LidarInfo>& metadata, double timeout, unsigned int queue_size,
                bool soft_id_check) {
                 new (self)
                     SensorFrameSetSource(sensors, metadata, timeout, queue_size, soft_id_check);
@@ -691,7 +751,7 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
         .def(
             "__init__",
             [](SensorFrameSetSource* self, const std::vector<Sensor>& sensors,
-               const std::vector<SensorInfo>& metadata,
+               const std::vector<LidarInfo>& metadata,
                const std::vector<std::vector<FieldType>>& field_types, double timeout,
                unsigned int queue_size, bool soft_id_check) {
                 new (self) SensorFrameSetSource(sensors, metadata, field_types, timeout, queue_size,
@@ -703,14 +763,6 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
         .def("flush", &SensorFrameSetSource::flush)
         .def("sockets", &SensorFrameSetSource::sockets)
         .def_prop_ro("dropped_frames", &SensorFrameSetSource::dropped_frames)
-        .def_prop_ro("dropped_scans",
-                     [](SensorFrameSetSource& self) {
-                         PyErr_WarnEx(PyExc_FutureWarning,
-                                      "dropped_scans is deprecated, use dropped_frames "
-                                      "instead.",
-                                      1);
-                         return self.dropped_frames();
-                     })
         .def_prop_ro("id_error_count", &SensorFrameSetSource::id_error_count)
         .def(
             "get_frame",
@@ -718,15 +770,6 @@ void init_client_frame_set_source(py::module_& module, py::module_& /*unused*/) 
                 py::gil_scoped_release release;
                 auto packet = self.get_frame(timeout);
                 return packet;
-            },
-            py::arg("timeout") = 0.1)
-        .def(
-            "get_scan",
-            [](SensorFrameSetSource& self, double timeout) {
-                PyErr_WarnEx(PyExc_FutureWarning, "get_scan is deprecated, use get_frame instead.",
-                             1);
-                py::gil_scoped_release release;
-                return self.get_frame(timeout);
             },
             py::arg("timeout") = 0.1);
 

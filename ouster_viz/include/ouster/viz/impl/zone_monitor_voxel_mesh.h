@@ -31,27 +31,27 @@ Val lerp_vector(const std::vector<Val>& v, Idx idx);
  * @param[in] row the floating point row index to interpolate at.
  * @return the interpolated altitude angle in degrees.
  */
-OUSTER_API_FUNCTION double slow_altitude_angle(const ouster::sdk::core::SensorInfo& sensor_info,
+OUSTER_API_FUNCTION double slow_altitude_angle(const ouster::sdk::core::LidarInfo& sensor_info,
                                                double row);
 
 /** Get the sub-pixel direction vector accounting for the lidar to sensor
  * transform.
- * @param[in] sensor_info the SensorInfo containing beam angles and transforms.
+ * @param[in] sensor_info the LidarInfo containing beam angles and transforms.
  * @param[in] row the floating point row index to interpolate at.
  * @param[in] col the floating point column index to interpolate at.
  * @return the direction vector for the pixel (row, col).
  */
-OUSTER_API_FUNCTION Eigen::Vector3f direction_rot(const ouster::sdk::core::SensorInfo& sensor_info,
+OUSTER_API_FUNCTION Eigen::Vector3f direction_rot(const ouster::sdk::core::LidarInfo& sensor_info,
                                                   double row, double col);
 
 /** Get the sub-pixel offset vector accounting for the beam to lidar and
  * lidar to sensor transforms.
- * @param[in] sensor_info the SensorInfo containing beam angles and transforms.
+ * @param[in] sensor_info the LidarInfo containing beam angles and transforms.
  * @param[in] row the floating point row index to interpolate at.
  * @param[in] col the floating point column index to interpolate at.
  * @return the offset vector for the pixel (row, col).
  */
-OUSTER_API_FUNCTION Eigen::Vector3f offset(const ouster::sdk::core::SensorInfo& sensor_info,
+OUSTER_API_FUNCTION Eigen::Vector3f offset(const ouster::sdk::core::LidarInfo& sensor_info,
                                            double row, double col);
 
 /** Direction and offset data for a voxel vertex. */
@@ -71,7 +71,7 @@ using VertexLookupTable = std::vector<std::vector<VoxelVertexData>>;
  * @return a lookup table of vertex data for each pixel corner.
  */
 OUSTER_API_FUNCTION VertexLookupTable
-precompute_voxel_vertices(const ouster::sdk::core::SensorInfo& metadata);
+precompute_voxel_vertices(const ouster::sdk::core::LidarInfo& metadata);
 
 /** Generate the voxels for each pixel in the range images, and stitch them
  * together. The vertex positions are calculated using the pre-computed
@@ -97,7 +97,7 @@ std::tuple<std::vector<Vertex3f>, std::vector<uint32_t>, std::vector<uint32_t>>
 voxel_style_mesh_components_from_range_images_with_lut(
     const ouster::sdk::core::img_t<uint32_t>& near_range_image_mm,
     const ouster::sdk::core::img_t<uint32_t>& far_range_image_mm,
-    const ouster::sdk::core::SensorInfo& metadata, const VertexLookupTable& vertex_lookup,
+    const ouster::sdk::core::LidarInfo& metadata, const VertexLookupTable& vertex_lookup,
     bool add_faces, bool add_edges);
 
 /**
@@ -111,7 +111,7 @@ voxel_style_mesh_components_from_range_images_with_lut(
  */
 OUSTER_API_FUNCTION ouster::sdk::viz::Mesh voxel_style_mesh_from_zone_image_pair(
     ouster::sdk::core::Zrb& zrb,  // TODO[tws] const
-    const ouster::sdk::core::SensorInfo& sensor_info, const VertexLookupTable& vertex_lookup);
+    const ouster::sdk::core::LidarInfo& sensor_info, const VertexLookupTable& vertex_lookup);
 
 }  // namespace viz
 }  // namespace sdk

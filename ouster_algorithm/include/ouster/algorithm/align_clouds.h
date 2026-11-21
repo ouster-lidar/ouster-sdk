@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "ouster/core/frame.h"
 #include "ouster/core/typedefs.h"
 
 namespace ouster {
@@ -105,15 +106,15 @@ core::Matrix4dR point_to_plane_align(
  * @param[in] target_frame Target frame.
  * @param[in] initial_guess Initial estimate of ``source_to_target_transform``
  *            in the extrinsic-applied frame (the frame produced by
- *            ``xyzlut(extrinsics=True)``).
+ *            ``XYZLut``).
  * @return Estimated ``source_to_target_transform`` in the extrinsic-applied
  * frame.
  * @throws std::invalid_argument If a frame lacks a RANGE field or
  *         ``sensor_info``.
  */
 OUSTER_API_FUNCTION
-core::Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
-                             const ouster::sdk::core::LidarFrame& target_frame,
+core::Matrix4dR align_clouds(const ouster::sdk::core::Frame& source_frame,
+                             const ouster::sdk::core::Frame& target_frame,
                              const core::Matrix4dR& initial_guess = core::Matrix4dR::Identity());
 
 /**
@@ -129,8 +130,8 @@ core::Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
  *         ``sensor_info``.
  */
 OUSTER_API_FUNCTION
-core::Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
-                             const ouster::sdk::core::LidarFrame& target_frame, double& confidence);
+core::Matrix4dR align_clouds(const ouster::sdk::core::Frame& source_frame,
+                             const ouster::sdk::core::Frame& target_frame, double& confidence);
 
 /**
  * @brief Estimate frame-to-frame alignment from an initial guess and report
@@ -140,7 +141,7 @@ core::Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
  * @param[in] target_frame Target frame.
  * @param[in] initial_guess Initial estimate of ``source_to_target_transform``
  *            in the extrinsic-applied frame (the frame produced by
- *            ``xyzlut(extrinsics=True)``).
+ *            ``XYZLut``).
  * @param[out] confidence Confidence score in ``[0, 1]`` for the estimated
  * pose.
  * @return Estimated ``source_to_target_transform`` in the extrinsic-applied
@@ -149,31 +150,39 @@ core::Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
  *         ``sensor_info``.
  */
 OUSTER_API_FUNCTION
-core::Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
-                             const ouster::sdk::core::LidarFrame& target_frame,
+core::Matrix4dR align_clouds(const ouster::sdk::core::Frame& source_frame,
+                             const ouster::sdk::core::Frame& target_frame,
                              const core::Matrix4dR& initial_guess, double& confidence);
 
 /**
  * @brief Align every valid frame in a FrameSet to the first frame.
  *
+ * Both ``LidarFrame`` and ``CameraFrame`` frames participate. Lidar frames
+ * contribute dewarped RANGE features (with surface normals); camera frames
+ * contribute a RANGE point cloud projected via the shared ``XYZLut``
+ * (point-to-point only, no normals). Every frame's cloud is expressed in a
+ * common reference frame using its existing ``sensor_to_body`` extrinsic as the
+ * initial prior.
+ *
  * For three or more valid frames, runs all-pairs initial XY/yaw matching, keeps
  * a consistency-checked spanning tree, then refines the tree with XY/yaw,
  * Z-only, and full 6-DoF passes. Two valid frames use the pairwise alignment
  * path directly. The input frames are expected to already have gravity-aligned
- * ``sensor_info.sensor_to_body`` rotations; the full existing extrinsics,
- * including translations, are used as initial priors. The first returned
- * transform is the first frame's existing extrinsic; each subsequent transform
- * is the frame's input extrinsic
- * left-multiplied by the estimated correction.
+ * ``sensor_to_body`` rotations; the full existing extrinsics, including
+ * translations, are used as initial priors. The first returned transform is the
+ * first frame's existing extrinsic; each subsequent transform is the frame's
+ * input extrinsic left-multiplied by the estimated correction.
  *
  * @param[in] frames Frame set to align. ``frames[0]`` must be valid and is used
  * as the anchor.
  * @return One 4x4 aligned extrinsic matrix per frame in ``frames``. For each
  *         frame after the anchor, the alignment component follows the
  *         ``source_to_target_transform`` convention, with that frame as source
- *         and frame 0 as target.
+ *         and frame 0 as target. A frame that is null, of an unsupported type,
+ *         or has too few usable points keeps its input extrinsic (identity when
+ *         no extrinsic is available).
  * @throws std::invalid_argument If ``frames[0]`` is null, or a frame lacks a
- *         RANGE field or ``sensor_info``.
+ *         RANGE field or its ``sensor_info``.
  * @throws std::runtime_error If the spanning-tree matching cannot connect all
  *         sensors.
  */

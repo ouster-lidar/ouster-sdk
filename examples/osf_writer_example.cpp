@@ -7,17 +7,24 @@
  * explanations.
  */
 
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "ouster/core/camera_frame.h"
+#include "ouster/core/camera_info.h"
 #include "ouster/core/class_map.h"
+#include "ouster/core/field.h"
 #include "ouster/core/impl/build.h"
 #include "ouster/core/lidar_frame.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/object.h"
 #include "ouster/core/open_source.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/osf/osf_frame_set_source.h"
 // NOLINTBEGIN(google-build-using-namespace)
 //! [doc-stag-osf-create-imports]
@@ -62,8 +69,9 @@ void add_example_objects(core::LidarFrame& frame) {
     // clang-format on
 }
 
+namespace {
 void write_classmaps_example(const std::string& output_osf_filename,
-                             const core::SensorInfo& sensor_info) {
+                             std::shared_ptr<core::SensorInfo> sensor_info) {
     // clang-format off
     //! [doc-stag-write-classmaps]
     osf::Writer writer(output_osf_filename, {sensor_info});
@@ -87,12 +95,13 @@ void write_classmaps_example(const std::string& output_osf_filename,
     frame_set_source_metadata_set.entries.emplace("class_maps", class_maps);
     std::string additional_info = "Test additional info";
     frame_set_source_metadata_set.entries.emplace("additional_info", additional_info);
-    
+
     writer.save(frame_set_source_metadata_set);
     //! [doc-etag-write-classmaps]
     // clang-format on
     writer.close();
 }
+}  // namespace
 
 std::string read_classmaps_example(const std::string& osf_path) {
     //! [doc-stag-read-classmaps]
@@ -118,23 +127,45 @@ int main(int argc, char* argv[]) {
         return (argc == 1) ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     const std::string osf_file = argv[1];
-    std::cerr << "Writing frame with example objects to OSF..." << '\n';
+    std::cerr << "Writing lidar and camera frames to OSF..." << '\n';
     //! [doc-stag-osf-create]
-    // Create default sensor info for a 512x10 sensor
-    auto info = core::SensorInfo::from_default(core::LidarMode::_512x10);
-    osf::Writer writer(osf_file, *info);
-    // Instantiate a lidar frame that matches the SensorInfo dimensions
-    auto frame = core::LidarFrame(info);
-    // Manipulate the frame as desired here
-    add_example_objects(frame);
-    // Write it to file on stream 0
-    writer.save(0, frame);
+    // A single OSF file can hold multiple sensors of mixed kinds. Pass the
+    // infos as a vector of SensorInfo base pointers; the Writer creates a lidar
+    // or camera stream for each, in the order provided.
+    auto lidar_info = core::LidarInfo::from_default(core::LidarMode::_512x10);
+    auto camera_info = std::make_shared<core::CameraInfo>();
+    camera_info->format.columns_per_frame = 32;
+    camera_info->format.pixels_per_column = 16;
+    std::vector<std::shared_ptr<core::SensorInfo>> infos{lidar_info, camera_info};
+    osf::Writer writer(osf_file, infos);
+
+    // Frames are addressed by a single, unified stream index: the sensor's
+    // position in the registration order above (lidar at 0, camera at 1),
+    // which is also the order sensor_info() reports on read. The frame's kind
+    // must match the sensor registered at that index.
+
+    // Instantiate a lidar frame that matches the LidarInfo dimensions and
+    // attach some example objects. The lidar was registered first, so its
+    // unified stream index is 0.
+    auto lidar_frame = core::LidarFrame(lidar_info);
+    add_example_objects(lidar_frame);
+    writer.save(0, lidar_frame);
+
+    // Instantiate a matching camera frame carrying a single RANGE image. The
+    // camera was registered second, so its unified stream index is 1.
+    auto camera_frame = core::CameraFrame(camera_info);
+    camera_frame.w = camera_info->w();
+    camera_frame.h = camera_info->h();
+    camera_frame.add_field("RANGE", core::fd_array<uint32_t>(camera_info->h(), camera_info->w()));
+    camera_frame.field<uint32_t>("RANGE").setConstant(1000u);
+    camera_frame.timestamp()[0] = 1;
+    writer.save(1, camera_frame);
     //! [doc-etag-osf-create]
     writer.close();
 
     std::cerr << "Writing ClassMap metadata example OSF..." << '\n';
     const std::string meta_osf = osf_file + ".meta.osf";
-    write_classmaps_example(meta_osf, *info);
+    write_classmaps_example(meta_osf, lidar_info);
 
     std::cerr << "Reading ClassMap metadata back from OSF..." << '\n';
     const auto dog_class = read_classmaps_example(meta_osf);

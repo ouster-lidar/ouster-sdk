@@ -96,7 +96,7 @@ Refer to :doc:`/features/consumption/frame_set_sources` for more information.
 Removal of ``PacketMultiSource``
 ++++++++++++++++++++++++++++++++
 
-``PacketMultiSource`` has been removed. It's functionality is now handled by ``PacketSource``,
+``PacketMultiSource`` has been removed. Its functionality is now handled by ``PacketSource``,
 which returns a ``Tuple[int, Packet]``. This represents both single and multi sensor data streams.
 
 Previously:

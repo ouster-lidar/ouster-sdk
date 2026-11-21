@@ -6,14 +6,23 @@ Perception [BETA]
    This is a **BETA** feature.
 
 Ouster SDK 1.0 introduces the Ouster Perception API, which includes a detection engine interface and implementation
-to add objects (i.e. features derived from lidar data) to :ouster:class:`LidarFrame
-<py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>` or
+to add objects (i.e. features derived from sensor data) to :ouster:class:`Frame
+<py=ouster.sdk.core.Frame|cpp=ouster::sdk::core::Frame>` or
 :ouster:class:`FrameSet <py=ouster.sdk.core.FrameSet|cpp=ouster::sdk::core::FrameSet>`.
 
 At this time, Ouster SDK includes a single detection engine implementation that performs clustering
-on the lidar data present in a ``LidarFrame`` or ``FrameSet`` and adds an
+on the ``RANGE`` data present in a ``Frame`` or ``FrameSet`` and adds an
 :ouster:class:`Object <py=ouster.sdk.core.Object|cpp=ouster::sdk::core::Object>` for each cluster.
 Future releases will add new engines, including those that do object classification.
+
+Detection is not lidar-specific: a :ouster:class:`CameraFrame
+<py=ouster.sdk.core.CameraFrame|cpp=ouster::sdk::core::CameraFrame>` carrying ``RANGE`` is clustered the
+same way a :ouster:class:`LidarFrame <py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>`
+is, and a ``FrameSet`` mixing the two is handled in a single pass. Two differences follow from the
+geometry of a camera: it has one global-shutter pose rather than one per column, so its points are
+placed in the world by that single pose without motion compensation; and the left and right borders
+of its image are not adjacent, so — unlike a 360 degree lidar's first and last columns — clusters are
+never merged across them.
 
 Key capabilities
 ----------------
@@ -52,7 +61,7 @@ Core concepts
 
 * :ouster:class:`DetectionEngine <py=ouster.sdk.perception.DetectionEngine|cpp=ouster::sdk::perception::DetectionEngine>`
   — a base class that declares virtual methods for modifying (e.g. by adding objects to)
-  :ouster:class:`LidarFrame <py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>` and
+  :ouster:class:`Frame <py=ouster.sdk.core.Frame|cpp=ouster::sdk::core::Frame>` and
   :ouster:class:`FrameSet <py=ouster.sdk.core.FrameSet|cpp=ouster::sdk::core::FrameSet>`.
 
 * :ouster:class:`ClassMap <py=ouster.sdk.core.ClassMap|cpp=ouster::sdk::core::ClassMap>`
@@ -73,7 +82,7 @@ Core concepts
 For detailed type definitions and end-to-end examples, see :doc:`API workflow <using-api>` for application integration, custom
 logic, and programmatic control.
 
-For fast iteration, using CLI commands, to dataset generate and vizualize data refer to :doc:`CLI workflow <using-cli>`.
+For fast iteration, using CLI commands, to dataset generate and visualize data refer to :doc:`CLI workflow <using-cli>`.
 
 Coordinate Frames
 -----------------
@@ -114,13 +123,13 @@ kinds of transform are:
   stores the full timestamped trajectory, one matrix per lidar column; and ``Object::body_to_world``
   is a single matrix sampled from that trajectory at the object's detection timestamp.
 
-.. figure:: /images/sdk_pose_graph.svg
-   :alt: SDK pose graph: coordinate frames and transforms
+.. figure:: /images/sdk_coordinate_frames.svg
+   :alt: SDK coordinate frames and transforms
    :width: 100%
 
-   SDK pose graph: coordinate frames and transforms
+   SDK coordinate frames and transforms
 
-The key coordinate frames used in this pose graph are:
+The key coordinate frames in this transform tree are:
 
 .. list-table::
    :header-rows: 1
@@ -163,10 +172,14 @@ Where poses are stored
 
 Transforms are owned by three data structures:
 
-- :ouster:class:`SensorInfo <py=ouster.sdk.core.SensorInfo|cpp=ouster::sdk::core::SensorInfo>` (one per sensor): ``lidar_to_sensor_transform``, ``imu_to_sensor_transform``, and ``sensor_to_body``.
+- :ouster:class:`LidarInfo <py=ouster.sdk.core.LidarInfo|cpp=ouster::sdk::core::LidarInfo>` (one per sensor): ``lidar_to_sensor_transform``, ``imu_to_sensor_transform``, and ``sensor_to_body``.
+  A :ouster:class:`CameraInfo <py=ouster.sdk.core.CameraInfo|cpp=ouster::sdk::core::CameraInfo>` has no
+  internal optics frame, so its chain is just ``sensor_to_body``.
 - :ouster:class:`LidarFrame <py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>`: dynamic ``body_to_world()`` ego trajectory, one SE(3) per lidar column (shape ``(w, 4, 4)``).
+  A :ouster:class:`CameraFrame <py=ouster.sdk.core.CameraFrame|cpp=ouster::sdk::core::CameraFrame>` is
+  exposed the whole image at once, so it stores a single pose (shape ``(1, 4, 4)``).
 - :ouster:class:`Object <py=ouster.sdk.core.Object|cpp=ouster::sdk::core::Object>`: per-detection ``object_to_body`` and ``body_to_world``.
-  ``body_to_world`` is sampled from ``LidarFrame`` at ``Object.timestamp``, making each object self-contained.
+  ``body_to_world`` is sampled from the frame at ``Object.timestamp``, making each object self-contained.
 
 **Object world pose** is computed by composing the two ``Object`` pose fields (both stored on the ``Object`` itself):
 

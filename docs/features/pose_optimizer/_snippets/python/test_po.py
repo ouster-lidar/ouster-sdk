@@ -26,34 +26,34 @@ def test_po_example_runs_and_generates_files(tmp_path):
 
     # Verify the main script exists
     assert SCRIPT_PATH.exists(), "po_example.py is missing"
-    
+
     # Verify OSF fixture exists
     assert OSF_PATH.exists(), f"Required test fixture not found: {OSF_PATH}"
-    
+
     # Define output files in tmp_path
     output_osf = tmp_path / "po_output.osf"
     trajectory_csv = tmp_path / "loop_test_traj.csv"
-    
+
     # Set environment variables for the script
     original_osf_env = os.environ.get("POSE_OPTIMIZER_OSF")
     original_output_env = os.environ.get("POSE_OPTIMIZER_OUTPUT")
     original_cwd = os.getcwd()
-    
+
     try:
         # Change to tmp_path so trajectory file is created there
         os.chdir(tmp_path)
         os.environ["POSE_OPTIMIZER_OSF"] = str(OSF_PATH)
         os.environ["POSE_OPTIMIZER_OUTPUT"] = str(output_osf)
-        
+
         # Run the pose optimizer example and check it doesn't throw
         runpy.run_path(str(SCRIPT_PATH), run_name="__main__")
-        
+
         # Check that the trajectory file was created
         assert trajectory_csv.exists(), f"Expected trajectory file '{trajectory_csv.name}' was not created"
-        
+
         # Check that the OSF output file was created
         assert output_osf.exists(), f"Expected OSF output file '{output_osf.name}' was not created"
-        
+
     except Exception as e:
         pytest.fail(f"Pose optimizer example threw an exception: {e}")
     finally:

@@ -1,6 +1,6 @@
-# Find flatbuffers and set flatc 
-# Set OUSTER_SKIP_FIND_PACKAGE_STANDARD to FALSE on APPLE 
-# When set to TRUE, there are: flatbuffers/flatbuffers.h not found errors 
+# Find flatbuffers and set flatc
+# Set OUSTER_SKIP_FIND_PACKAGE_STANDARD to FALSE on APPLE
+# When set to TRUE, there are: flatbuffers/flatbuffers.h not found errors
 if(APPLE)
   set(OUSTER_SKIP_FIND_PACKAGE_STANDARD FALSE)
 else()
@@ -22,7 +22,7 @@ if(NOT TARGET flatbuffers::flatbuffers)
     add_library(flatbuffers::flatbuffers INTERFACE IMPORTED)
     set_target_properties(flatbuffers::flatbuffers PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${FLATBUFFERS_INCLUDE_DIR}"
-        INTERFACE_LINK_LIBRARIES "${FLATBUFFERS_LIBRARY}" 
+        INTERFACE_LINK_LIBRARIES "${FLATBUFFERS_LIBRARY}"
     )
     message(STATUS "FlatBuffers found: ${FLATBUFFERS_INCLUDE_DIR}")
 endif()

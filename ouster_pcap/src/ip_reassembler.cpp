@@ -184,7 +184,7 @@ IPv4Reassembler2::PacketStatus IPv4Reassembler2::process(const std::chrono::micr
             key_type key = make_key(ip);
             // Delete old streams if too many build up, we only expect one per
             // lidar in practice We just want to keep from building up too much
-            // memory If we didnt do this we could end up with 99 MB or so in
+            // memory If we didn't do this we could end up with 99 MB or so in
             // junk worst case
             if (streams_.size() > 100) {
                 for (auto it = streams_.cbegin(); it != streams_.cend();) {

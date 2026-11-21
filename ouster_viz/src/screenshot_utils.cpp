@@ -4,20 +4,19 @@
  */
 #include "screenshot_utils.h"
 
-#include <png.h>
-#include <pngconf.h>
-
 #include <chrono>
-#include <csetjmp>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <ctime>
-#include <fstream>
 #include <iomanip>
-#include <ios>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
+
+#include "ouster/core/typedefs.h"
+#include "ouster/io/image_io.h"
 
 namespace ouster {
 namespace sdk {
@@ -30,7 +29,7 @@ namespace {
 std::string generate_filename(const std::string& path) {
     // Get the current time
     auto now = std::chrono::system_clock::now();
-    // Convert itto time_t for standard formatting
+    // Convert it to time_t for standard formatting
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
     // Get the milliseconds
     auto now_ms =
@@ -62,70 +61,21 @@ std::string generate_filename(const std::string& path) {
 
 std::string write_png(const std::string& path, const std::vector<uint8_t>& pixels, int width,
                       int height) {
-    if (pixels.empty() || width <= 0 || height <= 0) {
-        // Invalid image dimensions or empty pixel data
+    if (width <= 0 || height <= 0 ||
+        pixels.size() < static_cast<size_t>(width) * static_cast<size_t>(height) * 3) {
+        // Invalid image dimensions or missing pixel data
         return "";
     }
 
     auto filename = generate_filename(path);
-    std::ofstream file(filename, std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("write_png: Failed to open file for writing");
-    }
-
-    // Set up libpng
-    png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
-    if (png == nullptr) {
-        throw std::runtime_error("write_png: Failed to create png write struct");
-    }
-
-    png_infop info = png_create_info_struct(png);
-    if (info == nullptr) {
-        png_destroy_write_struct(&png, nullptr);
-        throw std::runtime_error("write_png: Failed to create png info struct");
-    }
-
-    // libpng error handling requires setjmp; exceptions cannot propagate
-    // through C library callbacks.
-    // NOLINTNEXTLINE(cert-err52-cpp)
-    if (setjmp(png_jmpbuf(png))) {
-        png_destroy_write_struct(&png, &info);
-        throw std::runtime_error("write_png: Error during PNG creation");
-    }
-
-    auto write_fn = [](png_structp png_ptr, png_bytep data, png_size_t length) {
-        auto* file = static_cast<std::ofstream*>(png_get_io_ptr(png_ptr));
-        file->write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(length));
-    };
-
-    auto flush_fn = [](png_structp png_ptr) {
-        auto* file = static_cast<std::ofstream*>(png_get_io_ptr(png_ptr));
-        file->flush();
-    };
-
-    png_set_write_fn(png, &file, write_fn, flush_fn);
-
-    png_set_IHDR(png, info, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-                 PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-
     // Viz colors are authored as sRGB, and on macOS the window is tagged as
-    // sRGB (see glfw_macos.mm), so record that in the PNG. This keeps
-    // screenshots consistent across platforms and display profiles.
-    png_set_sRGB_gAMA_and_cHRM(png, info, PNG_sRGB_INTENT_PERCEPTUAL);
-
-    png_write_info(png, info);
-    png_set_filter(png, 0, PNG_FILTER_NONE);
-
-    std::vector<png_bytep> row_pointers(height);
-    for (int y = 0; y < height; ++y) {
-        row_pointers[y] = const_cast<png_bytep>(&pixels[static_cast<size_t>(y) * width * 3]);
-    }
-
-    png_write_image(png, row_pointers.data());
-    png_write_end(png, nullptr);
-
-    png_destroy_write_struct(&png, &info);
-    file.close();
+    // sRGB (see glfw_macos.mm), so the PNG must keep the sRGB tag.
+    // Recording writes a PNG every frame, so skip row filtering for speed.
+    io::PngWriteOptions options;
+    options.srgb = true;
+    options.filter_rows = false;
+    const Eigen::TensorMap<const core::rgb_img_t<uint8_t>> image(pixels.data(), height, width, 3);
+    io::write_png(filename, image, options);
     return filename;
 }
 

@@ -178,7 +178,7 @@ def prepare_frame_points_like_cpp(frame, plumb_rotation):
         ext = np.asarray(info_for_xyz.sensor_to_body, dtype=np.float64).copy()
         ext[:3, :3] = plumb_rotation @ ext[:3, :3]
         info_for_xyz.sensor_to_body = ext
-    xyz_flat = np.asarray(core.XYZLut(info_for_xyz, use_extrinsics=True)(frame),
+    xyz_flat = np.asarray(core.XYZLut(info_for_xyz)(frame),
                           dtype=np.float64)
 
     poses = np.asarray(frame.body_to_world, dtype=np.float64)
@@ -319,6 +319,182 @@ def _apply_gravity_aligned_extrinsics(frame, plumb_rotation):
     ext = np.asarray(frame.sensor_info.sensor_to_body, dtype=np.float64).copy()
     ext[:3, :3] = plumb_rotation @ ext[:3, :3]
     frame.sensor_info.sensor_to_body = ext
+
+
+# ---------------------------------------------------------------------------
+# Camera participation in align_clouds(FrameSet)
+# ---------------------------------------------------------------------------
+
+_CAM_W, _CAM_H = 160, 120
+_CAM_F = 90.0
+
+
+def _camera_beam_angles(w, h, fx, fy, cx, cy):
+    """Per-pixel beam angles (deg) + range scaling map, mirroring source_zed."""
+    u, v = np.meshgrid(np.arange(w), np.arange(h))
+    x_cam = (u - cx) / fx
+    y_cam = (v - cy) / fy
+    z_cam = np.ones_like(x_cam)
+    # ZED image space -> Ouster sensor space (X forward, Y left, Z up).
+    ox = z_cam
+    oy = -x_cam
+    oz = -y_cam
+    mag = np.sqrt(ox ** 2 + oy ** 2 + oz ** 2)
+    az = np.degrees(np.arctan2(oy, ox)).flatten()
+    alt = np.degrees(np.arcsin(oz / mag)).flatten()
+    return az, alt, mag
+
+
+def _make_camera_info(sensor_to_body=None):
+    info = core.CameraInfo()
+    info.model = core.CameraModel(_CAM_F, _CAM_F, _CAM_W / 2.0, _CAM_H / 2.0)
+    info.format.columns_per_frame = _CAM_W
+    info.format.pixels_per_column = _CAM_H
+    # The shared XYZLut derives per-pixel direction/offset from the pinhole
+    # intrinsics, so no beam angles are stored on the CameraInfo.
+    if sensor_to_body is not None:
+        info.sensor_to_body = np.asarray(sensor_to_body, dtype=np.float64)
+    return info
+
+
+def _make_camera_frame(depth, info):
+    frame = core.CameraFrame()
+    frame.w = _CAM_W
+    frame.h = _CAM_H
+    _, _, mag = _camera_beam_angles(_CAM_W, _CAM_H, _CAM_F, _CAM_F,
+                                    _CAM_W / 2.0, _CAM_H / 2.0)
+    depth = np.ascontiguousarray(depth, dtype=np.float64)
+    # DEPTH (planar X distance) -> RANGE (radial mm) via the range scaling map.
+    range_mm = np.where(depth > 0.0, depth * mag * 1000.0, 0.0).astype(np.uint32)
+    frame.add_field("RANGE", np.ascontiguousarray(range_mm))
+    frame.sensor_info = info
+    return frame
+
+
+def _render_box_forest_depth(seed=7):
+    """Render a synthetic pinhole DEPTH image of a box "forest".
+
+    Axis-aligned boxes scattered in front of a back wall and floor produce
+    occlusion edges and faces in every direction, giving strong 6-DoF geometry
+    so ICP can resolve a camera's extrinsic offset. Returns the depth (X-axis
+    forward distance) as an ``H x W`` float image.
+    """
+    rng = np.random.default_rng(seed)
+    boxes = []
+    for _ in range(40):
+        x0 = rng.uniform(1.2, 3.2)
+        y0 = rng.uniform(-1.6, 1.6)
+        boxes.append((
+            np.array([x0, y0, -1.4]),
+            np.array([x0 + rng.uniform(0.12, 0.25),
+                      y0 + rng.uniform(0.12, 0.25),
+                      rng.uniform(-0.3, 1.2)]),
+        ))
+    back_x, floor_z = 4.2, -1.4
+
+    u = np.arange(_CAM_W)
+    v = np.arange(_CAM_H)
+    uu, vv = np.meshgrid(u, v)
+    # Ray directions in the sensor frame with X (forward) fixed to 1 so the
+    # intersection parameter t equals the stored DEPTH (X distance).
+    d = np.stack([np.ones_like(uu, dtype=np.float64),
+                  -(uu - _CAM_W / 2.0) / _CAM_F,
+                  -(vv - _CAM_H / 2.0) / _CAM_F], axis=-1)
+    best = np.full((_CAM_H, _CAM_W), np.inf)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = back_x / d[..., 0]
+        best = np.where(t > 0.05, np.minimum(best, t), best)
+        t = floor_z / d[..., 2]
+        best = np.where(t > 0.05, np.minimum(best, t), best)
+        for lo, hi in boxes:
+            t1 = lo / d
+            t2 = hi / d
+            t_enter = np.max(np.minimum(t1, t2), axis=-1)
+            t_exit = np.min(np.maximum(t1, t2), axis=-1)
+            hit = (t_enter <= t_exit) & (t_enter > 0.05)
+            best = np.where(hit, np.minimum(best, t_enter), best)
+    return np.where(np.isfinite(best), best, 0.0)
+
+
+def test_align_clouds_camera_frames_participate():
+    """A CameraFrame in a FrameSet takes part in alignment.
+
+    Two cameras with identical clouds and the same non-identity extrinsic must
+    round-trip to that extrinsic. Previously camera frames were ignored and left
+    at identity, so the camera output being its (non-identity) input extrinsic
+    proves it is now processed.
+    """
+    extrinsic = np.eye(4, dtype=np.float64)
+    extrinsic[:3, 3] = [0.05, 0.4, 0.03]
+    depth = _render_box_forest_depth()
+
+    frames = core.FrameSet([
+        _make_camera_frame(depth, _make_camera_info(extrinsic)),
+        _make_camera_frame(depth.copy(), _make_camera_info(extrinsic.copy())),
+    ])
+    transforms = [np.asarray(t, dtype=np.float64) for t in align_clouds(frames)]
+
+    assert len(transforms) == 2
+    # Identical clouds -> no correction: both keep the shared extrinsic.
+    np.testing.assert_allclose(transforms[0], extrinsic, atol=1e-6)
+    np.testing.assert_allclose(transforms[1], extrinsic, atol=1e-4)
+    # The camera output is the real (non-identity) extrinsic, not the identity
+    # the old ignore-path would have returned.
+    assert not np.allclose(transforms[1], np.eye(4), atol=1e-2)
+
+
+def test_align_clouds_camera_recovers_extrinsic_offset():
+    """align_clouds corrects a camera's perturbed extrinsic.
+
+    Both cameras observe the same underlying cloud (full overlap); the second
+    camera's extrinsic prior is offset by a known transform. Alignment must pull
+    it back toward the anchor, reducing the extrinsic error.
+    """
+    offset = np.eye(4, dtype=np.float64)
+    offset[:3, 3] = [0.15, 0.10, -0.08]
+    depth = _render_box_forest_depth()
+
+    frames = core.FrameSet([
+        _make_camera_frame(depth, _make_camera_info(np.eye(4))),
+        _make_camera_frame(depth.copy(), _make_camera_info(offset)),
+    ])
+    transforms = [np.asarray(t, dtype=np.float64) for t in align_clouds(frames)]
+
+    assert len(transforms) == 2
+    # The true relative extrinsic is identity; alignment should recover it.
+    guess_trans_err, guess_rot_err = _pose_error(offset, np.eye(4))
+    out_trans_err, out_rot_err = _pose_error(transforms[1], np.eye(4))
+    assert out_trans_err < guess_trans_err
+    assert out_trans_err < 0.13
+    assert out_rot_err < np.deg2rad(3.0)
+
+
+def test_align_clouds_camera_uses_full_image_width():
+    """A camera contributes its whole image, not just column 0.
+
+    A camera's status is a single frame-level word rather than one per column,
+    so deriving the column range from it collapsed the usable cloud to image
+    column 0. Here all the depth lives in the right half of the image, so that
+    bug leaves the camera with no usable points and skips it entirely.
+    """
+    offset = np.eye(4, dtype=np.float64)
+    offset[:3, 3] = [0.15, 0.10, -0.08]
+    depth = _render_box_forest_depth()
+    depth[:, :_CAM_W // 2] = 0.0
+    assert not np.any(depth[:, 0] > 0.0)
+
+    frames = core.FrameSet([
+        _make_camera_frame(depth, _make_camera_info(np.eye(4))),
+        _make_camera_frame(depth.copy(), _make_camera_info(offset)),
+    ])
+    transforms = [np.asarray(t, dtype=np.float64) for t in align_clouds(frames)]
+
+    # The skipped-sensor path returns the input extrinsic untouched.
+    assert not np.allclose(transforms[1], offset, atol=1e-6)
+    guess_trans_err, _ = _pose_error(offset, np.eye(4))
+    out_trans_err, out_rot_err = _pose_error(transforms[1], np.eye(4))
+    assert out_trans_err < guess_trans_err
+    assert out_rot_err < np.deg2rad(3.0)
 
 
 @pytest.mark.parametrize(

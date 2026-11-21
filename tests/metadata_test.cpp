@@ -7,10 +7,14 @@
 
 #include <fstream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "ouster/core/camera_info.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/core/types.h"
 
 using namespace ouster::sdk::core;
@@ -57,7 +61,7 @@ TEST_P(MetaFiles, combinedTestMetadata) {
 
     auto data_dir = getenvs("DATA_DIR");
 
-    const SensorInfo si_orig = metadata_from_json(data_dir + param + ".json");
+    const LidarInfo si_orig = metadata_from_json(data_dir + param + ".json");
 
     // Make si new -- change a few values
     auto si_new = si_orig;
@@ -73,12 +77,84 @@ TEST_P(MetaFiles, combinedTestMetadata) {
     EXPECT_NE(si_new.beam_altitude_angles, si_orig.beam_altitude_angles);
 
     auto si_new_updated_string = si_new.to_json_string();
-    auto si_roundtrip = SensorInfo(si_new_updated_string);
+    auto si_roundtrip = LidarInfo(si_new_updated_string);
 
     EXPECT_EQ(si_new.config.lidar_mode, si_roundtrip.config.lidar_mode);
     EXPECT_EQ(si_new.init_id, si_roundtrip.init_id);
     EXPECT_EQ(si_new.format.fps, si_roundtrip.format.fps);
     EXPECT_EQ(si_new.beam_altitude_angles, si_roundtrip.beam_altitude_angles);
+}
+
+TEST(Util, CameraInfoFpsRoundTrip) {
+    CameraInfo ci_orig;
+    ci_orig.sn = 12345;
+    ci_orig.format.columns_per_frame = 4;
+    ci_orig.format.pixels_per_column = 3;
+    ci_orig.format.fps = 60;
+
+    const auto ci_roundtrip = CameraInfo(ci_orig.to_json_string());
+    EXPECT_EQ(ci_roundtrip.fps(), 60);
+    EXPECT_EQ(ci_roundtrip, ci_orig);
+
+    // The frame rate participates in equality.
+    auto ci_slower = ci_roundtrip;
+    ci_slower.format.fps = 30;
+    EXPECT_NE(ci_slower, ci_orig);
+
+    // Metadata that omits the key leaves the zero default.
+    EXPECT_EQ(
+        CameraInfo(
+            R"({"camera_info": {"format": {"columns_per_frame": 4, "pixels_per_column": 3}}})")
+            .fps(),
+        0);
+}
+
+TEST(Util, CameraInfoFormatRoundTrip) {
+    CameraInfo ci_orig;
+    ci_orig.format.columns_per_frame = 640;
+    ci_orig.format.pixels_per_column = 480;
+    ci_orig.format.fps = 15;
+
+    const auto ci_roundtrip = CameraInfo(ci_orig.to_json_string());
+    EXPECT_EQ(ci_roundtrip.format, ci_orig.format);
+    EXPECT_EQ(ci_roundtrip.w(), 640u);
+    EXPECT_EQ(ci_roundtrip.h(), 480u);
+
+    auto ci_wider = ci_roundtrip;
+    ci_wider.format.columns_per_frame = 1280;
+    EXPECT_NE(ci_wider.format, ci_orig.format);
+    EXPECT_NE(ci_wider, ci_orig);
+
+    auto ci_taller = ci_roundtrip;
+    ci_taller.format.pixels_per_column = 720;
+    EXPECT_NE(ci_taller, ci_orig);
+}
+
+TEST(Util, CameraInfoRequiresFormat) {
+    EXPECT_THROW(CameraInfo(R"({"camera_info": {"sn": 1}})"), std::invalid_argument);
+    EXPECT_THROW(CameraInfo(R"({"camera_info": {"format": 7}})"), std::invalid_argument);
+    // The pre-format layout, with width/height/fps directly under camera_info, is rejected.
+    EXPECT_THROW(CameraInfo(R"({"camera_info": {"width": 4, "height": 3, "fps": 30}})"),
+                 std::invalid_argument);
+}
+
+TEST(Util, SensorInfoFromJsonString) {
+    const auto lidar_json = LidarInfo::from_default(LidarMode::_1024x10)->to_json_string();
+    CameraInfo camera_orig;
+    camera_orig.format.columns_per_frame = 4;
+    camera_orig.format.pixels_per_column = 3;
+    const auto camera_json = camera_orig.to_json_string();
+
+    const auto lidar =
+        std::dynamic_pointer_cast<LidarInfo>(SensorInfo::from_json_string(lidar_json));
+    ASSERT_NE(lidar, nullptr);
+    EXPECT_EQ(*lidar, LidarInfo(lidar_json));
+
+    const auto camera =
+        std::dynamic_pointer_cast<CameraInfo>(SensorInfo::from_json_string(camera_json));
+    ASSERT_NE(camera, nullptr);
+    EXPECT_EQ(*camera, camera_orig);
+    EXPECT_EQ(*camera, CameraInfo(camera_json));
 }
 
 class product_info_test : public ProductInfo {

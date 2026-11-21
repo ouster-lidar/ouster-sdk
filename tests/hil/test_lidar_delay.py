@@ -107,7 +107,7 @@ def test_lidar_packets_delay(hil_configured_sensor, hil_sensor_config,
     maximum_avg_delay_ms = 20.0
     delays_ms = [float] * total_capture_count
     logger.debug(f"Capturing {total_capture_count} lidar packets...")
-    
+
     with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
         metadata = src.sensor_info
 

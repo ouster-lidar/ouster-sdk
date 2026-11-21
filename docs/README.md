@@ -1,6 +1,6 @@
 ## Build
 
-Build docs builds performs installs for docs build, builds sdk-extensions docs, builds ouster-sdk (for API refernce).
+`build docs` installs the docs build dependencies, builds the sdk-extensions docs, and builds ouster-sdk (for the API reference).
 
 ```bash
 python3.10 -m venv venv310

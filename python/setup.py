@@ -17,6 +17,7 @@ from setuptools import setup, find_namespace_packages, Extension
 from setuptools.command.build_ext import build_ext
 from setuptools.command.sdist import sdist
 from wheel.bdist_wheel import bdist_wheel
+from wheel.wheelfile import WheelFile
 
 SRC_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -284,6 +285,8 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_BUILD_TYPE={self._build_type}",
             f"-DOUSTER_SDK_PATH={ouster_sdk_path}"
         ]
+        if platform.system() == "Darwin":
+            cmake_args.append("-DOUSTER_OSX_DEPLOYMENT_TARGET=14.0")
         if "VCPKG_MANIFEST_MODE" in self._env:
             cmake_args.append(f"-DVCPKG_MANIFEST_MODE={self._env['VCPKG_MANIFEST_MODE']}")
         else:
@@ -400,6 +403,17 @@ class CMakeBuild(build_ext):
         self._profiler.start('wheel_packaging_s')
 
 
+def _strip_bytecode(root):
+    """Delete all __pycache__ dirs and .pyc/.pyo files under root."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        for filename in filenames:
+            if filename.endswith(('.pyc', '.pyo')):
+                os.remove(os.path.join(dirpath, filename))
+        if '__pycache__' in dirnames:
+            shutil.rmtree(os.path.join(dirpath, '__pycache__'))
+            dirnames.remove('__pycache__')
+
+
 class sdk_sdist(sdist):
     """Allow including files from parent directory via symlink."""
     def run(self):
@@ -463,9 +477,23 @@ class sdk_bdist_wheel(bdist_wheel):
             if hasattr(self.distribution, "_finalize_license_files"):
                 self.distribution._finalize_license_files()
 
-            # super().run() triggers build_ext → CMakeBuild.run() which creates
-            # the profiler and attaches it to self.distribution._build_profiler
-            super().run()
+            # Stub generation imports the package during the C++ build, which
+            # leaves __pycache__/*.pyc in the staging tree. bdist_wheel has no
+            # hook between staging and zipping, so strip bytecode inside
+            # WheelFile.write_files, right before the tree is packed.
+            write_files_impl = WheelFile.write_files
+
+            def write_files_stripped(wheel_file, base_dir):
+                _strip_bytecode(base_dir)
+                return write_files_impl(wheel_file, base_dir)
+
+            WheelFile.write_files = write_files_stripped
+            try:
+                # super().run() triggers build_ext → CMakeBuild.run() which creates
+                # the profiler and attaches it to self.distribution._build_profiler
+                super().run()
+            finally:
+                WheelFile.write_files = write_files_impl
         finally:
             for file in staged:
                 if os.path.exists(file):
@@ -492,13 +520,14 @@ if __name__ == "__main__":
         url='https://github.com/ouster-lidar/ouster-sdk',
         version=parse_version(),
         package_dir={'': 'src'},
-        packages=find_namespace_packages(where='src', include='ouster.*'),
+        packages=find_namespace_packages(where='src', include=['ouster.*']),
         package_data={
             'ouster.sdk.client': ['py.typed', '_client.pyi'],
             'ouster.sdk.pcap': ['py.typed', '_pcap.pyi'],
             'ouster.sdk.osf': ['py.typed', '_osf.pyi'],
             'ouster.sdk.viz': ['py.typed', '_viz.pyi'],
             'ouster.sdk.algorithm': ['py.typed'],
+            'ouster.sdk.io': ['py.typed'],
             'ouster.sdk.mapping': ['py.typed', '_mapping.pyi'],
             'ouster.sdk.bag': ['py.typed'],
             'ouster.cli': ['sensor_replay_dockerfile', 'templates/*.html']
@@ -523,7 +552,7 @@ if __name__ == "__main__":
         extras_require={
             'test': [
                 'pytest >=7.0, <8',
-                'pytest-asyncio',
+                'pytest-asyncio >= 0.21',
                 'iniconfig <=2.1.0',
             ],
             'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf', "nanobind==2.9.2", "numpy"],

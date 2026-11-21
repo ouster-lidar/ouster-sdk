@@ -21,8 +21,8 @@ namespace {
 
 constexpr double kTol = 1e-6;
 
-std::shared_ptr<SensorInfo> make_sensor_info(int h, int w) {
-    SensorInfo info;
+std::shared_ptr<LidarInfo> make_sensor_info(int h, int w) {
+    LidarInfo info;
     info.format.columns_per_packet = 16;
     info.format.pixels_per_column = h;
     info.format.columns_per_frame = w;
@@ -30,7 +30,7 @@ std::shared_ptr<SensorInfo> make_sensor_info(int h, int w) {
     info.format.udp_profile_imu = UDPProfileIMU::LEGACY;
     info.fw_rev = "3.2.1";
     info.image_rev = "3.2.1";
-    return std::make_shared<SensorInfo>(std::move(info));
+    return std::make_shared<LidarInfo>(std::move(info));
 }
 
 void set_column_valid(LidarFrame& frame, int col, bool valid) {

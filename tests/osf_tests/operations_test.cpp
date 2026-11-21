@@ -18,23 +18,31 @@
 #include <set>
 #include <sstream>
 
+#include "common.h"
 #include "osf_test.h"
+#include "ouster/core/camera_frame.h"
+#include "ouster/core/camera_info.h"
+#include "ouster/core/lidar_frame.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/impl/basics.h"
 #include "ouster/osf/impl/fb_utils.h"
+#include "ouster/osf/meta_camera_sensor.h"
 #include "ouster/osf/meta_lidar_sensor.h"
+#include "ouster/osf/osf_frame_set_source.h"
 #include "ouster/osf/reader.h"
+#include "ouster/osf/stream_camera_frame.h"
 #include "ouster/osf/stream_lidar_frame.h"
 #include "ouster/osf/stream_osf_file.h"
+#include "ouster/osf/writer.h"
 
 namespace ouster {
 namespace sdk {
 namespace osf {
 namespace {
 
-// For some reason windows doesnt like the block_size
+// For some reason windows doesn't like the block_size
 // init in the code below
 #define BLOCK_SIZE (1024 * 1024)
 #define FILESHA_DIGEST_SIZE 64
@@ -225,8 +233,8 @@ bool _parse_json(const std::string& json, jsoncons::json& root) {
     return !failure;
 }
 
-ouster::sdk::core::SensorInfo _gen_new_metadata(int start_number) {
-    ouster::sdk::core::SensorInfo new_metadata;
+ouster::sdk::core::LidarInfo _gen_new_metadata(int start_number) {
+    ouster::sdk::core::LidarInfo new_metadata;
     new_metadata.sn = 123456;
     new_metadata.fw_rev = "sqrt(-1) friends";
     new_metadata.config.lidar_mode = ouster::sdk::core::LidarMode::_512x10;
@@ -320,7 +328,7 @@ TEST_F(OperationsTest, MetadataRewriteTestSimple) {
 
     _verify_empty_metadata(test_root);
 
-    ouster::sdk::core::SensorInfo new_metadata = _gen_new_metadata(100);
+    ouster::sdk::core::LidarInfo new_metadata = _gen_new_metadata(100);
 
     osf_file_modify_metadata(temp_file, {new_metadata});
     std::string output_metadata_json = dump_metadata(temp_file, true);
@@ -348,8 +356,8 @@ TEST_F(OperationsTest, MetadataRewriteTestMulti) {
 
     _verify_empty_metadata(test_root);
 
-    ouster::sdk::core::SensorInfo new_metadata = _gen_new_metadata(100);
-    ouster::sdk::core::SensorInfo new_metadata2 = _gen_new_metadata(200);
+    ouster::sdk::core::LidarInfo new_metadata = _gen_new_metadata(100);
+    ouster::sdk::core::LidarInfo new_metadata2 = _gen_new_metadata(200);
 
     osf_file_modify_metadata(temp_file, {new_metadata, new_metadata2});
     std::string output_metadata_json = dump_metadata(temp_file, true);
@@ -388,7 +396,7 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
     EXPECT_EQ(test_root["metadata"]["entries"][0]["buffer"],
               "LidarFrameStreamMeta: sensor_id = 12345678, field_types = {}");
 
-    ouster::sdk::core::SensorInfo new_metadata = _gen_new_metadata(100);
+    ouster::sdk::core::LidarInfo new_metadata = _gen_new_metadata(100);
 
     osf_file_modify_metadata(temp_file, {new_metadata});
     std::string output_metadata_json = dump_metadata(temp_file, true);
@@ -404,6 +412,162 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
     EXPECT_EQ(new_root, output_root["metadata"]["entries"][1]["buffer"]["sensor_info"]);
     EXPECT_EQ(output_root["metadata"]["entries"].size(), 2);
     unlink_path(temp_file);
+}
+
+ouster::sdk::core::CameraInfo _gen_new_camera_metadata(double fx) {
+    ouster::sdk::core::CameraInfo new_metadata;
+    new_metadata.sn = 654321;
+    new_metadata.format.columns_per_frame = 640;
+    new_metadata.format.pixels_per_column = 480;
+    new_metadata.model = ouster::sdk::core::CameraModel(fx, fx + 1.0f, 320.0f, 240.0f);
+    return new_metadata;
+}
+
+ouster::sdk::core::CameraFrame _gen_camera_frame(const ouster::sdk::core::CameraInfo& info,
+                                                 uint64_t ts) {
+    ouster::sdk::core::CameraFrame frame{std::make_shared<ouster::sdk::core::CameraInfo>(info)};
+    frame.w = info.w();
+    frame.h = info.h();
+    frame.add_field("image", ouster::sdk::core::fd_array<uint8_t>(info.h(), info.w()),
+                    ouster::sdk::core::FieldClass::PIXEL_FIELD);
+    frame.timestamp()[0] = ts;
+    frame.receive_timestamp()[0] = ts;
+    return frame;
+}
+
+/// Collect the footer ids of the sensor metadata entries (both kinds) in
+/// ascending order, which is the order osf_file_modify_metadata replaces them
+/// in.
+std::vector<uint32_t> _sensor_footer_ids(const std::string& file_name) {
+    Reader reader(file_name);
+    std::vector<uint32_t> ids;
+    for (const auto& entry : reader.meta_store().entries()) {
+        const std::string type = entry.second->type();
+        if (type == metadata_type<LidarSensor>() || type == metadata_type<CameraSensor>()) {
+            ids.push_back(entry.first);
+        }
+    }
+    return ids;
+}
+
+TEST_F(OperationsTest, MetadataRewriteCameraOnly) {
+    std::string temp_file = tmp_file("metadata_rewrite_camera_only.osf");
+
+    auto camera_info = _gen_new_camera_metadata(100.0);
+    {
+        Writer writer(temp_file);
+        auto camera_idx = writer.add_sensor(camera_info);
+        writer.save(camera_idx, _gen_camera_frame(camera_info, 100), ts_t{100});
+        writer.close();
+    }
+
+    auto original_ids = _sensor_footer_ids(temp_file);
+    ASSERT_EQ(original_ids.size(), 1u);
+
+    auto new_camera_info = _gen_new_camera_metadata(200.0);
+    EXPECT_GT(osf_file_modify_metadata(
+                  temp_file, {std::make_shared<ouster::sdk::core::CameraInfo>(new_camera_info)}),
+              0);
+
+    // The camera is still stored as a CameraSensor entry, under the same footer
+    // id, so the CameraFrameStream that references it still resolves.
+    EXPECT_EQ(_sensor_footer_ids(temp_file), original_ids);
+    jsoncons::json output_root{};
+    ASSERT_TRUE(_parse_json(dump_metadata(temp_file, true), output_root));
+    bool found_camera_entry = false;
+    for (const auto& entry : output_root["metadata"]["entries"].array_range()) {
+        const auto type = entry["type"].as<std::string>();
+        if (type == metadata_type<CameraSensor>()) {
+            found_camera_entry = true;
+            jsoncons::json expected{};
+            ASSERT_TRUE(_parse_json(new_camera_info.to_json_string(), expected));
+            EXPECT_EQ(expected, entry["buffer"]["sensor_info"]);
+        }
+        EXPECT_NE(type, metadata_type<LidarSensor>());
+    }
+    EXPECT_TRUE(found_camera_entry);
+
+    // ...and reading the file back yields the new CameraInfo along with the
+    // original frame.
+    OsfFrameSetSource source(temp_file);
+    const auto& infos = source.sensor_info();
+    ASSERT_EQ(infos.size(), 1u);
+    auto read_camera = std::dynamic_pointer_cast<ouster::sdk::core::CameraInfo>(infos[0]);
+    ASSERT_NE(read_camera, nullptr);
+    EXPECT_EQ(*read_camera, new_camera_info);
+
+    size_t frame_count = 0;
+    for (const auto& frame_set : source) {
+        ASSERT_EQ(frame_set.size(), 1u);
+        EXPECT_NE(std::dynamic_pointer_cast<ouster::sdk::core::CameraFrame>(frame_set[0]), nullptr);
+        ++frame_count;
+    }
+    EXPECT_EQ(frame_count, 1u);
+}
+
+TEST_F(OperationsTest, MetadataRewriteMixedSensors) {
+    std::string temp_file = tmp_file("metadata_rewrite_mixed.osf");
+
+    auto camera_info = _gen_new_camera_metadata(100.0);
+    const auto lidar_info = ouster::sdk::core::metadata_from_json(
+        path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
+    {
+        // Register the camera first so the lidar's footer id is *not* the lowest
+        // one: a rewrite that assigned fresh ids would silently re-point the
+        // frame streams at the wrong sensor.
+        Writer writer(temp_file);
+        auto camera_idx = writer.add_sensor(camera_info);
+        auto lidar_idx = writer.add_sensor(lidar_info);
+        writer.save(camera_idx, _gen_camera_frame(camera_info, 100), ts_t{100});
+        writer.save(lidar_idx, get_random_lidar_frame(lidar_info), ts_t{100});
+        writer.close();
+    }
+
+    auto original_ids = _sensor_footer_ids(temp_file);
+    ASSERT_EQ(original_ids.size(), 2u);
+    EXPECT_GT(original_ids[1], 1u);
+
+    // new_metadata is positional, in the same (footer id) order the sensors are
+    // reported in: camera first, then lidar.
+    auto new_camera_info = _gen_new_camera_metadata(200.0);
+    const auto new_lidar_info = ouster::sdk::core::metadata_from_json(
+        path_concat(test_data_dir(), "pcaps/OS-0-128-U1_v2.3.0_1024x10.json"));
+    EXPECT_GT(osf_file_modify_metadata(
+                  temp_file, {std::make_shared<ouster::sdk::core::CameraInfo>(new_camera_info),
+                              std::make_shared<ouster::sdk::core::LidarInfo>(new_lidar_info)}),
+              0);
+
+    EXPECT_EQ(_sensor_footer_ids(temp_file), original_ids);
+
+    OsfFrameSetSource source(temp_file);
+    const auto& infos = source.sensor_info();
+    ASSERT_EQ(infos.size(), 2u);
+    auto read_camera = std::dynamic_pointer_cast<ouster::sdk::core::CameraInfo>(infos[0]);
+    auto read_lidar = std::dynamic_pointer_cast<ouster::sdk::core::LidarInfo>(infos[1]);
+    ASSERT_NE(read_camera, nullptr);
+    ASSERT_NE(read_lidar, nullptr);
+    EXPECT_EQ(*read_camera, new_camera_info);
+    // client_version is not serialized, so compare the lidar metadata the way
+    // it was stored rather than field-by-field.
+    EXPECT_EQ(read_lidar->to_json_string(), new_lidar_info.to_json_string());
+
+    // Both streams still resolve to a frame of the right kind.
+    size_t camera_frames = 0;
+    size_t lidar_frames = 0;
+    for (const auto& frame_set : source) {
+        for (const auto& frame : frame_set) {
+            if (!frame) {
+                continue;
+            }
+            if (std::dynamic_pointer_cast<ouster::sdk::core::CameraFrame>(frame)) {
+                ++camera_frames;
+            } else if (std::dynamic_pointer_cast<ouster::sdk::core::LidarFrame>(frame)) {
+                ++lidar_frames;
+            }
+        }
+    }
+    EXPECT_EQ(camera_frames, 1u);
+    EXPECT_EQ(lidar_frames, 1u);
 }
 
 }  // namespace

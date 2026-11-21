@@ -274,6 +274,7 @@ class RstProcessor:
     _SDK_SUBPACKAGES_ORDER = [
         "ouster.sdk.algorithm",
         "ouster.sdk.core",
+        "ouster.sdk.io",
         "ouster.sdk.mapping",
         "ouster.sdk.osf",
         "ouster.sdk.pcap",

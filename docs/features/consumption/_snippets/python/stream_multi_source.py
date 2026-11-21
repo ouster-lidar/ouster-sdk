@@ -1,14 +1,13 @@
 """Doc snippets for multi-sensor streams with SensorFrameSetSource/open_source."""
-from typing import Iterable, Optional, Sequence
+from typing import Sequence
 from ouster import sdk
 from ouster.sdk import sensor
-from ouster.sdk.core import LidarFrame
+from ouster.sdk.core import FrameSet
 
 
-def _print_frame(count: int, frame_set: Iterable[Optional[LidarFrame]]) -> None:
-    for idx, frame in enumerate(frame_set):
-        if frame:
-            print(f"frame: {count} frame_id={frame.frame_id}")
+def _print_frame(count: int, frame_set: FrameSet) -> None:
+    for frame in frame_set.valid_frames():
+        print(f"frame: {count} ts={frame.timestamp[0]}")
 
 
 def stream_multi_sensor(hosts: Sequence[str], limit: int = 5) -> None:
@@ -21,10 +20,8 @@ def stream_multi_sensor(hosts: Sequence[str], limit: int = 5) -> None:
     # [doc-stag-multi-sensorframesetsource-loop]
     with source:
         for count, frame_set in enumerate(source):
-            for idx, _ in enumerate(frame_set):
-                frame = frame_set[idx]
-                if frame:
-                    print(f"frame:{count} frame_id={frame.frame_id}")
+            for frame in frame_set.valid_frames():
+                print(f"frame:{count} ts={frame.timestamp[0]}")
         # [doc-etag-multi-sensorframesetsource-loop]
             if count + 1 >= limit:
                 break
@@ -38,10 +35,8 @@ def stream_multi_open_source(hosts: Sequence[str], limit: int = 5) -> None:
     source = sdk.open_source(list(hosts), collate=True)
     with source:
         for count, frame_set in enumerate(source):
-            for idx, _ in enumerate(frame_set):
-                frame = frame_set[idx]
-                if frame:
-                    print(f"frame:{count}" f"frame_id={frame.frame_id}")
+            for frame in frame_set.valid_frames():
+                print(f"frame:{count} ts={frame.timestamp[0]}")
 
             if count + 1 >= limit:
                 break

@@ -1,12 +1,12 @@
 import numpy as np
 
-from ouster.sdk.core import SensorInfo
+from ouster.sdk.core import LidarInfo
 from ouster.sdk.examples.lidar_frame import lidar_frame_example
 
 
 def test_custom_field_populated_from_example(test_data_dir):
     """Custom field should exist with baseline value 1 and 255 override block."""
-    info = SensorInfo(open(test_data_dir / "metadata" / "3_0_1_os-122246000293-128.json").read())
+    info = LidarInfo(open(test_data_dir / "metadata" / "3_0_1_os-122246000293-128.json").read())
     ls = lidar_frame_example(info)
     field = ls.field("my-custom-field")
 

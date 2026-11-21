@@ -17,25 +17,24 @@ def open_indexed_source_example(pcap_path: str = "<SAMPLE_DATA_PCAP_PATH>") -> c
 
 
 def print_nth_frame_example(source: core.FrameSetSource) -> None:
-    """Doc example that prints the tenth frame's frame id."""
+    """Doc example that prints the tenth frame's timestamp."""
     # [doc-stag-slicing-print-nth]
     frame_set = source[9]
-    for frame in frame_set:
-        if frame is not None:
-            print(frame.frame_id)
+    for frame in frame_set.valid_frames():
+        print(frame.timestamp[0])
     # To directly access 9th frame of sensor with index 0.
-    frame = source[9][0]
-    assert frame is not None
-    print(frame.frame_id)
+    nth_frame = source[9][0]
+    assert nth_frame is not None
+    print(nth_frame.timestamp[0])
     # [doc-etag-slicing-print-nth]
 
 
 def print_last_frame_example(source: core.FrameSetSource) -> None:
-    """Doc example that prints the last frame's frame id."""
+    """Doc example that prints the last frame's timestamp."""
     # [doc-stag-slicing-print-last]
     frame = source[-1][0]
     assert frame is not None
-    print(frame.frame_id)
+    print(frame.timestamp[0])
     # [doc-etag-slicing-print-last]
 
 
@@ -43,9 +42,8 @@ def print_first_n_frames_example(source: core.FrameSetSource) -> None:
     """Doc example that iterates over the first n frames."""
     # [doc-stag-slicing-first-n]
     for frame_set in source[0:9]:
-        for frame in frame_set:
-            if frame is not None:
-                print(frame.frame_id)
+        for frame in frame_set.valid_frames():
+            print(frame.timestamp[0])
     # [doc-etag-slicing-first-n]
 
 
@@ -53,9 +51,8 @@ def print_last_n_frames_example(source: core.FrameSetSource) -> None:
     """Doc example that iterates over the last nine frames."""
     # [doc-stag-slicing-last-n]
     for frame_set in source[-9:-1]:
-        for frame in frame_set:
-            if frame is not None:
-                print(frame.frame_id)
+        for frame in frame_set.valid_frames():
+            print(frame.timestamp[0])
     # [doc-etag-slicing-last-n]
 
 
@@ -64,9 +61,8 @@ def print_step_sliced_frames_example(source: core.FrameSetSource) -> None:
     # [doc-stag-slicing-step]
     # prints every second frame in the first ten
     for frame_set in source[0:10:2]:
-        for frame in frame_set:
-            if frame is not None:
-                print(frame.frame_id)
+        for frame in frame_set.valid_frames():
+            print(frame.timestamp[0])
     # [doc-etag-slicing-step]
 
 
@@ -77,17 +73,20 @@ def slicing_as_source_example(source: core.FrameSetSource) -> None:
     # This should print 5 since source2 is scoped to the range [5, 10]
     print("source2 length:", len(source2))
     # This is equivalent to calling source[5][0]
-    print(source2[0][0].frame_id)  # type: ignore[union-attr]
+    first_frame = source2[0][0]
+    assert first_frame is not None
+    print(first_frame.timestamp[0])
 
     # This is equivalent to calling source[9][0]
-    print(source2[4][0].frame_id)  # type: ignore[union-attr]
+    fifth_frame = source2[4][0]
+    assert fifth_frame is not None
+    print(fifth_frame.timestamp[0])
 
-
-    # Use source2 as an iterator similar to the main source, assumes only one sensor
+    # Use source2 as an iterator similar to the main source
     source_iter = iter(source2)
-    for frame, in source_iter:
-        assert frame is not None
-        print(frame.frame_id)
+    for frame_set in source_iter:
+        for frame in frame_set.valid_frames():
+            print(frame.timestamp[0])
 
     # it is possible to sub slice, meaning take the result of a previous slice operation and slice it
     # Thus, the following statement is valid

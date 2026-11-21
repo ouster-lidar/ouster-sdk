@@ -50,7 +50,7 @@ struct OUSTER_API_CLASS Triangle {
      */
     OUSTER_API_FUNCTION
     bool operator==(const Triangle& rhs) const {
-        // TODO[tws] comparing edges and normal would be unnecesary if they're
+        // TODO[tws] comparing edges and normal would be unnecessary if they're
         // derived
         return coords == rhs.coords && edges == rhs.edges && normal == rhs.normal;
     }

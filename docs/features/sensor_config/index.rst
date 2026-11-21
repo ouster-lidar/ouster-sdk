@@ -1,5 +1,5 @@
 Sensor Configuration
-====================    
+====================
 
 The Ouster SDK provides a powerful and flexible way to discover, inspect, and configure your Ouster sensors.
 This section of the documentation guides you through the process of adjusting a sensor's mutable settings (``sensor_config``)

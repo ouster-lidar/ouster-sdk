@@ -27,8 +27,30 @@ struct CloudIds;
  */
 class GLCloud {
    private:
+    struct ProgramIds {
+        GLuint program_id;
+
+        // Ordered only ids
+        GLint off_id, range_id, transformation_id, trans_index_id, model_id, proj_view_id;
+
+        // Unordered only ids
+        GLint proj_view_model_id;
+
+        // Common ids for all
+        GLint xyz_id, key_id, mono_id, palette_id;
+
+        // Other optional ids
+        GLint mask_id;
+
+        ProgramIds(){};
+
+        ProgramIds(const std::string& vertexs, const std::string& frags);
+
+        ~ProgramIds();
+    };
+
     // per-object gl state
-    GLuint vao_;
+    GLuint ordered_vao_, unordered_vao_, maskless_unordered_vao_;
     GLfloat point_size_;
     bool mono_;
 
@@ -38,20 +60,18 @@ class GLCloud {
 
     core::Matrix4dR map_pose_;
     Matrix4fR extrinsic_;
+    const ProgramIds* last_program_ = 0;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     struct GlobalState {
-        GLuint program_id;
-
-        GLint xyz_id, off_id, range_id, key_id, mask_id, model_id, proj_view_id, mono_id,
-            palette_id, transformation_id, trans_index_id;
+        ProgramIds ordered, unordered, unordered_maskless;
 
         GlobalState();
         ~GlobalState();
 
-        // Make sure it cant be copied
+        // Make sure it can't be copied
         GlobalState(const GlobalState&) = delete;
         GlobalState& operator=(const GlobalState&) = delete;
     };
@@ -77,7 +97,8 @@ class GLCloud {
     static void endDraw();
 
    private:
-    void update_buffers(const GlobalState& state, const CameraData& camera, Cloud& cloud);
+    void update_buffers(const GlobalState& state, const CameraData& camera, Cloud& cloud,
+                        const ProgramIds& program);
 };
 
 }  // namespace impl

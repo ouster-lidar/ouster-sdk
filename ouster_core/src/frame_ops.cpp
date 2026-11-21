@@ -5,10 +5,14 @@
 #include <cstring>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 #include "ouster/core/field.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/impl/lidar_frame_impl.h"
+#include "ouster/core/lidar_frame.h"
 
 namespace ouster {
 namespace sdk {
@@ -16,12 +20,15 @@ namespace core {
 namespace frame_ops {
 namespace {
 
-std::vector<std::string> resolve_pixel_fields(const LidarFrame& frame,
+std::vector<std::string> resolve_pixel_fields(const Frame& frame,
                                               const std::vector<std::string>* filtered_fields) {
+    // Determine pixel fields directly from each Field's class so this works for
+    // any Frame subtype (LidarFrame, CameraFrame, ...) without relying on the
+    // LidarFrame-specific field_types() accessor.
     std::unordered_set<std::string> pixel_fields;
-    for (const auto& ft : frame.field_types()) {
-        if (ft.field_class == FieldClass::PIXEL_FIELD) {
-            pixel_fields.insert(ft.name);
+    for (const auto& item : frame.fields()) {
+        if (item.second.field_class() == FieldClass::PIXEL_FIELD) {
+            pixel_fields.insert(item.first);
         }
     }
 
@@ -107,7 +114,7 @@ auto select_array_rows(const Eigen::ArrayBase<Derived>& values, const std::vecto
     return out;
 }
 
-std::string form_factor_prod_line(const SensorInfo& metadata, size_t v_res) {
+std::string form_factor_prod_line(const LidarInfo& metadata, size_t v_res) {
     const auto pi = metadata.get_product_info();
     auto form_factor = pi.form_factor;
     if (form_factor.find("MAX") != std::string::npos) {
@@ -186,38 +193,49 @@ struct ApplyMaskOp {
     Eigen::Ref<const img_t<uint8_t>> mask;
     double invalid;
 
-    template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field) const {
-        for (Eigen::Index r = 0; r < field.rows(); ++r) {
-            for (Eigen::Index c = 0; c < field.cols(); ++c) {
-                if (!mask(r, c)) {
-                    field(r, c) = static_cast<T>(invalid);
+    template <typename T, size_t NDim>
+    void operator()(ArrayView<T, NDim> field) const {
+        size_t num_elements = 1;
+        for (size_t i = 2; i < NDim; i++) {
+            num_elements *= field.shape[i];
+        }
+        for (Eigen::Index x = 0; x < field.shape[0]; ++x) {
+            for (Eigen::Index y = 0; y < field.shape[1]; ++y) {
+                if (!mask(x, y)) {
+                    T* dest = field.data() + (x * field.strides[0]) + (y * field.strides[1]);
+                    for (size_t i = 0; i < num_elements; i++) {
+                        *(dest + i) = static_cast<T>(invalid);
+                    }
                 }
             }
         }
     }
 };
 
-void apply_mask_to_fields(LidarFrame& frame, const std::vector<std::string>& fields,
+void apply_mask_to_fields(Frame& frame, const std::vector<std::string>& fields,
                           Eigen::Ref<const img_t<uint8_t>> mask, double invalid) {
     for (const auto& field_name : fields) {
         auto& field = frame.field(field_name);
-        impl::visit_field_2d(field, ApplyMaskOp{mask, invalid});
+        impl::visit_field_ndim(field, ApplyMaskOp{mask, invalid});
     }
 }
 
 }  // namespace
 
-void clip(LidarFrame& frame, const std::vector<std::string>& fields, double lower, double upper,
+void clip(Frame& frame, const std::vector<std::string>& fields, double lower, double upper,
           double invalid) {
     const auto* filter = fields.empty() ? nullptr : &fields;
     for (const auto& field_name : resolve_pixel_fields(frame, filter)) {
         auto& field = frame.field(field_name);
+        if (field.shape().size() != 2 || field.shape()[0] != frame.h ||
+            field.shape()[1] != frame.w) {
+            throw std::invalid_argument("clip requires a pixel field with shape (h, w)");
+        }
         impl::visit_field_2d(field, ClipOp{lower, upper, invalid});
     }
 }
 
-void filter_field(LidarFrame& frame, const std::string& field, double lower, double upper,
+void filter_field(Frame& frame, const std::string& field, double lower, double upper,
                   double invalid, const std::vector<std::string>* filtered_fields) {
     const auto& filter_view = frame.field(field);
     if (filter_view.shape().size() != 2 || filter_view.shape()[0] != frame.h ||
@@ -235,7 +253,7 @@ void filter_field(LidarFrame& frame, const std::string& field, double lower, dou
                          invalid);
 }
 
-void filter_uv(LidarFrame& frame, const std::string& coord_2d, size_t lower, size_t upper,
+void filter_uv(Frame& frame, const std::string& coord_2d, size_t lower, size_t upper,
                double invalid, const std::vector<std::string>* filtered_fields) {
     if (coord_2d != "u" && coord_2d != "v") {
         throw std::invalid_argument("coord_2d == " + coord_2d + " must be either 'u' or 'v'");
@@ -262,20 +280,36 @@ void filter_uv(LidarFrame& frame, const std::string& coord_2d, size_t lower, siz
         return;
     }
 
+    // Column ("v") filtering. Lidar data is staggered, so columns must be
+    // filtered in the destaggered domain and then re-staggered. Non-lidar
+    // frames (e.g. CameraFrame) hold rectified, non-staggered images, so a
+    // plain column mask is applied directly.
+    const auto* lidar = dynamic_cast<const LidarFrame*>(&frame);
+    if (lidar == nullptr || lidar->sensor_info() == nullptr) {
+        img_t<uint8_t> filter_mask = img_t<uint8_t>::Ones(static_cast<Eigen::Index>(frame.h),
+                                                          static_cast<Eigen::Index>(frame.w));
+        for (size_t col = lower; col < upper; ++col) {
+            filter_mask.col(static_cast<Eigen::Index>(col)).setZero();
+        }
+        apply_mask_to_fields(frame, resolve_pixel_fields(frame, filtered_fields), filter_mask,
+                             invalid);
+        return;
+    }
+
     for (const auto& field_name : resolve_pixel_fields(frame, filtered_fields)) {
-        auto destaggered = destagger(*frame.sensor_info, frame.field(field_name));
+        auto destaggered = destagger(*lidar->sensor_info(), frame.field(field_name));
         img_t<uint8_t> v_mask = img_t<uint8_t>::Ones(frame.h, frame.w);
         for (size_t r = 0; r < frame.h; ++r) {
             for (size_t c = lower; c < upper; ++c) {
-                v_mask(r, c) = 0;
+                v_mask(static_cast<Eigen::Index>(r), static_cast<Eigen::Index>(c)) = 0;
             }
         }
-        impl::visit_field_2d(destaggered, ApplyMaskOp{v_mask, invalid});
-        frame.field(field_name) = destagger(*frame.sensor_info, destaggered, true);
+        impl::visit_field_ndim(destaggered, ApplyMaskOp{v_mask, invalid});
+        frame.field(field_name) = destagger(*lidar->sensor_info(), destaggered, true);
     }
 }
 
-void mask(LidarFrame& frame, const std::vector<std::string>& fields,
+void mask(Frame& frame, const std::vector<std::string>& fields,
           Eigen::Ref<const img_t<uint8_t>> mask) {
     if (mask.rows() != static_cast<Eigen::Index>(frame.h) ||
         mask.cols() != static_cast<Eigen::Index>(frame.w)) {
@@ -303,8 +337,7 @@ std::vector<size_t> reduce_factor_to_indices(size_t factor, size_t height) {
     return indices;
 }
 
-SensorInfo select_by_index_metadata(const SensorInfo& metadata,
-                                    const std::vector<size_t>& indices) {
+LidarInfo select_by_index_metadata(const LidarInfo& metadata, const std::vector<size_t>& indices) {
     validate_beam_indices(indices, metadata.h());
     auto out = metadata;
     out.prod_line = form_factor_prod_line(metadata, indices.size());
@@ -329,18 +362,18 @@ SensorInfo select_by_index_metadata(const SensorInfo& metadata,
 LidarFrame select_by_index(const LidarFrame& frame, const std::vector<size_t>& indices,
                            bool update_metadata) {
     validate_beam_indices(indices, frame.h);
-    if (!frame.sensor_info) {
-        throw std::invalid_argument("select_by_index requires frame.sensor_info");
+    if (!frame.sensor_info()) {
+        throw std::invalid_argument("select_by_index requires frame.sensor_info()");
     }
 
     LidarFrame result(indices.size(), frame.w, frame.field_types(),
-                      frame.sensor_info->format.columns_per_packet);
+                      frame.sensor_info()->format.columns_per_packet);
     result.frame_id = frame.frame_id;
     result.frame_status = frame.frame_status;
     result.shutdown_countdown = frame.shutdown_countdown;
     result.shot_limiting_countdown = frame.shot_limiting_countdown;
     result.timestamp() = frame.timestamp();
-    result.packet_timestamp() = frame.packet_timestamp();
+    result.receive_timestamp() = frame.receive_timestamp();
     result.measurement_id() = frame.measurement_id();
     result.status() = frame.status();
     result.body_to_world() = frame.body_to_world();
@@ -353,13 +386,13 @@ LidarFrame select_by_index(const LidarFrame& frame, const std::vector<size_t>& i
         }
     }
     if (update_metadata) {
-        result.sensor_info =
-            std::make_shared<SensorInfo>(select_by_index_metadata(*frame.sensor_info, indices));
+        result.set_sensor_info(
+            std::make_shared<LidarInfo>(select_by_index_metadata(*frame.sensor_info(), indices)));
     }
     return result;
 }
 
-SensorInfo reduce_by_factor_metadata(const SensorInfo& metadata, size_t factor) {
+LidarInfo reduce_by_factor_metadata(const LidarInfo& metadata, size_t factor) {
     return select_by_index_metadata(metadata, reduce_factor_to_indices(factor, metadata.h()));
 }
 

@@ -26,9 +26,9 @@ class TestReplayMultiRecording:
         buf = io.StringIO()
         with redirect_stdout(buf):
             snippet.replay_multi_recording([str(PCAP_PATH)], limit=1)
-        output = buf.getvalue()   
+        output = buf.getvalue()
         print(f"Single PCAP replay output: '{output}'")
-        assert "frame_id=" in output
+        assert "ts=" in output
         assert "0" in output  # Frame counter
 
 
@@ -39,7 +39,7 @@ class TestReplayMultiRecording:
             snippet.replay_multi_recording([str(OSF_PATH)], limit=1)
         output = buf.getvalue()
         print(f"Single OSF replay output: '{output}'")
-        assert "frame_id=" in output
+        assert "ts=" in output
         assert "0" in output  # Frame counter
 
 
@@ -88,15 +88,15 @@ class TestOutputFormat:
         output = buf.getvalue()
         print(f"Output format test: '{output}'")
         lines = [line.strip() for line in output.strip().split('\n') if line.strip()]
-        assert len(lines) >= 1  
+        assert len(lines) >= 1
         # Look for correctly formatted frame line
-        frame_line = next((line for line in lines if 'frame_id=' in line), None)
+        frame_line = next((line for line in lines if 'ts=' in line), None)
         assert frame_line is not None
         # Check format
         assert 'frame' in frame_line  # Sensor identifier
-        assert 'frame_id=' in frame_line  # Frame ID
-        frame_id_part = frame_line.split('frame_id=')[1].strip()
-        assert frame_id_part.isdigit()
+        assert 'ts=' in frame_line  # Measurement timestamp
+        ts_part = frame_line.split('ts=')[1].strip()
+        assert ts_part.isdigit()
 
 
     def test_print_frame_helper_via_replay(self):
@@ -105,12 +105,12 @@ class TestOutputFormat:
         with redirect_stdout(buf):
             snippet.replay_multi_recording([str(OSF_PATH)], limit=2)
         output = buf.getvalue()
-        lines = [line for line in output.strip().split('\n') if line.strip()]     
+        lines = [line for line in output.strip().split('\n') if line.strip()]
         for line in lines:
-            if 'frame_id=' in line:
-                # Should match format: [count] frame sensor_idx: frame_id=id
-                assert 'frame' in line  
-                assert 'frame_id=' in line
+            if 'ts=' in line:
+                # Should match format: frame:{count} ts=<timestamp>
+                assert 'frame' in line
+                assert 'ts=' in line
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

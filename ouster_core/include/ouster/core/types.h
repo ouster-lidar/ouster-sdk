@@ -11,6 +11,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -21,12 +22,13 @@
 #include <vector>
 
 #include "nonstd/optional.hpp"
+#include "ouster/core/camera_info.h"
 #include "ouster/core/chanfield.h"
 #include "ouster/core/data_format.h"
 #include "ouster/core/deprecation.h"
 #include "ouster/core/impl/cache_ptr.h"
-#include "ouster/core/sensor_config.h"
-#include "ouster/core/sensor_info.h"
+#include "ouster/core/lidar_config.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/typedefs.h"
 #include "ouster/core/visibility.h"
 #include "ouster/core/zone_monitor.h"
@@ -45,6 +47,9 @@ class Field;
 /** Unit of range from sensor packet, in meters. */
 constexpr double RANGE_UNIT = 0.001;
 
+/** Multiply by this to convert degrees to radians. */
+constexpr double DEG_TO_RAD = M_PI / 180.0;
+
 /** Design values for altitude and azimuth offset angles for gen1 sensors. */
 extern const std::vector<double> GEN1_ALTITUDE_ANGLES;
 /** Design values for altitude and azimuth offset angles for gen1 sensors. */
@@ -60,28 +65,6 @@ extern const mat4d DEFAULT_LIDAR_TO_SENSOR_TRANSFORM;
  * Constants used for configuration. Refer to the sensor documentation for the
  * meaning of each option.
  */
-
-/**
- * Get number of columns in a frame for a lidar mode.
- *
- * @param[in] mode LidarMode to get the number of columns for.
- *
- * @return number of columns per rotation for the mode.
- */
-OUSTER_DEPRECATED_MSG("LidarMode.columns", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-uint32_t n_cols_of_lidar_mode(LidarMode mode);
-
-/**
- * Get the lidar rotation frequency from lidar mode.
- *
- * @param[in] mode Lidar mode to get the rotation frequency from.
- *
- * @return lidar rotation frequency in Hz.
- */
-OUSTER_DEPRECATED_MSG("LidarMode.fps", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-unsigned int frequency_of_lidar_mode(LidarMode mode);
 
 /**
  * Get client version.
@@ -128,14 +111,13 @@ class OUSTER_API_CLASS PacketFormat {
      * @param[in] info sensor info
      */
     OUSTER_API_FUNCTION
-    PacketFormat(const SensorInfo& info);
+    explicit PacketFormat(const LidarInfo& info);
 
     using FieldIter =
         decltype(field_types_)::const_iterator;  ///< iterator over field types
                                                  ///< of packet
 
-    const UDPProfileLidar
-        udp_profile_lidar;  ///< udp lidar profile of packet format
+    const std::string udp_profile_lidar;  ///< udp lidar profile of packet format
     const UDPProfileIMU udp_profile_imu;  ///< udp imu profile of packet format
     const HeaderType header_type;         ///< header type of packets
     const size_t lidar_packet_size;       ///< lidar packet size
@@ -157,6 +139,7 @@ class OUSTER_API_CLASS PacketFormat {
     const size_t packet_footer_size;  ///< Size in bytes of the packet footer
 
     const uint32_t max_frame_id;   ///< maximum frame id for this packet format
+    bool imu_enabled;              ///< if yes, imu stream is on
     bool zone_monitoring_enabled;  ///< if yes, zone monitoring is on
 
     /**
@@ -676,7 +659,7 @@ class OUSTER_API_CLASS PacketFormat {
      * @return zone id
      */
     OUSTER_API_FUNCTION
-    uint8_t zone_id(const uint8_t* zone_buffer) const;
+    uint16_t zone_id(const uint8_t* zone_buffer) const;
 
     /**
      * Get zone error flags.
@@ -1175,7 +1158,7 @@ inline void PacketFormat::unpack_raw_headers(Eigen::Ref<const img_t<T>> field,
  * @return a PacketFormat suitable for parsing UDP packets sent by the sensor.
  */
 OUSTER_API_FUNCTION
-const PacketFormat& get_format(const SensorInfo& info);
+const PacketFormat& get_format(const LidarInfo& info);
 
 /**
  * Get a packet parser for a particular data format.

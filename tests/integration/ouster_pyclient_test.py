@@ -36,7 +36,7 @@ def _read_sensor_info(meta_file):
     if os.path.exists(meta_file):
         with open(meta_file, 'r') as f:
             meta_raw = f.read()
-            meta = core.SensorInfo(meta_raw)
+            meta = core.LidarInfo(meta_raw)
     else:
         meta = None
 
@@ -61,7 +61,7 @@ def _send_receive_lidar_packets(path, dst_ip, meta):
     dst_imu_port = dst_lidar_port
 
     # Create a metadata for the dummy sensor that uses the reserved port
-    rcv_meta = core.SensorInfo(meta.to_json_string())
+    rcv_meta = core.LidarInfo(meta.to_json_string())
     rcv_meta.config.udp_port_lidar = dst_lidar_port
     rcv_meta.config.udp_port_imu = dst_imu_port
     try:
@@ -100,7 +100,7 @@ def run_receive_data(test_file_prefix):
 
     # outer_pyclient_test_long does not have a _meta.json
     if info is None:
-        info = core.SensorInfo.from_default(
+        info = core.LidarInfo.from_default(
             core.LidarMode._1024x10)
 
     it = _send_receive_lidar_packets(path, dst_ip, info)

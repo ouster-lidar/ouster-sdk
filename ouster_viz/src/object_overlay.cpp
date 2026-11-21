@@ -9,7 +9,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include "camera.h"
 #include "common.h"
+#include "ouster/core/camera_info.h"
 #include "ouster/core/pose_conversion.h"
 
 #ifndef M_PI
@@ -179,6 +181,13 @@ void GLObjectOverlay::draw(const GlobalState& state, const WindowCtx& ctx,
         overlay.objects_changed_ = false;
     }
 
+    if (overlay.sensor_info_changed_ && overlay.pinhole_) {
+        // Pinhole overlays project through camera intrinsics (set as uniforms
+        // per draw); no altitude lookup table is needed.
+        altitude_angles_.clear();
+        overlay.sensor_info_changed_ = false;
+    }
+
     if (overlay.sensor_info_changed_) {
         altitude_angles_.clear();
         for (double angle : overlay.sensor_info_.beam_altitude_angles) {
@@ -223,9 +232,40 @@ void GLObjectOverlay::draw(const GlobalState& state, const WindowCtx& ctx,
         overlay.position_changed_ = false;
     }
 
-    if (altitude_angles_.empty()) {
+    if (!overlay.pinhole_ && altitude_angles_.empty()) {
         return;
     }
+
+    // Set the projection uniforms for the given program: pinhole camera
+    // intrinsics when in pinhole mode, otherwise the panorama fov / altitude
+    // lookup. Position and view uniforms are shared and set by the caller.
+    auto set_projection_uniforms = [&](GLuint program) {
+        if (overlay.pinhole_) {
+            glUniform1f(glGetUniformLocation(program, "u_fx"), overlay.fx_);
+            glUniform1f(glGetUniformLocation(program, "u_fy"), overlay.fy_);
+            glUniform1f(glGetUniformLocation(program, "u_cx"), overlay.cx_);
+            glUniform1f(glGetUniformLocation(program, "u_cy"), overlay.cy_);
+            glUniform1f(glGetUniformLocation(program, "u_width"), overlay.img_width_);
+            glUniform1f(glGetUniformLocation(program, "u_height"), overlay.img_height_);
+        } else {
+            glUniform1f(glGetUniformLocation(program, "u_fov_h"),
+                        2.0f * static_cast<float>(M_PI));  // 360 degrees
+            glUniform1i(glGetUniformLocation(program, "u_v_lookup"), 1);
+            glUniform1f(glGetUniformLocation(program, "u_v_min"), v_min_);
+            glUniform1f(glGetUniformLocation(program, "u_v_max"), v_max_);
+        }
+        glUniform1f(glGetUniformLocation(program, "u_x0"), x0_);
+        glUniform1f(glGetUniformLocation(program, "u_x1"), x1_);
+        glUniform1f(glGetUniformLocation(program, "u_y0"), y0_);
+        glUniform1f(glGetUniformLocation(program, "u_y1"), y1_);
+        glUniform1f(glGetUniformLocation(program, "u_hshift"), hshift_);
+        glUniform1f(glGetUniformLocation(program, "u_aspect"),
+                    static_cast<float>(window_aspect(ctx)));
+    };
+
+    const GLuint line_program = overlay.pinhole_ ? state.pinhole_program_id : state.program_id;
+    const GLuint face_program =
+        overlay.pinhole_ ? state.pinhole_face_program_id : state.face_program_id;
 
     float aspect = static_cast<float>(window_aspect(ctx));
     float sc_x0 = (x0_ / aspect + hshift_ + 1.0f) / 2.0f * static_cast<float>(ctx.viewport_width);
@@ -246,25 +286,18 @@ void GLObjectOverlay::draw(const GlobalState& state, const WindowCtx& ctx,
 
     if (face_vertex_count_ > 0) {
         glBindVertexArray(state.face_vao);
-        glUseProgram(state.face_program_id);
+        glUseProgram(face_program);
 
-        // Uniforms
+        // Uniforms. The panorama and pinhole face programs share the same
+        // vertex shader (view/model) and position uniforms; only the
+        // projection uniforms differ (set by set_projection_uniforms).
         Matrix4fR view = overlay.view_matrix_.cast<float>();
-        glUniformMatrix4fv(state.face_view_id, 1, GL_TRUE, view.data());
+        glUniformMatrix4fv(glGetUniformLocation(face_program, "u_view"), 1, GL_TRUE, view.data());
         Matrix4fR identity = Matrix4fR::Identity();
-        glUniformMatrix4fv(state.face_model_id, 1, GL_TRUE, identity.data());
+        glUniformMatrix4fv(glGetUniformLocation(face_program, "u_model"), 1, GL_TRUE,
+                           identity.data());
 
-        glUniform1f(state.face_fov_h_id,
-                    2.0f * static_cast<float>(M_PI));  // 360 degrees
-        glUniform1i(state.face_v_lookup_id, 1);
-        glUniform1f(state.face_v_min_id, v_min_);
-        glUniform1f(state.face_v_max_id, v_max_);
-        glUniform1f(state.face_x0_id, x0_);
-        glUniform1f(state.face_x1_id, x1_);
-        glUniform1f(state.face_y0_id, y0_);
-        glUniform1f(state.face_y1_id, y1_);
-        glUniform1f(state.face_hshift_id, hshift_);
-        glUniform1f(state.face_aspect_id, static_cast<float>(window_aspect(ctx)));
+        set_projection_uniforms(face_program);
         glBindBuffer(GL_ARRAY_BUFFER, face_vbo);
         // NOLINTBEGIN(performance-no-int-to-ptr)
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(float), nullptr);
@@ -282,25 +315,19 @@ void GLObjectOverlay::draw(const GlobalState& state, const WindowCtx& ctx,
 
     if (vertex_count_ > 0) {
         glBindVertexArray(state.vao);
-        glUseProgram(state.program_id);
+        glUseProgram(line_program);
 
-        // Uniforms
+        // Uniforms. Panorama and pinhole line programs share the vertex shader
+        // (view/model) and position uniforms; only the projection uniforms
+        // differ (set by set_projection_uniforms). Attribute locations match
+        // because both programs use the same vertex shader.
         Matrix4fR view = overlay.view_matrix_.cast<float>();
-        glUniformMatrix4fv(state.view_id, 1, GL_TRUE, view.data());
+        glUniformMatrix4fv(glGetUniformLocation(line_program, "u_view"), 1, GL_TRUE, view.data());
         Matrix4fR identity = Matrix4fR::Identity();
-        glUniformMatrix4fv(state.model_id, 1, GL_TRUE, identity.data());
+        glUniformMatrix4fv(glGetUniformLocation(line_program, "u_model"), 1, GL_TRUE,
+                           identity.data());
 
-        glUniform1f(state.fov_h_id,
-                    2.0f * static_cast<float>(M_PI));  // 360 degrees
-        glUniform1i(state.v_lookup_id, 1);
-        glUniform1f(state.v_min_id, v_min_);
-        glUniform1f(state.v_max_id, v_max_);
-        glUniform1f(state.x0_id, x0_);
-        glUniform1f(state.x1_id, x1_);
-        glUniform1f(state.y0_id, y0_);
-        glUniform1f(state.y1_id, y1_);
-        glUniform1f(state.hshift_id, hshift_);
-        glUniform1f(state.aspect_id, static_cast<float>(window_aspect(ctx)));
+        set_projection_uniforms(line_program);
 
         glEnableVertexAttribArray(state.pos_id);
         glEnableVertexAttribArray(state.center_id);
@@ -379,7 +406,12 @@ GLObjectOverlay::GlobalState::GlobalState()
       face_y0_id(glGetUniformLocation(face_program_id, "u_y0")),
       face_y1_id(glGetUniformLocation(face_program_id, "u_y1")),
       face_hshift_id(glGetUniformLocation(face_program_id, "u_hshift")),
-      face_aspect_id(glGetUniformLocation(face_program_id, "u_aspect")) {
+      face_aspect_id(glGetUniformLocation(face_program_id, "u_aspect")),
+      pinhole_program_id(load_shaders(PANORAMA_VERTEX_SHADER_CODE, PANORAMA_FRAGMENT_SHADER_CODE,
+                                      PINHOLE_GEOMETRY_SHADER_CODE)),
+      pinhole_face_program_id(load_shaders(PANORAMA_VERTEX_SHADER_CODE,
+                                           PANORAMA_FRAGMENT_SHADER_CODE,
+                                           PINHOLE_FACE_GEOMETRY_SHADER_CODE)) {
     glGenVertexArrays(1, &vao);
 
     glGenVertexArrays(1, &face_vao);
@@ -388,6 +420,8 @@ GLObjectOverlay::GlobalState::GlobalState()
 GLObjectOverlay::GlobalState::~GlobalState() {
     glDeleteProgram(program_id);
     glDeleteProgram(face_program_id);
+    glDeleteProgram(pinhole_program_id);
+    glDeleteProgram(pinhole_face_program_id);
     glDeleteVertexArrays(1, &vao);
     glDeleteVertexArrays(1, &face_vao);
 }
@@ -443,8 +477,26 @@ void ObjectOverlay::set_cuboids(const std::vector<Cuboid>& cuboids) {
     objects_changed_ = true;
 }
 
-void ObjectOverlay::set_sensor_info(const ouster::sdk::core::SensorInfo& info) {
+void ObjectOverlay::set_sensor_info(const ouster::sdk::core::LidarInfo& info) {
     sensor_info_ = info;
+    pinhole_ = false;
+    sensor_info_changed_ = true;
+}
+
+const ouster::sdk::core::LidarInfo& ObjectOverlay::sensor_info() const {
+    return sensor_info_;
+}
+
+void ObjectOverlay::set_camera_info(const ouster::sdk::core::CameraInfo& info) {
+    pinhole_ = true;
+    img_width_ = static_cast<float>(info.w());
+    img_height_ = static_cast<float>(info.h());
+    if (info.model) {
+        fx_ = info.model->fx;
+        fy_ = info.model->fy;
+        cx_ = info.model->cx;
+        cy_ = info.model->cy;
+    }
     sensor_info_changed_ = true;
 }
 

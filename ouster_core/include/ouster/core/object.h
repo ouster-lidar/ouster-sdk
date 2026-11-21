@@ -69,7 +69,7 @@ class OUSTER_API_CLASS Object {
     Pose body_to_world{};
 
     /**
-     * Velocity vector (inside worldframe).
+     * Velocity vector (inside world frame).
      */
     UnalignedVector3f velocity{UnalignedVector3f::Zero()};
 

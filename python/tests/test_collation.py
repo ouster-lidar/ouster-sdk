@@ -6,7 +6,7 @@ import copy
 import pytest
 import numpy as np
 from ouster.sdk import open_source, core
-from typing import List, Iterator
+from typing import List, Iterator, cast
 
 
 @pytest.fixture
@@ -22,11 +22,12 @@ class FakeSrc(core.FrameSetSource):
         self._frames = frames
 
         # now sort frames by start timestamp (as OSF would)
-        self._frames.sort(key=lambda frame: frame.get_first_valid_packet_timestamp())
+        self._frames.sort(key=lambda frame: frame.get_first_valid_receive_timestamp())
 
     @property
     def sensor_info(self) -> List[core.SensorInfo]:
-        return self._sensor_info
+        # Test source holds lidar LidarInfo objects; base contract is SensorInfo.
+        return cast(List[core.SensorInfo], self._sensor_info)
 
     @property
     def is_live(self) -> bool:
@@ -109,11 +110,11 @@ def generate_test_src(frame, sensor_offsets, skip_first_frame=False,
             frame_copy.sensor_info = si
             frame_copy.frame_id = 1000 + frame_idx
             frame_copy.status[:] = 1
-            frame_copy.timestamp[:] = 1  # just make sure they arent zero
+            frame_copy.timestamp[:] = 1  # just make sure they aren't zero
             start = (frame_idx * period + sensor_offsets[idx]) * 1e9
-            num_pkts = frame_copy.packet_timestamp.size
+            num_pkts = frame_copy.receive_timestamp.size
             for i in range(num_pkts):
-                frame_copy.packet_timestamp[i] = start + 1e9 / float(num_pkts) * i * period
+                frame_copy.receive_timestamp[i] = start + 1e9 / float(num_pkts) * i * period
             frames.append(frame_copy)
     return FakeSrc(frames, sensor_infos)
 
@@ -137,6 +138,7 @@ def test_collate_synchronized(input_osf_file) -> None:
         fid = 1000 + idx
         for sidx, frame in enumerate(frame_set):
             assert frame is not None
+            assert isinstance(frame, core.LidarFrame)
             assert frame.frame_id == fid
             assert frame.sensor_info.sn == 10000 + sidx
 
@@ -153,6 +155,7 @@ def test_collate_synchronized(input_osf_file) -> None:
                 assert frame is None
                 continue
             assert frame is not None
+            assert isinstance(frame, core.LidarFrame)
             assert frame.frame_id == fid
             assert frame.sensor_info.sn == 10000 + sidx
 
@@ -185,6 +188,7 @@ def test_collate_synchronized_offset(input_osf_file) -> None:
                 assert frame is None
                 continue
             assert frame is not None
+            assert isinstance(frame, core.LidarFrame)
             assert frame.frame_id == fid
             assert frame.sensor_info.sn == 10000 + sidx
 
@@ -210,7 +214,7 @@ def test_collate_synchronized_phases(input_osf_file, configs) -> None:
 
     test_src = generate_test_src(frame, num_frames=0,
                                  sensor_offsets=offset, imu=imu, zm=zm)
-    test_src.sensor_info[0].config.azimuth_window = aziw
+    cast(core.LidarInfo, test_src.sensor_info[0]).config.azimuth_window = aziw
 
     # check that it autodetects latencies as expected with a range of cases
     # make sure autodetect picks the period of the lidar and proper latencies

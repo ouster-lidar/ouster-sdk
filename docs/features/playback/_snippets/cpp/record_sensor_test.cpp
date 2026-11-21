@@ -322,10 +322,7 @@ TEST(RecordSensorSnippet, SliceOsfProducesSubset) {
         std::vector<std::string> expected_sorted = expected_fields;
         std::sort(expected_sorted.begin(), expected_sorted.end());
         for (const auto& frame_set : sliced_source) {
-            for (const auto& frame_ptr : frame_set) {
-                if (!frame_ptr) {
-                    continue;
-                }
+            for (const auto& frame_ptr : frame_set.valid_frames()) {
                 const auto types = frame_ptr->field_types();
                 std::vector<std::string> actual_fields;
                 actual_fields.reserve(types.size());

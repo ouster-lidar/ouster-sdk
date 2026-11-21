@@ -1,19 +1,20 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "ouster/core/deprecation.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/impl/cartesian.h"
-#include "ouster/core/lidar_frame.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/core/typedefs.h"
 #include "ouster/core/visibility.h"
 
 namespace ouster {
 namespace sdk {
 namespace core {
-// Forward declaration
-class SensorInfo;
 
 template <typename T>
 class XYZLutT;
@@ -57,24 +58,33 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit, const mat4d& beam_to_
 
 /**
  * Convenient overload that uses parameters from the supplied SensorInfo.
- * Projections to XYZ made with this XYZLut will be in the sensor coordinate
- * frame defined in the sensor documentation unless use_extrinics is true.
- * Then the projections will be in the coordinate frame defined by the provided
- * extrinsics in the metadata.
+ * Dispatches on the concrete sensor kind: a LidarInfo uses its per-row beam
+ * angles and beam/lidar transforms, while a CameraInfo computes per-pixel
+ * direction/offset vectors directly from its CameraModel and frame
+ * dimensions (and returns an empty 0x0 LUT if it carries no CameraModel or has
+ * a zero width or height).
+ * Throws std::invalid_argument for any other SensorInfo.
+ * The sensor's sensor_to_body transform is always applied, so projections to
+ * XYZ made with this XYZLut are in the body frame defined by the extrinsics in
+ * the metadata.
  *
  * @param[in] sensor metadata returned from the client.
- * @param[in] use_extrinsics if true, applies the ``sensor.sensor_to_body``
- * transform to the resulting "sensor frame" coordinates
  *
- * @return xyz direction and offset vectors for each point in the lidar frame.
+ * @return xyz direction and offset vectors for each point in the frame.
  */
 OUSTER_API_FUNCTION
-XYZLut make_xyz_lut(const SensorInfo& sensor, bool use_extrinsics);
+XYZLut make_xyz_lut(const SensorInfo& sensor);
 }  // namespace impl
 
-/** Lookup table of beam directions and offsets. */
+/**
+ * Lookup table of beam directions and offsets.
+ *
+ * Derives from enable_shared_from_this so that a LUT owned by a shared_ptr
+ * keeps the same ownership when it round-trips through the Python bindings,
+ * which lets APIs that key on LUT identity, like viz::Cloud, recognize it.
+ */
 template <typename T>
-class XYZLutT {
+class XYZLutT : public std::enable_shared_from_this<XYZLutT<T>> {
    public:
     /**
      * Unit direction vectors from the sensor for each pixel.
@@ -105,11 +115,17 @@ class XYZLutT {
     /**
      * Construct an XYZ lookup table using the provided sensor information.
      *
+     * Accepts any SensorInfo subclass (LidarInfo or CameraInfo) that provides
+     * beam intrinsics and frame dimensions. A CameraInfo without a CameraModel,
+     * or with a zero width or height, yields an empty (0x0) LUT that cannot
+     * project frames. The sensor's sensor_to_body
+     * transform is applied, so the LUT produces body-frame points. Prefer the
+     * shared LUT from SensorInfo::xyzlut() when projecting frames from one
+     * sensor repeatedly.
+     *
      * @param[in] sensor Sensor metadata including intrinsics and resolution.
-     * @param[in] use_extrinsics Whether to apply extrinsic calibration.
      */
-    XYZLutT(const SensorInfo& sensor, bool use_extrinsics = true)
-        : XYZLutT(impl::make_xyz_lut(sensor, use_extrinsics)) {}
+    explicit XYZLutT(const SensorInfo& sensor) : XYZLutT(impl::make_xyz_lut(sensor)) {}
 
     /**
      * Construct an XYZ lookup table from an existing one of a different type.
@@ -136,58 +152,53 @@ class XYZLutT {
 
     XYZLutT() = default;
 
+    /**
+     * Project a range image into Cartesian points.
+     *
+     * @param[in] range Range values in millimeters, shaped (h, w).
+     *
+     * @return point cloud with one row per pixel.
+     *
+     * @throws std::invalid_argument if the range image pixel count does not
+     * match the LUT.
+     */
     PointCloudXYZ<T> operator()(const Eigen::Ref<const img_t<uint32_t>>& range) const {
+        check_dimensions(range);
         PointCloudXYZ<T> points(range.rows() * range.cols(), 3);
         impl::cartesianT<T>(points, range, direction, offset);
         return points;
     }
 
-    PointCloudXYZ<T> operator()(const LidarFrame& frame) const {
+    /**
+     * Project a frame's RANGE field into Cartesian points.
+     *
+     * Works for any Frame (lidar or camera) that carries a uint32 RANGE field
+     * (millimeters), so lidar and camera point clouds are handled identically.
+     *
+     * @throws std::invalid_argument if the frame's pixel count does not match
+     * the LUT.
+     */
+    PointCloudXYZ<T> operator()(const Frame& frame) const {
         Eigen::Ref<const img_t<uint32_t>> range = frame.field<uint32_t>(ChanField::RANGE);
+        check_dimensions(range);
         PointCloudXYZ<T> points(range.rows() * range.cols(), 3);
         impl::cartesianT<T>(points, range, direction, offset);
         return points;
     }
 
    private:
+    void check_dimensions(const Eigen::Ref<const img_t<uint32_t>>& range) const {
+        if (range.size() != direction.rows() || range.size() != offset.rows()) {
+            throw std::invalid_argument("range image size does not match the XYZLut");
+        }
+    }
+
     template <typename NewT>
     XYZLutT<NewT> cast() const {
         XYZLutT<NewT> result(direction.template cast<NewT>(), offset.template cast<NewT>(), h, w);
         return result;
     }
 };
-
-/** \defgroup ouster_core_lidar_frame_cartesian Ouster Core lidar_scan.h
- * XYZLut related items.
- * @{
- */
-/**
- * Convert LidarFrame to Cartesian points.
- *
- * @param[in] frame a LidarFrame to generate a point cloud from.
- * @param[in] lut lookup tables generated by make_xyz_lut.
- *
- * @return Cartesian points where ith row is a 3D point which corresponds
- *         to ith pixel in LidarFrame where i = row * w + col.
- */
-OUSTER_DEPRECATED_MSG(XYZLut operator()(LidarFrame), OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-PointCloudXYZd cartesian(const LidarFrame& frame, const XYZLut& lut);
-
-/**
- * Convert a staggered range image to Cartesian points.
- *
- * @param[in] range a range image in the same format as the RANGE field of a
- * LidarFrame.
- * @param[in] lut lookup tables generated by make_xyz_lut.
- *
- * @return Cartesian points where ith row is a 3D point which corresponds
- *         to ith pixel in LidarFrame where i = row * w + col.
- */
-OUSTER_DEPRECATED_MSG(XYZLut operator()(img_t<uint32_t>), OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_API_FUNCTION
-PointCloudXYZd cartesian(const Eigen::Ref<const img_t<uint32_t>>& range, const XYZLut& lut);
-/** @}*/
 
 }  // namespace core
 }  // namespace sdk

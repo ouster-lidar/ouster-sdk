@@ -169,7 +169,7 @@ def test_osf_slice_time_2(test_osf_file) -> None:
 
 # FIXME[tws]?
 def test_osf_slice_time_3(test_osf_file_new) -> None:
-    """It will allow a time slice stop value equal to zero, which evalutes to False."""
+    """It will allow a time slice stop value equal to zero, which evaluates to False."""
 
     expected_num_frames = 3
     # check precondition
@@ -250,3 +250,18 @@ def test_osf_slice_time_5(test_osf_file_new) -> None:
             result_src.close()
     finally:
         os.unlink(result_osf.name)
+
+
+def test_osf_select_must_be_first(test_osf_file) -> None:
+    """It should reject select when it is not the first command."""
+    runner = CliRunner()
+    result = runner.invoke(cli,
+        CliArgs([
+            'source', test_osf_file,
+            'slice', '0:1',
+            'select', '0,1',
+            'save', '/dev/null.osf'
+        ]).args, catch_exceptions=False)
+    print(result.output)
+    assert result.exit_code != 0
+    assert "select needs to be the first command" in result.output

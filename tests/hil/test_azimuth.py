@@ -73,7 +73,7 @@ def azimuth_params(hil_initial_config, request):
 
 @pytest.fixture
 def hil_sensor_config(hil_initial_config,
-                      azimuth_params) -> core.SensorConfig:
+                      azimuth_params) -> core.LidarConfig:
     mode, window, _ = azimuth_params
 
     newcfg = copy(hil_initial_config)

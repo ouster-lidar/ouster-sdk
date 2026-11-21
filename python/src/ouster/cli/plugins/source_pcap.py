@@ -2,7 +2,15 @@ from datetime import datetime
 import os
 
 import click
-from prettytable import PrettyTable, PLAIN_COLUMNS  # type: ignore
+try:
+    # prettytable >= 3.12: the module-level style constants are deprecated in
+    # favor of the TableStyle enum. Bind PLAIN_COLUMNS to the enum member to
+    # avoid the DeprecationWarning.
+    from prettytable import PrettyTable, TableStyle  # type: ignore
+    PLAIN_COLUMNS = TableStyle.PLAIN_COLUMNS
+except ImportError:
+    # older prettytable (e.g. on Python 3.8) has no TableStyle enum
+    from prettytable import PrettyTable, PLAIN_COLUMNS  # type: ignore
 from textwrap import indent
 
 from .source_util import (SourceCommandContext,
@@ -56,8 +64,11 @@ def print_stream_table(all_infos):
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) -> None:
-    """Print information about a file to stdout."""
-    file = ctx.source_uri or ""
+    """Print information about a file to stdout.
+
+    Shows file size, packet counts, encapsulation, capture time range and UDP streams.
+    """
+    file = ctx.source_uri
     try:
         import ouster.sdk.pcap as pcap
     except ImportError:

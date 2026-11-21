@@ -1,13 +1,18 @@
 #pragma once
 
+#include <ouster/core/camera_info.h>
 #include <ouster/core/lidar_frame.h>
 #include <ouster/core/types.h>
 #include <ouster/core/visibility.h>
 
 #include <Eigen/Core>
+#include <cstdint>
+#include <memory>
 #include <nonstd/optional.hpp>
+#include <vector>
 
 #include "ouster/core/frame_set.h"
+#include "ouster/core/lidar_info.h"
 
 namespace ouster {
 namespace sdk {
@@ -62,16 +67,40 @@ void init_valid_column_poses(ouster::sdk::core::FrameSet& frame_set,
                              Eigen::Ref<const core::Matrix4dR> pose);
 
 /**
+ * Sets body_to_world[0] on every camera frame in the FrameSet.
+ *
+ * @param[in,out] frame_set The FrameSet whose camera poses are initialized.
+ * @param[in] pose The pose to set for each camera.
+ */
+void init_camera_poses(ouster::sdk::core::FrameSet& frame_set,
+                       Eigen::Ref<const core::Matrix4dR> pose);
+
+/**
  * Transforms the poses in the given LidarFrame in place using the provided
  * transformation matrix.
  */
 void transform_inplace(ouster::sdk::core::LidarFrame& frame, const core::Matrix4dR& transform);
 
 /**
- * Transforms the poses in all valid LidarFrames in the given FrameSet in
- * place using the provided transformation matrix.
+ * Transforms lidar column poses and camera body_to_world poses in place.
  */
 void transform_inplace(ouster::sdk::core::FrameSet& frame_set, const core::Matrix4dR& transform);
+
+/**
+ * @return true if @p sensor_infos contains at least one LidarInfo entry.
+ */
+bool contains_lidar(
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& sensor_infos);
+
+/**
+ * Pose of a dewarped/projected source point.
+ *
+ * Both lidar and camera points use frame_idx as the frame's position in the
+ * unified container, and col_idx as the pose index within that frame (the
+ * column for lidar, 0 for a single-pose camera frame).
+ */
+core::Matrix4dR source_point_pose(const ouster::sdk::core::FrameSet& frame_set, uint32_t frame_idx,
+                                  int col_idx);
 
 /**
  * @brief Re-anchors each object's body_to_world to the interpolated frame pose
@@ -95,6 +124,18 @@ void update_object_poses(ouster::sdk::core::LidarFrame& frame);
  * @param[in,out] frame_set The FrameSet whose object poses are re-anchored.
  */
 void update_object_poses(ouster::sdk::core::FrameSet& frame_set);
+
+/**
+ * @brief Writes body_to_world for each camera frame by interpolating lidar
+ * column poses at the camera timestamp.
+ *
+ * Uses CameraFrame::timestamp()[0], or FrameSet::receive_timestamp() when that
+ * is zero. Cameras whose timestamp cannot be bracketed by any lidar frame are
+ * left unchanged.
+ *
+ * @param[in,out] frame_set FrameSet whose camera poses are written.
+ */
+void update_camera_poses(ouster::sdk::core::FrameSet& frame_set);
 
 template <typename T>
 size_t count_valid_columns(Eigen::Ref<const ouster::sdk::core::LidarFrame::Header<T>> status) {
@@ -142,8 +183,7 @@ std::pair<uint64_t, uint64_t> compute_frame_ts_range(const ouster::sdk::core::Fr
  * Short-circuits on the first valid column. Used to skip frames that would
  * otherwise make get_first_valid_column() throw.
  */
-inline bool has_valid_columns(const ouster::sdk::core::LidarFrame& frame) {
-    // Same status-check idiom used throughout lidar_frame.cpp; any()
+inline bool has_valid_columns(const ouster::sdk::core::Frame& frame) {
     // short-circuits on the first valid column.
     return frame.status().unaryExpr([](uint32_t status_val) { return status_val & 0x01; }).any();
 }

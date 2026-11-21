@@ -34,7 +34,7 @@ namespace osf {
 constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024;  // not strict ...
 
 /**
- * Sreaming Layout chunking strategy
+ * Streaming Layout chunking strategy
  *
  * TODO[pb]: sorting TBD as in RFC0018 but first pass should be good enough
  * because usually messages from the same source and of the same type comes
@@ -42,7 +42,7 @@ constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024;  // not stric
  *
  * When messages laid out into chunks in an ordered as they come (not full
  * RFC0018 compliant, see TODO below), with every chunk holding messages
- * exclusively of a single stream_id. Tries not to exceede `chunk_size` (if
+ * exclusively of a single stream_id. Tries not to exceed `chunk_size` (if
  * possible). However if a single message size is bigger than specified
  * `chunk_size` it's still recorded.
  */

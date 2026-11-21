@@ -190,10 +190,10 @@ class JsonTools {
     /**
      * Method used to create a Callback validator to use
      * in a parse_and_validate_item call to verify
-     * that a single resulting numeric value is inbetween
+     * that a single resulting numeric value is in between
      * the lower and upper bounds. This specifically returns a
      * callback rather than being the callback due to the need
-     * to specificy the bounds at the time of calling.
+     * to specify the bounds at the time of calling.
      *
      * @tparam T The type of data to verify, should be something
      *           that can be turned into a number.

@@ -4,11 +4,11 @@ Using the Visualizer
 ====================
 
 It's easier than ever to use "map" or "frame"
-accumulation to visualize lidar frames that contain pose information. The
+accumulation to visualize frames (lidar or camera) that contain pose information. The
 default visualizer, ``SimpleViz``, present in both ``ouster-cli`` and Ouster
 SDK's Python API support these accumulation modes out of the box.
 
-Furthermore, when poses are not present in the ``LidarFrame`` accumulation may
+Furthermore, when poses are not present in the frame, accumulation may
 still be useful to view the accumulated *N* frames from the live
 sensor/recording and reveal the accuracy/repeatability of the data.
 
@@ -35,7 +35,7 @@ complete iteration.
 
 
 **Accumulation**: The viz command supports several options for creating visually-pleasing maps by accumulating data from
-lidar frames that contain pose information. The following sections describe the options and provide usage examples.
+frames that contain pose information. The following sections describe the options and provide usage examples.
 
 Available view modes
 ^^^^^^^^^^^^^^^^^^^^
@@ -71,7 +71,7 @@ CLI ``viz`` accumulation options
     ``--accum-every-m`` is set.
   * ``--accum-every INTEGER`` Add a new frame to the accumulator for every specified number
     of frames as an argument in this option.
-  * ``--accum-every-m FLOAT`` Add a new frame to the accumulator after specified number of 
+  * ``--accum-every-m FLOAT`` Add a new frame to the accumulator after specified number of
     meters of travel.
 
 * **map accumulation options**
@@ -98,6 +98,9 @@ The following key shortcuts apply to accumulation options while running Ouster C
    * - ``6``
      - Frame
      - Toggle frames accumulation view mode.
+   * - ``alt+1 / alt+2``
+     - Frame
+     - Toggle the first / second return of the accumulated clouds.
    * - ``7``
      - Map
      - Toggle overall map view mode.
@@ -144,7 +147,7 @@ Overall map view (with poses)
 
 One of the main tasks we frequently need is a preview of the overall map. We can test this by using
 the SLAM-generated OSF file, which was created with the above command and contains the
-SLAM trajectory in ``LidarFrame.body_to_world``. If you are using a SLAM-generated OSF, you can directly use
+SLAM trajectory in each frame's ``body_to_world``. If you are using a SLAM-generated OSF, you can directly use
 viz with frame accumulator feature without appending the ``slam`` option.
 
 
@@ -157,7 +160,7 @@ Here is a preview example of the overall map generated from the accumulated fram
 By utilizing the '-e stop' option, the visualizer stops once the replay process finishes,
 displaying the preview of the lidar trajectory:
 
-  
+
 .. figure:: _snippets/images/frames_accum_map_all_frame.png
    :alt: Localization map
    :width: 100%
@@ -179,7 +182,7 @@ displaying the preview of the lidar trajectory:
    positions)
 
 
-Vizualization using Python API
+Visualization using Python API
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following examples show how to compute SLAM poses and visualize frame accumulation modes directly from Python.

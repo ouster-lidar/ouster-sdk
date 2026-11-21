@@ -82,15 +82,15 @@ def process_ast(node):
 
         if in_class:
             # When a function is inside of a class, this is normally a friend function
-            # decleration, we dont need to expose this
+            # declaration, we don't need to expose this
             if kind == clang.cindex.CursorKind.FUNCTION_DECL:
                 continue
 
-            # We dont need to expose deleted members
+            # We don't need to expose deleted members
             if current_node.is_deleted_method():
                 continue
 
-            # We dont need to expose any class members that are not marked public
+            # We don't need to expose any class members that are not marked public
             if current_node.access_specifier != clang.cindex.AccessSpecifier.PUBLIC:
                 if kind == clang.cindex.CursorKind.CONSTRUCTOR:
                     continue
@@ -101,7 +101,7 @@ def process_ast(node):
                 if kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE:
                     continue
 
-        # If this is a forward class/struct decl, we dont need to expose here
+        # If this is a forward class/struct decl, we don't need to expose here
         if kind == clang.cindex.CursorKind.CLASS_DECL or kind == clang.cindex.CursorKind.STRUCT_DECL:
             if len([x for x in current_node.get_children()]) == 0:
                 continue
@@ -247,6 +247,7 @@ def check_cpp_exports(ctx, paths, verbose, cmake_bin, vcpkg_toolchain,
     if len(paths) == 0:
         paths = [f"{ctx.obj.sdk_dir}/ouster_core/include/ouster/core",
                  f"{ctx.obj.sdk_dir}/ouster_algorithm/include/ouster",
+                 f"{ctx.obj.sdk_dir}/ouster_io/include/ouster/io",
                  f"{ctx.obj.sdk_dir}/ouster_osf/include/ouster/osf",
                  f"{ctx.obj.sdk_dir}/ouster_pcap/include/ouster/pcap",
                  f"{ctx.obj.sdk_dir}/ouster_viz/include/ouster/viz",
@@ -272,7 +273,7 @@ def check_cpp_exports(ctx, paths, verbose, cmake_bin, vcpkg_toolchain,
             from tqdm import tqdm
             bar = tqdm(total=len(files))
         except ImportError:
-            print("tqdm not found, cant display progress bar. please install tqdm")
+            print("tqdm not found, can't display progress bar. please install tqdm")
             progress_bar = False
 
     missing = []

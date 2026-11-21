@@ -12,7 +12,7 @@ namespace sdk {
 namespace core {
 
 /**
- * @brief A unit vector respresenting the direction of a lidar beam.
+ * @brief A unit vector representing the direction of a lidar beam.
  */
 struct OUSTER_API_CLASS Ray {
     Coord offset;     ///< The origin of the beam

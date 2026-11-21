@@ -9,13 +9,15 @@ import time
 import json
 import click
 from datetime import datetime, timezone
-from ouster.sdk.core import SensorInfo, OperatingMode, UDPProfileLidar, TimestampMode, ZoneSetOutputFilter
+from ouster.sdk.core import (LidarFrame, LidarInfo, OperatingMode, UDPProfileLidar,
+                             TimestampMode, ZoneSetOutputFilter)
 from ouster.sdk._bindings.client import PacketType
 from ouster.sdk.util.parsing import frame_to_packets
 from ouster.sdk.core import OusterIoType, io_type
 from ouster.cli.plugins.source_util import (SourceCommandContext,
                                             SourceCommandType,
-                                            source_multicommand)
+                                            source_multicommand,
+                                            warn_if_camera_streams)
 from ouster.cli.plugins.source import source  # type: ignore
 from ouster.sdk.pcap import PcapPacketSource
 from ouster.sdk.bag import BagPacketSource
@@ -68,12 +70,17 @@ class OsfPacketSource():
         self._sensor_info = self._frame_set_source.sensor_info
 
     def __iter__(self):
-        for frame, in self._frame_set_source:
-            if frame is None:
-                continue
-            packets = frame_to_packets(frame, self._sensor_info[0])
-            for packet in packets:
-                yield 0, packet
+        # Frame sets may contain multiple frames (lidar + camera). Only lidar
+        # frames can be turned into sensor packets; camera frames are skipped.
+        for frame_set in self._frame_set_source:
+            for frame in frame_set:
+                if not isinstance(frame, LidarFrame):
+                    continue
+                info = frame.sensor_info if frame.sensor_info is not None \
+                    else self._sensor_info[0]
+                packets = frame_to_packets(frame, info)
+                for packet in packets:
+                    yield 0, packet
 
 
 class FrameToPacketSource():
@@ -86,12 +93,17 @@ class FrameToPacketSource():
         self._sensor_info = sensor_info
 
     def __iter__(self):
-        for frame, in self._frame_set_source:
-            if frame is None:
-                continue
-            packets = frame_to_packets(frame, self._sensor_info[0])
-            for packet in packets:
-                yield 0, packet
+        # Frame sets may contain multiple frames (lidar + camera). Only lidar
+        # frames can be turned into sensor packets; camera frames are skipped.
+        for frame_set in self._frame_set_source:
+            for frame in frame_set:
+                if not isinstance(frame, LidarFrame):
+                    continue
+                info = frame.sensor_info if frame.sensor_info is not None \
+                    else self._sensor_info[0]
+                packets = frame_to_packets(frame, info)
+                for packet in packets:
+                    yield 0, packet
 
 
 class PacketSourcePacer():
@@ -165,7 +177,7 @@ io_type_handlers = {
 
 
 class mDNSService:
-    def __init__(self, sensor_info: SensorInfo):
+    def __init__(self, sensor_info: LidarInfo):
         self._sensor_info = sensor_info
         service_type = "_roger._tcp.local."
         service_name = f"Ouster Sensor {sensor_info.sn}"
@@ -410,7 +422,7 @@ class HttpServer():
             }
 
             configuration = {
-                'Lidar Mode': self._sensor.sensor_info.config.lidar_mode.name,
+                'Lidar Mode': str(self._sensor.sensor_info.config.lidar_mode),
                 'Signal Multiplier': self._sensor.sensor_info.config.signal_multiplier,
                 'Active Azimuth Window': self._sensor.sensor_info.config.azimuth_window,
                 'UDP Profile Lidar': self._sensor.sensor_info.config.udp_profile_lidar
@@ -484,8 +496,8 @@ class HttpServer():
                         'name': 'lidar_mode',
                         'immutable': True,
                         'label': 'Lidar Mode',
-                        'active': config.lidar_mode.name,
-                        'staged': config.lidar_mode.name,
+                        'active': str(config.lidar_mode),
+                        'staged': str(config.lidar_mode),
                         'type': 'dropdown',
                         'options': ['512x10', '512x20', '1024x10', '1024x20', '2048x10']
                     },
@@ -521,10 +533,10 @@ class HttpServer():
                         'name': 'udp_profile_lidar',
                         'immutable': True,
                         'label': 'UDP Profile Lidar',
-                        'active': config.udp_profile_lidar.name,
-                        'staged': config.udp_profile_lidar.name,
+                        'active': config.udp_profile_lidar,
+                        'staged': config.udp_profile_lidar,
                         'type': 'dropdown',
-                        'options': [profile.name for profile in UDPProfileLidar.values()]
+                        'options': [profile for profile in dir(UDPProfileLidar) if "__" not in profile]
                     }
                 ],
                 'timing': [
@@ -667,7 +679,7 @@ class HttpServer():
     def start(self):
         service_exception = None
 
-        def serve_flask_app(http_addr, http_port):
+        def serve_flask_app(http_addr, http_port) -> None:
             nonlocal service_exception
 
             serve_method: Callable[[], None]
@@ -790,7 +802,7 @@ class FrameSetSourceUdpReplay():
         self.start()
 
     @property
-    def sensor_info(self) -> SensorInfo:
+    def sensor_info(self) -> LidarInfo:
         return self._sensor_info
 
     def display_diagnostics(self, lines):
@@ -920,7 +932,7 @@ def build_ouster_cli_sensor_replay_image(ouster_sdk: str):
             build_target = "ouster-sdk-local"
         else:
             # if ouster_sdk is not a path and not empty str assume it is a version number
-            # TODO: when ouster_sdk is not empty check it represnts a valid version
+            # TODO: when ouster_sdk is not empty check it represents a valid version
             ouster_sdk = f"ouster-sdk=={ouster_sdk}" if ouster_sdk else \
                 f"ouster-sdk=={package_version}"
             build_target = "ouster-sdk-public"
@@ -953,13 +965,13 @@ def build_ouster_cli_sensor_replay_image(ouster_sdk: str):
 @click.option('--http-addr', type=str, default="127.0.0.1", show_default=True,
               help="Change the listening address used by the sensor HTTP server")
 @click.option('--lidar-port', type=int, default=-1, show_default=True,
-              help="lidar port")
+              help="Lidar port")
 @click.option('--imu-port', type=int, default=-1, show_default=True,
-              help="imu port")
+              help="IMU port")
 @click.option('--loop', type=bool, default=True, show_default=True,
-              help="When playback reaches the end of the file, restart from the begnning")
+              help="When playback reaches the end of the file, restart from the beginning")
 @click.option('--rate', type=float, default="1.0", show_default=True,
-              help="udp packets replay rate.")
+              help="UDP packet replay rate.")
 @click.option('--ouster-sdk', type=str, default="",
               hidden=True, help="Use local SDK build (hidden option)")
 @click.option('--udp-dest', type=str, default="127.0.0.1", show_default=True,
@@ -985,7 +997,14 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: 
     if not dockerize:
         try:
             assert ctx.frame_set_source is not None
-            sensor_info = ctx.frame_set_source.sensor_info
+            warn_if_camera_streams(ctx.frame_set_source.sensor_info, "sensor_replay")
+            # sensor_replay is lidar-only; take just the lidar sensors.
+            sensor_info = [info for info in ctx.frame_set_source.sensor_info
+                           if isinstance(info, LidarInfo)]
+            if not sensor_info:
+                click.secho("sensor_replay requires at least one lidar stream; the source has "
+                            "no lidar data to replay.", fg='red')
+                exit(1)
             source = ctx.source_uri if len(ctx.invoked_command_names) == 1 else ctx.frame_set_iter
             if "lidar_profile" in ctx.other_options:
                 profile = ctx.other_options["lidar_profile"]
@@ -1009,8 +1028,8 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: 
                         "1) set the --http-port to a value higher than 1024 in combination with one of the following:\n"
                         "   a) (preferred) Set the environment variable 'http_proxy' to http://localhost:port (for port"
                         " use the same value you used as the http-port) then launch the client app.\n"
-                        "   b) If the above option fail you can use a reverse proxy such as ngix or similar to re-route"
-                        " the selected http-port value to port 80 and then launch the client app.\n"
+                        "   b) If the above option fails you can use a reverse proxy such as nginx or similar to"
+                        " re-route the selected http-port value to port 80 and then launch the client app.\n"
                         "2) If you have docker installed and have followed the linux postinstall guide described in:"
                         " https://docs.docker.com/engine/install/linux-postinstall/ then you may simply pass the option"
                         " --dockerize  to the 'sensor_replay' command, follow the prompts to spin the service in a"
@@ -1031,7 +1050,7 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: 
         # dockerfile is newer than the image, then prompt to rebuild.
         # helpful for development.
         click.secho("The dockerize flag is set but the docker image is not found."
-                    " To use this feature we need to build the assoicated docker image first."
+                    " To use this feature we need to build the associated docker image first."
                     " Build the image now (Y/n)?", fg='yellow')
         choice = input("")
         if choice == 'Y':
@@ -1042,7 +1061,7 @@ def source_sensor_replay(ctx: SourceCommandContext, dockerize: bool, http_addr: 
 
     command = ["docker", "run", "--rm", "--network", "host"]
 
-    source_url = ctx.source_uri or ""
+    source_url = ctx.source_uri
     if io_type(source_url) != OusterIoType.SENSOR:
         abs_source_url = os.path.abspath(source_url)
         abs_dir_url = os.path.dirname(abs_source_url)

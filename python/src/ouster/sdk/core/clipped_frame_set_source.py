@@ -51,8 +51,15 @@ class ClippedFrameSetSource(FrameSetSource):
             return cpy
 
         for frames in self._frame_set_source.__iter__():
-            yield FrameSet([clip_with_copy(frame, self._fields, self._lower, self._upper)
-                   if frame else None for frame in frames])
+            new_frames = []
+            for frame in frames:
+                if isinstance(frame, LidarFrame):
+                    new_frames.append(
+                        clip_with_copy(frame, self._fields, self._lower, self._upper))
+                else:
+                    # pass through camera / other frame types (and None) unchanged
+                    new_frames.append(frame)
+            yield FrameSet(new_frames)
 
     def close(self) -> None:
         pass

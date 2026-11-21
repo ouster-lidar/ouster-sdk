@@ -5,7 +5,8 @@ from re import escape
 import pytest
 import tempfile
 from ouster.sdk.util import resolve_metadata_multi
-from ouster.sdk.core import SensorInfo, FieldClass
+from ouster.sdk import core
+from ouster.sdk.core import LidarInfo, FieldClass, LidarFrame
 from ouster.sdk import open_source, open_packet_source, SourceURLException
 from tests.conftest import PCAPS_DATA_DIR, BAGS_DATA_DIR, OSFS_DATA_DIR
 
@@ -51,12 +52,19 @@ def test_open_source_meta_pcap():
     json_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
 
     with open(json_file_path, 'r') as f:
-        expected = SensorInfo(f.read())
+        expected = LidarInfo(f.read())
 
     # the test file is different than what would be resolved ordinarily
     assert json_file_path not in resolve_metadata_multi(pcap_file_path)
     src = open_source(pcap_file_path, meta=(json_file_path,))
     assert src.sensor_info[0] == expected
+
+
+def test_open_source_lidar_config_renamed_to_sensor_config() -> None:
+    """The 'lidar_config' option was renamed back to 'sensor_config'."""
+    file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    with pytest.raises(SourceURLException, match="Unknown parameter 'lidar_config'"):
+        open_source(file_path, lidar_config=[core.LidarConfig()])
 
 
 def test_open_source_field_names_pcap() -> None:
@@ -120,7 +128,7 @@ def test_raw_fields() -> None:
 
     src = open_source(file_path, raw_fields=True)
     frame = next(iter(src))[0]
-    assert frame is not None
+    assert isinstance(frame, LidarFrame)
     ft_names = [ft.name for ft in frame.field_types]
     assert "RAW32_WORD1" in ft_names
 
@@ -130,7 +138,7 @@ def test_raw_headers() -> None:
 
     src = open_source(file_path, raw_headers=True)
     frame = next(iter(src))[0]
-    assert frame is not None
+    assert isinstance(frame, LidarFrame)
     ft_names = [ft.name for ft in frame.field_types]
     assert "RAW_HEADERS" in ft_names
 
@@ -163,7 +171,7 @@ def test_source_no_lidar() -> None:
 
     src = open_source(file_path)
     frame = next(iter(src))[0]
-    assert frame is not None
+    assert isinstance(frame, LidarFrame)
     ft_names = [ft.name for ft in frame.field_types]
     assert "IMU_PACKET_TIMESTAMP" in ft_names
     assert "ZONE_PACKET_TIMESTAMP" in ft_names
@@ -184,9 +192,9 @@ def test_open_source_collating_osf() -> None:
     info = input_src.sensor_info[0]
     input_src.close()
 
-    frames[0].packet_timestamp[:] = 100  # type: ignore
-    frames[1].packet_timestamp[:] = 200  # type: ignore
-    frames[2].packet_timestamp[:] = 300  # type: ignore
+    frames[0].receive_timestamp[:] = 100  # type: ignore
+    frames[1].receive_timestamp[:] = 200  # type: ignore
+    frames[2].receive_timestamp[:] = 300  # type: ignore
 
     from ouster.sdk.core import FrameSet
 

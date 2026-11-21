@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <ouster/core/voxel_hash_map.h>
@@ -24,22 +25,25 @@ namespace mapping {
  * @brief Lidar Inertial Odometry (LIO) based localization backend.
  *
  * The LIOLocalization class implements the LocalizationEngine interface
- * using the KISS-ICP algorithm for point cloud registration and localization.
+ * using ICP-based scan-to-map registration.
  */
 class OUSTER_API_CLASS LIOLocalization : public LocalizationEngine {
    public:
     /**
      * @brief Constructs a LIOLocalization object.
      *
-     * @param[in] infos Vector of shared pointers to sensor information objects.
+     * @param[in] sensor_infos Unified sensor calibration (a mix of LidarInfo
+     *            and CameraInfo). The list is reordered lidar-first internally
+     *            and dispatched on concrete type, so lidar-only, camera-only,
+     *            and mixed sources are all supported.
      * @param[in] config Localization configuration parameters.
      * @param[in] map Reference to the map points used for localization.
      *
-     * @throws std::invalid_argument If no SensorInfo is provided.
+     * @throws std::invalid_argument If no sensor calibration is provided.
      */
     OUSTER_API_FUNCTION
-    LIOLocalization(const std::vector<std::shared_ptr<core::SensorInfo>>& infos,
-                    LIOLocalizationConfig config, const Eigen::Ref<const core::PointCloudXYZf> map);
+    LIOLocalization(const std::vector<std::shared_ptr<core::SensorInfo>>& sensor_infos,
+                    LIOLocalizationConfig config, Eigen::Ref<const core::PointCloudXYZf> map);
 
     /**
      * @brief Let LIOLocalization process LidarFrames and rely on current world
@@ -55,15 +59,26 @@ class OUSTER_API_CLASS LIOLocalization : public LocalizationEngine {
     OUSTER_API_FUNCTION
     void update(core::FrameSet& frame_set) override;
 
+    /**
+     * @brief Get the underlying local voxel hash map
+     *
+     * This should only be called once the engine has been initialized. If no
+     * voxel size is specified (automatic) then only after a frame of data has been processed.
+     *
+     * @throws std::logic_error if the engine has not been initialized yet
+     * @return Reference to the voxel hash map object.
+     */
+    OUSTER_API_FUNCTION
+    core::VoxelHashMap& get_local_map() const override;
+
    private:
     void initialize_components();
 
     std::unique_ptr<AdaptiveThreshold> adaptive_threshold_;
-    std::unique_ptr<ouster::sdk::core::VoxelHashMap3d> local_map_;
+    std::unique_ptr<ouster::sdk::core::VoxelHashMap> local_map_;
     std::unique_ptr<ICPRegistration> registration_;
     size_t frame_count_ = 0;
 
-    std::vector<core::XYZLut> xyz_lut_;
     core::PointCloudXYZf map_;  // mainly used for delayed load
 
     std::unique_ptr<DeskewMethod> deskew_method_;

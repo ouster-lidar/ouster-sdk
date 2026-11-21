@@ -68,10 +68,6 @@ const std::vector<size_t>& FrameSetSource::frames_num() const {
     throw std::runtime_error("'frames_num' not supported on unindexed frame set sources.");
 }
 
-const std::vector<size_t>& FrameSetSource::scans_num() const {
-    return frames_num();
-}
-
 // TODO[tws] law of demeter
 void FrameSetSource::add_metadata(const std::string& name, FrameSetSourceMetadata obj) {
     metadata_.entries.emplace(name, std::move(obj));
