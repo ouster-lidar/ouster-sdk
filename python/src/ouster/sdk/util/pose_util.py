@@ -483,8 +483,12 @@ class TrajectoryEvaluator(Poser):
             # we only need vec6 form for deltas to do interpolations
             self._deltas = np.r_[np.zeros((1, 6)), log_pose(deltas_mat)]
 
-        # store keys separately for bisect function
-        self._ts_keys: List[Numeric] = [x[0] for x in self._poses]
+        # Use Python integers for timestamp arithmetic: unsigned NumPy
+        # subtraction can wrap, while float conversion loses nanosecond precision.
+        # Keep the original knot timestamps in self._poses for __getitem__.
+        self._ts_keys: List[Numeric] = [
+            int(ts) if isinstance(ts, np.integer) else ts for ts, _ in self._poses
+        ]
 
     def _check_ts_and_bounds(self, ts: Union[Sequence[Numeric], np.ndarray]):
         """Checks whether `ts` in the trajectory poses timestamps with bounds"""
@@ -498,10 +502,8 @@ class TrajectoryEvaluator(Poser):
             return
 
         # get left/right bounds distance
-        left_bound = (self._poses[0][0] - ts[0]) / (self._poses[1][0] -
-                                                    self._poses[0][0])
-        right_bound = (ts[-1] - self._poses[-1][0]) / (self._poses[-1][0] -
-                                                       self._poses[-2][0])
+        left_bound = (self._ts_keys[0] - ts[0]) / (self._ts_keys[1] - self._ts_keys[0])
+        right_bound = (ts[-1] - self._ts_keys[-1]) / (self._ts_keys[-1] - self._ts_keys[-2])
 
         if left_bound > self._time_bounds or right_bound > self._time_bounds:
             raise ValueError(
@@ -516,15 +518,16 @@ class TrajectoryEvaluator(Poser):
     def pose_at(self, ts: Numeric) -> PoseH:
         """Calculates a single pose (4x4 matrix) at a given `ts` timestamp."""
 
+        ts = int(ts) if isinstance(ts, np.integer) else ts
         self._check_ts_and_bounds([ts])
 
-        if ts < self._poses[0][0]:
+        if ts < self._ts_keys[0]:
             # out on the left
             dt = (ts - self._ts_keys[0]) / (self._ts_keys[1] -
                                             self._ts_keys[0])
             pose_d_dt = exp_pose6(self._deltas[1] * dt)
             pose_base = self._poses_mat[0]
-        elif ts >= self._poses[-1][0]:
+        elif ts >= self._ts_keys[-1]:
             # out on the right
             dt = (ts - self._ts_keys[-2]) / (self._ts_keys[-1] -
                                              self._ts_keys[-2])
@@ -545,6 +548,7 @@ class TrajectoryEvaluator(Poser):
         if len(ts) == 0:
             return np.array([])
 
+        ts = [int(t) if isinstance(t, np.integer) else t for t in ts]
         self._check_ts_and_bounds(ts)
 
         ts_size = len(ts)
@@ -556,13 +560,13 @@ class TrajectoryEvaluator(Poser):
         curr_idx = 0
 
         for i in range(ts_size):
-            if ts[i] < self._poses[0][0]:
+            if ts[i] < self._ts_keys[0]:
                 # out on the left
                 dts[i] = (ts[i] - self._ts_keys[0]) / (self._ts_keys[1] -
                                                        self._ts_keys[0])
                 pose_d_dts[i] = self._deltas[1]
                 curr_idx_1_poses[i] = self._poses_mat[0]
-            elif ts[i] >= self._poses[-1][0]:
+            elif ts[i] >= self._ts_keys[-1]:
                 # out on the right
                 dts[i] = (ts[i] - self._ts_keys[-2]) / (self._ts_keys[-1] -
                                                         self._ts_keys[-2])
