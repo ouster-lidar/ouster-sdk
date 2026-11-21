@@ -51,7 +51,7 @@ Use ``--dir`` to specify an output directory. The ``{VALID_INPUT_SOURCE}`` must 
 
 
 These commands run until interrupted (``CTRL+C``). Use ``--split`` to rotate output files at a size
-threshold. 
+threshold.
 
 
 Recording Packet data to PCAP/BAG files
@@ -82,7 +82,7 @@ The extension you pass determines the output format; using ``.pcap`` preserves t
 metadata JSON file is written alongside the PCAP.
 
 The ``save_raw`` command also accepts ``--duration`` to stop automatically after the
-requested number of seconds. 
+requested number of seconds.
 
 Consult ``ouster-cli source <SOURCE> save --help`` for the full option set.
 
@@ -108,12 +108,12 @@ sensor packets.
    :caption: Replay a recording as a virtual sensor
    :dedent: 0
 
-You can view the sensor webpage at http://127.0.0.1:8080. 
+You can view the sensor webpage at http://127.0.0.1:8080.
 
 .. note::
 
    This is a **BETA** feature.
-   
+
    This emulator implements a limited subset of the device capabilities and does not fully model the actual sensor behavior.
 
    The emulator allows the change of the following list of configuration options (All other settings are read-only):

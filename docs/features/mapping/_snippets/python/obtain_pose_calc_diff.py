@@ -30,16 +30,19 @@ def iterate_pose_differences(
         if not frames_w_poses:
             continue
 
+        # Read the pose through the shared Frame interface so lidar and camera
+        # frames are handled uniformly. get_first_valid_column() returns 0 for a
+        # single-pose camera frame.
+        first_frame = frames_w_poses[0]
+        if first_frame is None:
+            continue
         try:
-            first_frame = frames_w_poses[0]
-            if first_frame is None:
-                continue
             col = first_frame.get_first_valid_column()
         except RuntimeError:
             continue
 
         frame_pose = first_frame.body_to_world[col]
-        frame_ts = frame_set[0].timestamp[col]
+        frame_ts = first_frame.timestamp[col]
         rotation_diff, translation_diff = pose_differences(last_frame_pose, frame_pose)
         last_frame_pose = frame_pose
         # [doc-etag-pose-diff-call]

@@ -101,7 +101,7 @@ visualize a list of ``LidarFrame``:
    :end-before: [doc-etag-viz-frame-show]
    :dedent: 4
 
-    
+
 This will open an interactive window displaying the ``LidarFrame`` as PointCloud.
 
 

@@ -27,9 +27,9 @@
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/impl/fb_utils.h"
-#include "ouster/osf/memory_mapped_osf_file.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata.h"
+#include "ouster/osf/stream_osf_file.h"
 
 // these includes must be last as it somehow pulls in weird
 // things that break stuff in windows
@@ -88,7 +88,7 @@ class Curl {
         buffer_.reserve(length);
         auto res = curl_easy_perform(curl_handle_);
         if (res == CURLE_SEND_ERROR) {
-            // Specific versions of curl does't play well with the sensor
+            // Specific versions of curl don't play well with the sensor
             // http server. When CURLE_SEND_ERROR happens for the first time
             // silently re-attempting the http request resolves the problem.
             res = curl_easy_perform(curl_handle_);
@@ -120,7 +120,7 @@ class Curl {
         long http_code = 0;
         auto res = curl_easy_perform(curl_handle_);
         if (res == CURLE_SEND_ERROR) {
-            // Specific versions of curl does't play well with the sensor
+            // Specific versions of curl don't play well with the sensor
             // http server. When CURLE_SEND_ERROR happens for the first time
             // silently re-attempting the http request resolves the problem.
             res = curl_easy_perform(curl_handle_);
@@ -207,6 +207,8 @@ class LRUCache {
     size_t current_size_ = 0;
 };
 
+}  // namespace
+
 std::unique_ptr<OsfFile> make_file(const std::string& file) {
     if (file.find("://") != std::string::npos) {
         auto curl = std::make_shared<Curl>();
@@ -227,10 +229,8 @@ std::unique_ptr<OsfFile> make_file(const std::string& file) {
         };
         return std::make_unique<CallbackOsfFile>(callback, curl->get_size(file));
     }
-    return std::make_unique<MemoryMappedOsfFile>(file);
+    return std::make_unique<StreamOsfFile>(file);
 }
-
-}  // namespace
 
 // ==========================================================
 // ========= Reader::ChunksIter =============================
@@ -379,6 +379,18 @@ MessagesStreamingRange Reader::messages(const std::vector<uint32_t>& stream_ids,
     return MessagesStreamingRange(start_ts, end_ts, stream_ids, this);
 }
 
+SequentialMessagesStreamingRange Reader::messages_by_index(uint32_t stream_id, uint32_t start_index,
+                                                           uint32_t end_index) {
+    if (!has_stream_info()) {
+        throw std::logic_error("ERROR: Can't iterate by streams without StreamingInfo available.");
+    }
+    // if we start at 0, we do not need the message index
+    if (!chunks_.has_message_idx() && start_index != 0) {
+        throw std::logic_error("ERROR: Can't iterate by index without message index available.");
+    }
+    return SequentialMessagesStreamingRange(stream_id, start_index, end_index, this);
+}
+
 nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id, uint32_t message_idx) {
     if (!has_stream_info()) {
         throw std::logic_error(
@@ -451,7 +463,7 @@ MessageRef::ts_t MessageRef::ts() const {
     return ts_t(stamped_message->ts());
 }
 
-OsfBuffer MessageRef::buf() const {
+const OsfBuffer& MessageRef::buf() const {
     return buf_;
 }
 
@@ -490,6 +502,17 @@ std::vector<uint8_t> MessageRef::buffer() const {
     // FIXME[tws] a copy
     return {stamped_message->buffer()->data(),
             stamped_message->buffer()->data() + stamped_message->buffer()->size()};
+}
+
+const uint8_t* MessageRef::data() const {
+    const ouster::sdk::osf::impl::gen::StampedMessage* stamped_message =
+        reinterpret_cast<const ouster::sdk::osf::impl::gen::StampedMessage*>(buf_.data());
+
+    if (stamped_message->buffer() == nullptr) {
+        return nullptr;
+    }
+
+    return stamped_message->buffer()->data();
 }
 
 const error_handler_t& MessageRef::error_handler() const {
@@ -686,7 +709,7 @@ bool MessagesChunkIter::done() const {
 }
 
 // ==========================================================
-// ========= SreeamingReader::MessagesStreamingIter =========
+// ========= StreamingReader::MessagesStreamingIter =========
 // ==========================================================
 
 // Simplest hash to better compare priority que states with stream ids
@@ -705,6 +728,12 @@ uint32_t calc_stream_ids_hash(const std::vector<uint32_t>& stream_ids) {
 
 bool MessagesStreamingIter::GreaterChunkType::operator()(const opened_chunk_type& a,
                                                          const opened_chunk_type& b) {
+    return a.first[a.second].ts() > b.first[b.second].ts();
+}
+
+// todo deduplicate
+bool SequentialMessagesStreamingIter::GreaterChunkType::operator()(const opened_chunk_type& a,
+                                                                   const opened_chunk_type& b) {
     return a.first[a.second].ts() > b.first[b.second].ts();
 }
 
@@ -738,7 +767,7 @@ MessagesStreamingIter::MessagesStreamingIter(const ts_t start_ts, const ts_t end
     //  1. find first chunk by start_ts (lower bound)
     //  2. if chunk is valid open it, otherwise step 5
     //  3. find first message within chunk in [start_ts, end_ts) range
-    //  4. addd opened chunk (offset, msg_idx) to the queue of streams we are
+    //  4. add opened chunk (offset, msg_idx) to the queue of streams we are
     //     reading
     //  5. move to the next chunk within stream, and continue from Step 2.
     for (const auto stream_id : stream_ids_) {
@@ -756,7 +785,7 @@ MessagesStreamingIter::MessagesStreamingIter(const ts_t start_ts, const ts_t end
                     // 3. find first message within chunk in [start_ts, end_ts)
                     //    range
                     if (cref[msg_idx].ts() >= start_ts && cref[msg_idx].ts() < end_ts) {
-                        // 4. addd opened chunk (offset, msg_idx) to the queue
+                        // 4. add opened chunk (offset, msg_idx) to the queue
                         //    of streams we are reading
                         curr_chunks_.emplace(cref, msg_idx);
                         filled = true;
@@ -833,8 +862,7 @@ void MessagesStreamingIter::next() {
             curr_chunks_.emplace(cref, msg_idx);
         }
     } else {
-        // Looking for the next chunk of the current stream_id
-        // const auto curr_stream_id = cref[msg_idx].id();
+        // Advance to the next chunk of the current stream_id
         auto next_chunk_state = reader_->chunks_.next_by_stream(curr_item.first.offset());
         if (next_chunk_state != nullptr) {
             auto next_chunk_info = reader_->chunks_.get_info(next_chunk_state->offset);
@@ -893,6 +921,162 @@ std::string MessagesStreamingIter::to_string() const {
     return string_stream.str();
 }
 
+// ====================================================================
+// ========= StreamingReader::SequentialMessagesStreamingIter =========
+// ====================================================================
+
+SequentialMessagesStreamingIter::SequentialMessagesStreamingIter()
+    : curr_index_{}, end_index_{}, stream_id_{}, reader_{nullptr}, curr_chunks_{} {}
+
+SequentialMessagesStreamingIter::SequentialMessagesStreamingIter(
+    const SequentialMessagesStreamingIter& other) = default;
+
+SequentialMessagesStreamingIter::SequentialMessagesStreamingIter(uint32_t stream_id,
+                                                                 uint32_t start_index,
+                                                                 uint32_t end_index, Reader* reader)
+    : curr_index_{start_index}, end_index_{end_index}, stream_id_{stream_id}, reader_{reader} {
+    if (start_index == end_index) {
+        return;
+    }
+
+    // find first chunk by start_index
+    ChunkInfoNode* chunk_info = reader_->chunks_.get_info_by_message_idx(stream_id, start_index);
+    if (chunk_info == nullptr) {
+        curr_index_ = end_index_;
+        return;  // EoF
+    }
+    auto chunk_state = reader_->chunks_.get(chunk_info->offset);
+    if (chunk_state != nullptr && chunk_info->message_start_idx < end_index) {
+        auto msg_idx = start_index - chunk_info->message_start_idx;
+        auto curr_offset = chunk_state->offset;
+        OsfOffset temp_offset = {curr_offset, reader_->chunks_.get(curr_offset)->size};
+        OsfBuffer buf = reader_->get_chunk(temp_offset);
+        // if chunk is valid open it and add it, otherwise throw as the desired chunk could
+        // not be read
+        if (reader_->verify_chunk(temp_offset, buf)) {
+            ChunkRef cref{curr_offset, buf, reader_};
+            curr_chunks_.emplace(cref, msg_idx);
+            curr_index_ = msg_idx + chunk_info->message_start_idx;
+            chunk_start_index_ = chunk_info->message_start_idx;
+            chunk_end_index_ = chunk_info->message_start_idx + cref.size();
+        } else {
+            throw std::runtime_error(
+                "Could not read requested message from OSF. Chunk failed verification.");
+        }
+    }
+
+    if (curr_chunks_.empty()) {
+        curr_index_ = end_index_;
+    }
+}
+
+MessageRef SequentialMessagesStreamingIter::operator*() const {
+    const auto& curr_item = curr_chunks_.top();
+    return curr_item.first[curr_item.second];
+}
+
+std::unique_ptr<const MessageRef> SequentialMessagesStreamingIter::operator->() const {
+    const auto& curr_item = curr_chunks_.top();
+    return curr_item.first.messages(curr_item.second);
+}
+
+// It's not a full equality because priority_queue requires either gnarly
+// hacks to access internal collection or re-implementation.
+// But for the purpose of checking the iterator position in a collection
+// and checking boundaries it should be somewhat "correct"
+//
+// TODO[pb]: This should be revisited later with priority_queue
+// re-implementation that will be easier to work with for our multi-streams
+// case.
+bool SequentialMessagesStreamingIter::operator==(
+    const SequentialMessagesStreamingIter& other) const {
+    return (reader_ == other.reader_ && stream_id_ == other.stream_id_ &&
+            end_index_ == other.end_index_ && curr_index_ == other.curr_index_ &&
+            curr_chunks_.size() == other.curr_chunks_.size() &&
+            (curr_chunks_.empty() || curr_chunks_.top() == other.curr_chunks_.top()));
+}
+
+bool SequentialMessagesStreamingIter::operator!=(
+    const SequentialMessagesStreamingIter& other) const {
+    return !this->operator==(other);
+}
+
+SequentialMessagesStreamingIter& SequentialMessagesStreamingIter::operator++() {
+    this->next();
+    return *this;
+}
+
+SequentialMessagesStreamingIter SequentialMessagesStreamingIter::operator++(int) {
+    auto res = *this;
+    this->next();
+    return res;
+}
+
+void SequentialMessagesStreamingIter::next() {
+    if (curr_index_ >= end_index_) {
+        return;
+    }
+    const auto curr_item = curr_chunks_.top();
+    curr_chunks_.pop();
+    const ChunkRef& cref = curr_item.first;
+    size_t msg_idx = curr_item.second;
+    // DO NOT USE MESSAGE START IDX ON CHUNK INFOS HERE IT MAY NOT BE PRESENT
+    if (msg_idx + 1 < cref.size()) {
+        // Traversing current chunk
+        ++msg_idx;
+        auto next_chunk_info = reader_->chunks_.get_info(curr_item.first.offset());
+        auto idx = msg_idx + chunk_start_index_;
+        if (idx < end_index_) {
+            curr_chunks_.emplace(cref, msg_idx);
+            curr_index_ = idx;
+        }
+    } else {
+        // Looking for the next chunk of the current stream_id
+        auto next_chunk_state = reader_->chunks_.next_by_stream(curr_item.first.offset());
+        if (next_chunk_state != nullptr) {
+            auto next_chunk_info = reader_->chunks_.get_info(next_chunk_state->offset);
+            if (next_chunk_info == nullptr) {
+                throw std::logic_error(
+                    "ERROR: Can't iterate by streams without StreamingInfo available.");
+            }
+            if (chunk_end_index_ < end_index_) {
+                OsfOffset temp_offset = {next_chunk_state->offset,
+                                         reader_->chunks_.get(next_chunk_state->offset)->size};
+                OsfBuffer buf = reader_->file_->read(reader_->file_->chunks_offset(), temp_offset);
+                if (reader_->verify_chunk(temp_offset, buf)) {
+                    ChunkRef cref{next_chunk_state->offset, buf, reader_};
+                    for (size_t msg_idx = 0; msg_idx < cref.size(); ++msg_idx) {
+                        auto total_msg_idx = msg_idx + chunk_end_index_;
+                        curr_chunks_.emplace(cref, msg_idx);
+                        curr_index_ = total_msg_idx;
+                        chunk_start_index_ = total_msg_idx;
+                        chunk_end_index_ = total_msg_idx + cref.size();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    if (curr_chunks_.empty()) {
+        curr_index_ = end_index_;
+    }
+}
+
+std::string SequentialMessagesStreamingIter::to_string() const {
+    std::stringstream string_stream;
+    string_stream << "SequentialMessagesStreamingIter: [curr_index = " << curr_index_
+                  << ", end_index = " << end_index_
+                  << ", curr_chunks_.size = " << curr_chunks_.size()
+                  << ", stream_id_ = " << stream_id_;
+    if (!curr_chunks_.empty()) {
+        const auto& curr_item = curr_chunks_.top();
+        string_stream << ", top = (ts = " << curr_item.first[curr_item.second].ts().count()
+                      << ", id = " << curr_item.first[curr_item.second].id() << ")";
+    }
+    string_stream << "]";
+    return string_stream.str();
+}
+
 // =========================================================
 // ========= StreamingReader::MessagesStreamingRange =======
 // =========================================================
@@ -914,6 +1098,31 @@ std::string MessagesStreamingRange::to_string() const {
     std::stringstream string_stream;
     string_stream << "MessagesStreamingRange: [start_ts = " << start_ts_.count()
                   << ", end_ts = " << end_ts_.count() << "]";
+    return string_stream.str();
+}
+
+// ===================================================================
+// ========= StreamingReader::SequentialMessagesStreamingRange =======
+// ===================================================================
+
+SequentialMessagesStreamingRange::SequentialMessagesStreamingRange(uint32_t stream_id,
+                                                                   uint32_t start_index,
+                                                                   uint32_t end_index,
+                                                                   Reader* reader)
+    : stream_id_{stream_id}, reader_{reader}, start_index_(start_index), end_index_(end_index) {}
+
+SequentialMessagesStreamingIter SequentialMessagesStreamingRange::begin() const {
+    return SequentialMessagesStreamingIter(stream_id_, start_index_, end_index_, reader_);
+}
+
+SequentialMessagesStreamingIter SequentialMessagesStreamingRange::end() const {
+    return SequentialMessagesStreamingIter(stream_id_, end_index_, end_index_, reader_);
+}
+
+std::string SequentialMessagesStreamingRange::to_string() const {
+    std::stringstream string_stream;
+    string_stream << "SequentialMessagesStreamingRange: [start_index = " << start_index_
+                  << ", end_index = " << end_index_ << "]";
     return string_stream.str();
 }
 

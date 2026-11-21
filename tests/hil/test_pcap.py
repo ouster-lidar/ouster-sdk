@@ -61,7 +61,7 @@ def test_pcap_record(hil_sensor_hostname, hil_configured_sensor,
         metadata = src.sensor_info
         w = metadata[0].format.columns_per_frame
         take(640, src) # flush
-        
+
         def capture_fun(src):
             for idx, p in islice(src, n_packets):
                 yield p

@@ -11,7 +11,7 @@ Ouster Firmware 3.2 introduces Zone Monitor, which enables an Ouster LiDAR senso
 
 Ouster SDK 0.16.0 provides full support for this feature, allowing users to easily read and write Zone Monitor configuration from and to Ouster LiDAR sensors, record and visualize the zones and their states over time, and test a Zone Monitor configuration using pre-recorded data or data recorded from a sensor running older firmware.
 
-This document describes how the feature works, its use cases and capabilities, how to configure an Ouster LiDAR to use this feature, and how to use the SDK to create, visualize, and test Zone Monitor configurations. The `Ouster Firmware documentation <https://ouster.com/sensor-docs/fw-user-manual/zone-monitor>`__ contains further information about Zone Monitor, including relevant extensions to the LiDAR's UDP protocol and HTTP APIs.
+This document describes how the feature works, its use cases and capabilities, how to configure an Ouster LiDAR to use this feature, and how to use the SDK to create, visualize, and test Zone Monitor configurations. The `Ouster Firmware documentation <https://docs.ouster.com/sensor-docs/firmware/zone-monitor>`__ contains further information about Zone Monitor, including relevant extensions to the LiDAR's UDP protocol and HTTP APIs.
 
 .. caution::
     FW 3.2 and Ouster Rev 7 and earlier sensor models do not yet support using Zone Monitor for use in safety-critical applications.
@@ -19,7 +19,7 @@ This document describes how the feature works, its use cases and capabilities, h
 How it works
 ============
 
-An Ouster LiDAR supports configurations of as many as 128 zones, with support for live monitoring of up to 16 zones at a time.
+An Ouster LiDAR supports configurations of many zones, with support for live monitoring of up to 16 of the zones at a time.
 
 The configuration for each zone consists of a 3D geometry and triggering criteria. When the user uploads and applies a Zone Monitor configuration to the LiDAR, the LiDAR uses the zone geometry to render a pair of near/far distance images that it uses to determine which LiDAR measurements the zone contains during each LiDAR frame. During each frame, the LiDAR's firmware also checks the triggering criteria for each zone and transmits a packet containing information for each live zone, including whether that zone has met the triggering criteria (i.e. an object has entered or left the zone) or whether there is an obstruction preventing the LiDAR from determining the status of the zone.
 

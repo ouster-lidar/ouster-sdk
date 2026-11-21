@@ -6,7 +6,7 @@ node {
                 cleanWs()
             }
             // env.BRANCH_NAME is only set by multibranch jobs; generic Pipeline jobs need fallbacks.
-            def scmBranch = scm.branches[0].name.replaceAll(/^\*\//, '') 
+            def scmBranch = scm.branches[0].name.replaceAll(/^\*\//, '')
             def checkoutBranch = env.BRANCH_NAME ?: scmBranch ?: 'develop'
             echo "checkoutBranch: ${checkoutBranch}"
 

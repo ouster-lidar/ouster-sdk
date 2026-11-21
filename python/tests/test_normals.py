@@ -12,7 +12,9 @@ from ouster.sdk import open_source
 from ouster.sdk.core import (
     ChanField,
     XYZLut,
+    CameraFrame,
     destagger,
+    dewarp,
 )
 from ouster.sdk.algorithm import normals
 
@@ -397,3 +399,77 @@ def test_normals_2():
             [[0.0, 0.0, 0.0], [0, 0.0, 0.0]]
         ])
     )
+
+
+def _make_projectable_camera_info(w=4, h=3, fx=100.0, fy=200.0, cx=1.5, cy=1.0):
+    from ouster.sdk import core
+
+    ci = core.CameraInfo()
+    ci.model = core.CameraModel(fx, fy, cx, cy)
+    ci.format.columns_per_frame = w
+    ci.format.pixels_per_column = h
+    u, v = np.meshgrid(np.arange(w), np.arange(h))
+    x_cam = (u - cx) / fx
+    y_cam = (v - cy) / fy
+    z_cam = np.ones_like(x_cam)
+    ox, oy, oz = z_cam, -x_cam, -y_cam
+    mag = np.sqrt(ox ** 2 + oy ** 2 + oz ** 2)
+    return ci, mag
+
+
+def _make_camera_frame(ci, mag, rng_m=2.0):
+    frame = CameraFrame()
+    frame.w = ci.format.columns_per_frame
+    frame.h = ci.format.pixels_per_column
+    frame.sensor_info = ci
+    frame.add_field(ChanField.RANGE, np.round(rng_m * mag * 1000.0).astype(np.uint32))
+    return frame
+
+
+def test_normals_camera_xyzlut_applies_sensor_to_body():
+    """Like lidar, a camera XYZLut applies sensor_to_body."""
+    ci, mag = _make_projectable_camera_info()
+    frame = _make_camera_frame(ci, mag)
+    range_img = frame.field(ChanField.RANGE)
+
+    sensor_frame = XYZLut(ci)(range_img)
+    assert np.count_nonzero(sensor_frame) > 0
+
+    ci.sensor_to_body = np.eye(4)
+    ci.sensor_to_body[0, 3] = 1.0
+    shifted = XYZLut(ci)(range_img)
+    valid = range_img != 0
+    np.testing.assert_allclose(shifted[valid], sensor_frame[valid] + [1.0, 0.0, 0.0])
+
+
+def test_normals_camera_single_pose_broadcast():
+    """Camera frames carry one pose; normals needs origins tiled to image width."""
+    ci, mag = _make_projectable_camera_info()
+    frame = _make_camera_frame(ci, mag)
+    frame.body_to_world[0] = np.eye(4, dtype=np.float64)
+
+    h, w = frame.h, frame.w
+    info = frame.sensor_info
+    lut = XYZLut(info)
+    range_destaggered = destagger(info, frame.field(ChanField.RANGE))
+    xyz_destaggered = destagger(info, lut(frame.field(ChanField.RANGE)).reshape(h, w, 3))
+    poses = np.asarray(frame.body_to_world)
+    xyz_destaggered = dewarp(xyz_destaggered, poses)
+    origins = np.ascontiguousarray(
+        (poses @ info.sensor_to_body)[:, :3, 3], dtype=np.float64)
+    assert origins.shape == (1, 3)
+    sensor_origins_xyz = np.tile(origins, (w, 1))
+
+    normals_destaggered = normals(
+        xyz_destaggered,
+        range_destaggered,
+        sensor_origins_xyz=sensor_origins_xyz,
+    )
+    assert normals_destaggered.shape == (h, w, 3)
+
+    with pytest.raises(RuntimeError, match=r"sensor_origins size must match image width"):
+        normals(
+            xyz_destaggered,
+            range_destaggered,
+            sensor_origins_xyz=origins,
+        )

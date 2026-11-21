@@ -15,7 +15,9 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/core/camera_info.h"
 #include "ouster/core/impl/logging.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/types.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/buffer.h"
@@ -24,9 +26,12 @@
 #include "ouster/osf/file.h"
 #include "ouster/osf/impl/fb_utils.h"
 #include "ouster/osf/impl/sensor_info_stream.h"
+#include "ouster/osf/meta_camera_sensor.h"
+#include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/metadata_stream.h"
+#include "ouster/osf/stream_camera_frame.h"
 #include "ouster/osf/stream_lidar_frame.h"
 
 namespace ouster {
@@ -150,12 +155,13 @@ void ReaderBase::read_metadata() {
         const int chunk_header_footer_size = 8;
 
         // first iterate over all chunks
+        bool first_chunk = true;
         while (current_offset + sizeof(uint32_t) < file_->size()) {
             auto size_buf = file_->read(OsfOffset(current_offset, sizeof(uint32_t)));
 
             uint32_t size = *reinterpret_cast<const uint32_t*>(size_buf.data());
 
-            // make sure we dont run past the end of the file
+            // make sure we don't run past the end of the file
             if (current_offset + size + chunk_header_footer_size > file_->size()) {
                 error_handler_(Severity::OUSTER_WARNING,
                                "Osf: Incomplete chunk found at end of file. "
@@ -169,7 +175,15 @@ void ReaderBase::read_metadata() {
             auto chunk = ouster::sdk::osf::impl::gen::GetSizePrefixedChunk(buf.data());
 
             if (chunk->type() == nullptr) {
-                throw std::runtime_error("Osf: File format too old to recover without metadata.");
+                // if this is the first chunk, throw, otherwise we just have an unfinalized chunk
+                if (first_chunk) {
+                    throw std::runtime_error(
+                        "Osf: File format too old to recover without metadata.");
+                } else {
+                    error_handler_(Severity::OUSTER_WARNING,
+                                   "Osf: Chunk without type found. Discarding rest of file.");
+                    break;
+                }
             }
 
             // now recover metadata for each
@@ -183,9 +197,11 @@ void ReaderBase::read_metadata() {
                 strcmp("ouster/v1/os_sensor/ScanSourceMetadataStreamMeta",
                        chunk->type()->c_str()) == 0;
 
-            // todo handle chunks with 0 messages
+            // Rest of file is probably corrupt if we get a chunk with zero messages
             if (chunk->messages()->size() == 0) {
-                throw std::runtime_error("Unexpected chunk with 0 messages.");
+                error_handler_(Severity::OUSTER_WARNING,
+                               "Osf: Chunk without messages found. Discarding rest of file.");
+                break;
             }
 
             // to do this iterate over messages in the chunk
@@ -209,17 +225,38 @@ void ReaderBase::read_metadata() {
                     data.resize(msg->buffer()->size());
                     memcpy(data.data(), msg->buffer()->data(), data.size());
                     auto msg = SensorInfoStream::from_buffer(data);
-                    uint32_t lidar_sensor_id = msg->lidar_sensor_id;
-                    LidarSensor meta3(msg->sensor_info);
-                    meta3.set_id(lidar_sensor_id);
-                    meta_store_.add(meta3);
+                    uint32_t sensor_meta_id = msg->sensor_meta_id;
+                    // Rebuild the footer entry and frame stream meta that the
+                    // finalize step would have written, picking the camera or
+                    // lidar pair based on which metadata kind came back.
+                    auto camera_info =
+                        std::dynamic_pointer_cast<ouster::sdk::core::CameraInfo>(msg->sensor_info);
+                    if (camera_info) {
+                        CameraSensor sensor_meta(*camera_info);
+                        sensor_meta.set_id(sensor_meta_id);
+                        meta_store_.add(sensor_meta);
 
-                    // add the lidar frame stream meta
-                    LidarFrameStreamMeta meta(lidar_sensor_id);
-                    meta.set_id(msg->frame_stream_id);
-                    meta_store_.add(meta);
+                        CameraFrameStreamMeta stream_meta(sensor_meta_id);
+                        stream_meta.set_id(msg->frame_stream_id);
+                        meta_store_.add(stream_meta);
+                    } else {
+                        auto lidar_info = std::dynamic_pointer_cast<ouster::sdk::core::LidarInfo>(
+                            msg->sensor_info);
+                        if (!lidar_info) {
+                            throw std::runtime_error(
+                                "Osf: Unrecognized sensor metadata kind while recovering file.");
+                        }
+                        LidarSensor meta3(*lidar_info);
+                        meta3.set_id(sensor_meta_id);
+                        meta_store_.add(meta3);
 
-                    // add the meta for this stream if it doesnt already exist
+                        // add the lidar frame stream meta
+                        LidarFrameStreamMeta meta(sensor_meta_id);
+                        meta.set_id(msg->frame_stream_id);
+                        meta_store_.add(meta);
+                    }
+
+                    // add the meta for this stream if it doesn't already exist
                     if (!meta_store_.get(stream_id)) {
                         SensorInfoStreamMeta meta2;
                         meta2.set_id(stream_id);
@@ -261,6 +298,7 @@ void ReaderBase::read_metadata() {
             info.chunks_info()[chunk_info.offset] = chunk_info;
 
             current_offset = current_offset + size + chunk_header_footer_size;
+            first_chunk = false;
         }
 
         // update chunk end to be the end of last chunk
@@ -297,7 +335,7 @@ void ReaderBase::read_metadata() {
 
             auto meta_obj = meta_ref.as_type();
             if (meta_obj) {
-                // Successfull reconstruction of the metadata here.
+                // Successful reconstruction of the metadata here.
                 meta_store_.add(*meta_obj);
             } else {
                 // Can't reconstruct, adding the MetadataEntryRef proxy object

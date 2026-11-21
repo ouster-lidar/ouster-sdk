@@ -81,7 +81,7 @@ function(_doc_cpp_add_example snippet_dir example_source)
             "${CMAKE_SOURCE_DIR}/tests"
             "${_DOC_CPP_FEATURES_ROOT}/cpp_test_utils"
         )
-        target_compile_definitions(${test_target} PRIVATE 
+        target_compile_definitions(${test_target} PRIVATE
             "OUSTER_SDK_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\""
         )
         if(TARGET OusterSDK::ouster_osf)
@@ -125,7 +125,7 @@ foreach(feature_dir IN LISTS _DOC_CPP_FEATURE_DIRS)
     foreach(example_file IN LISTS example_files)
         _doc_cpp_add_example("${snippet_dir}" "${example_file}")
     endforeach()
-    
+
 endforeach()
 
 get_property(_doc_cpp_targets GLOBAL PROPERTY DOC_CPP_SNIPPET_TARGETS)

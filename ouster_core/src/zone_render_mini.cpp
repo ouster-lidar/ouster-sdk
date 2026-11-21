@@ -10,6 +10,7 @@
 
 #include "nonstd/optional.hpp"
 #include "ouster/core/beam_config.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/mesh.h"
 #include "ouster/core/typedefs.h"
 #include "ouster/core/types.h"
@@ -39,7 +40,7 @@ int main(int argc, char* argv[]) {
     std::string stl_path(argv[3]);
     std::string zrb_path(argv[4]);
 
-    ouster::sdk::core::SensorInfo sensor_info =
+    ouster::sdk::core::LidarInfo sensor_info =
         ouster::sdk::core::metadata_from_json(sensor_info_path);
 
     std::ifstream zone_monitor_json_file(zone_monitor_json_path);

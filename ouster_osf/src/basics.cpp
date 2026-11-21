@@ -137,8 +137,23 @@ uint32_t get_block_size(const OsfBuffer& buf) {
 bool check_prefixed_size_block_crc(const OsfBuffer& buf, const uint32_t max_size) {
     uint32_t prefixed_size = get_prefixed_size(buf);
     if (max_size < prefixed_size + FLATBUFFERS_PREFIX_LENGTH + CRC_BYTES_SIZE) {
-        // prefixed size doesnt match buffer size, the data is corrupt
+        // prefixed size doesn't match buffer size, the data is corrupt
         return false;
+    }
+
+    static bool read_env = false;
+    static bool do_check = false;
+    if (!read_env) {
+        read_env = true;
+        // NOLINTNEXTLINE(concurrency-mt-unsafe)
+        if (const char* value = std::getenv("OUSTER_OSF_CRC")) {
+            if (strcmp(value, "0") != 0) {
+                do_check = true;
+            }
+        }
+    }
+    if (!do_check) {
+        return true;
     }
 
     const uint32_t crc_stored =

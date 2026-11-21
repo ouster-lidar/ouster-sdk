@@ -12,7 +12,7 @@
 
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/types.h"
-#include "ouster/pcap/pcap.h"
+#include "ouster/pcap/pcap_packet_source.h"
 #include "util.h"
 
 using namespace ouster::sdk::core;
@@ -120,21 +120,23 @@ TEST_P(ParsingBenchmarkTestFixture, ParseCorrectnessTest) {
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
 
-    auto info = metadata_from_json(data_dir + "/" + test_params.info_filename);
-    auto pf = PacketFormat(info);
-    PcapReader pcap(data_dir + "/" + test_params.pcap_filename);
+    auto pcap_path = data_dir + "/" + test_params.pcap_filename;
+    auto metadata_path = data_dir + "/" + test_params.info_filename;
+    PcapPacketSource pcap(pcap_path, [&](auto m) { m.meta = {metadata_path}; });
+
+    auto info = pcap.sensor_info()[0];
+    PacketFormat pf(*info);
 
     // test headers parsing
-    pcap.seek(0);
-    pcap.next_packet();
-    EXPECT_EQ(pf.packet_type(pcap.current_data()), 1u);
-    EXPECT_EQ(pf.frame_id(pcap.current_data()), test_params.frame_id);
-    EXPECT_EQ(pf.init_id(pcap.current_data()), test_params.init_id);
-    EXPECT_EQ(pf.prod_sn(pcap.current_data()), test_params.prod_sn);
-    EXPECT_EQ(pf.countdown_thermal_shutdown(pcap.current_data()), 0);
-    EXPECT_EQ(pf.countdown_shot_limiting(pcap.current_data()), 0);
-    EXPECT_EQ(pf.thermal_shutdown(pcap.current_data()), ThermalShutdownStatus::NORMAL);
-    const uint8_t* col = pf.nth_col(7, pcap.current_data());
+    auto packet = (*pcap.begin()).second;
+    EXPECT_EQ(pf.packet_type(packet->buf.data()), 1u);
+    EXPECT_EQ(pf.frame_id(packet->buf.data()), test_params.frame_id);
+    EXPECT_EQ(pf.init_id(packet->buf.data()), test_params.init_id);
+    EXPECT_EQ(pf.prod_sn(packet->buf.data()), test_params.prod_sn);
+    EXPECT_EQ(pf.countdown_thermal_shutdown(packet->buf.data()), 0);
+    EXPECT_EQ(pf.countdown_shot_limiting(packet->buf.data()), 0);
+    EXPECT_EQ(pf.thermal_shutdown(packet->buf.data()), ThermalShutdownStatus::NORMAL);
+    const uint8_t* col = pf.nth_col(7, packet->buf.data());
     EXPECT_EQ(pf.col_status(col), 1u);
     EXPECT_EQ(pf.col_timestamp(col), test_params.col_timestamp);
     EXPECT_EQ(pf.col_measurement_id(col), 7);
@@ -143,12 +145,12 @@ TEST_P(ParsingBenchmarkTestFixture, ParseCorrectnessTest) {
 
     auto parse_and_hash = [&](auto parser) -> HashMap {
         // reset
-        pcap.seek(0);
         impl::foreach_channel_field(ls, pf, set_zero{});
         // parse
-        while (pcap.next_packet()) {
-            if (pcap.current_info().dst_port == 7502)
-                impl::foreach_channel_field(ls, pf, parser, pf, pcap.current_data());
+        for (const auto& packet : pcap) {
+            if (packet.second->type() == PacketType::Lidar) {
+                impl::foreach_channel_field(ls, pf, parser, pf, packet.second->buf.data());
+            }
         }
 
         HashMap map;
@@ -173,8 +175,9 @@ TEST_P(ParsingBenchmarkTestFixture, FrameBatcherBenchTest) {
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
 
-    auto info = metadata_from_json(data_dir + "/" + test_params.info_filename);
-    auto pf = PacketFormat(info);
+    auto metadata_path = data_dir + "/" + test_params.info_filename;
+    auto info = std::make_shared<LidarInfo>(metadata_from_json(metadata_path));
+    auto pf = PacketFormat(*info);
 
     std::cout << styles["yellow"] << styles["bold"]
               << "CHECKING PARSING PERFORMANCE WITH: " << test_params.pcap_filename
@@ -183,12 +186,12 @@ TEST_P(ParsingBenchmarkTestFixture, FrameBatcherBenchTest) {
     // load up packets into memory to avoid I/O latency messing with benchmarks
     std::vector<std::vector<uint8_t>> packets;
     {
-        PcapReader pcap(data_dir + "/" + test_params.pcap_filename);
-        while (pcap.next_packet()) {
-            if (pcap.current_info().dst_port == 7502) {
-                std::vector<uint8_t> packet(pcap.current_length());
-                std::memcpy(packet.data(), pcap.current_data(), pcap.current_length());
-                packets.push_back(std::move(packet));
+        auto pcap_path = data_dir + "/" + test_params.pcap_filename;
+        PcapPacketSource pcap(pcap_path, [&](auto m) { m.meta = {metadata_path}; });
+        for (const auto& packet : pcap) {
+            if (packet.second->type() == PacketType::Lidar) {
+                std::vector<uint8_t> packet_data = packet.second->buf;
+                packets.push_back(std::move(packet_data));
             }
         }
     }

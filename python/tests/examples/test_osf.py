@@ -61,7 +61,7 @@ def test_osf_slice_frames_writes_sliced_file(tmp_path, monkeypatch, capsys,
 
 
 def test_add_objects_to_frame_smoke():
-    sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x10)
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x10)
     frame = core.LidarFrame(sensor_info)
     objects = osf_examples.add_objects_to_frame(frame)
 
@@ -72,7 +72,7 @@ def test_add_objects_to_frame_smoke():
 
 
 def test_classmaps_smoke(tmp_path):
-    sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x10)
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x10)
     osf_path = tmp_path / "test.osf"
 
     writer, class_maps, metadata = osf_examples.write_classmaps(osf_path, sensor_info)

@@ -12,12 +12,16 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unique_ptr.h>
 #include <nanobind/stl/vector.h>
+#include <ouster/core/sensor_info.h>
 #include <ouster/perception/detection_engine.h>
+
+#include <memory>
+#include <vector>
 
 namespace py = nanobind;
 
+using ouster::sdk::core::Frame;
 using ouster::sdk::core::FrameSet;
-using ouster::sdk::core::LidarFrame;
 using ouster::sdk::core::SensorInfo;
 using ouster::sdk::perception::ClassicDetectionConfig;
 using ouster::sdk::perception::DetectionConfig;
@@ -35,7 +39,7 @@ void init_perception(py::module_& module, py::module_& /*unused*/) {
                          * is to have nanobind generate the type stub for us
                          */
                         throw std::logic_error(
-                            "Implementation is overriden in python. "
+                            "Implementation is overridden in python. "
                             "Are you importing DetectionConfig correctly?");
                     })
         .def_rw("save_instance_id_fields", &DetectionConfig::save_instance_id_fields);
@@ -51,7 +55,7 @@ void init_perception(py::module_& module, py::module_& /*unused*/) {
                 &ClassicDetectionConfig::cluster_filter_max_side_length);
 
     py::class_<DetectionEngine>(module, "DetectionEngine")
-        .def("update", [](DetectionEngine& self, LidarFrame& frame) { self.update(frame); })
+        .def("update", [](DetectionEngine& self, Frame& frame) { self.update(frame); })
         .def("update", [](DetectionEngine& self, FrameSet& frame_set) { self.update(frame_set); })
         .def_static(
             "create",

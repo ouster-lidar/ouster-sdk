@@ -44,7 +44,7 @@ void init_client_misc(py::module_& module, py::module_& /*unused*/) {
     console which is the default).
 
     Args:
-        log_level Control the level of log messages outputed by the client.
+        log_level Control the level of log messages output by the client.
             Valid options are (case-sensitive): "trace", "debug", "info", "warning",
             "error", "critical" and "off".
         log_file_path (str): Path to location where log files are stored. The
@@ -56,7 +56,7 @@ void init_client_misc(py::module_& module, py::module_& /*unused*/) {
             max_files. If rotating is set to false the following parameters are ignored
         max_size_in_bytes (int): Maximum number of bytes to write to a rotating log
             file before starting a new file. ignored if rotating is set to False.
-        max_files (int): Maximum number of rotating files to accumlate before
+        max_files (int): Maximum number of rotating files to accumulate before
             re-using the first file. ignored if rotating is set to False.
 
     Returns:

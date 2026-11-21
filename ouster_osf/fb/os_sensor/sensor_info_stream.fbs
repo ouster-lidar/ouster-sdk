@@ -2,11 +2,20 @@ include "common.fbs";
 
 namespace ouster.sdk.osf.v2;
 
-// Sensor info about a lidar scan
+// Which SensorInfo subtype the sensor_info json payload holds. Trailing field
+// with a default, so messages written before camera support read back as Lidar.
+enum SensorInfoType : ubyte {
+    Lidar = 0,
+    Camera = 1,
+}
+
+// Sensor info about a frame, duplicated into the data section so that the
+// sensor metadata is recoverable when the footer never reached disk.
 table SensorInfo {
-    lidar_sensor_id:uint32; // referenced to metadata.entry[].id with LidarSensor
-    scan_stream_id:uint32; // referenced to metadata.entry[].id with LidarScan
+    lidar_sensor_id:uint32; // referenced to metadata.entry[].id with LidarSensor/CameraSensor
+    scan_stream_id:uint32; // referenced to metadata.entry[].id with LidarScan/CameraFrameStream
     sensor_info:[uint8]; // zstd compressed sensor info json
+    sensor_type:SensorInfoType = Lidar;
 }
 
 table SensorInfoStream {

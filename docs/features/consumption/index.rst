@@ -63,29 +63,29 @@ Troubleshooting
 ---------------
 
 - **Connection / Stream Not Starting:**
-  
-  - Check hostname/IP reachability (ping). 
+
+  - Check hostname/IP reachability (ping).
   - Confirm correct metadata (JSON) for replay; mismatch -> malformed frames.
 
 - **Incomplete or Partial Frames:**
-  
+
   - Cause: UDP loss or mode/profile change mid-stream.
   - Action: Lower data rate (lidar_mode, dual returns off, narrow azimuth_window). Monitor packet drops.
 
 - **Frame ID Resets Unexpectedly:**
-  
-  - Occurs after sensor reconfig or reboot. Refresh SensorInfo and rebuild XYZ LUT.
+
+  - Occurs after sensor reconfig or reboot. Refresh LidarInfo and rebuild XYZ LUT.
 
 - **Timestamps Drift Across Sensors:**
-  
+
   - External sync not locked. Use same timesync_mode (PTP/GPS) and verify stability before multi-source collation.
 
 - **Dual Returns Missing RANGE2:**
-  
+
   - Profile not applied or sensor FW unsupported. Re-read config; ensure udp_profile_lidar dual profile active.
 
 - **Out-of-Order Multi-Sensor Bundles:**
-  
+
   - Different timing sources. Align by timestamp after enabling common sync mode.
 
 .. toctree::
@@ -99,4 +99,4 @@ Troubleshooting
    collation
    field
    using-the-viz
-   
+

@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -13,6 +14,7 @@
 #include "http_client.h"
 #include "ouster/core/impl/curl_ca.h"
 #include "ouster/core/impl/logging.h"
+#include "ouster/core/signals.h"
 
 class CurlClient : public ouster::sdk::sensor::HttpClient {
     enum class RequestType {
@@ -165,12 +167,12 @@ class CurlClient : public ouster::sdk::sensor::HttpClient {
         }
         while (attempts-- != 0) {
             buffer_.clear();
-            auto res = curl_easy_perform(curl_handle_);
+            auto res = perform();
             if (res == CURLE_SEND_ERROR) {
-                // Specific versions of curl does't play well with the sensor
+                // Specific versions of curl don't play well with the sensor
                 // http server. When CURLE_SEND_ERROR happens for the first time
                 // silently re-attempting the http request resolves the problem.
-                res = curl_easy_perform(curl_handle_);
+                res = perform();
             }
             if (res != CURLE_OK) {
                 curl_slist_free_all(hs);
@@ -200,6 +202,47 @@ class CurlClient : public ouster::sdk::sensor::HttpClient {
         throw std::runtime_error(std::string("CurlClient::execute_request failed for url: [" + url +
                                              "] with the code: [" + std::to_string(http_code) +
                                              std::string("] - and return: ") + buffer_));
+    }
+
+    // perform in a way that allows control-c
+    CURLcode perform() const {
+        auto multi_handle = curl_multi_init();
+        curl_multi_add_handle(multi_handle, curl_handle_);
+
+        int still_running;
+        CURLMcode mc;
+        do {
+            mc = curl_multi_perform(multi_handle, &still_running);
+
+            if (mc != CURLM_OK) {
+                fprintf(stderr, "curl_multi_perform() failed: %s\n", curl_multi_strerror(mc));
+                break;
+            }
+
+            // Wait for activity or timeout
+            if (still_running) {
+                mc = curl_multi_poll(multi_handle, NULL, 0, 100, NULL);
+                if (mc != CURLM_OK) {
+                    fprintf(stderr, "curl_multi_poll() failed: %s\n", curl_multi_strerror(mc));
+                    break;
+                }
+            }
+        } while (still_running && !ouster::sdk::core::signaled());
+
+        int msgq = 0;
+        struct CURLMsg* m = curl_multi_info_read(multi_handle, &msgq);
+
+        curl_multi_remove_handle(multi_handle, curl_handle_);
+        curl_multi_cleanup(multi_handle);
+
+        if (ouster::sdk::core::signaled()) {
+            // if we were aborted just return an approximate error code
+            return CURLE_ABORTED_BY_CALLBACK;
+        }
+        if (m == nullptr || m->msg != CURLMSG_DONE) {
+            throw std::runtime_error("curl_multi_perform finished without a result");
+        }
+        return m->data.result;
     }
 
     static size_t write_memory_callback(void* contents, size_t element_size, size_t elements_count,

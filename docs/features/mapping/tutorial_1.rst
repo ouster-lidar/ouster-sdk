@@ -1,12 +1,14 @@
 
-Obtain Lidar Pose and Calculate Pose Difference
------------------------------------------------
+Obtain Sensor Pose and Calculate Pose Difference
+------------------------------------------------
 
-The SLAM API outputs the sensor’s pose for each lidar frame, which you can use to determine the sensor’s orientation in your system. 
-From the Lidar Poses, we can calculate the Pose difference between consecutive frames.
+The SLAM API outputs the sensor’s pose for each frame (lidar or camera), which you can use to determine the sensor’s orientation in your system.
+From these poses, we can calculate the pose difference between consecutive frames.
 
 Once the SLAM is run on the current frames to compute poses using ``slam.update(frame_set)``.
-Extract the first valid column in the frame, frame_pose and frame_ts.
+Extract the first valid column in the frame (index ``0`` for a single-pose camera frame), frame_pose and frame_ts.
+Because ``get_first_valid_column()``, ``body_to_world``, and ``timestamp`` are all defined on the shared
+``Frame`` base, the same code reads poses from lidar and camera frames alike.
 
 The pose_differences function is used to compare the current pose to the previous one, calculating rotation and translation deltas between two poses.
 

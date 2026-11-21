@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
 
     for (const auto& idx_and_packet : source) {
         const auto& packet = idx_and_packet.second;
-        bool frame_finalized = batcher(*packet, frame);
+        bool frame_finalized = batcher.batch(*packet, frame);
         if (frame_finalized && first_frame) {
             first_frame = false;
             frame = core::LidarFrame(sensor_info);
@@ -39,15 +39,15 @@ int main(int argc, char* argv[]) {
 
         if (frame_finalized) {
             total_frames++;
-            Eigen::Ref<Eigen::Array<uint64_t, -1, 1> > lidar_packet_timestamps =
-                frame.packet_timestamp();
-            Eigen::Ref<Eigen::Array<uint64_t, -1, 1> > imu_packet_timestamps =
+            Eigen::Ref<Eigen::Array<uint64_t, -1, 1> > lidar_receive_timestamps =
+                frame.receive_timestamp();
+            Eigen::Ref<Eigen::Array<uint64_t, -1, 1> > imu_receive_timestamps =
                 frame.field("IMU_PACKET_TIMESTAMP");
-            Eigen::Ref<Eigen::Array<uint64_t, -1, 1> > zm_packet_timestamps =
+            Eigen::Ref<Eigen::Array<uint64_t, -1, 1> > zm_receive_timestamps =
                 frame.field("ZONE_PACKET_TIMESTAMP");
-            auto zero_lidar_ts = lidar_packet_timestamps.rows() - lidar_packet_timestamps.count();
-            auto zero_imu_ts = imu_packet_timestamps.rows() - imu_packet_timestamps.count();
-            auto zero_zm_ts = zm_packet_timestamps.rows() - zm_packet_timestamps.count();
+            auto zero_lidar_ts = lidar_receive_timestamps.rows() - lidar_receive_timestamps.count();
+            auto zero_imu_ts = imu_receive_timestamps.rows() - imu_receive_timestamps.count();
+            auto zero_zm_ts = zm_receive_timestamps.rows() - zm_receive_timestamps.count();
             if (zero_lidar_ts + zero_imu_ts + zero_zm_ts > 0) {
                 std::cerr << "Frame " << total_frames
                           << ": Zero timestamps - Lidar: " << zero_lidar_ts
@@ -57,10 +57,10 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Frame " << total_frames << std::endl;
                 complete_frames++;
             }
-            if (imu_packet_timestamps(imu_packet_timestamps.size() - 1) == 0) {
+            if (imu_receive_timestamps(imu_receive_timestamps.size() - 1) == 0) {
                 last_imu_ts_zero++;
             }
-            if (zm_packet_timestamps(zm_packet_timestamps.size() - 1) == 0) {
+            if (zm_receive_timestamps(zm_receive_timestamps.size() - 1) == 0) {
                 last_zm_ts_zero++;
             }
             if (total_frames >= static_cast<size_t>(iterations)) {

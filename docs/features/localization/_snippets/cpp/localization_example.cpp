@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
             auto yaw   = angles(2) * rad2deg;
 
             std::cout << std::fixed
-                      << "idx = " << frame->frame_id << "; ts = " << frame_ts << "; "
+                      << "ts = " << frame_ts << "; "
                       << "XYZ: " << std::setprecision(2) << t(0) << ", " << t(1) << ", " << t(2) << " "
                       << "(R: " << std::setprecision(1) << roll << ", P: " << pitch << ", Y: " << yaw << ")"
                       << std::endl;

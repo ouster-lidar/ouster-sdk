@@ -92,7 +92,11 @@ class Threadpool {
 
 template <class T>
 void Threadpool<T>::execute_task(Threadpool<T>::QueueItem& task) {
-    task.promise.set_value(task.task());
+    try {
+        task.promise.set_value(task.task());
+    } catch (...) {
+        task.promise.set_exception(std::current_exception());
+    }
 }
 
 template <>

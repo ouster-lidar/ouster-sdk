@@ -22,7 +22,7 @@ def runner():
 def test_udp_dest_finder_leaves_no_mark(hil_sensor_hostname, hil_configured_sensor, udp_dest):
 
         # set up with test udp value
-        cfg = core.SensorConfig()
+        cfg = core.LidarConfig()
         cfg.udp_dest = udp_dest
         sensor.set_config(hil_sensor_hostname, cfg)
 

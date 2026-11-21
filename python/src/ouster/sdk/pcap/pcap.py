@@ -8,7 +8,7 @@ import time
 from typing import (Iterable, Iterator, Optional, Tuple, Dict)  # noqa: F401
 
 from ouster.sdk.core import (LidarPacket, ImuPacket, ZonePacket, Packet, PacketSource,  # noqa: F401
-                           SensorInfo, PacketValidationFailure)      # noqa: F401
+                           LidarInfo, PacketValidationFailure)      # noqa: F401
 import ouster.sdk._bindings.pcap as _pcap
 import ouster.sdk._bindings.client as _client
 
@@ -33,7 +33,7 @@ def _packet_info_stream(path: str, n_packets, progress_callback=None, callback_f
     return result
 
 
-def _replay(pcap_path: str, info: SensorInfo, dst_ip: str, dst_lidar_port: int,
+def _replay(pcap_path: str, info: LidarInfo, dst_ip: str, dst_lidar_port: int,
             dst_imu_port: int, address: Optional[Tuple[str, int]] = None) -> Iterator[bool]:
     """Replay UDP packets out over the network.
 

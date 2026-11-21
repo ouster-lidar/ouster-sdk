@@ -1,4 +1,4 @@
-#include "ouster/pcap/indexed_pcap_reader.h"
+#include "indexed_pcap_reader.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -14,9 +14,6 @@
 #include "ouster/core/packet.h"
 #include "ouster/core/types.h"
 #include "ouster/pcap/os_pcap.h"
-
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
 
 using namespace ouster::sdk::core;
 namespace ouster {
@@ -37,7 +34,7 @@ IndexedPcapReader::IndexedPcapReader(const std::string& pcap_filename,
 }
 
 IndexedPcapReader::IndexedPcapReader(const std::string& pcap_filename,
-                                     const std::vector<SensorInfo>& sensor_infos)
+                                     const std::vector<LidarInfo>& sensor_infos)
     : PcapReader(pcap_filename),
       sensor_infos_(sensor_infos),
       index_(sensor_infos.size()),
@@ -48,7 +45,7 @@ IndexedPcapReader::IndexedPcapReader(const std::string& pcap_filename,
 
 namespace {
 std::vector<std::pair<int, int>> guess_ports(StreamInfo& stream_info,
-                                             const SensorInfo& sensor_info) {
+                                             const LidarInfo& sensor_info) {
     PacketFormat packet_format(sensor_info);
     std::vector<std::pair<int, int>> guesses;
     for (const auto& guess :
@@ -116,11 +113,18 @@ void IndexedPcapReader::init_() {
                 // sn_lidar.c_str());
             } else if (*port == 0) {
                 // stream is disabled
-            } else if (port_map_[*port].find(serial_num) != port_map_[*port].end()) {
-                throw PcapDuplicatePortException("Duplicate " + name + " port/sn found in pcap: " +
-                                                 serial_num + ":" + std::to_string(*port));
             } else {
-                port_map_[*port][serial_num] = index;
+                auto& serial_map = port_map_[*port];
+                auto existing = serial_map.find(serial_num);
+                // Lidar, IMU, and zone monitoring from one sensor may share a UDP port.
+                // They use the same serial and are separated later by packet size, so
+                // only a second sensor claiming that port and serial is a conflict.
+                if (existing != serial_map.end() && existing->second != index) {
+                    throw PcapDuplicatePortException("Duplicate " + name +
+                                                     " port/sn found in pcap: " + serial_num + ":" +
+                                                     std::to_string(*port));
+                }
+                serial_map[serial_num] = index;
             }
         };
 
@@ -139,7 +143,7 @@ nonstd::optional<size_t> IndexedPcapReader::sensor_idx_for_current_packet(
 std::pair<IdxErrorType, nonstd::optional<size_t>>
 IndexedPcapReader::check_sensor_idx_for_current_packet(bool soft_id_check) const {
     nonstd::optional<size_t> value;
-    IdxErrorType error = IdxErrorType::None;
+    IdxErrorType error = IdxErrorType::NONE;
     const auto& pkt_info = current_info();
     auto temp_match = port_map_.find(pkt_info.dst_port);
     if (temp_match != port_map_.end()) {
@@ -154,7 +158,7 @@ IndexedPcapReader::check_sensor_idx_for_current_packet(bool soft_id_check) const
             auto res = validate_packet(sensor_infos_[it.second], packet_format, data_,
                                        pkt_info.payload_size, type);
             if (res == PacketValidationFailure::NONE) {
-                return {IdxErrorType::None, it.second};
+                return {IdxErrorType::NONE, it.second};
             } else if (res == PacketValidationFailure::ID) {
                 if (soft_id_check) {
                     if (value) {
@@ -164,11 +168,11 @@ IndexedPcapReader::check_sensor_idx_for_current_packet(bool soft_id_check) const
                     }
                     value = it.second;
                 }
-                error = IdxErrorType::Id;
+                error = IdxErrorType::ID;
             } else if (res == PacketValidationFailure::PACKET_SIZE) {
-                // Dont let a size error override an id error
-                if (error == IdxErrorType::None) {
-                    error = IdxErrorType::Size;
+                // Don't let a size error override an id error
+                if (error == IdxErrorType::NONE) {
+                    error = IdxErrorType::SIZE;
                 }
             }
         }
@@ -222,7 +226,7 @@ void IndexedPcapReader::build_index() {
     reset();
 }
 
-const std::vector<SensorInfo>& IndexedPcapReader::sensor_info() const {
+const std::vector<LidarInfo>& IndexedPcapReader::sensor_info() const {
     return sensor_infos_;
 }
 
@@ -249,5 +253,3 @@ size_t PcapIndex::frame_count(size_t sensor_index) const {
 }  // namespace pcap
 }  // namespace sdk
 }  // namespace ouster
-
-OUSTER_DIAGNOSTIC_POP

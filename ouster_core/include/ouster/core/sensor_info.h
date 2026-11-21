@@ -1,435 +1,239 @@
 /**
- * Copyright (c) 2018, Ouster, Inc.
+ * Copyright (c) 2026, Ouster, Inc.
  * All rights reserved.
  *
  * @file
- * @brief Ouster sensor information and metadata
+ * @brief Common base for sensor metadata (LidarInfo, CameraInfo, ...)
  */
 
 #pragma once
 
-#include <Eigen/Core>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 
-#include "nonstd/optional.hpp"
-#include "ouster/core/data_format.h"
 #include "ouster/core/impl/cache_ptr.h"
-#include "ouster/core/sensor_config.h"
 #include "ouster/core/typedefs.h"
-#include "ouster/core/version.h"
 #include "ouster/core/visibility.h"
-#include "ouster/core/zone_monitor.h"
 
 namespace ouster {
 namespace sdk {
 namespace core {
 
-/** Forward declaration for XYZLut */
 template <typename T>
 class XYZLutT;
 
-/** Thermal Shutdown status. */
-enum class ThermalShutdownStatus : uint8_t {
-    NORMAL = 0x00,    ///< Normal operation
-    IMMINENT = 0x01,  ///< Thermal Shutdown imminent
-};
-
-/** Shot Limiting status. */
-enum class ShotLimitingStatus : uint8_t {
-    NORMAL = 0x00,           ///< Normal operation
-    IMMINENT = 0x01,         ///< Shot limiting imminent
-    REDUCTION_0_10 = 0x02,   ///< Shot limiting reduction by 0 to 10%
-    REDUCTION_10_20 = 0x03,  ///< Shot limiting reduction by 10 to 20%
-    REDUCTION_20_30 = 0x04,  ///< Shot limiting reduction by 20 to 30%
-    REDUCTION_30_40 = 0x05,  ///< Shot limiting reduction by 30 to 40%
-    REDUCTION_40_50 = 0x06,  ///< Shot limiting reduction by 40 to 50%
-    REDUCTION_50_60 = 0x07,  ///< Shot limiting reduction by 50 to 60%
-    REDUCTION_60_70 = 0x08,  ///< Shot limiting reduction by 60 to 70%
-    REDUCTION_70_75 = 0x09,  ///< Shot limiting reduction by 70 to 80%
-};
-
-/** Stores from-sensor calibration information */
-struct OUSTER_API_CLASS CalibrationStatus {
-    optional<bool> reflectivity_status;            ///< Whether reflectivity calibration is present.
-    optional<std::string> reflectivity_timestamp;  ///< Timestamp of reflectivity calibration.
-};
-
-/** Stores parsed information about the prod line */
-class OUSTER_API_CLASS ProductInfo {
-   public:
-    /**
-     * The original full product line string.
-     */
-    const std::string full_product_info;
-
-    /**
-     * The form factor of the sensor. This will
-     * look like: "OS1", "OS1MAX" or "OS2" and such.
-     */
-    const std::string form_factor;
-
-    /**
-     * Is the sensor a short range build or not.
-     */
-    const bool short_range;
-
-    /**
-     * The beam configuration of the sensor.
-     */
-    const std::string beam_config;
-
-    /**
-     * The number of beams on the sensor.
-     */
-    const int beam_count;
-
-    /**
-     * If is a RGB sensor or not.
-     */
-    const bool rgb;
-
-    /**
-     * Static method used to create ProductInfo classes.
-     *
-     * @throws std::runtime_error on a bad product info line.
-     *
-     * @param[in] product_info_string The product info string to create
-     *                                the ProductInfo class from.
-     * @return The new ProductInfo class.
-     */
-    OUSTER_API_FUNCTION
-    static ProductInfo create_product_info(const std::string& product_info_string);
-
-    /**
-     * Default constructor for ProductInfo that
-     * sets everything to blank.
-     */
-    OUSTER_API_FUNCTION
-    ProductInfo();
-
-   protected:
-    /**
-     * Constructor to initialize each of the members off of.
-     * @brief Constructor for ProductInfo that takes params (internal only)
-     *
-     * @param[in] product_info_string The full product line string.
-     * @param[in] form_factor The sensor form factor.
-     * @param[in] short_range If the sensor is short range or not.
-     * @param[in] beam_config The beam configuration for the sensor.
-     * @param[in] beam_count The number of beams for a sensor.
-     * @param[in] rgb If the sensor is RGB or not.
-     *
-     * @internal
-     */
-    OUSTER_API_FUNCTION
-    ProductInfo(std::string product_info_string, std::string form_factor, bool short_range,
-                std::string beam_config, int beam_count, bool rgb = false);
-};
-
-/**
- * Equality for ProductInfo.
- *
- * @param[in] lhs The first object to compare.
- * @param[in] rhs The second object to compare.
- *
- * @return lhs == rhs
- */
-OUSTER_API_FUNCTION
-bool operator==(const ProductInfo& lhs, const ProductInfo& rhs);
-
-/**
- * Inequality for ProductInfo.
- *
- * @param[in] lhs The first object to compare.
- * @param[in] rhs The second object to compare.
- *
- * @return lhs != rhs
- */
-OUSTER_API_FUNCTION
-bool operator!=(const ProductInfo& lhs, const ProductInfo& rhs);
-
-/**
- * Get string representation of a product info.
- *
- * @param[in] info Product Info to get the string representation from.
- *
- * @return string representation of the product info.
- */
-OUSTER_API_FUNCTION
-std::string to_string(const ProductInfo& info);
-
 namespace impl {
 struct SensorInfoCache;
-}
+}  // namespace impl
 
 /**
- * Stores parsed information from metadata.
+ * Common base for sensor metadata types such as LidarInfo and CameraInfo.
+ *
+ * Holds calibration shared by all sensor kinds. For now this is limited to the
+ * sensor-to-body extrinsic transform; other shared fields may be hoisted here
+ * as the API grows.
+ *
+ * @note Polymorphic base: instances may be held and iterated as
+ * std::shared_ptr<SensorInfo> (e.g. from FrameSetSource::sensor_info()) and
+ * downcast to their concrete type (LidarInfo, CameraInfo, ...) via
+ * std::dynamic_pointer_cast.
  */
-class OUSTER_API_CLASS SensorInfo {
+struct OUSTER_API_CLASS SensorInfo {
+   private:
     mutable impl::CachePtr<ouster::sdk::core::impl::SensorInfoCache> cache_;
 
    public:
-    /// Copy constructor for sensor_info.
-    OUSTER_API_FUNCTION
-    SensorInfo(const SensorInfo&);
-    /// Move constructor for SensorInfo.
-    OUSTER_API_FUNCTION
-    SensorInfo(SensorInfo&&);
-    OUSTER_API_FUNCTION
-    ~SensorInfo();
-    OUSTER_API_FUNCTION
-    SensorInfo& operator=(const SensorInfo&);
-
-    // clang-format off
-    uint64_t sn{};              ///< sensor serial number corresponding to prod_sn in
-                                ///< metadata.json
-    std::string
-        fw_rev{};               ///< fw revision corresponding to build_rev in metadata.json
-    std::string prod_line{};    ///< prod line
-
-    DataFormat format{};       ///< data format of sensor
-    std::vector<double>
-        beam_azimuth_angles{};  ///< beam azimuth angles for 3D projection
-    std::vector<double>
-        beam_altitude_angles{}; ///< beam altitude angles for 3D projection
-    double lidar_origin_to_beam_origin_mm{};  ///< distance between lidar origin
-                                              ///< and beam origin in mm
-    mat4d beam_to_lidar_transform =
-        mat4d::Zero();          ///< transform between beam and lidar frame
-    mat4d imu_to_sensor_transform =
-        mat4d::Zero();          ///< transform between sensor coordinate
-                                ///< frame and imu
-    mat4d lidar_to_sensor_transform =
-        mat4d::Zero();          ///< transform between lidar and sensor
-                                ///< coordinate frames
-    mat4d sensor_to_body =
-        mat4d::Zero();          ///< homogeneous transform from sensor frame to
-                                ///< body frame
-    uint32_t init_id{};         ///< initialization ID updated every reinit
-
-    std::string build_date{};   ///< build date from FW SensorInfo
-    std::string image_rev{};    ///< image rev from FW SensorInfo
-    std::string prod_pn{};      ///< prod pn
-    std::string status{};       ///< sensor status at time of pulling metadata
-
-    CalibrationStatus cal{};   ///< sensor calibration
-    SensorConfig config{};     ///< parsed sensor config if available from metadata
-    std::string user_data{};    ///< userdata from sensor if available
-    std::string client_version{};  ///< version of library that wrote metadata
-    nonstd::optional<ZoneSet> zone_set{};  ///< zone monitor configuration, if present
-
-    /**
-     * Constructs a SensorInfo object by parsing a metadata.
-     *
-     * @param[in] metadata JSON-formatted string representing sensor metadata.
-     * @throws std::runtime_error If the metadata string is empty.
-     */
-    OUSTER_API_FUNCTION
-    explicit SensorInfo(const std::string& metadata);
-
-    /* Empty constructor -- keep for  */
+    /// Default constructor.
+    ///
+    /// Defaulted out-of-line (see lidar_info.cpp) because the PIMPL cache_
+    /// member requires a complete SensorInfoCache type.
     OUSTER_API_FUNCTION
     SensorInfo();
 
-    /** Return an updated version of the metadata string reflecting any
-     * changes to the SensorInfo.
-     * Errors out if changes are incompatible but does not check for validity
-     *
-     * @return json serialized version of this object
-     */
+    /// Virtual destructor so SensorInfo can be used polymorphically.
+    ///
+    /// Defaulted out-of-line (see lidar_info.cpp) because the PIMPL cache_
+    /// member requires a complete SensorInfoCache type.
     OUSTER_API_FUNCTION
-    std::string to_json_string() const;
+    virtual ~SensorInfo();
+
+    /// Copy constructor.
+    OUSTER_API_FUNCTION
+    SensorInfo(const SensorInfo&);
+
+    /// Copy assignment operator.
+    OUSTER_API_FUNCTION
+    SensorInfo& operator=(const SensorInfo&);
+
+    /// Move constructor.
+    ///
+    /// Defaulted out-of-line (see lidar_info.cpp) because the PIMPL cache_
+    /// member requires a complete SensorInfoCache type.
+    ///
+    /// Not marked noexcept: CachePtr's move allocates a fresh cache for the
+    /// moved-from object, so the implicit specification is not noexcept, and
+    /// GCC rejects a defaulted move whose explicit exception-specification
+    /// differs from the implicit one. Let the compiler deduce it.
+    // NOLINTBEGIN(cppcoreguidelines-noexcept-move-operations)
+    OUSTER_API_FUNCTION
+    SensorInfo(SensorInfo&&);
+    // NOLINTEND(cppcoreguidelines-noexcept-move-operations)
+
+    /// Move assignment operator.
+    ///
+    /// Not marked noexcept for the same reason as the move constructor above.
+    // NOLINTBEGIN(cppcoreguidelines-noexcept-move-operations)
+    OUSTER_API_FUNCTION
+    SensorInfo& operator=(SensorInfo&&);
+    // NOLINTEND(cppcoreguidelines-noexcept-move-operations)
+
+    /// Sensor serial number.
+    uint64_t sn{};
+
+    /// Homogeneous transform from the sensor coordinate frame to the body frame.
+    /// Defaults to the identity, so the body frame coincides with the sensor
+    /// frame until extrinsics are supplied.
+    mat4d sensor_to_body = mat4d::Identity();
+
+    /// Homogeneous transform from the sensor coordinate frame to the IMU frame.
+    /// Lidar metadata provides this directly; other sensor kinds (e.g. cameras)
+    /// may leave it as the zero/identity default when no separate IMU extrinsic
+    /// exists.
+    mat4d imu_to_sensor_transform = mat4d::Zero();
+
+    // NOTE: the lidar-specific beam intrinsics (beam_azimuth_angles /
+    // beam_altitude_angles) and the beam_to_lidar_transform /
+    // lidar_to_sensor_transform live on LidarInfo, not this shared base, so a
+    // CameraInfo never carries them. Camera projection is derived from the
+    // pinhole intrinsics instead (see xyzlut.h / camera_info.h).
 
     /**
-     * Parse and return version info about this sensor.
+     * Width (number of columns) of a frame from this sensor.
      *
-     * @return sensor version info
+     * Overridden by concrete sensor types; the base returns 0.
+     *
+     * @return frame width in columns, or 0 in the base implementation.
      */
     OUSTER_API_FUNCTION
-    Version get_version() const;
-
-    /**
-     * Extracts and returns parsed product information for the sensor.
-     *
-     * @return A ProductInfo object containing the form factor, beam count, and other
-     *         relevant product metadata parsed from the SensorInfo.
-     */
-    OUSTER_API_FUNCTION
-    ProductInfo get_product_info() const;
-
-    /**
-     * Compares the current SensorInfo object to another and checks if the
-     * fields (excluding user metadata) are equal.
-     *
-     * @param[in] other Another SensorInfo object to compare with.
-     * @return True if key fields are equal, false otherwise.
-     */
-    OUSTER_API_FUNCTION
-    bool has_fields_equal(const SensorInfo& other) const;
-
-    /**
-     * Get the number of returns output by the sensor in its current setup.
-     *
-     * @return number of returns
-     */
-    OUSTER_API_FUNCTION
-    int num_returns() const;
-
-    /**
-     * Retrieves the width of a frame
-     *
-     * @return width of a frame.
-     */
-    OUSTER_API_FUNCTION
-    auto w() const -> decltype(format.columns_per_frame);  ///< returns the width of a frame (equivalent to format.columns_per_frame)
-
-    /**
-     * Retrieves the height of a frame
-     *
-     * @return height of a frame.
-     */
-    OUSTER_API_FUNCTION
-    auto h() const -> decltype(format.pixels_per_column);  ///< returns the height of a frame (equivalent to format.pixels_per_column)
-    // clang-format on
-
-    /**
-     * Gets a XYZLut for this sensor, caching between calls.
-     *
-     * @tparam T floating point type to use for the XYZLut: float or double
-     * @return cached xyzlut
-     *
-     * @see clear_xyzlut_cache()
-     */
-    template <typename T>
-    const XYZLutT<T>& xyzlut() const {
-        // this check is redundant, but need one that depends on T and always
-        // fails or else we get a compiler error even if this function isnt used
-        static_assert(std::is_same<T, float>() || std::is_same<T, double>(),
-                      "Unsupported type. Must use float or double.");
+    virtual size_t w() const {
+        return 0;
     }
 
     /**
+     * Height (number of rows) of a frame from this sensor.
+     *
+     * Overridden by concrete sensor types; the base returns 0.
+     *
+     * @return frame height in rows, or 0 in the base implementation.
+     */
+    OUSTER_API_FUNCTION
+    virtual size_t h() const {
+        return 0;
+    }
+
+    /**
+     * Rate at which this sensor produces frames.
+     *
+     * @return frame rate in frames per second.
+     */
+    OUSTER_API_FUNCTION
+    virtual int fps() const = 0;
+
+    /**
+     * Whether this sensor is capable of synchronizing with an external time
+     * source, and so may share a timebase with other sensors.
+     *
+     * @return true if the sensor supports an external timing source.
+     */
+    OUSTER_API_FUNCTION
+    virtual bool could_be_synchronized() const = 0;
+
+    /**
+     * Delay between the start of a capture and the timestamp reported for the
+     * resulting frame.
+     *
+     * @return capture latency in seconds.
+     */
+    OUSTER_API_FUNCTION
+    virtual double latency() const = 0;
+
+    /**
+     * Polymorphic copy. Returns a new SensorInfo of the concrete type (e.g.
+     * LidarInfo or CameraInfo), letting callers duplicate a sensor without
+     * knowing its kind.
+     *
+     * @return a shared_ptr to a copy of this SensorInfo.
+     */
+    OUSTER_API_FUNCTION
+    virtual std::shared_ptr<SensorInfo> clone() const = 0;
+
+    /**
+     * Return a JSON serialized representation of this sensor metadata.
+     *
+     * Implemented by concrete sensor types (LidarInfo, CameraInfo, ...).
+     *
+     * @return JSON serialized metadata string for this sensor.
+     */
+    OUSTER_API_FUNCTION
+    virtual std::string to_json_string() const = 0;
+
+    /**
+     * Construct the appropriate concrete SensorInfo subtype from a metadata
+     * JSON string, inferring the sensor kind from the JSON schema.
+     *
+     * A camera is recognized by the presence of a top-level `camera_info`
+     * object; anything else is parsed as lidar metadata (LidarInfo). Both
+     * subtypes share the SensorInfo base, so callers can hold the result as a
+     * std::shared_ptr and downcast via std::dynamic_pointer_cast when a
+     * concrete type is required.
+     *
+     * @param[in] json_string JSON-formatted sensor metadata string.
+     *
+     * @return a shared_ptr to a LidarInfo or CameraInfo populated from @p json_string.
+     */
+    OUSTER_API_FUNCTION
+    static std::shared_ptr<SensorInfo> from_json_string(const std::string& json_string);
+
+    /**
      * Clears cached data such as xyzluts calculated from other members.
+     *
+     * Call after changing members the cache is derived from, such as
+     * sensor_to_body. Pointers returned by xyzlut() earlier keep the LUT they
+     * share alive, so they stay valid but keep projecting with the old values.
      */
     OUSTER_API_FUNCTION
     void clear_cache();
 
     /**
-     * Get a default SensorInfo for the given lidar mode.
+     * Gets a XYZLut for this sensor, caching between calls.
      *
-     * @param[in] mode lidar mode to generate default SensorInfo for.
+     * The LUT is built on first use and shared with every pointer returned
+     * afterwards, until clear_cache() is called. Safe to call concurrently with
+     * other calls to xyzlut() and clear_cache().
      *
-     * @return default SensorInfo for the OS1-64.
+     * @tparam T floating point type to use for the XYZLut: float or double
+     * @return non-null pointer sharing ownership of the cached xyzlut; it stays
+     * valid even if the cache is cleared or this SensorInfo is destroyed
+     *
+     * @see clear_cache()
      */
-    OUSTER_API_FUNCTION
-    static std::shared_ptr<SensorInfo> from_default(LidarMode mode);
+    template <typename T>
+    std::shared_ptr<const XYZLutT<T>> xyzlut() const {
+        // this check is redundant, but need one that depends on T and always
+        // fails or else we get a compiler error even if this function isn't used
+        static_assert(std::is_same<T, float>() || std::is_same<T, double>(),
+                      "Unsupported type. Must use float or double.");
+    }
 };
 
 /// \cond
 template <>
-OUSTER_API_FUNCTION const XYZLutT<float>& SensorInfo::xyzlut() const;
+OUSTER_API_FUNCTION std::shared_ptr<const XYZLutT<float>> SensorInfo::xyzlut() const;
 template <>
-OUSTER_API_FUNCTION const XYZLutT<double>& SensorInfo::xyzlut() const;
+OUSTER_API_FUNCTION std::shared_ptr<const XYZLutT<double>> SensorInfo::xyzlut() const;
 /// \endcond
-
-/**
- * Equality for SensorInfo.
- *
- * @param[in] lhs The first object to compare.
- * @param[in] rhs The second object to compare.
- *
- * @return lhs == rhs
- */
-OUSTER_API_FUNCTION
-bool operator==(const SensorInfo& lhs, const SensorInfo& rhs);
-
-/**
- * Inequality for SensorInfo.
- *
- * @param[in] lhs The first object to compare.
- * @param[in] rhs The second object to compare.
- *
- * @return lhs != rhs
- */
-OUSTER_API_FUNCTION
-bool operator!=(const SensorInfo& lhs, const SensorInfo& rhs);
-
-/**
- * Equality of sensor calibration.
- *
- * @param[in] lhs The first object to compare.
- * @param[out] rhs The second object to compare.
- */
-OUSTER_API_FUNCTION
-bool operator==(const CalibrationStatus& lhs, const CalibrationStatus& rhs);
-
-/**
- * Inequality of sensor calibration.
- *
- * @param[in] lhs The first object to compare.
- * @param[out] rhs The second object to compare.
- */
-OUSTER_API_FUNCTION
-bool operator!=(const CalibrationStatus& lhs, const CalibrationStatus& rhs);
-
-/**
- * Get string representation of a Shot Limiting Status.
- *
- * @param[in] shot_limiting_status The shot limiting status to get the string
- *                                 representation of.
- *
- * @return string representation of the shot limiting status.
- */
-OUSTER_API_FUNCTION
-std::string to_string(ShotLimitingStatus shot_limiting_status);
-
-/**
- * Get string representation of Thermal Shutdown Status.
- *
- * @param[in] thermal_shutdown_status The thermal shutdown status to get the
- *                                    string representation of.
- *
- * @return string representation of thermal shutdown status.
- */
-OUSTER_API_FUNCTION
-std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
-
-/**
- * Parse metadata given path to a json file.
- *
- * @throw runtime_error if json file does not exist or is malformed.
- *
- * @param[in] json_file path to a json file containing sensor metadata.
- * @param[in] skip_beam_validation whether to skip validation on metadata - not
- *                                 for use on recorded data or metadata
- *                                 from sensors
- *
- * @return a SensorInfo struct populated with a subset of the metadata.
- */
-OUSTER_API_FUNCTION
-SensorInfo metadata_from_json(const std::string& json_file, bool skip_beam_validation = false);
-
-/**
- * Get a string representation of sensor calibration. Only set fields will be
- * represented.
- *
- * @param[in] cal a struct of calibration.
- *
- * @return string representation of sensor calibration.
- */
-OUSTER_API_FUNCTION
-std::string to_string(const CalibrationStatus& cal);
-
-/**
- * Get client version.
- *
- * @return client version string
- */
-OUSTER_API_FUNCTION
-std::string client_version();
 
 }  // namespace core
 }  // namespace sdk

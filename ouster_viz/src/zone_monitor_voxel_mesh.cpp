@@ -4,9 +4,9 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <stdexcept>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "ouster/core/lidar_frame.h"  // NOLINT(misc-include-cleaner,unused-includes) needed for destagger
@@ -14,10 +14,10 @@
 #include "ouster/core/types.h"
 #include "ouster/viz/point_viz.h"
 
-using ouster::sdk::core::SensorInfo;
+using ouster::sdk::core::LidarInfo;
 using std::array;
-using std::map;
 using std::pair;
+using std::unordered_map;
 using std::vector;
 namespace ouster {
 namespace sdk {
@@ -54,7 +54,9 @@ Val lerp_vector(const std::vector<Val>& vec, Idx idx) {
 // the voxel face corners. The voxels themselves have no physical meaning, so
 // we're not concerned that this interpolation would not correspond to a real
 // beam angle.
-Eigen::Vector3f direction_for_pixel(const SensorInfo& sensor_info, double row, double col) {
+namespace {
+
+Eigen::Vector3f direction_for_pixel(const LidarInfo& sensor_info, double row, double col) {
     double theta_encoder = 2.0 * M_PI * (1.0 - col / sensor_info.w());
     double phi = M_PI * lerp_vector(sensor_info.beam_altitude_angles, row) / 180.0;
     Eigen::Vector3f direction(static_cast<float>(std::cos(theta_encoder) * std::cos(phi)),
@@ -63,9 +65,11 @@ Eigen::Vector3f direction_for_pixel(const SensorInfo& sensor_info, double row, d
     return direction;
 }
 
+}  // namespace
+
 // Returns a direction vector for a given pixel (row, col) in the sensor frame,
 // accounting for the lidar to sensor transform.
-Eigen::Vector3f direction_rot(const SensorInfo& sensor_info, double row, double col) {
+Eigen::Vector3f direction_rot(const LidarInfo& sensor_info, double row, double col) {
     auto dir = direction_for_pixel(sensor_info, row, col);
     auto& rot = sensor_info.lidar_to_sensor_transform.topLeftCorner(3, 3).cast<float>();
     return rot * dir / 1000.0;  // convert mm to meters
@@ -74,7 +78,7 @@ Eigen::Vector3f direction_rot(const SensorInfo& sensor_info, double row, double 
 // Returns an offset vector for a given pixel (row, col) in the sensor frame,
 // accounting for the beam to lidar and lidar to sensor transforms. Once again
 // this is interpolated for sub-pixel accuracy to compute voxel face corners.
-Eigen::Vector3f offset(const SensorInfo& sensor_info, double row, double col) {
+Eigen::Vector3f offset(const LidarInfo& sensor_info, double row, double col) {
     double beam_to_lidar_euclidean_distance_mm = std::sqrt(
         (sensor_info.beam_to_lidar_transform(0, 3) * sensor_info.beam_to_lidar_transform(0, 3)) +
         (sensor_info.beam_to_lidar_transform(2, 3) * sensor_info.beam_to_lidar_transform(2, 3)));
@@ -95,7 +99,7 @@ Eigen::Vector3f offset(const SensorInfo& sensor_info, double row, double col) {
 }
 
 // Pre-computes direction and offset vectors for every voxel corner.
-VertexLookupTable precompute_voxel_vertices(const SensorInfo& metadata) {
+VertexLookupTable precompute_voxel_vertices(const LidarInfo& metadata) {
     // The grid of vertices is one larger than the grid of pixels in each
     // dimension.
     const int n_rows = static_cast<int>(metadata.h());
@@ -113,6 +117,14 @@ VertexLookupTable precompute_voxel_vertices(const SensorInfo& metadata) {
     return lookup_table;
 }
 
+// Simple (collision free) hash function for lidar pixel coordinates
+struct PairHash {
+    template <class T1, class T2>
+    std::size_t operator()(const std::pair<T1, T2>& pair) const {
+        return (pair.first << 16) | pair.second;
+    }
+};
+
 // Generate the voxels for each pixel in the range images, and stitch them
 // together. The vertex positions are calculated using the pre-computed
 // direction and offset vectors from the lookup table, scaled by the range value
@@ -127,9 +139,13 @@ VertexLookupTable precompute_voxel_vertices(const SensorInfo& metadata) {
 std::tuple<std::vector<Vertex3f>, std::vector<uint32_t>, std::vector<uint32_t>>
 voxel_style_mesh_components_from_range_images_with_lut(
     const ouster::sdk::core::img_t<uint32_t>& near_range_image_mm,
-    const ouster::sdk::core::img_t<uint32_t>& far_range_image_mm, const SensorInfo& metadata,
+    const ouster::sdk::core::img_t<uint32_t>& far_range_image_mm, const LidarInfo& metadata,
     const VertexLookupTable& vertex_lookup, bool add_faces, bool add_edges) {
-    auto normalize = [](const Eigen::Vector3f& vec) { return vec / vec.norm(); };
+    // Return a materialized Vector3f (not an Eigen expression template). The
+    // callers invoke this on temporary `.cross(...)` results and store the
+    // result in an `auto` variable; returning an expression would leave that
+    // variable dangling once the temporary is destroyed at end-of-statement.
+    auto normalize = [](const Eigen::Vector3f& vec) -> Eigen::Vector3f { return vec / vec.norm(); };
     vector<Vertex3f> vertices;
     vector<uint32_t> edges;
     vector<uint32_t> faces;
@@ -137,8 +153,9 @@ voxel_style_mesh_components_from_range_images_with_lut(
 
     // This map keeps track of the vertices created for each pixel in each face.
     // We'll use it to stitch together adjacent voxels.
-    vector<map<pair<int, int>, vector<Vertex3f>>> verts = {map<pair<int, int>, vector<Vertex3f>>(),
-                                                           map<pair<int, int>, vector<Vertex3f>>()};
+    vector<unordered_map<pair<int, int>, vector<Vertex3f>, PairHash>> verts = {
+        unordered_map<pair<int, int>, vector<Vertex3f>, PairHash>(),
+        unordered_map<pair<int, int>, vector<Vertex3f>, PairHash>()};
 
     auto near_destaggered = ouster::sdk::core::destagger<uint32_t>(
         near_range_image_mm, metadata.format.pixel_shift_by_row, false);
@@ -160,7 +177,10 @@ voxel_style_mesh_components_from_range_images_with_lut(
             // The per-pixel center direction is not shared, so calculate it
             // here.
             const auto center_direction = direction_rot(metadata, row, col);
-            const auto face_normal = -normalize(center_direction);
+            // Materialize into a concrete Vector3f: `-normalize(...)` is an Eigen
+            // expression that references normalize()'s temporary result, so
+            // deducing `auto` here would leave face_normal dangling.
+            const Eigen::Vector3f face_normal = -normalize(center_direction);
 
             // Get the four corners for pixel (row,col) from the shared vertex
             // lookup table. Pixel (row,col) is defined by vertices (row,col),
@@ -313,7 +333,7 @@ voxel_style_mesh_components_from_range_images_with_lut(
 
 ouster::sdk::viz::Mesh voxel_style_mesh_from_zone_image_pair(
     ouster::sdk::core::Zrb& zone_image_pair,  // TODO[tws] const
-    const SensorInfo& sensor_info, const VertexLookupTable& vertex_lookup) {
+    const LidarInfo& sensor_info, const VertexLookupTable& vertex_lookup) {
     auto res = voxel_style_mesh_components_from_range_images_with_lut(
         zone_image_pair.near_range_mm, zone_image_pair.far_range_mm, sensor_info, vertex_lookup,
         false, true);

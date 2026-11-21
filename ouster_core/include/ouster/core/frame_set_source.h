@@ -19,6 +19,7 @@
 #include "ouster/core/generic.h"
 #include "ouster/core/impl/iterator_base.h"
 #include "ouster/core/lidar_frame.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/core/types.h"
 
 namespace ouster {
@@ -88,8 +89,17 @@ class OUSTER_API_CLASS FrameSetSource {
     OUSTER_API_FUNCTION
     virtual FrameSetIterator end() const;
 
-    /// Get the sensor info for each sensor in this dataset
-    /// @return sensor info for each sensor
+    /// Get the info for every sensor (of any kind) in this dataset, in a single
+    /// combined container.
+    ///
+    /// The returned vector is index-aligned with the frame slots of the
+    /// FrameSets produced by this source: the info at index @c i describes the
+    /// sensor whose frame occupies slot @c i. Entries may be downcast to their
+    /// concrete type (LidarInfo, CameraInfo, ...) via
+    /// std::dynamic_pointer_cast when a caller needs sensor-kind-specific
+    /// fields. Do not filter this list by type and then use the filtered
+    /// position as a frame-slot index; that breaks the index alignment.
+    /// @return combined sensor info for each sensor
     OUSTER_API_FUNCTION
     virtual const std::vector<std::shared_ptr<SensorInfo>>& sensor_info() const = 0;
 
@@ -124,12 +134,6 @@ class OUSTER_API_CLASS FrameSetSource {
     /// @throw std::runtime_error if unindexed
     OUSTER_API_FUNCTION
     virtual const std::vector<size_t>& frames_num() const;
-
-    /// @deprecated Use frames_num() instead
-    /// @return frame count for each sensor in the file
-    OUSTER_DEPRECATED_MSG("frames_num()", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION
-    virtual const std::vector<size_t>& scans_num() const;
 
     /// Returns the Nth frame in time order
     /// Supports negative indices for python-like indexing behavior.
@@ -178,10 +182,14 @@ class OUSTER_API_CLASS FrameSetSource {
         return T(std::move(*this), sensor_idx);
     }
 
-    /// Slice a frame set source
-    /// @tparam T hack to allow usage of yet-undefined class. Do not change.
-    /// @param[in] l slice
-    /// @return sliced frame set source
+    /**
+     * Slice a frame set source.
+     *
+     * @tparam T hack to allow usage of yet-undefined class. Do not change.
+     * @param[in] l slice specification as optional start, end, and step values.
+     *
+     * @return sliced frame set source
+     */
     template <class T = Slicer>
     T operator[](std::initializer_list<nonstd::optional<int>> l) const& {
         Slice s;
@@ -197,7 +205,7 @@ class OUSTER_API_CLASS FrameSetSource {
         return T(*this, s.start, s.end, s.step);
     }
 
-    /// @copydoc operator[](std::initializer_list<nonstd::optional<int>>)
+    /** @copydoc FrameSetSource::operator[](std::initializer_list<nonstd::optional<int>>) const & */
     template <class T = Slicer>
     T operator[](std::initializer_list<nonstd::optional<int>> l) && {
         Slice s;
@@ -256,28 +264,18 @@ class OUSTER_API_CLASS FrameSetSource {
 
    protected:
     virtual void close() = 0;
+
+    /// Close another source, allowing derived sources to close sources they wrap.
+    /// @param[in] source source to close
+    static void close_source(FrameSetSource& source) {
+        source.close();
+    }
+
     FrameSetSourceMetadataSet metadata_;
 
     OUSTER_API_FUNCTION
     virtual void add_metadata(const std::string& name, FrameSetSourceMetadata obj);
 };
-
-}  // namespace core
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace core {
-
-OUSTER_DEPRECATED_TYPE(ScanSource, FrameSetSource, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(ScanSourceMetadata, FrameSetSourceMetadata,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(ScanSourceMetadataSet, FrameSetSourceMetadataSet,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(ScanIterator, FrameSetIterator, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
 
 }  // namespace core
 }  // namespace sdk

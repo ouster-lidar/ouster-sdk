@@ -26,7 +26,7 @@ inline std::string getenvs(const std::string& var) {
     return res ? std::string{res} : std::string{};
 }
 
-void sinfo_populator(SensorInfo& info, const std::string& /*name*/, uint64_t sn,
+void sinfo_populator(LidarInfo& info, const std::string& /*name*/, uint64_t sn,
                      const std::string& fw_rev, const LidarMode mode, const std::string& prod_line,
                      const DataFormat& format, const std::vector<double>& beam_azimuth_angles,
                      const std::vector<double> beam_altitude_angles,
@@ -37,7 +37,7 @@ void sinfo_populator(SensorInfo& info, const std::string& /*name*/, uint64_t sn,
                      const nonstd::optional<int> udp_port_imu, const std::string& build_date,
                      const std::string& image_rev, const std::string& prod_pn,
                      const std::string& status, const CalibrationStatus& cal,
-                     const SensorConfig& config, std::string client_version) {
+                     const LidarConfig& config, std::string client_version) {
     info.sn = sn;
     info.fw_rev = fw_rev;
     info.prod_line = prod_line;
@@ -60,38 +60,41 @@ void sinfo_populator(SensorInfo& info, const std::string& /*name*/, uint64_t sn,
     info.config.udp_port_lidar = udp_port_lidar;
     info.config.udp_port_imu = udp_port_imu;
     info.client_version = client_version;
+    if (!info.config.udp_dest.value_or("").empty() && info.config.udp_port_imu.value_or(0) != 0) {
+        info.format.imu_enabled = true;
+    }
 }
 
-static SensorInfo si_1_12_os1_991913000010_64;
-static SensorInfo si_1_12_os1_991937000062_16A0_legacy;
-static SensorInfo si_1_12_os1_991937000062_64_legacy;
-static SensorInfo si_1_13_os1_991913000010_64;
-static SensorInfo si_1_13_os1_991937000062_16A0_legacy;
-static SensorInfo si_1_13_os1_991937000062_32A02_legacy;
-static SensorInfo si_1_13_os1_991937000062_64_legacy;
-static SensorInfo si_1_14_6cccd_os_882002000138_128_legacy;
-static SensorInfo si_1_14_6cccd_os_882002000138_32U0_legacy;
-static SensorInfo si_1_14_beta_os1_991937000062_16A0_legacy;
-static SensorInfo si_1_14_beta_os1_991937000062_64_legacy;
-static SensorInfo si_ouster_studio_reduced_config_v1;
-static SensorInfo si_2_0_rc2_os_992011000121_32U0_legacy;
-static SensorInfo si_2_0_0_os1_992008000494_128_col_win_legacy;
-static SensorInfo si_2_0_0_os1_991913000010_64;
-static SensorInfo si_2_1_2_os1_991913000010_64_legacy;
-static SensorInfo si_2_1_2_os1_991913000010_64;
-static SensorInfo si_2_2_os_992119000444_128_legacy;
-static SensorInfo si_2_2_os_992119000444_128;
-static SensorInfo si_2_3_1_os_992146000760_128_legacy;
-static SensorInfo si_2_3_1_os_992146000760_128;
-static SensorInfo si_2_4_0_os_992146000760_128;
-static SensorInfo si_2_4_0_os_992146000760_128_legacy;
-static SensorInfo si_2_5_0_os_992146000760_128;
-static SensorInfo si_2_5_0_os_992146000760_128_legacy;
-static SensorInfo si_3_0_1_os_122246000293_128_legacy;
-static SensorInfo si_3_0_1_os_122246000293_128;
+static LidarInfo si_1_12_os1_991913000010_64;
+static LidarInfo si_1_12_os1_991937000062_16A0_legacy;
+static LidarInfo si_1_12_os1_991937000062_64_legacy;
+static LidarInfo si_1_13_os1_991913000010_64;
+static LidarInfo si_1_13_os1_991937000062_16A0_legacy;
+static LidarInfo si_1_13_os1_991937000062_32A02_legacy;
+static LidarInfo si_1_13_os1_991937000062_64_legacy;
+static LidarInfo si_1_14_6cccd_os_882002000138_128_legacy;
+static LidarInfo si_1_14_6cccd_os_882002000138_32U0_legacy;
+static LidarInfo si_1_14_beta_os1_991937000062_16A0_legacy;
+static LidarInfo si_1_14_beta_os1_991937000062_64_legacy;
+static LidarInfo si_ouster_studio_reduced_config_v1;
+static LidarInfo si_2_0_rc2_os_992011000121_32U0_legacy;
+static LidarInfo si_2_0_0_os1_992008000494_128_col_win_legacy;
+static LidarInfo si_2_0_0_os1_991913000010_64;
+static LidarInfo si_2_1_2_os1_991913000010_64_legacy;
+static LidarInfo si_2_1_2_os1_991913000010_64;
+static LidarInfo si_2_2_os_992119000444_128_legacy;
+static LidarInfo si_2_2_os_992119000444_128;
+static LidarInfo si_2_3_1_os_992146000760_128_legacy;
+static LidarInfo si_2_3_1_os_992146000760_128;
+static LidarInfo si_2_4_0_os_992146000760_128;
+static LidarInfo si_2_4_0_os_992146000760_128_legacy;
+static LidarInfo si_2_5_0_os_992146000760_128;
+static LidarInfo si_2_5_0_os_992146000760_128_legacy;
+static LidarInfo si_3_0_1_os_122246000293_128_legacy;
+static LidarInfo si_3_0_1_os_122246000293_128;
 
 // for lookup by name
-const std::map<std::string, SensorInfo*> expected_sensor_infos{
+const std::map<std::string, LidarInfo*> expected_sensor_infos{
     {"1_12_os1-991913000010-64", &si_1_12_os1_991913000010_64},
     {"1_12_os1-991937000062-16A0_legacy", &si_1_12_os1_991937000062_16A0_legacy},
     {"1_12_os1-991937000062-64_legacy", &si_1_12_os1_991937000062_64_legacy},
@@ -397,10 +400,10 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
 
 };
 // Add test data here: these are the base names for input .json files
-// and populated structeds from populated_expected
+// and populated structs from populated_expected
 //
 // Expected output files will need to be re-generated whenever
-// SensorInfo or the parsing output changes
+// LidarInfo or the parsing output changes
 // clang-format off
 
 //clang-format off
@@ -409,7 +412,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
     protected:
     static void SetUpTestSuite() {
 
-        SensorConfig config{};
+        LidarConfig config{};
         config.udp_dest="169.254.91.92";
         config.multipurpose_io_mode = MultipurposeIOMode::OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
@@ -474,7 +477,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
         sinfo_populator(si_1_12_os1_991937000062_64_legacy,
@@ -499,10 +502,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.azimuth_window = std::make_pair(0, 36000);
         config.lidar_mode = LidarMode::_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::OFF;
@@ -592,7 +595,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
         sinfo_populator(si_1_14_6cccd_os_882002000138_128_legacy,
@@ -617,7 +620,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102144-A",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
         sinfo_populator(si_1_14_6cccd_os_882002000138_32U0_legacy,
@@ -642,7 +645,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102144-A",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
         sinfo_populator( si_1_14_beta_os1_991937000062_16A0_legacy,
@@ -667,7 +670,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
         sinfo_populator(si_1_14_beta_os1_991937000062_64_legacy,
@@ -692,7 +695,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101855-02",
             "INITIALIZING",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
         sinfo_populator(si_ouster_studio_reduced_config_v1,
@@ -717,7 +720,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "",
             "",
             CalibrationStatus{},
-            SensorConfig{}, ""
+            LidarConfig{}, ""
         );
 
         sinfo_populator(si_2_0_rc2_os_992011000121_32U0_legacy,
@@ -742,7 +745,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102145-B",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, "0.1.0-dev0"
+            LidarConfig{}, "0.1.0-dev0"
         );
 
         sinfo_populator(si_2_0_0_os1_992008000494_128_col_win_legacy,
@@ -767,10 +770,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102145-A",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, "0.2.0-dev0"
+            LidarConfig{}, "0.2.0-dev0"
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.operating_mode = OperatingMode::NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.lidar_mode = LidarMode::_1024x10;
@@ -837,10 +840,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-101396-03",
             "RUNNING",
             CalibrationStatus(),
-            SensorConfig{}, "ouster_client 0.2.2dev0"
+            LidarConfig{}, "ouster_client 0.2.2dev0"
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.operating_mode = OperatingMode::NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.lidar_mode = LidarMode::_1024x10;
@@ -908,10 +911,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-102145-05",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, "ouster_client 0.3.0"
+            LidarConfig{}, "ouster_client 0.3.0"
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.operating_mode = OperatingMode::NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
@@ -982,10 +985,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, "ouster_client 0.4.1"
+            LidarConfig{}, "ouster_client 0.4.1"
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.operating_mode = OperatingMode::NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
@@ -1034,7 +1037,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             config, ""
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
         config.lidar_mode = LidarMode::_1024x10;
@@ -1105,7 +1108,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, "ouster_client 0.5.3dev3"
+            LidarConfig{}, "ouster_client 0.5.3dev3"
         );
 
         sinfo_populator( si_3_0_1_os_122246000293_128_legacy,
@@ -1130,10 +1133,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-104682-C",
             "RUNNING",
             CalibrationStatus{},
-            SensorConfig{}, "ouster_client 0.7.1"
+            LidarConfig{}, "ouster_client 0.7.1"
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
         config.lidar_mode = LidarMode::_1024x10;
@@ -1204,10 +1207,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             "840-103575-06",
             "RUNNING",
             CalibrationStatus(),
-            SensorConfig{}, "ouster_client 0.8.0dev0"
+            LidarConfig{}, "ouster_client 0.8.0dev0"
         );
 
-        config = SensorConfig{};
+        config = LidarConfig{};
         config.azimuth_window = std::make_pair<int, int>(583, 39402);
         config.columns_per_packet = 16;
         config.lidar_mode = LidarMode::_1024x10;
@@ -1290,17 +1293,17 @@ testing::Values(
 std::string data_dir = ".";
 
 // Backwards-compatibility test for meta json parsing: compare previously
-// parsed SensorInfo structs to the output of metadata_from_json
+// parsed LidarInfo structs to the output of metadata_from_json
 TEST_P(MetaJsonTest, MetadataFromJson) {
     std::string param = GetParam();
 
     auto data_dir = getenvs("DATA_DIR");
 
     // parse json file
-    SensorInfo si = metadata_from_json(data_dir + "/" + param + ".json");
+    LidarInfo si = metadata_from_json(data_dir + "/" + param + ".json");
 
     // compare with previously parsed struct from bcompat_sensor_info_data.h
-    const SensorInfo si_expected = *(expected_sensor_infos.at(param));
+    const LidarInfo si_expected = *(expected_sensor_infos.at(param));
 
     EXPECT_EQ(si.sn, si_expected.sn);
     EXPECT_EQ(si.fw_rev, si_expected.fw_rev);
@@ -1381,14 +1384,14 @@ void make_expected(const std::string& path, const std::vector<std::string>& actu
 }
 
 // Backwards-compatibility test for meta json parsing: compare previously
-// parsed SensorInfo structs to the output of metadata_from_json
+// parsed LidarInfo structs to the output of metadata_from_json
 TEST_P(MetaJsonTest, MetadataErrorTests) {
     std::string param = GetParam();
 
     auto data_dir = getenvs("DATA_DIR");
 
     // parse json file
-    nonstd::optional<SensorInfo> sensor_info;
+    nonstd::optional<LidarInfo> sensor_info;
     ValidatorIssues issues;
 
     std::ifstream ifs;
@@ -1405,7 +1408,7 @@ TEST_P(MetaJsonTest, MetadataErrorTests) {
         actual_issues.push_back(it.get_path());
     }
     for (auto it : issues.information) {
-        // ignore config related infos since they arent important and change
+        // ignore config related infos since they aren't important and change
         // every time we add or change a config option for new FWs
         if (it.get_path().find(".config_params") != std::string::npos) {
             continue;

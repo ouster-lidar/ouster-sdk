@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/camera_info.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/core/types.h"
 #include "ouster/core/visibility.h"
 #include "ouster/osf/buffer.h"
@@ -23,7 +25,16 @@ namespace sdk {
 namespace osf {
 
 /**
- * Metadata entry to store lidar SensorInfo, i.e. Ouster sensor configuration.
+ * Metadata entry storing a sensor's metadata (calibration/config) as a JSON
+ * string in the OSF footer.
+ *
+ * @note Despite the historical name, this entry stores metadata for *any*
+ * sensor kind - both ouster::sdk::core::LidarInfo and
+ * ouster::sdk::core::CameraInfo are serialized through this single type. The
+ * concrete subtype is inferred from the JSON schema on read (see
+ * ouster::sdk::core::SensorInfo::from_json_string); the name and OSF type string are kept
+ * for backward compatibility. Use sensor_info() for the generic (base) accessor
+ * and info() only when the entry is known to describe a lidar.
  *
  * OSF type:
  *   ouster/v1/os_sensor/LidarSensor
@@ -32,30 +43,50 @@ namespace osf {
  *   fb/os_sensor/lidar_sensor.fbs
  */
 class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
-    using sensor_info = ouster::sdk::core::SensorInfo;
-
    public:
     /**
-     * @param[in] sensor_info Initialize the LidarSensor with a sensor_info
+     * @param[in] sensor_info Initialize the LidarSensor with a LidarInfo
      * object.
      */
     OUSTER_API_FUNCTION
-    explicit LidarSensor(const sensor_info& sensor_info);
+    explicit LidarSensor(const ouster::sdk::core::LidarInfo& sensor_info);
 
     /**
-     * @param[in] sensor_metadata Initialize the LidarSensor with a json string
-     *                            representation of the sensor_info object.
+     * @param[in] camera_info Initialize the entry with a CameraInfo object.
+     * Cameras reuse this same footer metadata type as lidars.
+     */
+    OUSTER_API_FUNCTION
+    explicit LidarSensor(const ouster::sdk::core::CameraInfo& camera_info);
+
+    /**
+     * @param[in] sensor_metadata Initialize the entry with a json string
+     *                            representation of a LidarInfo or CameraInfo
+     *                            object. The concrete type is inferred from the
+     *                            JSON schema.
      */
     OUSTER_API_FUNCTION
     explicit LidarSensor(const std::string& sensor_metadata);
 
     /**
-     * Returns the sensor_info associated with the LidarSensor.
+     * Returns the sensor metadata associated with this entry as the polymorphic
+     * base type. Downcast with std::dynamic_pointer_cast to obtain the concrete
+     * LidarInfo or CameraInfo.
      *
-     * @return The sensor_info associated with the LidarSensor.
+     * @return The SensorInfo associated with this entry.
      */
     OUSTER_API_FUNCTION
-    const sensor_info& info() const;
+    std::shared_ptr<ouster::sdk::core::SensorInfo> sensor_info() const;
+
+    /**
+     * Returns the LidarInfo associated with the entry.
+     *
+     * @throws std::runtime_error if this entry stores a non-lidar sensor (e.g.
+     *         a CameraInfo). Prefer sensor_info() when the kind is not known.
+     *
+     * @return The LidarInfo associated with the entry.
+     */
+    OUSTER_API_FUNCTION
+    const ouster::sdk::core::LidarInfo& info() const;
 
     /**
      * Returns the json string representation sensor_info associated
@@ -75,7 +106,7 @@ class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
     /**
      * Create a LidarSensor object from a byte array.
      *
-     * @todo Figure out why this wasnt just done as a constructor overload.
+     * @todo Figure out why this wasn't just done as a constructor overload.
      *
      * @relates MetadataEntry::from_buffer
      *
@@ -107,12 +138,13 @@ class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
 
    private:
     /**
-     * The internal sensor_info object.
+     * The internal sensor metadata object (LidarInfo or CameraInfo), held via
+     * the polymorphic base type.
      */
-    sensor_info sensor_info_;
+    std::shared_ptr<ouster::sdk::core::SensorInfo> sensor_info_;
 
     /**
-     * The internal json string representation of the sensor_info object.
+     * The internal json string representation of the sensor metadata object.
      */
     const std::string metadata_;
 };

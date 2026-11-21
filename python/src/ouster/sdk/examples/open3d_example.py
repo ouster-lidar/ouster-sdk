@@ -148,15 +148,16 @@ def viewer_3d(frames: core.FrameSetSource, paused: bool = False) -> None:
 
     Args:
         pcap_path: path to the pcap file
-        metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
-        num: frame number in a given pcap file (satrs from *0*)
+        metadata_path: path to the .json with metadata (aka :class:`.LidarInfo`)
+        num: frame number in a given pcap file (starts from *0*)
     """
 
     # visualizer state
     frames_iter = iter(frames)
     frame = next(frames_iter)[0]
-    assert frame is not None
+    assert isinstance(frame, core.LidarFrame)
     metadata = frames.sensor_info[0]
+    assert isinstance(metadata, core.LidarInfo)
     xyzlut = core.XYZLut(metadata)
 
     # get pixel fields only (e.g. range, signal, reflectivity) to visualize in 2d image and colormap

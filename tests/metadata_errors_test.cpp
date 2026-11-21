@@ -37,7 +37,7 @@ TEST_P(MetaErrorsFiles, MetadataParsingExceptions) {
 
     EXPECT_ANY_THROW({
         // parse json file
-        const ouster::sdk::core::SensorInfo si =
+        const ouster::sdk::core::LidarInfo si =
             ouster::sdk::core::metadata_from_json(data_dir + "/malformed/" + param + ".json");
     });
 }

@@ -10,11 +10,15 @@
 #include <jsoncons/json_parser.hpp>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <vector>
 
 #include "flatbuffers/flatbuffers.h"
+#include "ouster/core/camera_info.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/sensor_info.h"
 // We need this for the v2 namespace.
 #include "ouster/core/types.h"
 #include "ouster/osf/buffer.h"
@@ -25,7 +29,9 @@ namespace ouster {
 namespace sdk {
 namespace osf {
 
-using sensor_info = ouster::sdk::core::SensorInfo;
+using ouster::sdk::core::CameraInfo;
+using ouster::sdk::core::LidarInfo;
+using ouster::sdk::core::SensorInfo;
 
 namespace {
 
@@ -72,14 +78,29 @@ std::unique_ptr<std::string> restore_lidar_sensor(const OsfBuffer& buf) {
 
 }  // namespace
 
-LidarSensor::LidarSensor(const sensor_info& sensor_info)
-    : sensor_info_(sensor_info), metadata_(sensor_info.to_json_string()) {}
+LidarSensor::LidarSensor(const LidarInfo& sensor_info)
+    : sensor_info_(std::make_shared<LidarInfo>(sensor_info)),
+      metadata_(sensor_info.to_json_string()) {}
+
+LidarSensor::LidarSensor(const CameraInfo& camera_info)
+    : sensor_info_(std::make_shared<CameraInfo>(camera_info)),
+      metadata_(camera_info.to_json_string()) {}
 
 LidarSensor::LidarSensor(const std::string& sensor_metadata)
-    : sensor_info_(sensor_metadata), metadata_(sensor_metadata) {}
+    : sensor_info_(SensorInfo::from_json_string(sensor_metadata)), metadata_(sensor_metadata) {}
 
-const sensor_info& LidarSensor::info() const {
+std::shared_ptr<SensorInfo> LidarSensor::sensor_info() const {
     return sensor_info_;
+}
+
+const LidarInfo& LidarSensor::info() const {
+    auto* lidar = dynamic_cast<const LidarInfo*>(sensor_info_.get());
+    if (lidar == nullptr) {
+        throw std::runtime_error(
+            "LidarSensor::info(): this metadata entry does not store a LidarInfo "
+            "(it may describe a camera). Use sensor_info() instead.");
+    }
+    return *lidar;
 }
 
 const std::string& LidarSensor::metadata() const {
@@ -108,7 +129,8 @@ std::unique_ptr<MetadataEntry> LidarSensor::from_buffer(const OsfBuffer& buf) {
 std::string LidarSensor::repr() const {
     jsoncons::json root;
 
-    std::istringstream temp(sensor_info_.to_json_string());
+    // Print the original metadata-string so we do not mutate it by encoding->decoding
+    std::istringstream temp(metadata_);
 
     jsoncons::json_decoder<jsoncons::json> temp_decoder;
     jsoncons::json_stream_reader reader(temp, temp_decoder);

@@ -7,17 +7,21 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "nonstd/optional.hpp"
+#include "ouster/algorithm/impl/custom_voxel_downsample.h"
 #include "ouster/algorithm/normals.h"
-#include "ouster/algorithm/voxel_downsample.h"
 #include "ouster/core/impl/logging.h"
 #include "ouster/core/impl/transformation.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/open_source.h"
 #include "ouster/core/pose_util.h"
+#include "ouster/core/typedefs.h"
 #include "ouster/core/voxel_hash_map.h"
 #include "ouster/mapping/impl/utils.h"
 #include "ouster/mapping/pose_optimizer_node.h"
+#include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_frame.h"
 #include "ouster/osf/writer.h"
@@ -35,22 +39,29 @@ using ouster::sdk::core::logger;
 Trajectory::Trajectory(const std::string& osf_file, double key_frame_distance)
     : input_osf_file(osf_file) {
     ouster::sdk::osf::Reader reader(osf_file);
+    // LidarSensor footer entries store either LidarInfo or CameraInfo; keep only
+    // the lidar ones for trajectory estimation.
     const auto lidar_sensors = reader.meta_store().find<ouster::sdk::osf::LidarSensor>();
-    if (lidar_sensors.size() > 1) {
+    std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>> lidar_infos;
+    for (const auto& kv : lidar_sensors) {
+        auto lidar =
+            std::dynamic_pointer_cast<ouster::sdk::core::LidarInfo>(kv.second->sensor_info());
+        if (lidar) {
+            lidar_infos.push_back(lidar);
+        }
+    }
+    if (lidar_infos.size() > 1) {
         throw std::runtime_error("Multi sensor recording is not supported for now.");
     }
-    for (const auto& kv : lidar_sensors) {
-        const auto& value = kv.second;
-        info = value->info();
-        xyz_lut = std::make_shared<ouster::sdk::core::XYZLut>(info, true);
-        break;
+    if (!lidar_infos.empty()) {
+        info = *lidar_infos.front();
     }
     logger().info("Preparing data ...");
     prepare_data(osf_file, key_frame_distance);
 }
 
 void Trajectory::prepare_data(const std::string& osf_file, double node_gap) {
-    // open the source indexed and decode no fields since we arent using any
+    // open the source indexed and decode no fields since we aren't using any
     auto source = ouster::sdk::open_source(osf_file, [](auto& req) {
         req.index = true;
         req.field_names = std::vector<std::string>();
@@ -58,6 +69,9 @@ void Trajectory::prepare_data(const std::string& osf_file, double node_gap) {
 
     uint32_t column_count = 0;
     uint32_t i = 0;
+    // sensor_info() is index-aligned with individual_index() (unified sensor
+    // index / frame-slot order), so iterate it directly rather than a filtered
+    // per-type view.
     for (const auto& sensor : source.sensor_info()) {
         column_count += source.individual_index()[i].size() * sensor->w();
         i++;
@@ -69,11 +83,7 @@ void Trajectory::prepare_data(const std::string& osf_file, double node_gap) {
     size_t frame_num = source.size();
     uint32_t frame_index = 0;
     for (const auto& frame_set : source) {
-        for (const auto& frame : frame_set) {
-            if (!frame) {
-                continue;
-            }
-
+        for (const auto& frame : frame_set.valid_lidar_frames()) {
             auto frame_ts = frame->timestamp();
             int first_col = frame->get_first_valid_column();
             int last_col = frame->get_last_valid_column();
@@ -293,11 +303,7 @@ std::shared_ptr<Node> Trajectory::create_node_by_ts(uint64_t timestamp, bool gen
     auto part_osf = source[{start_index, end_index + 1u}];
 
     for (const auto& frame_set : part_osf) {
-        for (auto& frame : frame_set) {
-            if (!frame) {
-                continue;
-            }
-
+        for (auto& frame : frame_set.valid_lidar_frames()) {
             uint64_t frame_ts = 0;
             try {
                 frame_ts = frame->timestamp()[frame->get_first_valid_column()];
@@ -518,7 +524,7 @@ std::shared_ptr<Node> Trajectory::insert_node(const LidarFrame& lidar_frame,
             return data;
         }
 
-        const PointCloudXYZd pts = (*xyz_lut)(lidar_frame);
+        const PointCloudXYZd pts = (*info.xyzlut<double>())(lidar_frame);
 
         const PoseH first_pose(lidar_frame.get_column_pose(first_col));
         const PoseH first_pose_inv(first_pose.inverse());
@@ -594,7 +600,7 @@ std::shared_ptr<Node> Trajectory::insert_node(const LidarFrame& lidar_frame,
             if (idx_out > 0) {
                 // Keep ICP cloud aggressively downsampled; point-to-plane
                 // matcher does O(N*M) nearest-neighbor search.
-                auto icp_cloud = algorithm::voxel_downsample_with_normals(
+                auto icp_cloud = algorithm::impl::voxel_downsample_with_normals(
                     valid_pts, valid_normals, std::max(0.35, downsample_voxel_size * 8.0));
                 data.icp_pts = std::move(icp_cloud.first);
                 data.icp_normals = std::move(icp_cloud.second);

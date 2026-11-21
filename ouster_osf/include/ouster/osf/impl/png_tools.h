@@ -60,7 +60,7 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr, FrameChann
  * @param[out] img The output img that will be filled as a result of
  *                 decoding.
  * @param[in] channel_buf Single PNG buffer to decode.
- * @return false (0) if operation is successful true (1) if error occured
+ * @return false (0) if operation is successful true (1) if error occurred
  */
 
 /** @copydoc OSFPngDecode8 */
@@ -88,7 +88,7 @@ OUSTER_API_FUNCTION bool decode_8bit_image(Eigen::Ref<ouster::sdk::core::img_t<T
  * @param[out] img The output img that will be filled as a result of
  *                 decoding.
  * @param[in] channel_buf Single PNG buffer to decode.
- * @return false (0) if operation is successful true (1) if error occured
+ * @return false (0) if operation is successful true (1) if error occurred
  */
 
 /**
@@ -116,7 +116,7 @@ OUSTER_API_FUNCTION bool decode_16bit_image(Eigen::Ref<ouster::sdk::core::img_t<
  * @param[out] img The output img that will be filled as a result of
  *                 decoding.
  * @param[in] channel_buf Single PNG buffer to decode.
- * @return false (0) if operation is successful true (1) if error occured
+ * @return false (0) if operation is successful true (1) if error occurred
  */
 
 /**
@@ -144,7 +144,7 @@ OUSTER_API_FUNCTION bool decode_24bit_image(Eigen::Ref<ouster::sdk::core::img_t<
  * @param[out] img The output img that will be filled as a result of
  *                 decoding.
  * @param[in] channel_buf Single PNG buffer to decode.
- * @return false (0) if operation is successful true (1) if error occured
+ * @return false (0) if operation is successful true (1) if error occurred
  */
 
 /**
@@ -172,7 +172,7 @@ OUSTER_API_FUNCTION bool decode_32bit_image(Eigen::Ref<ouster::sdk::core::img_t<
  * @param[out] img The output img that will be filled as a result of
  *                 decoding.
  * @param[in] channel_buf Single PNG buffer to decode.
- * @return false (0) if operation is successful true (1) if error occured
+ * @return false (0) if operation is successful true (1) if error occurred
  */
 
 /**
@@ -196,9 +196,12 @@ OUSTER_API_FUNCTION bool decode_64bit_image(Eigen::Ref<ouster::sdk::core::img_t<
  *
  * @param[inout] field field to store result in
  * @param[in] buffer buffer to decode
+ * @param[in] field_type original field type stored in OSF
+ * @param[in] px_offset pixel offsets by row
  */
 OUSTER_API_FUNCTION
-void decode_field(ouster::sdk::core::Field& field, const EncodedFrameChannelData& buffer,
+void decode_field(ouster::sdk::core::FieldView& field, const EncodedFrameChannelData& buffer,
+                  ouster::sdk::osf::v2::CHAN_FIELD_TYPE field_type,
                   const std::vector<int>& px_offset = {});
 
 }  // namespace impl

@@ -82,7 +82,7 @@ class OUSTER_API_CLASS ClientTimeout : public ClientError {
     ClientTimeout(const std::string& msg) : ClientError(msg) {}
 };
 
-/// Struct that describes a result from retriving a packet from SensorClient
+/// Struct that describes a result from retrieving a packet from SensorClient
 class SensorPacketSource;
 /**
  * @brief Represents an event from the SensorPacketSource.
@@ -132,14 +132,14 @@ class OUSTER_API_CLASS Sensor {
    public:
     /// Construct a sensor descriptor with the given hostname and desired config
     OUSTER_API_FUNCTION
-    Sensor(std::string hostname,                   ///< [in] sensor hostname
-           ouster::sdk::core::SensorConfig config  ///< [in] desired sensor configuration
+    Sensor(std::string hostname,                  ///< [in] sensor hostname
+           ouster::sdk::core::LidarConfig config  ///< [in] desired sensor configuration
     );
 
     /// Queries the sensor metadata.
-    /// @return the parsed SensorInfo object containing the metadata.
+    /// @return the parsed LidarInfo object containing the metadata.
     OUSTER_API_FUNCTION
-    ouster::sdk::core::SensorInfo fetch_metadata(
+    ouster::sdk::core::LidarInfo fetch_metadata(
         int timeout = 10  ///< [in] timeout for the request in seconds
     ) const;
 
@@ -151,7 +151,7 @@ class OUSTER_API_CLASS Sensor {
     /// Get the desired config of this sensor.
     /// @return the desired config
     OUSTER_API_FUNCTION
-    inline const ouster::sdk::core::SensorConfig& desired_config() const {
+    inline const ouster::sdk::core::LidarConfig& desired_config() const {
         return config_;
     }
 
@@ -166,7 +166,7 @@ class OUSTER_API_CLASS Sensor {
     mutable std::shared_ptr<ouster::sdk::sensor::SensorHttp> http_client_;
     std::string hostname_;
 
-    ouster::sdk::core::SensorConfig config_;
+    ouster::sdk::core::LidarConfig config_;
 };
 
 /// SensorFrameSetSource specific configuration options
@@ -253,7 +253,7 @@ class OUSTER_API_CLASS SensorPacketSource
     /// configuring and retrieving them from each sensor.
     OUSTER_API_FUNCTION
     SensorPacketSource(const std::vector<Sensor>& sensors,  ///< [in] sensors to connect to
-                       const std::vector<ouster::sdk::core::SensorInfo>&
+                       const std::vector<ouster::sdk::core::LidarInfo>&
                            infos,  ///< [in] metadata for each sensor, if present used instead
                                    ///< of configuring each sensor
                        double config_timeout_sec = 45,  ///< [in] timeout for sensor config
@@ -262,7 +262,7 @@ class OUSTER_API_CLASS SensorPacketSource
                                                         ///< outside of the OS.
                        bool reuse_ports = false,        ///< [in] If true bind ports with port reuse
                                                         ///< enabled
-                       uint32_t rcvbuf_size = 1024 * 1024  ///< [in] Receive buffer size in bytes
+                       uint32_t rcvbuf_size = 0  ///< [in] Receive buffer size in bytes. 0 is auto
     );
 
     /// Destruct the sensor client
@@ -300,7 +300,7 @@ class OUSTER_API_CLASS SensorPacketSource
     bool is_live() const override;
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& sensor_info() const override;
+    const std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>>& sensor_info() const override;
 
     /// Get the sockets used in the client. Useful for changing options.
     /// @return list of socket handles
@@ -325,7 +325,7 @@ class OUSTER_API_CLASS SensorPacketSource
         std::vector<uint8_t> data;
     };
 
-    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> sensor_info_;
+    std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>> sensor_info_;
     std::vector<SOCKET> sockets_;
     std::vector<std::shared_ptr<ouster::sdk::core::PacketFormat>> formats_;
 

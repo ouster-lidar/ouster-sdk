@@ -44,3 +44,33 @@ TEST(OpenSourceTest, test_open_source_builders_availability) {
     EXPECT_NO_THROW(ouster::sdk::open_source(osf_file));
 #endif
 }
+
+/**
+ * Regression test for issue #721:
+ * https://github.com/ouster-lidar/ouster-sdk/issues/721
+ *
+ * The PacketSourceOptions(FrameSetSourceOptions&) converting constructor
+ * previously omitted config_timeout from its move-list. This had two effects:
+ *   1. The caller's config_timeout value was silently discarded, so the packet
+ *      source always fell back to its default.
+ *   2. The source-side "set" flag was never cleared, so a later
+ *      options.check() would throw "Parameter 'config_timeout' not supported".
+ *      In SensorFrameSetSource this check ran after a joinable batcher thread
+ *      had been assigned, so unwinding destroyed the joinable std::thread and
+ *      called std::terminate() -- aborting the whole process with SIGABRT.
+ */
+TEST(OpenSourceTest, test_config_timeout_forwarded_from_frame_set_options) {
+    ouster::sdk::FrameSetSourceOptions fopts;
+    fopts.config_timeout = 12.0f;
+
+    ouster::sdk::PacketSourceOptions popts(fopts);
+
+    // The value must actually be forwarded to the packet source and
+    // not silently reset to the default.
+    EXPECT_TRUE(popts.config_timeout.was_set());
+    EXPECT_FLOAT_EQ(popts.config_timeout.value_, 12.0f);
+
+    // The source-side flag must be cleared so that option
+    // validation no longer rejects config_timeout.
+    EXPECT_NO_THROW(fopts.check("SensorFrameSetSource"));
+}

@@ -8,7 +8,7 @@
 const std::string test_string = "TEST STRING HERE";
 
 TEST(Sensor, SmokeTests) {
-    ouster::sdk::core::SensorConfig config;
+    ouster::sdk::core::LidarConfig config;
     config.udp_dest = test_string;
     ouster::sdk::sensor::Sensor test(test_string, config);
 

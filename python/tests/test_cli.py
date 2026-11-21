@@ -60,6 +60,24 @@ def test_metadata_file() -> str:
 
 
 @pytest.fixture
+def test_imu_osf_file() -> str:
+    """One frame of a handheld OS-1-256 recording (beam-reduced to 32) with
+    the FW 3.2+ IMU profile, RANGE and IMU fields only. The sensor is
+    pitched ~16 degrees and actively pitching, so the IMU anchor, deskew,
+    and wall capture range all get exercised."""
+    return str(Path(OSFS_DATA_DIR) / 'OS-1-256_pitched_imu_n1.osf')
+
+
+@pytest.fixture
+def multisensor_osf_file() -> str:
+    """One frame of a dual-sensor no-IMU recording (two OS-1s on poles
+    across an intersection, beam-reduced to 16, RANGE only). Exercises the
+    walls-only degrade path, per-sensor IMU warnings, and the shared
+    correction across sensors."""
+    return str(Path(OSFS_DATA_DIR) / 'OS-1-16x2_no_imu_tilted_n1.osf')
+
+
+@pytest.fixture
 def runner():
     return CliRunner()
 
@@ -204,7 +222,7 @@ def test_source_sensor(runner, has_mapping) -> None:
     # sensor
     result = runner.invoke(core.cli, ['source', '127.0.0.1'])
     assert result.exit_code == 0
-    expected_commands = {'config', 'metadata', 'viz', 'slice', 'save'}
+    expected_commands = {'config', 'sensor_info', 'viz', 'slice', 'save'}
     if has_mapping:
         expected_commands.add('slam')
     assert set(read_commands_from_help_text(result.output)) >= expected_commands
@@ -286,9 +304,9 @@ def test_source_config(runner):
     assert result.exit_code == 1
 
 
-def test_source_metadata(runner):
-    """It should attempt to get metadata (and fail when there is no sensor)"""
-    result = runner.invoke(core.cli, ['source', '127.0.0.1', 'metadata'])
+def test_source_sensor_info(runner):
+    """It should attempt to get sensor_info (and fail when there is no sensor)"""
+    result = runner.invoke(core.cli, ['source', '127.0.0.1', 'sensor_info'])
     assert "Error: CurlClient::execute_request failed" in result.output
     assert result.exit_code == 1
 
@@ -333,6 +351,25 @@ def test_source_pcap_slice_help_2(test_pcap_file, runner):
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice', 'outputfile.pcap', '--help'])
     assert result.exit_code == 2
     assert "Error: Invalid value for 'INDICES'" in result.output
+
+
+def test_unrepeatable_command_is_rejected(test_osf_file, runner):
+    """Repeating a PROCESSOR_UNREPEATABLE command in a multi-command chain
+    should fail with a usage error.
+
+    This tests the duplicate-command lint itself; slice just serves as an
+    example unrepeatable command. If the command used here ever becomes
+    repeatable, swap in another PROCESSOR_UNREPEATABLE command.
+    """
+    result = runner.invoke(core.cli,
+        CliArgs([
+            'source', test_osf_file,
+            'slice', '1:3',
+            'slice', '0:1',
+            'save', '/dev/null.osf'
+        ]).args)
+    assert result.exit_code != 0
+    assert "'slice' is duplicated" in result.output
 
 
 def source_pcap_slice_impl(test_pcap_file, runner, command, packets, should_fail=False):
@@ -555,7 +592,7 @@ def test_source_split_save(test_pcap_file2, runner, tmp_path, args, monkeypatch)
             assert len(files) == num_files
         assert ('test' + ext) in files
 
-        assert "Count: 3" in get_stats(monkeypatch, runner, 'test*' + ext, args=['-g'])
+        assert "Count: 3" in get_stats(monkeypatch, runner, 'test*' + ext, args=['-g', "--time"])
 
 
 @pytest.mark.parametrize('args', [('.bag', 10, 1, 1), ('.pcap', 10, 2, 2),
@@ -579,7 +616,7 @@ def test_source_split_save_raw(test_pcap_file2, runner, tmp_path, args, monkeypa
             assert len(files) == num_files
         assert ('test' + ext) in files
 
-        assert "Count: 3" in get_stats(monkeypatch, runner, 'test*' + ext, args=['-g'])
+        assert "Count: 3" in get_stats(monkeypatch, runner, 'test*' + ext, args=['-g', "--time"])
 
 
 def test_discover(runner):
@@ -613,7 +650,7 @@ def test_source_stats_with_objects(tmp_path, test_osf_file, runner, monkeypatch)
         for frame in frame_set:
             frame.status[:] = 1
             frame.timestamp[:] = 1
-            frame.packet_timestamp[:] = 1
+            frame.receive_timestamp[:] = 1
             frame.objects['frame_objects'] = [Object(), Object(), Object()]
             frame.objects['frame_objects_2'] = [Object(), Object()]
         writer.save(frame_set)
@@ -665,15 +702,15 @@ def test_source_filter_coord_frame_requires_xyz():
         )
 
 
-@pytest.mark.parametrize("coord_frame, expected_use_extrinsics, expected_dewarp_points", [
-    ("SENSOR", False, False),
-    ("BODY", True, False),
-    ("WORLD", True, True),
+@pytest.mark.parametrize("coord_frame, expect_sensor_frame, expected_dewarp_points", [
+    ("SENSOR", True, False),
+    ("BODY", False, False),
+    ("WORLD", False, True),
 ])
 def test_source_filter_xyz_coord_frame_modes(
     monkeypatch,
     coord_frame,
-    expected_use_extrinsics,
+    expect_sensor_frame,
     expected_dewarp_points,
 ):
     """XYZ coord frames should map to expected LUT/dewarp behavior."""
@@ -681,19 +718,26 @@ def test_source_filter_xyz_coord_frame_modes(
     import ouster.sdk.core.frame_ops as so
     source_filter_fn = inspect.unwrap(source.source_filter.callback)
 
-    xyzlut_use_extrinsics = []
+    xyzlut_extrinsics = []
     dewarp_points_args = []
     frame_tokens = []
 
+    sensor_to_body = np.eye(4)
+    sensor_to_body[:3, 3] = [1.0, 2.0, 3.0]
+
+    class FakeSensorInfo:
+        def __init__(self):
+            self.sensor_to_body = sensor_to_body.copy()
+
     class FakeFrameSetSource:
-        sensor_info = [object()]
+        sensor_info = [FakeSensorInfo()]
 
     ctx = source.SourceCommandContext()
     ctx.frame_set_source = FakeFrameSetSource()
     ctx.frame_set_iter = lambda: iter([[{"frame": 1}]])  # type: ignore
 
-    def fake_xyzlut(sensor_info, use_extrinsics=True):
-        xyzlut_use_extrinsics.append(use_extrinsics)
+    def fake_xyzlut(sensor_info):
+        xyzlut_extrinsics.append(np.asarray(sensor_info.sensor_to_body))
 
         def fake_xyz(range_image):
             h, w = range_image.shape
@@ -721,23 +765,96 @@ def test_source_filter_xyz_coord_frame_modes(
     list(ctx.frame_set_iter())  # type: ignore[operator]
 
     assert frame_tokens
-    assert xyzlut_use_extrinsics
-    assert set(xyzlut_use_extrinsics) == {expected_use_extrinsics}
+    assert xyzlut_extrinsics
+    expected_extrinsics = np.eye(4) if expect_sensor_frame else sensor_to_body
+    for extrinsics in xyzlut_extrinsics:
+        np.testing.assert_array_equal(extrinsics, expected_extrinsics)
+    # Projecting in the sensor frame must not modify the source's metadata.
+    np.testing.assert_array_equal(FakeFrameSetSource.sensor_info[0].sensor_to_body, sensor_to_body)
     assert dewarp_points_args
     assert set(dewarp_points_args) == {expected_dewarp_points}
 
 
-def test_source_plumb(test_pcap_file, runner, tmp_path):
-    """ouster-cli source ... plumb should run successfully."""
+def test_source_plumb_methods(test_imu_osf_file, runner, tmp_path):
+    """plumb --method imu/walls/all should each succeed on a source with the
+    FW 3.2+ IMU profile, and 'all' should run both stages."""
     with set_directory(tmp_path):
-        assert not os.listdir(tmp_path)  # no files in output dir
+        for method in ('imu', 'walls', 'all'):
+            result = runner.invoke(core.cli, CliArgs(
+                ['source', test_imu_osf_file, 'plumb', '--method', method,
+                 'save', f'{method}.osf']).args)
+            assert result.exit_code == 0, result.output
+            assert os.path.exists(f'{method}.osf')
+            # the frame plumb sampled must still reach downstream consumers
+            saved = open_source(f'{method}.osf')
+            assert len(saved) == 1
+            # the correction lands in the sensor's extrinsic
+            if method != 'walls':
+                source_before = open_source(test_imu_osf_file)
+                delta = (
+                    np.asarray(saved.sensor_info[0].sensor_to_body)
+                    @ np.linalg.inv(np.asarray(
+                        source_before.sensor_info[0].sensor_to_body)))
+                assert not np.allclose(delta[:3, :3], np.eye(3), atol=1e-4)
+                source_before.close()
+            saved.close()
+
+
+def test_source_plumb_multisensor(multisensor_osf_file, runner, tmp_path):
+    """A dual-sensor no-IMU source: plumb degrades to walls only and refines
+    each sensor independently from its own wall geometry. One of these
+    16-beam sensors sees too sparse a wall to clear
+    PLUMB_WALLS_MIN_WALL_POINTS, so that sensor is refused rather than
+    guessed at, and the run aborts before anything is written."""
+    with set_directory(tmp_path):
+        result = runner.invoke(core.cli, CliArgs(
+            ['source', multisensor_osf_file, 'plumb',
+             'save', 'test.osf']).args)
+        assert result.exit_code != 0
+        # the sensor with too few wall points is refused, not guessed at
+        assert result.output.count('ERROR: could not plumb sensor') == 1
+        assert 'sensor extrinsics left unchanged' in result.output
+        assert not os.path.exists('test.osf')
+
+        # a sensor that cannot be levelled aborts before anything is written
+        result = runner.invoke(core.cli, CliArgs(
+            ['source', multisensor_osf_file, 'plumb', '--method', 'imu',
+             'save', 'imu.osf']).args)
+        assert result.exit_code != 0
+        assert result.output.count('ERROR: could not plumb sensor') == 2
+        assert 'sensor extrinsics left unchanged' in result.output
+        assert not os.path.exists('imu.osf')
+
+
+def test_source_plumb_legacy_imu(test_pcap_file, runner, tmp_path):
+    """Sources without the FW 3.2+ IMU profile: the default 'all' degrades
+    to wall geometry with a warning, and '--method imu' errors."""
+    with set_directory(tmp_path):
         result = runner.invoke(core.cli, CliArgs(['source', "--sensor-idx", "0",
                                                   test_pcap_file, 'plumb', 'save', 'test.osf']).args)
-        assert result.exit_code == 0
-        # there's at most one OSF file in output dir
-        files = os.listdir(tmp_path)
-        assert len(files) == 1
-        assert all(filename == 'test.osf' for filename in files)
+        assert result.exit_code == 0, result.output
+        assert os.path.exists('test.osf')
+
+        result = runner.invoke(core.cli, CliArgs(['source', "--sensor-idx", "0",
+                                                  test_pcap_file, 'plumb', '--method', 'imu',
+                                                  'save', 'test2.osf']).args)
+        assert 'ERROR: could not plumb sensor' in result.output
+
+
+def test_source_plumb_slice_aware(test_imu_osf_file, runner, tmp_path):
+    """A 'slice' before 'plumb' should move the sampling window: slicing
+    past the only frame of the test file leaves plumb with nothing to
+    sample, while a slice starting at 0 must still succeed."""
+    with set_directory(tmp_path):
+        result = runner.invoke(core.cli, CliArgs(['source', test_imu_osf_file,
+                                                  'slice', '0:',
+                                                  'plumb', 'save', 'test.osf']).args)
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(core.cli, CliArgs(['source', test_imu_osf_file,
+                                                  'slice', '1:',
+                                                  'plumb', 'save', 'test2.osf']).args)
+        assert 'has no frame in the sampled frame set' in result.output
 
 
 def test_source_osf(runner, has_mapping) -> None:
@@ -813,6 +930,51 @@ def test_source_save_collations(test_osf_file, runner, tmp_path):
         assert src.contains_collations
 
 
+@pytest.mark.perception
+@pytest.mark.skipif(sys.platform == "win32", reason="Does not run on Windows")
+@pytest.mark.parametrize("options, expected", [
+    ([], {}),
+    (['--no-save-instance-id-fields',
+      '--cluster-filter-min-side-length', '0.5',
+      '--cluster-filter-max-side-length', '-1',
+      '--cluster-filter-min-vertical-size', '0.25',
+      '--cluster-filter-max-volume', '100'],
+     {'save_instance_id_fields': False,
+      'cluster_filter_min_side_length': 0.5,
+      'cluster_filter_max_side_length': -1.0,
+      'cluster_filter_min_vertical_size': 0.25,
+      'cluster_filter_max_volume': 100.0}),
+])
+def test_source_detect_config_options(test_osf_file, runner, tmp_path, monkeypatch, options, expected):
+    """Verify detect command line options are applied to the detection engine config."""
+    from ouster.cli.plugins import perception
+    from ouster.sdk.perception import ClassicDetectionConfig
+
+    real_engine = perception.DetectionEngine
+    captured = []
+
+    class RecordingDetectionEngine:
+        @staticmethod
+        def create(sensor_infos, config):
+            captured.append(config)
+            return real_engine.create(sensor_infos=sensor_infos, config=config)
+
+    monkeypatch.setattr(perception, "DetectionEngine", RecordingDetectionEngine)
+
+    output_osf_file = str(Path(tmp_path) / "output.osf")
+    result = runner.invoke(core.cli, ['source', test_osf_file, 'slice', '0:2',
+                                      'detect', *options, 'save', output_osf_file])
+    print(result.output)
+    assert result.exit_code == 0
+    assert len(captured) == 1
+
+    defaults = ClassicDetectionConfig()
+    for name in ('save_instance_id_fields', 'cluster_filter_min_side_length',
+                 'cluster_filter_max_side_length', 'cluster_filter_min_vertical_size',
+                 'cluster_filter_max_volume'):
+        assert getattr(captured[0], name) == pytest.approx(expected.get(name, getattr(defaults, name)))
+
+
 def test_source_save_frame_set_source_metadata(test_osf_file, tmp_path, runner):
     """Verify that when we save an OSF, we include the frame source metadata."""
     from ouster.sdk.core import ClassMapSet, FrameSetSourceMetadataSet
@@ -836,10 +998,589 @@ def test_source_save_frame_set_source_metadata(test_osf_file, tmp_path, runner):
     try:
         result = runner.invoke(core.cli, ['source', src_osf_name, 'save', dst_osf_name])
         assert result.exit_code == 0
-        dst_src = open_source(dst_osf_name)
-        dst_metadata_keys = dst_src.metadata_keys()
-        assert 'class_maps' in dst_metadata_keys
-        assert 'additional_info' in dst_metadata_keys
+        with open_source(dst_osf_name) as dst_src:
+            dst_metadata_keys = dst_src.metadata_keys()
+            assert 'class_maps' in dst_metadata_keys
+            assert 'additional_info' in dst_metadata_keys
     finally:
-        os.unlink(src_osf_name)
-        os.unlink(dst_osf_name)
+        # allow exceptions here since windows will likely error as the file could be still open
+        try:
+            os.unlink(src_osf_name)
+        except Exception:
+            pass
+        try:
+            os.unlink(dst_osf_name)
+        except Exception:
+            pass
+
+
+def test_source_print_field(test_pcap_file, runner):
+    import ouster.cli.plugins.source_utils  # noqa force the plugin to get loaded
+    result = runner.invoke(
+        core.cli,
+        ['source', test_pcap_file, 'print', '-f', 'RANGE'],
+    )
+    assert result.exit_code == 0
+    assert 'RANGE' in result.output
+
+
+def test_source_strip_removes_field(test_pcap_file, runner):
+    import ouster.cli.plugins.source_utils  # noqa force the plugin to get loaded
+    result = runner.invoke(
+        core.cli,
+        ['source', str(test_pcap_file), 'strip', '-f', 'RANGE', 'print', '-f', 'RANGE'],
+    )
+    assert result.exit_code == 0
+    assert 'RANGE' not in result.output
+
+
+def _write_mixed_lidar_camera_osf(lidar_osf_path: str, out_path: str) -> None:
+    """Write a mixed OSF with one lidar stream and one camera stream, taking the
+    lidar info/frame from an existing lidar-only OSF."""
+    from ouster.sdk import core as sdkcore
+    from ouster.sdk import osf as sdkosf
+
+    src = open_source(lidar_osf_path)
+    lidar_info = src.sensor_info[0]
+    lidar_frame = next(iter(src))[0]
+
+    ci = sdkcore.CameraInfo()
+    ci.model = sdkcore.CameraModel(100.0, 100.0, 0.0, 0.0)
+    ci.format.columns_per_frame, ci.format.pixels_per_column, ci.sn = 4, 3, 999999
+    cf = sdkcore.CameraFrame()
+    cf.w, cf.h = 4, 3
+    cf.add_field('RANGE', np.full((3, 4), 2000, dtype=np.uint32))
+    cf.timestamp[0] = lidar_frame.timestamp[0]
+    cf.receive_timestamp[0] = lidar_frame.timestamp[0]
+
+    with sdkosf.Writer(out_path, [lidar_info, ci]) as w:
+        w.save(sdkcore.FrameSet([lidar_frame, cf]))
+
+
+@pytest.mark.parametrize("extension", ["pcap", "bag"])
+def test_source_save_mixed_camera_warns_and_skips(test_imu_osf_file, runner, tmp_path, extension):
+    """Saving a mixed lidar+camera source to a packet format (pcap/bag) warns
+    that camera streams are skipped via frame_to_packets, and still saves the
+    lidar stream without crashing."""
+    import ouster.cli.plugins.source_save  # noqa force the plugin to get loaded
+    if extension == "bag":
+        pytest.importorskip("rosbags")
+
+    mixed_osf = str(tmp_path / "mixed.osf")
+    _write_mixed_lidar_camera_osf(test_imu_osf_file, mixed_osf)
+
+    out_file = str(tmp_path / f"out.{extension}")
+    result = runner.invoke(core.cli, ['source', mixed_osf, 'save', out_file],
+                           catch_exceptions=False)
+    assert result.exit_code == 0
+    assert "does not support camera data" in result.output
+    assert "1 camera stream(s) will be skipped" in result.output
+
+    produced = list(tmp_path.glob(f"*.{extension}"))
+    assert produced, f"expected a .{extension} file to be produced"
+    assert any(p.stat().st_size > 0 for p in produced)
+
+
+def _camera_rgb_image(height: int, width: int, shift: int) -> np.ndarray:
+    """A deterministic 8-bit color image, kept well inside 0..255 so that any
+    rescaling of it would be obvious."""
+    return np.ascontiguousarray(
+        ((np.indices((height, width, 3)).sum(0) * 7 + shift) % 200).astype(np.uint8))
+
+
+def _write_camera_only_osf(out_path: str, frame_count: int = 2) -> None:
+    """Write a camera-only OSF whose frames carry an 8-bit RGB image and a RANGE
+    image, like a ZED source produces."""
+    from ouster.sdk import core as sdkcore
+    from ouster.sdk import osf as sdkosf
+
+    width, height = 16, 8
+    ci = sdkcore.CameraInfo()
+    ci.model = sdkcore.CameraModel(100.0, 100.0, 0.0, 0.0)
+    ci.format.columns_per_frame, ci.format.pixels_per_column, ci.sn = width, height, 999999
+
+    with sdkosf.Writer(out_path, [ci]) as w:
+        for i in range(frame_count):
+            cf = sdkcore.CameraFrame(ci)
+            cf.w, cf.h = width, height
+            cf.add_field('RGB', _camera_rgb_image(height, width, i * 10))
+            cf.add_field('RANGE', np.full((height, width), 2000 + i, dtype=np.uint32))
+            cf.timestamp[0] = 100000000 * (i + 1)
+            cf.receive_timestamp[0] = cf.timestamp[0]
+            cf.status[0] = 1
+            w.save(sdkcore.FrameSet([cf]))
+
+
+def test_source_save_png_camera_only(runner, tmp_path):
+    """Camera frames are saved as PNGs, one per frame per image field. Frames have
+    no sensor-assigned frame id, so they are named by their order of arrival."""
+    import ouster.cli.plugins.source_save  # noqa force the plugin to get loaded
+    from ouster.sdk.io import read_png
+
+    camera_osf = str(tmp_path / "camera.osf")
+    _write_camera_only_osf(camera_osf, frame_count=2)
+
+    result = runner.invoke(
+        core.cli, ['source', camera_osf, 'save', '-d', str(tmp_path), 'out.png'],
+        catch_exceptions=False)
+    assert result.exit_code == 0
+
+    produced = sorted(p.name for p in tmp_path.glob("*.png"))
+    assert produced == [
+        'out_999999_0_RANGE.png', 'out_999999_0_RGB.png',
+        'out_999999_1_RANGE.png', 'out_999999_1_RGB.png',
+    ]
+
+    # An 8-bit color image is already display data and is written unchanged.
+    saved = read_png(str(tmp_path / 'out_999999_0_RGB.png'))
+    assert saved.shape == (8, 16, 3)
+    assert np.array_equal(saved, _camera_rgb_image(8, 16, 0))
+
+
+def test_source_save_png_mixed_lidar_camera(test_imu_osf_file, runner, tmp_path):
+    """A mixed source saves both its lidar and its camera frames, with the lidar
+    files still named by frame id."""
+    import ouster.cli.plugins.source_save  # noqa force the plugin to get loaded
+
+    mixed_osf = str(tmp_path / "mixed.osf")
+    _write_mixed_lidar_camera_osf(test_imu_osf_file, mixed_osf)
+    lidar_sn = open_source(mixed_osf).sensor_info[0].sn
+
+    result = runner.invoke(
+        core.cli, ['source', mixed_osf, 'save', '-d', str(tmp_path), 'out.png'],
+        catch_exceptions=False)
+    assert result.exit_code == 0
+
+    produced = [p.name for p in tmp_path.glob("*.png")]
+    assert any(f"_{lidar_sn}_" in name for name in produced), produced
+    assert 'out_999999_0_RANGE.png' in produced, produced
+
+
+def test_source_mask_rgb_png_is_converted_and_scaled(test_imu_osf_file, runner, tmp_path):
+    """An RGB mask at half the sensor resolution is converted to gray and scaled
+    up; pixels that aren't fully white are masked out."""
+    from ouster.sdk.core.data import destagger
+    from ouster.sdk.io import write_png
+
+    info = open_source(test_imu_osf_file).sensor_info[0]
+    h, w = info.h, info.w
+    mask = np.zeros((h // 2, w // 2, 3), dtype=np.uint8)
+    mask[:, :w // 4] = 255
+    mask_png = str(tmp_path / "mask.png")
+    write_png(mask_png, mask)
+
+    out_osf = str(tmp_path / "masked.osf")
+    result = runner.invoke(core.cli, ['source', test_imu_osf_file, 'mask', '--fields', 'RANGE',
+                                      mask_png, 'save', out_osf], catch_exceptions=False)
+    assert result.exit_code == 0, result.output
+    assert "performing conversion" in result.output
+    assert "will scale" in result.output
+
+    frame = next(iter(open_source(out_osf)))[0]
+    masked_range = destagger(frame.sensor_info, frame.field('RANGE'))
+    assert np.count_nonzero(masked_range[:, :w // 2]) > 0
+    assert np.count_nonzero(masked_range[:, w // 2:]) == 0
+
+
+def test_source_mask_rejects_non_png(test_imu_osf_file, runner, tmp_path):
+    mask_file = tmp_path / "mask.jpg"
+    mask_file.write_bytes(b"\xff\xd8\xff\xe0 not a png")
+    result = runner.invoke(core.cli, ['source', test_imu_osf_file, 'mask', str(mask_file), 'stats'])
+    assert result.exit_code != 0
+    assert "must be a PNG" in result.output
+
+
+@pytest.mark.parametrize("command,arg", [("reduce", "32"), ("select", "0,1")])
+def test_source_beam_commands_reject_camera_streams(test_imu_osf_file, runner, tmp_path, command, arg):
+    """Beam reduction/selection is lidar-only, so a source with a camera stream is
+    rejected with a clear message instead of failing on CameraInfo."""
+    mixed_osf = str(tmp_path / "mixed.osf")
+    _write_mixed_lidar_camera_osf(test_imu_osf_file, mixed_osf)
+
+    result = runner.invoke(core.cli, ['source', mixed_osf, command, arg, 'stats'])
+    assert result.exit_code != 0
+    assert f"{command} is not compatible with sources containing camera streams" in result.output
+
+
+@pytest.fixture
+def test_zone_monitor_osf_file(test_data_dir) -> str:
+    """A single frame OSF whose sensor info has a zone set with four zones,
+    each with an STL and a rendered ZRB."""
+    return str(test_data_dir / 'zone_monitor' / 'single_frame_zm.osf')
+
+
+@pytest.fixture
+def zone_monitor_output_name(test_zone_monitor_osf_file) -> str:
+    """The serial number and sensor index that save_zone_set appends to its output names."""
+    return f"{open_source(test_zone_monitor_osf_file).sensor_info[0].sn}_0"
+
+
+@pytest.fixture
+def test_multisensor_zone_monitor_osf_file(test_zone_monitor_osf_file, tmp_path) -> str:
+    """Two sensors with zone sets: the single sensor zone monitor OSF plus a
+    copy of it with a different serial number and a modified zone."""
+    import copy
+    src = open_source(test_zone_monitor_osf_file)
+    first = src.sensor_info[0]
+    second = copy.deepcopy(first)
+    second.sn = first.sn + 1
+    zone_set = second.zone_set
+    zone_set.zones[0].frame_count += 1
+    second.zone_set = zone_set
+    out = str(tmp_path / 'two_sensors.osf')
+    osf.Writer(out, [first, second]).close()
+    return out
+
+
+def test_source_save_zone_set_zip(test_zone_monitor_osf_file, zone_monitor_output_name, runner, tmp_path):
+    """By default the zone set is saved as a zip suffixed with the serial number and
+    sensor index, containing both STLs and ZRBs, and it round trips to an identical zone set."""
+    import zipfile
+    from ouster.sdk.core import ZoneSet
+
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', str(tmp_path / 'zones.zip')])
+    assert result.exit_code == 0, result.output
+    assert [p.name for p in tmp_path.iterdir()] == [f'zones_{zone_monitor_output_name}.zip']
+
+    out_zip = tmp_path / f'zones_{zone_monitor_output_name}.zip'
+    with zipfile.ZipFile(out_zip) as zf:
+        names = set(zf.namelist())
+    assert 'metadata.json' in names
+    assert {'0.zrb', '1.zrb', '2.zrb', '3.zrb'} <= names
+    assert len([n for n in names if n.endswith('.stl')]) == 4
+
+    info = open_source(test_zone_monitor_osf_file).sensor_info[0]
+    assert ZoneSet(str(out_zip)) == info.zone_set
+    assert f'Saved zone set for sensor idx 0 sn {info.sn} to {out_zip}' in result.output.splitlines()
+
+
+@pytest.mark.parametrize("use_cwd", [False, True])
+def test_source_save_zone_set_zip_into_existing_directory(test_zone_monitor_osf_file, zone_monitor_output_name,
+                                                          runner, tmp_path, use_cwd):
+    """With zip output, an existing directory as FILENAME (including '.') gets the zips saved inside it,
+    named by serial number and sensor index."""
+    from ouster.sdk.core import ZoneSet
+
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    if use_cwd:
+        with set_directory(out_dir):
+            result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file, 'save_zone_set', '.'])
+        expected_logged_path = os.path.join('.', f'{zone_monitor_output_name}.zip')
+    else:
+        result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file, 'save_zone_set', str(out_dir)])
+        expected_logged_path = str(out_dir / f'{zone_monitor_output_name}.zip')
+    assert result.exit_code == 0, result.output
+    assert [p.name for p in out_dir.iterdir()] == [f'{zone_monitor_output_name}.zip']
+    assert [p.name for p in tmp_path.iterdir()] == ['out']
+
+    info = open_source(test_zone_monitor_osf_file).sensor_info[0]
+    assert ZoneSet(str(out_dir / f'{zone_monitor_output_name}.zip')) == info.zone_set
+    assert f'Saved zone set for sensor idx 0 sn {info.sn} to {expected_logged_path}' in result.output.splitlines()
+
+
+def test_source_save_zone_set_zip_into_existing_directory_requires_overwrite(test_zone_monitor_osf_file,
+                                                                            zone_monitor_output_name,
+                                                                            runner, tmp_path):
+    existing = tmp_path / f'{zone_monitor_output_name}.zip'
+    existing.write_bytes(b'')
+    args = ['source', test_zone_monitor_osf_file, 'save_zone_set']
+    result = runner.invoke(core.cli, args + [str(tmp_path)])
+    assert result.exit_code == 1
+    assert 'already exists' in result.output
+    assert existing.stat().st_size == 0
+
+    result = runner.invoke(core.cli, args + ['--overwrite', str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert existing.stat().st_size > 0
+
+
+def test_source_save_zone_set_zip_without_extension(test_zone_monitor_osf_file, zone_monitor_output_name,
+                                                    runner, tmp_path):
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', str(tmp_path / 'zones')])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / f'zones_{zone_monitor_output_name}').is_file()
+
+
+def test_source_save_zone_set_directory(test_zone_monitor_osf_file, zone_monitor_output_name, runner, tmp_path):
+    """With --output-type directory, the zone set is written as loose files in a
+    subdirectory named by serial number and sensor index, creating missing parent directories."""
+    from ouster.sdk.core import ZoneSet
+
+    out_dir = tmp_path / 'nested' / 'zones'
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', '--output-type', 'directory', str(out_dir)])
+    assert result.exit_code == 0, result.output
+    assert [p.name for p in out_dir.iterdir()] == [zone_monitor_output_name]
+
+    sensor_dir = out_dir / zone_monitor_output_name
+    assert (sensor_dir / 'metadata.json').is_file()
+    assert len(list(sensor_dir.glob('*.stl'))) == 4
+    assert len(list(sensor_dir.glob('*.zrb'))) == 4
+
+    info = open_source(test_zone_monitor_osf_file).sensor_info[0]
+    assert ZoneSet(str(sensor_dir)) == info.zone_set
+    assert f'Saved zone set for sensor idx 0 sn {info.sn} to {sensor_dir}' in result.output.splitlines()
+
+
+@pytest.mark.parametrize("output_type", ['zip', 'zip_into_directory', 'directory'])
+def test_source_save_zone_set_multisensor(test_multisensor_zone_monitor_osf_file, runner, tmp_path,
+                                          output_type):
+    """Each sensor's zone set is saved to its own output, named by serial number and sensor index,
+    and each saved output is logged."""
+    from ouster.sdk.core import ZoneSet
+
+    infos = open_source(test_multisensor_zone_monitor_osf_file).sensor_info
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    out_path = {
+        'zip': out_dir / 'zones.zip',
+        'zip_into_directory': out_dir,
+        'directory': out_dir / 'zones',
+    }[output_type]
+    result = runner.invoke(core.cli, ['source', test_multisensor_zone_monitor_osf_file, 'save_zone_set',
+                                      '--output-type', 'directory' if output_type == 'directory' else 'zip',
+                                      str(out_path)])
+    assert result.exit_code == 0, result.output
+
+    for idx, info in enumerate(infos):
+        if output_type == 'zip':
+            saved = out_dir / f'zones_{info.sn}_{idx}.zip'
+            assert saved.is_file()
+        elif output_type == 'zip_into_directory':
+            saved = out_dir / f'{info.sn}_{idx}.zip'
+            assert saved.is_file()
+        else:
+            saved = out_path / f'{info.sn}_{idx}'
+            assert saved.is_dir()
+        assert ZoneSet(str(saved)) == info.zone_set
+        assert f'Saved zone set for sensor idx {idx} sn {info.sn} to {saved}' in result.output.splitlines()
+    assert infos[0].zone_set != infos[1].zone_set
+
+
+@pytest.mark.parametrize("output_type", ['zip', 'directory'])
+def test_source_save_zone_set_multisensor_same_serial_number(test_zone_monitor_osf_file, runner, tmp_path,
+                                                             output_type):
+    """Sensors that share a serial number are saved to separate outputs, told apart by sensor index."""
+    import copy
+    from ouster.sdk.core import ZoneSet
+
+    first = open_source(test_zone_monitor_osf_file).sensor_info[0]
+    second = copy.deepcopy(first)
+    zone_set = second.zone_set
+    zone_set.zones[0].frame_count += 1
+    second.zone_set = zone_set
+    src_osf = str(tmp_path / 'same_sn.osf')
+    osf.Writer(src_osf, [first, second]).close()
+    infos = open_source(src_osf).sensor_info
+    assert infos[0].sn == infos[1].sn
+
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    out_path = out_dir / ('zones.zip' if output_type == 'zip' else 'zones')
+    result = runner.invoke(core.cli, ['source', src_osf, 'save_zone_set', '--output-type', output_type,
+                                      str(out_path)])
+    assert result.exit_code == 0, result.output
+
+    saved_dir = out_dir if output_type == 'zip' else out_path
+    expected_names = ([f'zones_{first.sn}_0.zip', f'zones_{first.sn}_1.zip'] if output_type == 'zip'
+                      else [f'{first.sn}_0', f'{first.sn}_1'])
+    assert sorted(p.name for p in saved_dir.iterdir()) == expected_names
+    for idx, info in enumerate(infos):
+        assert ZoneSet(str(saved_dir / expected_names[idx])) == info.zone_set
+    assert infos[0].zone_set != infos[1].zone_set
+
+
+def test_source_save_zone_set_multisensor_conflict_writes_nothing(test_multisensor_zone_monitor_osf_file,
+                                                                  runner, tmp_path):
+    """If any sensor's output already exists, no zone set is written."""
+    infos = open_source(test_multisensor_zone_monitor_osf_file).sensor_info
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    existing = out_dir / f'zones_{infos[1].sn}_1.zip'
+    existing.write_bytes(b'')
+
+    result = runner.invoke(core.cli, ['source', test_multisensor_zone_monitor_osf_file,
+                                      'save_zone_set', str(out_dir / 'zones.zip')])
+    assert result.exit_code == 1
+    assert 'already exists' in result.output
+    assert 'Saved zone set' not in result.output
+    assert [p.name for p in out_dir.iterdir()] == [existing.name]
+    assert existing.stat().st_size == 0
+
+
+@pytest.mark.parametrize("filter_arg, expect_stl, expect_zrb", [
+    ('stl', True, False),
+    ('zrb', False, True),
+    ('both', True, True),
+    ('STL', True, False),
+])
+def test_source_save_zone_set_filter(test_zone_monitor_osf_file, zone_monitor_output_name, runner, tmp_path,
+                                     filter_arg, expect_stl, expect_zrb):
+    """--filter controls which zone files are written (case insensitive)."""
+    import zipfile
+
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', '--filter', filter_arg, str(tmp_path / 'zones.zip')])
+    assert result.exit_code == 0, result.output
+
+    with zipfile.ZipFile(tmp_path / f'zones_{zone_monitor_output_name}.zip') as zf:
+        names = zf.namelist()
+    assert 'metadata.json' in names
+    assert any(n.endswith('.stl') for n in names) == expect_stl
+    assert any(n.endswith('.zrb') for n in names) == expect_zrb
+
+
+def test_source_save_zone_set_invalid_filter(test_zone_monitor_osf_file, runner, tmp_path):
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', '--filter', 'obj', str(tmp_path / 'zones.zip')])
+    assert result.exit_code != 0
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("output_type", ['zip', 'directory'])
+def test_source_save_zone_set_requires_overwrite(test_zone_monitor_osf_file, zone_monitor_output_name, runner,
+                                                 tmp_path, output_type):
+    """An existing output is only replaced when --overwrite is passed."""
+    if output_type == 'zip':
+        out_arg = tmp_path / 'zones.zip'
+        saved = tmp_path / f'zones_{zone_monitor_output_name}.zip'
+        saved.write_bytes(b'')
+    else:
+        out_arg = tmp_path / 'zones'
+        saved = out_arg / zone_monitor_output_name
+        saved.mkdir(parents=True)
+
+    args = ['source', test_zone_monitor_osf_file, 'save_zone_set', '--output-type', output_type]
+    result = runner.invoke(core.cli, args + [str(out_arg)])
+    assert result.exit_code == 1
+    assert 'already exists' in result.output
+    assert '--overwrite' in result.output
+
+    result = runner.invoke(core.cli, args + ['--overwrite', str(out_arg)])
+    assert result.exit_code == 0, result.output
+    if output_type == 'zip':
+        assert saved.stat().st_size > 0
+    else:
+        assert (saved / 'metadata.json').is_file()
+
+
+def test_source_save_zone_set_existing_parent_directory(test_zone_monitor_osf_file, zone_monitor_output_name,
+                                                        runner, tmp_path):
+    """With directory output, FILENAME itself may already exist; only the
+    per-sensor subdirectories require --overwrite."""
+    out_dir = tmp_path / 'zones'
+    out_dir.mkdir()
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', '--output-type', 'directory', str(out_dir)])
+    assert result.exit_code == 0, result.output
+    assert (out_dir / zone_monitor_output_name / 'metadata.json').is_file()
+
+
+def test_source_save_zone_set_zip_onto_directory(test_zone_monitor_osf_file, zone_monitor_output_name,
+                                                 runner, tmp_path):
+    out_dir = tmp_path / f'zones_{zone_monitor_output_name}.zip'
+    out_dir.mkdir()
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', '--overwrite', str(tmp_path / 'zones.zip')])
+    assert result.exit_code == 1
+    assert 'is a directory' in result.output
+    assert list(out_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize("conflict", ['filename', 'sensor_subdirectory'])
+def test_source_save_zone_set_directory_onto_file(test_zone_monitor_osf_file, zone_monitor_output_name,
+                                                  runner, tmp_path, conflict):
+    out_arg = tmp_path / 'zones'
+    if conflict == 'filename':
+        out_file = out_arg
+    else:
+        out_arg.mkdir()
+        out_file = out_arg / zone_monitor_output_name
+    out_file.write_bytes(b'')
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', '--output-type', 'directory',
+                                      '--overwrite', str(out_arg)])
+    assert result.exit_code == 1
+    assert 'is a file' in result.output
+    assert out_file.stat().st_size == 0
+
+
+def test_source_save_zone_set_no_zone_set(test_osf_file, runner, tmp_path):
+    """A source without a zone set exits with an error and writes nothing."""
+    sn = open_source(test_osf_file).sensor_info[0].sn
+    result = runner.invoke(core.cli, ['source', test_osf_file, 'save_zone_set', str(tmp_path / 'zones.zip')])
+    assert result.exit_code == 1
+    assert f'Sensor idx 0 sn {sn} has no zone set, skipping.' in result.output
+    assert 'No zone sets found' in result.output
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_source_save_zone_set_skips_sensor_without_zone_set(test_zone_monitor_osf_file, runner, tmp_path):
+    """Sensors without a zone set are reported and skipped; the others are still saved."""
+    import copy
+    first = open_source(test_zone_monitor_osf_file).sensor_info[0]
+    second = copy.deepcopy(first)
+    second.sn = first.sn + 1
+    second.zone_set = None
+    src_osf = str(tmp_path / 'two_sensors.osf')
+    osf.Writer(src_osf, [first, second]).close()
+
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    result = runner.invoke(core.cli, ['source', src_osf, 'save_zone_set', str(out_dir / 'zones.zip')])
+    assert result.exit_code == 0, result.output
+    assert f'Sensor idx 1 sn {second.sn} has no zone set, skipping.' in result.output
+    assert f'Sensor idx 0 sn {first.sn} has no zone set' not in result.output
+    assert [p.name for p in out_dir.iterdir()] == [f'zones_{first.sn}_0.zip']
+    saved_lines = [line for line in result.output.splitlines() if line.startswith('Saved zone set')]
+    assert saved_lines == [f'Saved zone set for sensor idx 0 sn {first.sn} to {out_dir / f"zones_{first.sn}_0.zip"}']
+
+
+def test_source_save_zone_set_zip_missing_parent_directory(test_zone_monitor_osf_file, runner, tmp_path):
+    """Saving a zip into a directory that doesn't exist reports an error instead of
+    silently writing nothing."""
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file,
+                                      'save_zone_set', str(tmp_path / 'missing' / 'zones.zip')])
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert 'Error: ZoneSet::save: failed to open file for writing' in result.output
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_source_save_zone_set_directory_write_error(test_zone_monitor_osf_file, zone_monitor_output_name,
+                                                    runner, tmp_path):
+    """A file that save_to_directory can't write is reported as an error, not a traceback."""
+    sensor_dir = tmp_path / 'zones' / zone_monitor_output_name
+    (sensor_dir / 'metadata.json').mkdir(parents=True)
+    result = runner.invoke(core.cli, ['source', test_zone_monitor_osf_file, 'save_zone_set',
+                                      '--output-type', 'directory', '--overwrite', str(tmp_path / 'zones')])
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert 'Error: ZoneSet::save_to_directory: failed to open file for writing' in result.output
+
+
+def test_source_save_zone_set_directory_overwrite_removes_stale_files(test_zone_monitor_osf_file,
+                                                                      zone_monitor_output_name, runner, tmp_path):
+    """Overwriting a directory output with a narrower filter removes the zone files the
+    previous save wrote, but leaves unrelated files and subdirectories alone."""
+    from ouster.sdk.core import ZoneSet
+
+    out_dir = tmp_path / 'zones'
+    sensor_dir = out_dir / zone_monitor_output_name
+    args = ['source', test_zone_monitor_osf_file, 'save_zone_set', '--output-type', 'directory']
+    result = runner.invoke(core.cli, args + [str(out_dir)])
+    assert result.exit_code == 0, result.output
+    assert len(list(sensor_dir.glob('*.zrb'))) == 4
+    (sensor_dir / 'notes.txt').write_text('keep me')
+    (sensor_dir / 'extra').mkdir()
+
+    result = runner.invoke(core.cli, args + ['--filter', 'stl', '--overwrite', str(out_dir)])
+    assert result.exit_code == 0, result.output
+    assert list(sensor_dir.glob('*.zrb')) == []
+    assert len(list(sensor_dir.glob('*.stl'))) == 4
+    assert (sensor_dir / 'notes.txt').read_text() == 'keep me'
+    assert (sensor_dir / 'extra').is_dir()
+    assert all(zone.zrb is None for zone in ZoneSet(str(sensor_dir)).zones.values())

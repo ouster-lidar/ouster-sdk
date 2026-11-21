@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
-#include <vector>
+
+#include "ouster/core/chanfield.h"
 
 namespace ouster {
 namespace sdk {
@@ -14,14 +16,23 @@ namespace impl {
 
 size_t max_number_of_valid_points(const FrameSet& frame_set) {
     size_t count = 0;
-    for (const auto& frame : frame_set.valid_frames()) {
+    for (const auto& frame : frame_set.valid_lidar_frames()) {
         // A frame with no valid columns contributes no points; skip it rather
         // than let get_first_valid_column() throw (matches dewarp_impl).
         try {
             const int start_col = frame->get_first_valid_column();
             const int stop_col = frame->get_last_valid_column();
             count += static_cast<size_t>(stop_col - start_col + 1) * frame->h;
-        } catch (const std::runtime_error& /*e*/) {
+        } catch (const std::runtime_error& ignored) {
+            // Frame has no valid columns; it contributes no points, so skip it.
+            (void)ignored;
+        }
+    }
+
+    // Camera frames contribute at most one point per RANGE pixel.
+    for (const auto& camera : frame_set.valid_camera_frames()) {
+        if (camera->has_field(ChanField::RANGE)) {
+            count += static_cast<size_t>(camera->field<uint32_t>(ChanField::RANGE).size());
         }
     }
 

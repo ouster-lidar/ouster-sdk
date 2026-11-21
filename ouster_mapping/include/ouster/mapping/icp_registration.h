@@ -38,26 +38,16 @@ struct OUSTER_API_CLASS ICPRegistration {
     explicit ICPRegistration(int max_num_iteration = 50, double convergence_criterion = 0.0001,
                              int max_num_threads = 0);
 
-    /// @brief Align points to map using 3D voxel map.
+    /// @brief Align points to a voxel map.
     /// @param[in] frame Points to align.
-    /// @param[in] voxel_map 3D voxel map.
+    /// @param[in] voxel_map Target map; only its point positions are matched
+    ///                      against, so any strategy and attribute layout works.
     /// @param[in] max_distance Maximum distance to search for correspondences.
     /// @param[in] kernel_scale Kernel scale.
     /// @return Aligned points.
     OUSTER_API_FUNCTION
     core::Matrix4dR align_points_to_map(const std::vector<Eigen::Vector3d>& frame,
-                                        const ouster::sdk::core::VoxelHashMap3d& voxel_map,
-                                        const double max_distance, const double kernel_scale) const;
-
-    /// @brief Align points to map using X-dimensional voxel map.
-    /// @param[in] frame Points to align.
-    /// @param[in] voxel_map X-dimensional voxel map.
-    /// @param[in] max_distance Maximum distance to search for correspondences.
-    /// @param[in] kernel_scale Kernel scale.
-    /// @return Aligned points.
-    OUSTER_API_FUNCTION
-    core::Matrix4dR align_points_to_map(const std::vector<Eigen::Vector3d>& frame,
-                                        const ouster::sdk::core::VoxelHashMapXd& voxel_map,
+                                        const ouster::sdk::core::VoxelHashMap& voxel_map,
                                         const double max_distance, const double kernel_scale) const;
 
     /// @brief Maximum number of ICP iterations.

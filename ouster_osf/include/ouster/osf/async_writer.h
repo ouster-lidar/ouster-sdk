@@ -44,7 +44,8 @@ class OUSTER_API_CLASS AsyncWriter {
      *                            Writer should encode the OSF.
      */
     OUSTER_API_FUNCTION
-    AsyncWriter(const std::string& filename, const std::vector<ouster::sdk::core::SensorInfo>& info,
+    AsyncWriter(const std::string& filename,
+                const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& info,
                 const std::vector<std::string>& fields_to_write = std::vector<std::string>(),
                 uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
 
@@ -58,79 +59,83 @@ class OUSTER_API_CLASS AsyncWriter {
      * Save a single frame to the specified stream_index in an OSF
      * file.
      *
-     * The concept of the stream_index is related to the sensor_info vector.
-     * Consider the following:
+     * The stream_index is the sensor's position in registration order, the
+     * same unified index Writer::save() uses and the same order returned by
+     * FrameSetSource::sensor_info() on read. Lidar and camera streams share
+     * this one index space. Consider the following:
      @code{.cpp}
-     SensorInfo info1; // The first sensor in this OSF file
-     SensorInfo info2; // The second sensor in this OSF file
-     SensorInfo info3; // The third sensor in this OSF file
+     LidarInfo lidar1;   // registered at index 0
+     CameraInfo camera;  // registered at index 1
+     LidarInfo lidar2;   // registered at index 2
 
-     Writer output = Writer(filename, {info1, info2, info3});
+     AsyncWriter output = AsyncWriter(filename, {lidar1, camera, lidar2});
 
-     LidarFrame frame = RANDOM_FRAME_HERE;
+     // Save a LidarFrame to lidar1 (index 0):
+     output.save(0, lidar_frame);
 
-     // To save the LidarFrame to the first sensor, you would do the
-     // following
-     output.save(0, frame);
+     // Save a CameraFrame to camera (index 1):
+     output.save(1, camera_frame);
 
-     // To save the LidarFrame to the second sensor, you would do the
-     // following
-     output.save(1, frame);
-
-     // To save the LidarFrame to the third sensor, you would do the
-     // following
-     output.save(2, frame);
+     // Save a LidarFrame to lidar2 (index 2):
+     output.save(2, lidar_frame);
      @endcode
+     *
+     * The frame may be a LidarFrame or a CameraFrame; the correct stream type
+     * is selected based on the concrete frame type.
      *
      * @throws std::logic_error Will throw exception on writer being closed.
      * @throws std::logic_error ///< Will throw exception on
      *                          ///< out of bound stream_index.
      *
-     * @param[in] stream_index The index of the corrosponding SensorInfo to
-     *                         use.
+     * @param[in] stream_index The unified stream index (registration order) of
+     *                         the sensor to write this frame to.
      * @param[in] frame The frame to save.
      * @return a future, which can propagate exceptions that may have occurred
      * in the background from the save thread.
      */
     OUSTER_API_FUNCTION
-    std::future<void> save(uint32_t stream_index, const ouster::sdk::core::LidarFrame& frame);
+    std::future<void> save(uint32_t stream_index, const ouster::sdk::core::Frame& frame);
 
     /**
      * Save a single frame with the specified timestamp to the
      * specified stream_index in an OSF file.
      *
+     * The frame may be a LidarFrame or a CameraFrame; the correct stream type
+     * is selected based on the concrete frame type.
+     *
      * @throws std::logic_error Will throw exception on writer being closed.
      * @throws std::logic_error ///< Will throw exception on
      *                          ///< out of bound stream_index.
      *
-     * @param[in] stream_index The index of the corrosponding SensorInfo to
-     *                         use.
+     * @param[in] stream_index The unified stream index (registration order) of
+     *                         the sensor to write this frame to.
      * @param[in] frame The frame to save.
      * @param[in] timestamp Receive timestamp to index this frame with.
      * @return a future, which can propagate exceptions that may have occurred
      * in the background from the save thread.
      */
     OUSTER_API_FUNCTION
-    std::future<void> save(uint32_t stream_index, const ouster::sdk::core::LidarFrame& frame,
+    std::future<void> save(uint32_t stream_index, const ouster::sdk::core::Frame& frame,
                            ouster::sdk::osf::ts_t timestamp);
 
     /**
      * Save multiple frames to the OSF file.
      *
-     * The concept of the stream_index is related to the SensorInfo vector.
-     * Consider the following:
+     * A FrameSet's slots are in the same registration order as the sensors,
+     * so slot i holds the frame for the sensor registered at index i. Lidar
+     * and camera sensors share that one ordering. Consider the following:
      @code{.cpp}
-     SensorInfo info1; // The first sensor in this OSF file
-     SensorInfo info2; // The second sensor in this OSF file
-     SensorInfo info3; // The third sensor in this OSF file
+     LidarInfo lidar1;   // registered at index 0
+     CameraInfo camera;  // registered at index 1
+     LidarInfo lidar2;   // registered at index 2
 
-     Writer output = Writer(filename, {info1, info2, info3});
+     AsyncWriter output = AsyncWriter(filename, {lidar1, camera, lidar2});
 
-     std::shared_ptr<LidarFrame> sensor1_frame = RANDOM_FRAME_HERE;
-     std::shared_ptr<LidarFrame> sensor2_frame = RANDOM_FRAME_HERE;
-     std::shared_ptr<LidarFrame> sensor3_frame = RANDOM_FRAME_HERE;
+     std::shared_ptr<LidarFrame> lidar1_frame = RANDOM_FRAME_HERE;
+     std::shared_ptr<CameraFrame> camera_frame = RANDOM_FRAME_HERE;
+     std::shared_ptr<LidarFrame> lidar2_frame = RANDOM_FRAME_HERE;
 
-     FrameSet frame_set{sensor1_frame, sensor2_frame, sensor3_frame};
+     FrameSet frame_set{lidar1_frame, camera_frame, lidar2_frame};
 
      // To save the frames matched appropriately to their sensors, you would do
      // the following
@@ -181,15 +186,15 @@ class OUSTER_API_CLASS AsyncWriter {
 
         // TODO: can we get out of these copies?
 
-        // Note - this constructor deliberately copies the LidarFrame because it
-        // could be modified in a different thread.
+        // Note - this constructor deliberately copies the frame (via clone,
+        // preserving its concrete LidarFrame/CameraFrame type) because it could
+        // be modified in a different thread.
         OUSTER_API_IGNORE
         LidarFrameMessage(int stream_index, const ouster::sdk::osf::ts_t& timestamp,
-                          const ouster::sdk::core::LidarFrame& lidar_frame,
-                          std::promise<void>& promise)
+                          const ouster::sdk::core::Frame& frame, std::promise<void>& promise)
             : stream_index(stream_index),
               timestamp(timestamp),
-              frame_set({std::make_shared<ouster::sdk::core::LidarFrame>(lidar_frame)}),
+              frame_set({frame.clone()}),
               promise(std::move(promise)),
               saving_uncollated(true) {}
 
@@ -209,6 +214,9 @@ class OUSTER_API_CLASS AsyncWriter {
     };
 
     Writer writer_;
+    // Unlike Writer, AsyncWriter requires all sensors to be known at construction.
+    // Cache the number of sensors so we can validate stream_index in save() calls.
+    const size_t num_sensors_;
     /**
      * Internal job queue, used to keep the save function from blocking the
      * calling thread for the duration of encoding.
@@ -216,7 +224,19 @@ class OUSTER_API_CLASS AsyncWriter {
     ThreadsafeQueue<LidarFrameMessage> save_queue_;
     std::thread save_thread_;
     std::mutex stream_mutex_;
-    std::unordered_map<uint32_t, ouster::sdk::osf::ts_t> last_timestamp_;
+    /**
+     * Serializes the producer side of the writer (the save() overloads and
+     * close()). It guards last_timestamp_ and the closed check/enqueue
+     * sequence so that concurrent callers do not race on this state.
+     *
+     * Note: this mutex must NOT be held by the save thread, otherwise close()
+     * (which acquires it and then joins the save thread) could deadlock.
+     */
+    std::mutex save_mutex_;
+    // Keyed by a composite of frame type and stream index, since lidar and
+    // camera stream indices are independent 0-based spaces that would otherwise
+    // collide. See make_timestamp_key() in the implementation.
+    std::unordered_map<uint64_t, ouster::sdk::osf::ts_t> last_timestamp_;
 
     /**
      * A runnable used to handle writes in the thread 'save_thread_'.

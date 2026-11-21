@@ -9,9 +9,9 @@ The API is built around two primary components:
   :ouster:class:`LIOSlamConfig <py=ouster.sdk.mapping.LIOSlamConfig|cpp=ouster::sdk::mapping::LIOSlamConfig>`,
   provide specific configurations for different implementations. LIO refers to the Lidar Inertial Odometry.
 * :ouster:class:`SlamEngine <py=ouster.sdk.mapping.SlamEngine|cpp=ouster::sdk::mapping::SlamEngine>`
-  - An interface for implementations that process lidar frames, estimates sensor poses, and build an internal map.
+  - An interface for implementations that process frames (lidar and/or camera), estimate sensor poses, and build an internal map.
   This interface also serves as a factory for different SLAM implementations, e.g. the built-in Lidar Inertial Odometry engine.
-* The engine modifies input LidarFrame objects to include per-column pose information.
+* The engine modifies input :ouster:class:`Frame <py=ouster.sdk.core.Frame|cpp=ouster::sdk::core::Frame>` objects to include pose information — per-column for a ``LidarFrame`` and a single rigid pose for a ``CameraFrame``.
 
 Prerequisites
 -------------
@@ -20,9 +20,9 @@ Before using the mapping and SLAM features, ensure your development environment 
 
 - Follow the installation steps in the `Getting Started <../../getting-started.html>`__ guide.
 - Download PCAP/OSF data from the `Sample Data <../../getting-started/download-data.html>`__ section to experiment with the API.
-  
+
 - For C++ development, make sure you have built the SDK with ``BUILD_MAPPING=ON``.
-  
+
 
 Configuration
 -------------
@@ -55,9 +55,18 @@ A ``SlamConfig`` (or ``LIOSlamConfig``) object provides several parameters to tu
      - float (meters)
      - Voxel size for the internal map. If set to 0.0, a suitable size will be automatically determined from the first few frames.
        Controls map resolution; Smaller values increase map fidelity but also increase memory usage and computation time.
+   * - ``voxel_map_size``
+     - float (meters), default ``150.0``
+     - Maximum distance from the robot body at which points are retained in the local voxel map.
    * - ``initial_pose``
-     - 4×4 matrix
-     - A 4x4 transformation matrix specifying the starting pose of the sensor in the world frame. Defaults to the identity matrix.
+     - Optional 4×4 matrix
+     - Starting body-to-world pose in a gravity-levelled world frame, with gravity along world
+       -Z. When supplied, defines the first anchor. IMU deskewing validates it by plumbing; see
+       below.
+   * - ``plumb_method``
+     - ``"all"`` (default) | ``"imu"`` | ``"walls"``
+     - First-frame plumbing for IMU deskewing. With an ``initial_pose``, SLAM only runs the IMU
+       plumb, as a check.
    * - ``max_iterations``
      - int
      - Maximum number of ICP registration iterations per frame update. Defaults to 500.
@@ -65,13 +74,48 @@ A ``SlamConfig`` (or ``LIOSlamConfig``) object provides several parameters to tu
      - ``"auto"`` (default) | ``"constant_velocity"`` | ``"imu_deskew"`` | ``"none"``
      - Method to use for motion distortion correction (deskewing) within each frame.
 
- 
+
 ``deskew_method`` specifies how to handle motion distortion within each frame. Options are:
 
 * **"auto"**: For FW >= 3.2, the ``deskew_method`` is set to ``"imu_deskew"``, which uses IMU data from the sensor to perform more accurate deskewing.
   On FW < 3.2, it defaults to ``"constant_velocity"``.
 * **"constant_velocity"**: Enables software-based deskewing assuming constant velocity motion between poses during the frame acquisition.
 * **"none"**: Disables software deskewing, assuming the input frames are already deskewed or that motion distortion is negligible.
+
+
+.. _mapping-initial-pose-gravity:
+
+Initial Pose and Gravity
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+With IMU deskewing, SLAM plumbs the frame set its trajectory starts from: the first one that
+produces a pose, whether registration succeeds or ICP is skipped for too few valid columns.
+``plumb_method`` selects how: ``imu`` estimates gravity from the IMU, ``walls`` uses wall
+geometry, and ``all``, the default, refines the IMU result with walls. If the wall refinement is
+unavailable, ``all`` keeps the IMU result. A frame set with no valid points produces no pose, so
+the next one is plumbed again, wall search included; once a pose exists, walls are never searched
+again.
+Without an ``initial_pose``, SLAM levels that frame set by plumbing; if plumbing cannot, the world
+frame starts at the identity pose and a warning is logged.
+
+A supplied ``initial_pose`` is a body-to-world transform, used directly as the first integration
+anchor and never levelled away. SLAM assumes the pose's world frame is level and takes the initial
+gravity as world -Z. Only the IMU plumb runs, whatever ``plumb_method`` is, and only to check the
+pose: the IMU gravity, rotated into the world frame through the extrinsics and the pose, is
+compared with world -Z, and a difference **more than 10 degrees** warns that the pose may not be
+levelled, the extrinsics may be wrong, or the sensor may be moving. Yaw and translation do not
+enter the check, and the supplied pose is kept either way. If plumbing fails on the frame set the
+trajectory starts from, later frames retry the IMU plumb and run the check on its first success.
+
+The initial gravity stays in use until the platform holds still: near-static IMU windows then
+gradually refine it, exactly as without a supplied pose, so it keeps tracking the world frame as
+the trajectory drifts. A platform that never holds still keeps the initial gravity for the whole
+run.
+
+When no ``initial_pose`` is provided, SLAM plumbing establishes both the first anchor and the
+initial gravity for subtraction. Explicitly supplying identity is different: it asserts an already
+level body frame and is validated like any other supplied pose. Without IMU deskewing, an unset
+pose starts at identity and no plumbing validation runs.
 
 
 .. note::
@@ -102,7 +146,7 @@ The following code snippets demonstrate how to create a SlamConfig, which ``Slam
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|docs/features/mapping/_snippets/python/slam.py>`__
          :dedent: 0
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -129,7 +173,7 @@ The following code snippets demonstrate how to create a SlamConfig, which ``Slam
          :class: doc-snippet
          :caption: `View on GitHub <|github-src|docs/features/mapping/_snippets/python/slam.py>`__
          :dedent: 4
-   
+
    .. tab-item:: C++
       :sync: cpp
 
@@ -145,14 +189,16 @@ The following code snippets demonstrate how to create a SlamConfig, which ``Slam
 Open a Data Source and Construct the Engine
 -------------------------------------------
 
-Next, open your lidar data source using :ouster:func:`open_source <py=ouster.sdk.open_source|cpp=ouster::sdk::open_source>`. This function handles live sensors, PCAP files, and OSF files,
-returning an iterable source object and associated metadata (:ouster:class:`SensorInfo <py=ouster.sdk.core.SensorInfo|cpp=ouster::sdk::core::SensorInfo>`).
+Next, open your data source using :ouster:func:`open_source <py=ouster.sdk.open_source|cpp=ouster::sdk::open_source>`. This function handles live sensors, PCAP files, and OSF files,
+returning an iterable source object and associated per-sensor metadata (:ouster:class:`SensorInfo <py=ouster.sdk.core.SensorInfo|cpp=ouster::sdk::core::SensorInfo>` — a :ouster:class:`LidarInfo <py=ouster.sdk.core.LidarInfo|cpp=ouster::sdk::core::LidarInfo>` and/or :ouster:class:`CameraInfo <py=ouster.sdk.core.CameraInfo|cpp=ouster::sdk::core::CameraInfo>` for each stream).
 
 The ``SlamEngine`` is also a factory that can instantiate derived ``SlamEngine`` instances using the
 :ouster:func:`create <py=ouster.sdk.mapping.SlamEngine.create|cpp=ouster::sdk::mapping::SlamEngine::create>` method,
-providing the ``SensorInfo`` list (even for a single sensor) and an optional ``SlamConfig`` (defaults to
-``LIOSlamConfig{}``). Currently, ``SlamEngine`` supports only the ``lio`` (Lidar Inertial Odometry) implementation, which provides fast, incremental, CPU-based mapping.
-The ``SensorInfo`` is crucial as it contains calibration data (beam angles, intrinsics) needed for point cloud generation and deskewing.
+providing the sensor metadata list (``source.sensor_info``, even for a single sensor) and an optional ``SlamConfig`` (defaults to
+``LIOSlamConfig{}``). The list may mix ``LidarInfo`` and ``CameraInfo`` entries in any order — the
+engine dispatches per sensor on the concrete type, so lidar-only, camera-only, and mixed sources all
+use the same call. Currently, ``SlamEngine`` supports only the ``lio`` (Lidar Inertial Odometry) implementation, which provides fast, incremental, CPU-based mapping.
+The ``SensorInfo`` is crucial as it contains the calibration data (lidar beam angles / camera intrinsics, plus extrinsics) needed for point cloud generation and deskewing.
 
 
 .. tab-set::
@@ -187,17 +233,17 @@ Run SLAM on Each Frame
 
 The core of the SLAM process is an iteration loop. You read a :ouster:class:`FrameSet <py=ouster.sdk.core.FrameSet|cpp=ouster::sdk::core::FrameSet>`, ``frame_set``, from your source and pass it to the ``slam_engine.update()`` method.
 
-:ouster:func:`SlamEngine.update() <py=ouster.sdk.mapping.SlamEngine.update|cpp=ouster::sdk::mapping::SlamEngine::update>` processes the input ``FrameSet`` and augments each frame with per-column pose information.
+:ouster:func:`SlamEngine.update() <py=ouster.sdk.mapping.SlamEngine.update|cpp=ouster::sdk::mapping::SlamEngine::update>` processes the input ``FrameSet`` and augments each frame with pose information (per-column for a ``LidarFrame``, a single rigid pose for a ``CameraFrame``).
 In Python, it returns the updated frame set; in C++, it modifies the ``FrameSet`` in place and returns ``void``.
 
 This ``update()`` call performs several crucial steps:
 
-- It deskews the frame(s) using the configured ``deskew_method``, writing an initial per-column trajectory into ``frame.body_to_world``.
-- It aggregates points from the frame(s) in the set.
-- It registers the new points against its internal map (using KISS-ICP) to estimate the sensor's new pose.
-- It applies the ICP pose correction to every column pose and updates its internal map with the new points.
+- It deskews the frame(s) using the configured ``deskew_method``, writing an initial trajectory into ``frame.body_to_world`` (per-column for a lidar frame; a single rigid pose for a global-shutter camera frame, for which deskewing is a no-op).
+- It aggregates points from the frame(s) in the set, projecting lidar and camera RANGE through the same ``XYZLut``.
+- It uses ICP to register the new points against its internal map to estimate the sensor's new pose.
+- It applies the ICP pose correction to every pose and updates its internal map with the new points.
 
-After ``update()`` completes, the ``FrameSet`` is populated with map-aligned pose data. You can then access the pose for any column (measurement) in the frame to get the sensor’s position at that precise moment. The list contains one entry per sensor.
+After ``update()`` completes, the ``FrameSet`` is populated with map-aligned pose data. You can then access the pose for any column (measurement) in a lidar frame — or the single pose of a camera frame — to get the sensor’s position at that precise moment.
 
 
 .. tab-set::
@@ -229,11 +275,11 @@ After ``update()`` completes, the ``FrameSet`` is populated with map-aligned pos
 Inspect SLAM Output
 -------------------
 
-Each :ouster:class:`LidarFrame <py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>` now carries ``frame.body_to_world`` (a per-column SE(3) transform) and ``frame.timestamp`` arrays that are aligned with the
-range/reflectivity columns.  The engine also keeps the internal map up to date so subsequent calls
+Each :ouster:class:`Frame <py=ouster.sdk.core.Frame|cpp=ouster::sdk::core::Frame>` now carries ``frame.body_to_world`` (a ``(N, 4, 4)`` array of SE(3) transforms) and ``frame.timestamp`` arrays. For a ``LidarFrame`` there is one pose per measurement column (``N == W``), aligned with the
+range/reflectivity columns; a ``CameraFrame`` carries a single rigid pose (``N == 1``).  The engine also keeps the internal map up to date so subsequent calls
 benefit from accumulated structure.
 
-The examples show how to extract the pose corresponding to the last valid column in the frame and convert its rotation part into Euler angles (yaw, pitch, roll) for easier interpretation.
+The examples show how to extract the pose corresponding to the last valid column (or, for a camera frame, the single pose) using ``get_last_valid_column()`` — a shared ``Frame`` accessor that returns ``0`` for a single-pose camera frame — and convert its rotation part into Euler angles (yaw, pitch, roll) for easier interpretation.
 
 .. tab-set::
    :sync-group: api-lang
@@ -305,11 +351,11 @@ process: Deskewing and Dewarping.
 Deskew (Motion Compensation)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Deskewing is the process of estimating the required motion compensation for the frame captured while 
+Deskewing is the process of estimating the required motion compensation for the frame captured while
 the sensor in motion.
-   
+
 .. rubric:: **What it does**
-   
+
 It estimates the sensor's 4x4 pose at the specific timestamp for each column in the frame.
 This is done either using high-frequency data from an IMU or a constant velocity motion model.
 
@@ -320,8 +366,8 @@ It estimates an initial per-column trajectory and writes it into ``frame.body_to
 
 .. rubric:: SDK Implementation
 
-As described in :ref:`slam-run-loop`, ``update()`` then registers the deskewed points against the
-internal map using KISS-ICP and applies the resulting pose correction to every column pose in
+As described in :ref:`slam-run-loop`, ``update()`` then uses ICP to register the deskewed points
+against the internal map and applies the resulting pose correction to every column pose in
 ``frame.body_to_world``. The poses you read after ``update()`` are therefore deskewed *and* map-aligned—not
 deskew-only estimates.
 
@@ -336,10 +382,16 @@ Dewarping applies the estimated motion compensation from the deskewing step to t
 into a rigid, and geometrically correct point cloud.
 
 .. rubric:: **What it does**
-   
+
 It takes the distorted (H, W, 3) point cloud and the (W, 4, 4) per-column poses. It then applies the
 i-th pose matrix to all points in the i-th column, transforming all points from their individual
 "column frames" into a single, consistent coordinate frame (the frame of the middle column).
+
+For a single-pose frame such as a ``CameraFrame`` with RANGE data, ``frame.body_to_world`` holds a
+single ``(1, 4, 4)`` pose that is applied rigidly to every point—a global-shutter camera needs no
+rolling-shutter compensation. The only difference from the lidar case is the number of poses, so the
+same :ouster:func:`dewarp <py=ouster.sdk.core.dewarp|cpp=ouster::sdk::core::dewarp>` call handles
+both.
 
 .. rubric:: **Imports**
 
@@ -369,10 +421,11 @@ i-th pose matrix to all points in the i-th column, transforming all points from 
          :dedent: 0
 
 .. rubric:: **How it's used in the SDK**
-   
-Dewarping produces a new point cloud by applying a lidar frame's per-column poses to the frame's point cloud. When deskew (motion
-compensation) produces the per-column poses for the frame, the result of dewarp is a point cloud with motion distortion removed, where all
-points are expressed in a common frame.
+
+Dewarping produces a new point cloud by applying a frame's pose(s) to the frame's point cloud. For a
+lidar frame these are the per-column poses (removing motion distortion once deskew has produced them);
+for a camera frame it is the single rigid pose. In both cases the result is a point cloud whose points
+are expressed in a common frame.
 Refer to :ouster:func:`dewarp <py=ouster.sdk.core.dewarp|cpp=ouster::sdk::core::dewarp>` for API details.
 
 .. tab-set::

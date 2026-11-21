@@ -160,7 +160,7 @@ bool png_osf_read_init(png_structpp png_ptrp, png_infopp png_info_ptrp) {
 
 /**
  * Common png write setup routine.
- * Write destination is res_buf of std::vector<uitn8_t> type.
+ * Write destination is res_buf of std::vector<uint8_t> type.
  */
 void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr, FrameChannelData& res_buf,
                          uint32_t width, uint32_t height, int sample_depth, int color_type,
@@ -664,11 +664,66 @@ template bool decode_8bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
 template bool decode_8bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
                                           const EncodedFrameChannelData&);
 
-void decode_field(ouster::sdk::core::Field& field, const EncodedFrameChannelData& buffer,
+namespace {
+#pragma pack(push, 1)
+struct OUSTER_API_CLASS OldZoneState {
+    uint8_t live{0};
+    uint8_t id{0};
+    uint8_t error_flags{0};
+    uint8_t trigger_type{0};
+    uint8_t trigger_status{0};
+    uint32_t triggered_frames{0};
+    uint32_t count{0};
+    uint32_t occlusion_count{0};
+    uint32_t invalid_count{0};
+    uint32_t max_count{0};
+    uint32_t min_range{0};
+    uint32_t max_range{0};
+    uint32_t mean_range{0};
+};
+#pragma pack(pop)
+
+void convert_field_types(ouster::sdk::core::FieldView& field,
+                         ouster::sdk::osf::v2::CHAN_FIELD_TYPE field_type) {
+    if (field_type == ouster::sdk::osf::v2::CHAN_FIELD_TYPE::ZONE_STATE) {
+        // convert to new version
+        auto count = field.size();
+        std::vector<ZoneState> new_zone_state;
+        new_zone_state.reserve(count);
+
+        // NOLINTNEXTLINE(bugprone-casting-through-void)
+        auto data = reinterpret_cast<OldZoneState*>(static_cast<void*>(field));
+        for (size_t i = 0; i < count; i++) {
+            auto& old_zone = data[i];
+            ZoneState new_zone;
+            new_zone.live = old_zone.live;
+            new_zone.id = old_zone.id;
+            new_zone.error_flags = old_zone.error_flags;
+            new_zone.trigger_type = old_zone.trigger_type;
+            new_zone.trigger_status = old_zone.trigger_status;
+            new_zone.triggered_frames = old_zone.triggered_frames;
+            new_zone.count = old_zone.count;
+            new_zone.occlusion_count = old_zone.occlusion_count;
+            new_zone.invalid_count = old_zone.invalid_count;
+            new_zone.max_count = old_zone.max_count;
+            new_zone.min_range = old_zone.min_range;
+            new_zone.max_range = old_zone.max_range;
+            new_zone.mean_range = old_zone.mean_range;
+            new_zone_state.push_back(new_zone);
+        }
+
+        std::memcpy(field, new_zone_state.data(), new_zone_state.size() * sizeof(ZoneState));
+    }
+}
+}  // namespace
+
+void decode_field(ouster::sdk::core::FieldView& field, const EncodedFrameChannelData& buffer,
+                  ouster::sdk::osf::v2::CHAN_FIELD_TYPE field_type,
                   const std::vector<int>& px_offset) {
     // 1d case, uncompressed
     if (field.shape().size() == 1) {
         std::memcpy(field, buffer.data(), buffer.size());
+        convert_field_types(field, field_type);
         return;
     }
 
@@ -691,7 +746,7 @@ void decode_field(ouster::sdk::core::Field& field, const EncodedFrameChannelData
     ZPNG_Allocator alloc;
     alloc.AllocatorData = &field;
     alloc.Allocator = [](uint64_t size, void* data) {
-        auto field = static_cast<Field*>(data);
+        auto field = static_cast<FieldView*>(data);
         if (size != field->bytes()) {
             throw std::runtime_error("Invalid allocation");
         }
@@ -700,7 +755,8 @@ void decode_field(ouster::sdk::core::Field& field, const EncodedFrameChannelData
     auto out = ZPNG_DecompressEx(zbuffer, &alloc);
 
     if (out.Buffer.Data != nullptr) {
-        // ZPNG decoding successfull
+        // ZPNG decoding successful
+        convert_field_types(field, field_type);
         return;
     }
 
@@ -744,6 +800,7 @@ void decode_field(ouster::sdk::core::Field& field, const EncodedFrameChannelData
     if (res) {
         throw std::runtime_error("decodeField: could not decode field");
     }
+    convert_field_types(field, field_type);
 }
 
 }  // namespace impl

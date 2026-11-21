@@ -3,7 +3,7 @@ Copyright (c) 2023, Ouster, Inc.
 All rights reserved.
 """
 
-from typing import TYPE_CHECKING, Tuple, List, Callable, Union
+from typing import TYPE_CHECKING, Tuple, List, Callable, Union, Optional, cast
 
 import os
 import pytest
@@ -273,7 +273,7 @@ def test_viz_util_traj_eval_kitti(kitti_poses_file, point_viz: viz.PointViz) -> 
 
     point_viz.camera.set_dolly(-400)
 
-    traj_poses = pu.make_kiss_traj_poses(poses)
+    traj_poses = pu.make_frame_traj_poses(poses)
     traj_eval = pu.TrajectoryEvaluator(traj_poses, time_bounds=1.0)
 
     axis_a = viz.AxisWithLabel(point_viz,
@@ -338,10 +338,10 @@ def test_viz_util_traj_eval_frames_poses(test_data_dir,
     poses = pu.load_kitti_poses(poses_file)
 
     # make time indexed poses starting from 0.5
-    traj_poses = pu.make_kiss_traj_poses(poses)
+    traj_poses = pu.make_frame_traj_poses(poses)
     traj_eval = pu.TrajectoryEvaluator(traj_poses, time_bounds=1.0)
 
-    meta = core.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
+    meta = core.LidarInfo(open(resolve_metadata(pcap_file) or '').read())
     frame_sets = pcap.PcapFrameSetSource(pcap_file, sensor_info=[meta])
 
     # used for use_dewarp option
@@ -351,6 +351,8 @@ def test_viz_util_traj_eval_frames_poses(test_data_dir,
         for frame in frame_set:
             if frame is None:
                 continue
+            # pcap source is lidar-only
+            assert isinstance(frame, core.LidarFrame)
             # make frame indexed column timestamps
             idx_ts = idx + np.linspace(0, 1.0, frame.w, endpoint=False)
             traj_eval(frame, col_ts=idx_ts)
@@ -360,7 +362,7 @@ def test_viz_util_traj_eval_frames_poses(test_data_dir,
                 cloud_frame = viz.Cloud(frame.h * frame.w)
                 xyz = xyzlut(frame.field(core.ChanField.RANGE))
                 # TODO hao: remove the input_row_major
-                xyz = dewarp(xyz, frame.body_to_world)
+                xyz = cast(np.ndarray, dewarp(xyz, frame.body_to_world))
                 cloud_frame.set_xyz(xyz.astype(np.float32))
                 cloud_frame.set_key(key)
             else:
@@ -424,7 +426,7 @@ def test_viz_util_frames_accum_poses(test_data_dir,
     poses_file = str(test_data_dir / "pcaps" /
                      "OS-1-128_v2.3.0_1024x10_lb_n3_poses_kitti.txt")
 
-    meta = core.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
+    meta = core.LidarInfo(open(resolve_metadata(pcap_file) or '').read())
     frame_sets = pcap.PcapFrameSetSource(pcap_file, sensor_info=[meta])
     frame_sets_w_poses = pu.pose_frames_from_kitti(frame_sets, poses_file)
     model = LidarFrameVizModel(point_viz, metas=[meta], _img_aspect_ratio=0)
@@ -447,7 +449,8 @@ def test_viz_util_frames_accum_poses(test_data_dir,
         model,
         point_viz,
         accumulator_config,
-        threading.RLock()
+        threading.RLock(),
+        None
     )
 
     for frame in frame_sets_w_poses:
@@ -491,19 +494,20 @@ def test_lf_show(test_data_dir) -> None:
     # test single LidarFrame
     a = h[0][0]     # type: ignore
     assert a is not None
+    assert isinstance(a, core.LidarFrame)
     lf_show(a)
 
     # test a list of LidarFrame
     b = h[0]        # type: ignore
     lf_show(b)
 
-    # test a list of LidarFrame
+    # test a list of LidarFrame (pcap source yields lidar frames)
     c = [h[0][0], h[1][0]]  # type: ignore
     lf_show(c)
 
-    # test list of lists of LidarFrames
+    # test list of lists of LidarFrames (pcap source yields lidar frames)
     d = [[h[0][0], h[1][0]], [h[1][0], h[2][0]]]    # type: ignore
-    lf_show(d)
+    lf_show(cast(List[List[Optional[core.LidarFrame]]], d))
 
     # test a slice
     e = h[0:3]      # type: ignore

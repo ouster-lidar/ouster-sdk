@@ -75,7 +75,7 @@ class OUSTER_API_CLASS StreamOsfFile : public OsfFile {
     /// A method for checking errors and raising the appropriate exception
     void check_stream_bits();
 
-    uint64_t size_;
+    uint64_t size_{0};
 };
 
 }  // namespace osf

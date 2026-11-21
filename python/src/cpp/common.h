@@ -32,6 +32,20 @@ struct dtype_traits<ouster::sdk::core::float16_t> {
     };
     static constexpr auto name = const_name("float16");
 };
+
+// Eigen::half is the C++ type ouster::sdk::core::visit_attribute_type() maps
+// AttributeType::F16 to (see attribute_layout.h); this is what lets a
+// VoxelHashMap attribute of that type cross into Python as a numpy float16
+// array, the same way float16_t above does for LidarFrame fields.
+template <>
+struct dtype_traits<Eigen::half> {
+    static constexpr dlpack::dtype value{
+        (uint8_t)dlpack::dtype_code::Float,  // type code
+        16,                                  // size in bits
+        1                                    // lanes (simd), usually set to 1
+    };
+    static constexpr auto name = const_name("float16");
+};
 }  // namespace nanobind::detail
 
 /**
@@ -79,10 +93,8 @@ template <typename T>
 struct type_caster<nonstd::optional<T>> {
     using Caster = make_caster<T>;
 
-    static constexpr auto Name = const_name("typing.Optional[") + Caster::Name + const_name("]");
-
-    template <typename T_>
-    using Cast = nonstd::optional<T>;
+    NB_TYPE_CASTER(nonstd::optional<T>,
+                   const_name("typing.Optional[") + Caster::Name + const_name("]"))
 
     static handle from_cpp(const nonstd::optional<T>& src, rv_policy policy,
                            cleanup_list* cleanup) noexcept {
@@ -105,21 +117,6 @@ struct type_caster<nonstd::optional<T>> {
         }
         return false;
     }
-
-    operator nonstd::optional<T>*() {
-        return &value;
-    }
-    operator nonstd::optional<T>&() {
-        return value;
-    }
-    operator nonstd::optional<T>&&() {
-        return std::move(value);
-    }
-    operator nonstd::optional<T>() {
-        return std::move(value);
-    }
-
-    nonstd::optional<T> value;
 };
 };  // namespace nanobind::detail
 

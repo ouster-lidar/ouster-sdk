@@ -12,7 +12,7 @@
 
 #include "ouster/core/defaults.h"
 #include "ouster/core/impl/table.h"
-#include "ouster/core/sensor_config.h"
+#include "ouster/core/lidar_config.h"
 
 using nonstd::optional;
 using ouster::impl::lookup;
@@ -24,24 +24,6 @@ namespace sdk {
 namespace core {
 
 namespace impl {
-
-OUSTER_API_VAR Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{{
-    {UDPProfileLidar::UNKNOWN, "UNKNOWN"},
-    {UDPProfileLidar::LEGACY, "LEGACY"},
-    {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
-    {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
-    {UDPProfileLidar::RNG15_RFL8_NIR8, "RNG15_RFL8_NIR8"},
-    {UDPProfileLidar::FIVE_WORD_PIXEL, "FIVE_WORD_PIXEL"},
-    {UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL, "FUSA_RNG15_RFL8_NIR8_DUAL"},
-    {UDPProfileLidar::RNG15_RFL8_NIR8_DUAL, "RNG15_RFL8_NIR8_DUAL"},
-    {UDPProfileLidar::RNG15_RFL8_NIR8_ZONE16, "RNG15_RFL8_NIR8_ZONE16"},
-    {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_ZONE16, "RNG19_RFL8_SIG16_NIR16_ZONE16"},
-    {UDPProfileLidar::RNG15_RFL8_WIN8, "RNG15_RFL8_WIN8"},
-    {UDPProfileLidar::RNG19_RFL8_SIG16_ZONE16_DUAL, "RNG19_RFL8_SIG16_ZONE16_DUAL"},
-    {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16, "RNG19_RFL8_SIG16_NIR16_RGB16"},
-    {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_RGB16_DUAL, "RNG19_RFL8_SIG16_NIR16_RGB16_DUAL"},
-    {UDPProfileLidar::OFF, "OFF"},
-}};
 
 OUSTER_API_VAR Table<UDPProfileIMU, const char*, 3> udp_profile_imu_strings{{
     {UDPProfileIMU::LEGACY, "LEGACY"},
@@ -65,6 +47,7 @@ bool operator==(const DataFormat& lhs, const DataFormat& rhs) {
             lhs.column_window == rhs.column_window &&
             lhs.udp_profile_lidar == rhs.udp_profile_lidar && lhs.header_type == rhs.header_type &&
             lhs.udp_profile_imu == rhs.udp_profile_imu && lhs.fps == rhs.fps &&
+            lhs.imu_enabled == rhs.imu_enabled &&
             lhs.zone_monitoring_enabled == rhs.zone_monitoring_enabled);
 }
 
@@ -165,15 +148,6 @@ uint32_t DataFormat::max_frame_id() const {
         return std::numeric_limits<uint32_t>::max();
     }
     return std::numeric_limits<uint16_t>::max();
-}
-
-std::string to_string(UDPProfileLidar profile) {
-    auto res = lookup(impl::udp_profile_lidar_strings, profile);
-    return res ? res.value() : "UNKNOWN";
-}
-
-optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& str) {
-    return rlookup(impl::udp_profile_lidar_strings, str.c_str());
 }
 
 std::string to_string(UDPProfileIMU profile) {

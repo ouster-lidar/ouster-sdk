@@ -109,7 +109,7 @@ Load Metadata for Pcap Sources
 ------------------------------
 
 PCAP (Packet Capture) files are the most common format for recording raw UDP packets from Ouster sensors.
-They preserve the original network packets exactly as received.
+They preserve the original network packets exactly as received. The SDK does not yet support reading camera data from PCAP files.
 
 The ``source`` object returned by ``open_source`` provides access to :ouster:class:`LidarFrame <py=ouster.sdk.core.LidarFrame|cpp=ouster::sdk::core::LidarFrame>` objects,
 regardless of whether the source data comes from a sensor, pcap, or osf file.
@@ -380,7 +380,7 @@ Example for Multi Sensor Source:
      - Live sensors
      - Cap buffered frames to avoid backlog growth.
    * - ``sensor_info``
-     - ``List[SensorInfo]`` / unset
+     - ``List[LidarInfo]`` / unset
      - unset
      - Live sensors
      - Supply metadata without querying devices.
@@ -390,7 +390,7 @@ Example for Multi Sensor Source:
      - All
      - Include raw per-column headers or raw pixel words in each ``LidarFrame``.
    * - ``sensor_config``
-     - ``List[SensorConfig]`` / unset
+     - ``List[LidarConfig]`` / unset
      - unset
      - Live sensors
      - Apply staged configuration before streaming.
@@ -404,7 +404,7 @@ Example for Multi Sensor Source:
 Reading raw packet data
 =======================
 
-While most applications should use a ``FrameSetSource`` to work with complete ``LidarFrame`` objects, the SDK also provides a lower-level API for working directly with raw packets.
+While most applications should use a ``FrameSetSource`` to work with complete ``LidarFrame`` and ``CameraFrame`` objects, the SDK also provides a lower-level API for working directly with raw packets.
 
 The ``open_packet_source`` function is a high-level helper designed to automatically detect the source type and return the correct ``PacketSource`` implementation.
 
@@ -482,13 +482,13 @@ The ``FrameSetSource`` examines the timestamp of every frame from every sensor a
 that fit within the same time window as a single ``FrameSet``. The number of slots in the ``FrameSet`` is fixed corresponding
 to how many sensors are contained in the pcap or OSF file (one entry per sensor).
 
-However, the collation could yield a null value if one or more of the sensors didn’t produce a ``LidarFrame``
-object that fits within the time frame of the current ``FrameSet`` or iteration.
+However, the collation could yield a null slot if one or more of the sensors didn’t produce a ``Frame``
+that fits within the time frame of the current ``FrameSet`` or iteration.
 
-Thus, depending on the operation at hand it is critical to check if we got a valid ``LidarFrame`` object
+Thus, depending on the operation at hand it is critical to check if you got a valid ``Frame`` object
 when examining the iteration output of a ``FrameSetSource``.
 
-To display the ``frame_id`` of ``LidarFrame`` objects that belong to the same ``FrameSet`` on the same line, the code needs to be updated to the following:
+To display the measurement ``timestamp`` of every ``Frame`` in a ``FrameSet`` on separate lines, the code needs to be updated to the following:
 
 .. tab-set::
    :sync-group: api-lang
@@ -555,7 +555,7 @@ all streams (collated) while ``sensor_idx >= 0`` narrows the output to the singl
 
 Either of these two forms yields an iterator over ``FrameSet`` objects, but since the source is now narrowed to one sensor, each
 ``FrameSet`` holds only a single entry. Inside the loop, ``frame_set`` is that ``FrameSet``: ``frame_set[0]`` grabs the
-``LidarFrame`` object, and printing ``frame_set[0].frame_id`` gives the frame number for that sensor.
+``Frame`` for that sensor, and printing ``frame_set[0].timestamp[0]`` (Python) or ``frame_set[0]->timestamp()[0]`` (C++) gives the first measurement time for that frame.
 
 .. tab-set::
    :sync-group: api-lang

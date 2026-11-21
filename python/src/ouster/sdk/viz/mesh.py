@@ -6,7 +6,7 @@ from ouster.sdk.core import Zrb
 from ouster.sdk._bindings.viz import voxel_style_mesh_from_zone_image_pair
 
 
-def mesh_from_stl(simple_mesh, sensor_info: core.SensorInfo, add_faces=True, add_edges=True):
+def mesh_from_stl(simple_mesh, sensor_info: core.LidarInfo, add_faces=True, add_edges=True):
     mesh = Mesh.from_simple_mesh(simple_mesh)
     mesh.set_edge_rgba((1.0, 0.0, 0.0, 1.0))
     return mesh
@@ -36,7 +36,7 @@ def clouds_from_zrb(viz, zrb: Zrb, xyzlut):
 # TODO[tws] c++
 def voxel_style_mesh_from_zrb(
     zrb: Zrb,
-    metadata: core.SensorInfo,
+    metadata: core.LidarInfo,
     voxel_vertices,
     add_faces=True,   # TODO[tws] remove for now
     add_edges=True    # remove for now
@@ -51,4 +51,4 @@ def voxel_style_mesh_from_zrb(
 
 def load_sensor_info(file_path: str):
     with open(file_path) as f:
-        return core.SensorInfo(f.read())
+        return core.LidarInfo(f.read())

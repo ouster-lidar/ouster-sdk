@@ -1,0 +1,18 @@
+namespace ouster.sdk.osf.v2;
+
+// ============ Camera Sensor =======================================
+
+// Camera sensor metadata (a CameraInfo, serialized as a JSON string) stored in
+// the OSF footer. This is a distinct OSF metadata type from LidarSensor on
+// purpose: SDK versions that predate camera support don't recognize this type,
+// so they skip it as an opaque/unknown metadata entry instead of trying to
+// validate a CameraInfo as if it were a LidarInfo (which fails and aborts the
+// whole file open). That lets older readers still consume the lidar streams.
+
+table CameraSensor {
+    metadata:string;
+}
+
+// MetadataEntry.type: ouster/v1/os_sensor/CameraSensor
+root_type CameraSensor;
+file_identifier "oCS_";

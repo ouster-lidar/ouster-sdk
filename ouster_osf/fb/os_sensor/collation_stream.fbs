@@ -3,16 +3,42 @@ include "common.fbs";
 namespace ouster.sdk.osf.v2;
 
 struct ScanID {
+    // Sensor index for this frame's slot. Its exact meaning depends on which
+    // field holds the ScanID (see CollationMsg):
+    //   * In `scan_ids` (the legacy, lidar-only field) it is the per-lidar
+    //     index, i.e. the lidar's position among lidar streams only. This is
+    //     what SDK versions that predate camera support expect.
+    //   * In `frame_ids` (the unified field) it is the unified sensor index:
+    //     the sensor's position in the file's registration order (the same
+    //     order exposed by sensor_info()), covering both lidars and cameras.
+    // For legacy lidar-only files the two meanings coincide.
     sensor_id:uint32;
+    // Message index within that sensor's frame stream. A null (missing) slot is
+    // marked as UINT64_MAX in `frame_ids`, and as sensor_id=0xFFFF/scan_idx=0
+    // in `scan_ids` (the sentinel understood by pre-camera SDKs).
     scan_idx:uint64;
 }
 
 table CollationMsg {
+    // Legacy, lidar-only collation list, retained for backward compatibility
+    // with SDK versions that predate camera support. It contains one entry per
+    // lidar slot (camera slots are omitted), in per-lidar index order, so an
+    // older reader reconstructs a valid lidar-only FrameSet and silently
+    // ignores the cameras. Camera-aware readers should prefer `frame_ids`.
     scan_ids:[ScanID];
     fields:[Field];
     objects:[ObjectList];
+    // Unified collation list: one entry per collation slot, in the order frames
+    // appear within a saved FrameSet, covering both lidar and camera slots and
+    // addressing them by unified sensor index. This is the authoritative order
+    // and round-trips the exact frame layout regardless of interleaving. Added
+    // after `scan_ids`/`fields`/`objects` so older readers ignore it while
+    // camera-aware readers prefer it (falling back to `scan_ids` when absent).
+    frame_ids:[ScanID];
 }
 
+// Marker metadata entry: its presence identifies an OSF as containing
+// collations.
 table CollationStream {
 }
 

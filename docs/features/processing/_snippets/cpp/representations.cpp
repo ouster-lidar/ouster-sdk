@@ -11,6 +11,7 @@
 #include <vector>
 
 //! [doc-stag-xyzlut-imports]
+#include "ouster/core/frame.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/typedefs.h"
 #include "ouster/core/xyzlut.h"
@@ -22,11 +23,11 @@ using namespace ouster::sdk;
 namespace ouster {
 namespace docs {
 
-void project_with_metadata_extrinsics(const core::SensorInfo& info, const core::LidarFrame& frame) {
-    // core::XYZLut(info, true) multiplies the lookup table by
+void project_with_metadata_extrinsics(const core::SensorInfo& info, const core::Frame& frame) {
+    // core::XYZLut(info) multiplies the lookup table by
     // info.sensor_to_body * info.lidar_to_sensor_transform before projection.
     //! [doc-stag-cpp-xyzlut-extrinsics]
-    auto xyzlut = core::XYZLut(info, /*use_extrinsics=*/true);
+    auto xyzlut = core::XYZLut(info);
     auto cloud_in_extrinsics_frame = xyzlut(frame);
     //! [doc-etag-cpp-xyzlut-extrinsics]
     (void)cloud_in_extrinsics_frame;  // suppress unused warning in snippet
@@ -34,9 +35,9 @@ void project_with_metadata_extrinsics(const core::SensorInfo& info, const core::
 
 // Helper: Extract a channel (0=x, 1=y, 2=z), make it contiguous, and destagger
 core::img_t<double> destagger_channel(const core::PointCloudXYZd& cloud,
-                                      const core::SensorInfo& info, int channel_idx) {
-    const auto h = info.format.pixels_per_column;
-    const auto w = static_cast<size_t>(info.format.columns_per_frame);
+                                      const core::LidarInfo& info, int channel_idx) {
+    const auto h = info.h();
+    const auto w = info.w();
     const auto& shifts = info.format.pixel_shift_by_row;
 
     core::img_t<double> staggered(h, w);
@@ -72,18 +73,19 @@ std::vector<Eigen::Vector3d> filter_points_per_constraints(
 // clang-format off
 //! [doc-stag-filter-3d-full]
 core::PointCloudXYZd filter_points_by_range_and_azimuth(
-    const core::SensorInfo& info, const core::LidarFrame& frame,
+    const core::LidarFrame& frame,
     double range_min_m, double azimuth_fraction = 0.75) {
     //! [doc-stag-filter-3d-setup]
     // azimuth_fraction = 0.75
     // destagger RANGE so each column maps to a fixed azimuth.
+    auto& info = *frame.sensor_info();
     auto range_field = frame.field<uint32_t>(core::ChanField::RANGE);
     auto& shifts = info.format.pixel_shift_by_row;
     auto range_destaggered = core::destagger<uint32_t>(range_field, shifts);
-    
-    // obtain destaggered xyz representation
-    auto xyzlut = core::XYZLut(info, true);
-    auto cloud = xyzlut(frame);
+
+    // obtain destaggered xyz representation from the LUT cached on the info
+    const auto xyzlut = info.xyzlut<double>();
+    auto cloud = (*xyzlut)(frame);
     //! [doc-etag-filter-3d-setup]
     //! [doc-stag-filter-3d-destagger]
     // cloud shape is (H*W, 3)
@@ -133,29 +135,26 @@ core::PointCloudXYZd filter_points_by_range_and_azimuth(const std::string& hostn
     sensor::SensorFrameSetSource source(hostname,
                                         [&](auto& opts) { opts.lidar_port = lidar_port; });
     auto frame_pair = source.get_frame();
-    const auto& info = *source.sensor_info()[frame_pair.first];
     const auto& frame = *frame_pair.second;
 
-    return filter_points_by_range_and_azimuth(info, frame, range_min_m);
+    return filter_points_by_range_and_azimuth(frame, range_min_m);
 }
 
-core::PointCloudXYZd apply_metadata_transform_xyzlut(const core::SensorInfo& info,
+core::PointCloudXYZd apply_metadata_transform_xyzlut(const core::LidarInfo& info,
                                                      const core::LidarFrame& frame) {
     //! [doc-stag-xyzlut-metadata-transform]
     // Custom pose: flip Z/Y and translate up 20 m and 1.5 m along X.
     core::mat4d transform = core::mat4d::Identity();
     transform(2, 2) = -1.0;
     transform(1, 1) = -1.0;
-    transform(2, 3) = 20000.0;  // millimetres
-    transform(0, 3) = 1500.0;   // millimetres
-    // Compose with the existing lidar_to_sensor transform.
-    core::SensorInfo adjusted = info;
-    core::mat4d combined = transform * info.lidar_to_sensor_transform;
+    transform(2, 3) = 20.0;  // metres
+    transform(0, 3) = 1.5;   // metres
+    // Compose with the existing sensor_to_body extrinsics on a copy of the
+    // metadata, so the original LidarInfo and its cached LUT are untouched.
+    core::LidarInfo adjusted = info;
+    adjusted.sensor_to_body = transform * info.sensor_to_body;
 
-    // Override the transform before building the LUT.
-    adjusted.lidar_to_sensor_transform = combined;
-
-    core::XYZLut lut_adjusted(adjusted, /*use_extrinsics=*/false);
+    core::XYZLut lut_adjusted(adjusted);
     auto cloud_adjusted = lut_adjusted(frame);
     return cloud_adjusted;
     //! [doc-etag-xyzlut-metadata-transform]

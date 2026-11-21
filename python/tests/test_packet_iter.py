@@ -5,7 +5,7 @@ import weakref
 
 import pytest
 
-from ouster.sdk.core import SensorInfo
+from ouster.sdk.core import LidarInfo
 from ouster.sdk.pcap import PcapPacketSource
 from ouster.sdk.pcap import packet_iter
 from tests.conftest import PCAPS_DATA_DIR
@@ -120,7 +120,7 @@ def test_recording_packet_source(tmp_path) -> None:
         emitted_packets += 1
     assert emitted_packets == 74
 
-    sensor_info = SensorInfo(open(meta_file_path).read())
+    sensor_info = LidarInfo(open(meta_file_path).read())
     assert len(os.listdir(tmp_path)) == 1
     recording_path = os.path.join(tmp_path, os.listdir(tmp_path)[0])
     recorded_pcap = PcapPacketSource(recording_path, sensor_info=[sensor_info])

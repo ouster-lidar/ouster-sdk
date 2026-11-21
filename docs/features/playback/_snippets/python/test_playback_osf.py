@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from ouster.sdk import core
+
 CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
@@ -50,6 +52,7 @@ def assert_metadata_matches(original: Path, derived: Path) -> None:
         derived_infos = list(derived_source.sensor_info)
         assert len(orig_infos) == len(derived_infos), "Sensor count mismatch"
         for base, new in zip(orig_infos, derived_infos):
+            assert isinstance(base, core.LidarInfo) and isinstance(new, core.LidarInfo)
             assert base.sn == new.sn
             assert base.prod_line == new.prod_line
             assert base.config == new.config

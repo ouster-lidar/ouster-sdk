@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/frame.h"
 #include "ouster/core/visibility.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
@@ -26,11 +27,44 @@ namespace sdk {
 namespace osf {
 
 /**
+ * Cast `src` to a subset of fields with possible different underlying
+ * ChanFieldTypes.
+ *
+ * The result is a copy of `src` carrying exactly @p field_types: fields that
+ * `src` holds under a different ChanFieldType (or field class, or extra
+ * dimensions) are cast into the requested one, fields `src` already holds as
+ * requested are copied unchanged, and everything else is dropped. Every other
+ * part of the frame — dimensions, timestamp / pose / status headers, objects,
+ * the associated sensor_info(), and any headers specific to the concrete frame
+ * type — comes across untouched.
+ *
+ * The copy is made through Frame::clone(), so the returned frame has the same
+ * concrete type as @p src: hand it a LidarFrame and you get a LidarFrame, hand
+ * it a CameraFrame and you get a CameraFrame.
+ *
+ * @throws std::invalid_argument if a requested field is missing from @p src, or
+ *         if a field needing a cast cannot be cast (casting is supported for
+ *         two-dimensional fields only).
+ *
+ * @param[in] src The frame to cast.
+ * @param[in] field_types The field types to cast the frame to.
+ * @return a copy of `src` with transformed fields.
+ */
+OUSTER_API_FUNCTION
+std::shared_ptr<ouster::sdk::core::Frame> slice_and_cast(
+    const ouster::sdk::core::Frame& src,
+    const ouster::sdk::core::LidarFrameFieldTypes& field_types);
+
+/**
  * Cast `ls_src` LidarFrame to a subset of fields with possible different
  * underlying ChanFieldTypes.
  *
- * @throws std::logic_error Exception on trying to slice a frame with only
- *                          a subset of the requested frames
+ * Convenience overload returning a LidarFrame by value; see
+ * slice_and_cast(const core::Frame&, const core::LidarFrameFieldTypes&) for
+ * the semantics.
+ *
+ * @throws std::invalid_argument Exception on trying to slice a frame with only
+ *                               a subset of the requested frames
  *
  * @param[in] ls_src The LidarFrame to cast.
  * @param[in] field_types The field types to cast the LidarFrame to.
@@ -80,7 +114,7 @@ class OUSTER_API_CLASS LidarFrameStreamMeta : public MetadataEntryHelper<LidarFr
     /**
      * Create a LidarFrameStreamMeta object from a byte array.
      *
-     * @todo Figure out why this wasnt just done as a constructor overload.
+     * @todo Figure out why this wasn't just done as a constructor overload.
      *
      * @relates MetadataEntry::from_buffer
      *
@@ -238,29 +272,15 @@ class OUSTER_API_CLASS LidarFrameStream
     uint32_t sensor_meta_id_{0};
 
     /**
-     * The internal SensorInfo data.
+     * The internal LidarInfo data.
      */
-    ouster::sdk::core::SensorInfo sensor_info_;
+    ouster::sdk::core::LidarInfo sensor_info_;
 
     /**
      * The internal field_types data.
      */
     ouster::sdk::core::LidarFrameFieldTypes field_types_;
 };
-
-}  // namespace osf
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace osf {
-
-OUSTER_DEPRECATED_TYPE(LidarScanStreamMeta, LidarFrameStreamMeta,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(LidarScanStream, LidarFrameStream, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
 
 }  // namespace osf
 }  // namespace sdk

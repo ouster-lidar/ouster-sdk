@@ -1,16 +1,24 @@
 #include "slam_util.h"
 
-#include <ouster/core/impl/logging.h>
+#include <ouster/core/camera_info.h>
+#include <ouster/core/frame_set.h>
+#include <ouster/core/lidar_info.h>
 #include <ouster/core/object_util.h>
-#include <ouster/core/pose_util.h>
 #include <ouster/core/sensor_info.h>
+#include <ouster/core/typedefs.h>
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <memory>
 #include <nonstd/optional.hpp>
 #include <stdexcept>
+#include <vector>
 
+// NOLINTNEXTLINE(readability-identifier-naming)
 namespace ChanField = ouster::sdk::core::ChanField;
 using ouster::sdk::core::FrameSet;
 using ouster::sdk::core::LidarFrame;
@@ -45,7 +53,7 @@ nonstd::optional<double> determine_voxel_size(const FrameSet& frame_set, double 
 
     std::vector<uint32_t> selected_ranges;
 
-    for (const auto& frame : frame_set.valid_frames()) {
+    for (const auto& frame : frame_set.valid_lidar_frames()) {
         if (!has_valid_columns(*frame)) {
             continue;  // no valid columns; skip rather than throw
         }
@@ -83,6 +91,38 @@ nonstd::optional<double> determine_voxel_size(const FrameSet& frame_set, double 
             end_idx = num_ranges - 1;
         }
 
+        for (size_t i = start_idx; i <= end_idx; ++i) {
+            selected_ranges.push_back(frame_range[i]);
+        }
+    }
+
+    for (const auto& camera : frame_set.valid_camera_frames()) {
+        if (!camera->has_field("RANGE")) {
+            continue;
+        }
+        auto range = camera->field<uint32_t>("RANGE");
+        std::vector<uint32_t> frame_range;
+        frame_range.reserve(static_cast<size_t>(range.size()));
+        const uint32_t* range_ptr = range.data();
+        for (Eigen::Index i = 0; i < range.size(); ++i) {
+            const uint32_t r = range_ptr[i];
+            if (r == 0) {
+                continue;
+            }
+            frame_range.push_back(r);
+        }
+        if (frame_range.empty()) {
+            continue;
+        }
+        std::sort(frame_range.begin(), frame_range.end());
+        size_t num_ranges = frame_range.size();
+        size_t start_idx = static_cast<size_t>(
+            std::ceil(start_pct * 100.0 / 100.0 * static_cast<double>(num_ranges)));
+        size_t end_idx = static_cast<size_t>(
+            std::floor(end_pct * 100.0 / 100.0 * static_cast<double>(num_ranges)));
+        if (end_idx >= num_ranges) {
+            end_idx = num_ranges - 1;
+        }
         for (size_t i = start_idx; i <= end_idx; ++i) {
             selected_ranges.push_back(frame_range[i]);
         }
@@ -134,17 +174,42 @@ void init_valid_column_poses(LidarFrame& frame, Eigen::Ref<const core::Matrix4dR
 }
 
 void init_valid_column_poses(FrameSet& frame_set, Eigen::Ref<const core::Matrix4dR> pose) {
-    for (auto& frame : frame_set.valid_frames()) {
+    for (auto& frame : frame_set.valid_lidar_frames()) {
         init_valid_column_poses(*frame, pose);
+    }
+}
+
+void init_camera_poses(FrameSet& frame_set, Eigen::Ref<const core::Matrix4dR> pose) {
+    for (auto& camera : frame_set.valid_camera_frames()) {
+        camera->set_column_pose(0, pose);
     }
 }
 
 void transform_inplace(LidarFrame& frame, const core::Matrix4dR& transform) {
     Eigen::Ref<const LidarFrame::Header<uint32_t>> status = frame.status();
+
+    // Columns with only an IMU measurement (lidar return dropped) carry poses too
+    // and must move with the world: the deskew anchor may be read from one.
+    Eigen::ArrayX<bool> transformable = status != 0;
+    if (frame.has_field(ChanField::IMU_STATUS) && frame.has_field(ChanField::IMU_MEASUREMENT_ID)) {
+        Eigen::Ref<const Eigen::ArrayX<uint16_t>> imu_status = frame.field(ChanField::IMU_STATUS);
+        Eigen::Ref<const Eigen::ArrayX<uint16_t>> measurement_id =
+            frame.field(ChanField::IMU_MEASUREMENT_ID);
+        for (Eigen::Index k = 0; k < imu_status.size() && k < measurement_id.size(); ++k) {
+            if ((imu_status[k] & 0x01) == 0) {
+                continue;
+            }
+            const size_t column = static_cast<size_t>(measurement_id[k]);
+            if (column < frame.w) {
+                transformable[static_cast<Eigen::Index>(column)] = true;
+            }
+        }
+    }
+
     auto poses = Eigen::Map<MatrixX16dR>(frame.body_to_world().get<double>(),
                                          static_cast<Eigen::Index>(frame.w), 16);
     for (size_t j = 0; j < frame.w; ++j) {
-        if (status[static_cast<Eigen::Index>(j)] == 0) {
+        if (!transformable[static_cast<Eigen::Index>(j)]) {
             continue;
         }
         auto pose = Eigen::Map<core::Matrix4dR>(poses.row(static_cast<Eigen::Index>(j)).data());
@@ -153,9 +218,32 @@ void transform_inplace(LidarFrame& frame, const core::Matrix4dR& transform) {
 }
 
 void transform_inplace(FrameSet& frame_set, const core::Matrix4dR& transform) {
-    for (auto& frame : frame_set.valid_frames()) {
+    for (auto& frame : frame_set.valid_lidar_frames()) {
         transform_inplace(*frame, transform);
     }
+    for (auto& camera : frame_set.valid_camera_frames()) {
+        camera->set_column_pose(0, transform * camera->get_column_pose(0));
+    }
+}
+
+bool contains_lidar(const std::vector<std::shared_ptr<core::SensorInfo>>& sensor_infos) {
+    return std::any_of(
+        sensor_infos.begin(), sensor_infos.end(),
+        [](const std::shared_ptr<core::SensorInfo>& info) {
+            return static_cast<bool>(std::dynamic_pointer_cast<core::LidarInfo>(info));
+        });
+}
+
+core::Matrix4dR source_point_pose(const FrameSet& frame_set, uint32_t frame_idx, int col_idx) {
+    // With the unified container, lidar and camera frames share a single index
+    // space, so a frame's global index is simply its position in frames().
+    if (frame_idx < frame_set.size()) {
+        const auto& frame = frame_set[frame_idx];
+        if (frame) {
+            return frame->get_column_pose(col_idx);
+        }
+    }
+    return core::Matrix4dR::Identity();
 }
 
 void update_object_poses(LidarFrame& frame) {
@@ -172,7 +260,7 @@ void update_object_poses(LidarFrame& frame) {
 
 void update_object_poses(FrameSet& frame_set) {
     // Per-frame objects interpolate directly from their owning frame's columns.
-    for (auto& frame : frame_set.valid_frames()) {
+    for (auto& frame : frame_set.valid_lidar_frames()) {
         update_object_poses(*frame);
     }
 
@@ -183,13 +271,33 @@ void update_object_poses(FrameSet& frame_set) {
             //    Use the first valid frame whose valid columns bracket
             //    the object's timestamp. If no frame brackets it, the object is
             //    left unchanged.
-            for (auto& frame : frame_set.valid_frames()) {
+            for (auto& frame : frame_set.valid_lidar_frames()) {
                 try {
                     object.body_to_world = core::pose_at_timestamp(*frame, object.timestamp);
                     break;
-                } catch (const std::invalid_argument&) {
+                } catch (const std::invalid_argument& ignored) {
                     // This frame doesn't bracket the timestamp, try the next one.
+                    (void)ignored;
                 }
+            }
+        }
+    }
+}
+
+void update_camera_poses(FrameSet& frame_set) {
+    for (auto& camera : frame_set.valid_camera_frames()) {
+        uint64_t timestamp_ns = camera->timestamp()[0];
+        if (timestamp_ns == 0) {
+            continue;
+        }
+        for (auto& frame : frame_set.valid_lidar_frames()) {
+            try {
+                camera->set_column_pose(0,
+                                        core::pose_at_timestamp(*frame, timestamp_ns).to_matrix());
+                break;
+            } catch (const std::invalid_argument& ignored) {
+                // This frame doesn't bracket the timestamp, try the next one.
+                (void)ignored;
             }
         }
     }
@@ -209,8 +317,7 @@ std::pair<uint64_t, uint64_t> compute_frame_ts_range(const FrameSet& frame_set) 
     uint64_t frame_start_ts = std::numeric_limits<uint64_t>::max();
     uint64_t frame_stop_ts = std::numeric_limits<uint64_t>::min();
 
-    for (size_t idx : frame_set.valid_indices()) {
-        const auto& frame = frame_set[idx];
+    for (const auto& frame : frame_set.valid_lidar_frames()) {
         if (!has_valid_columns(*frame)) {
             continue;  // no valid columns; skip rather than throw
         }
@@ -219,6 +326,15 @@ std::pair<uint64_t, uint64_t> compute_frame_ts_range(const FrameSet& frame_set) 
         uint64_t stop_ts = c_timestamps[frame->get_last_valid_column()];
         frame_start_ts = std::min(frame_start_ts, start_ts);
         frame_stop_ts = std::max(frame_stop_ts, stop_ts);
+    }
+
+    for (const auto& camera : frame_set.valid_camera_frames()) {
+        uint64_t timestamp_ns = camera->timestamp()[0];
+        if (timestamp_ns == 0) {
+            continue;
+        }
+        frame_start_ts = std::min(frame_start_ts, timestamp_ns);
+        frame_stop_ts = std::max(frame_stop_ts, timestamp_ns);
     }
 
     return {frame_start_ts, frame_stop_ts};

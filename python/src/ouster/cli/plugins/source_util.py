@@ -23,7 +23,8 @@ class SourceCommandType(IntEnum):
 
 @dataclass(init=False)
 class SourceCommandContext:
-    source_uri: Optional[str]
+    source_uri: str
+    source_uris: List[str]
     source_options: Dict[str, Any]
     other_options: Dict[str, Any]
     frame_set_source: Optional[FrameSetSource]
@@ -63,28 +64,57 @@ class SourceCommandContext:
         return self.misc[key]
 
 
+def warn_if_camera_streams(sensor_infos: Iterable[Any], command: str) -> int:
+    """Warn that camera streams cannot be converted to sensor packets.
+
+    Several ouster-cli commands (e.g. ``save`` to pcap/bag and
+    ``sensor_replay``) turn frames back into sensor UDP packets via
+    ``frame_to_packets``, which only supports lidar data. When the source
+    contains camera streams, emit a warning and return the number of camera
+    streams so the caller can skip them.
+    """
+    from ouster.sdk.core import CameraInfo
+    cameras = [si for si in sensor_infos if isinstance(si, CameraInfo)]
+    if cameras:
+        click.secho(
+            f"Warning: '{command}' converts frames to sensor packets via "
+            "frame_to_packets, which does not support camera data. "
+            f"{len(cameras)} camera stream(s) will be skipped.",
+            fg="yellow")
+    return len(cameras)
+
+
+def sensor_frame_xyzlut(info: Any) -> Any:
+    """Build an ``XYZLut`` that projects into the sensor frame.
+
+    ``XYZLut`` always applies ``sensor_to_body``, so build it from a copy of
+    the metadata whose extrinsic is the identity.
+    """
+    import copy
+    import numpy as np
+    from ouster.sdk import core
+    sensor_frame_info = copy.copy(info)
+    sensor_frame_info.sensor_to_body = np.eye(4)
+    return core.XYZLut(sensor_frame_info)
+
+
 @dataclass
 class SourceCommandCallback:
     callback_fn: Callable[[SourceCommandContext], None]
-    prerun_fn: Callable[[SourceCommandContext], None]
     type: SourceCommandType
 
 
 def source_multicommand(type: SourceCommandType = SourceCommandType.MULTICOMMAND_UNSUPPORTED,
-                        retrieve_click_context: bool = False,
-                        prerun: Optional[Callable[[SourceCommandContext], None]] = None):
+                        retrieve_click_context: bool = False):
     def source_multicommand_wrapper(fn):
         @wraps(fn)
         def callback_wrapped(click_ctx: click.core.Context, *args, **kwargs):
-            prefn = None
-            if prerun is not None:
-                prefn = lambda ctx: prerun(ctx, *args, **kwargs)
             # Extract ctx.obj: SourceCommandContext from click context
             if not retrieve_click_context:
-                return SourceCommandCallback(lambda ctx: fn(ctx, *args, **kwargs), prefn, type)  # type: ignore
+                return SourceCommandCallback(lambda ctx: fn(ctx, *args, **kwargs), type)  # type: ignore
             else:
                 return SourceCommandCallback(
-                        lambda ctx: fn(ctx, click_ctx, *args, **kwargs), prefn, type)  # type: ignore
+                        lambda ctx: fn(ctx, click_ctx, *args, **kwargs), type)  # type: ignore
         return callback_wrapped
     return source_multicommand_wrapper
 
@@ -136,7 +166,7 @@ class CoupledTee:
                 val = self._queues[idx].get(block=True, timeout=0.5)
                 self._queues[idx].task_done()
                 if isinstance(val, Exception):
-                    # python doesnt allow you to throw a stop iteration here
+                    # python doesn't allow you to throw a stop iteration here
                     if isinstance(val, StopIteration):
                         if self._loop:
                             yield []

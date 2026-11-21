@@ -6,7 +6,7 @@ consists of the following:
 
 - ``simple-viz`` (:py:class:`.viz.SimpleViz`): the default Python application visualizer, which can
   also be used as an entrypoint for more sophisticated custom point cloud visualizations
-- ``ouster_viz``: the core C++ library 
+- ``ouster_viz``: the core C++ library
 - ``ouster.sdk.viz``: the Python module for the bindings
 
 
@@ -50,8 +50,8 @@ at the same time, you can toggle each frame on/off within SimpleViz using ``CTRL
 to compare frames side by side. It is worth noting that the frames don't need to be from the same source.
 
 In the second example, we are passing a slice of frames to ``lf_show``, this will visualize the frames
-within the slice sequentially. You can press the ``spacebar`` to unpause the playback or use the 
-`<`, `>` keys to step back and forth between frames. 
+within the slice sequentially. You can press the ``spacebar`` to unpause the playback or use the
+`<`, `>` keys to step back and forth between frames.
 
 For more advanced visualization you can explore a programmatically accessible :py:class:`.viz.PointViz`
 API below:

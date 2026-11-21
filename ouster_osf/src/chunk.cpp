@@ -66,12 +66,16 @@ ChunkInfoNode* ChunksPile::get_info(uint64_t offset) {
 }
 
 ChunkInfoNode* ChunksPile::get_info_by_message_idx(uint32_t stream_id, uint32_t message_idx) {
-    if (!has_message_idx()) {
+    auto schunks = stream_chunks_.find(stream_id);
+    if (schunks == stream_chunks_.end()) {
         return nullptr;
     }
 
-    auto schunks = stream_chunks_.find(stream_id);
-    if (schunks == stream_chunks_.end()) {
+    if (message_idx == 0) {
+        return get_info(schunks->second->front());
+    }
+
+    if (!has_message_idx()) {
         return nullptr;
     }
 

@@ -19,11 +19,14 @@
 #include <vector>
 
 #include "common.h"
+#include "eigen_dense.h"
 #include "ndarray_helpers.h"
 #include "nonstd/optional.hpp"
 #include "ouster/algorithm/align_clouds.h"
 #include "ouster/algorithm/ground_seg.h"
+#include "ouster/algorithm/impl/wall.h"
 #include "ouster/algorithm/normals.h"
+#include "ouster/algorithm/plumb.h"
 #include "ouster/core/frame_set.h"
 #include "ouster/core/lidar_frame.h"
 
@@ -405,6 +408,7 @@ std::vector<py::ndarray<py::numpy, double, py::c_contig>> process_normals(
         static_cast<Eigen::Index>(range.shape(1))};
 
     std::vector<ouster::sdk::core::MatrixX3dR> normals_vec;
+    normals_vec.reserve(xyz2.has_value() ? 2 : 1);
     if (xyz2.has_value()) {
         Eigen::Map<const ouster::sdk::core::PointCloudXYZd> second_xyz_map{
             static_cast<const double*>(xyz2->data()),
@@ -425,6 +429,7 @@ std::vector<py::ndarray<py::numpy, double, py::c_contig>> process_normals(
     }
 
     std::vector<py::ndarray<py::numpy, double, py::c_contig>> results;
+    results.reserve(normals_vec.size());
     for (auto& it : normals_vec) {
         std::vector<size_t> shape = {static_cast<size_t>(h), static_cast<size_t>(w), 3};
 
@@ -558,12 +563,21 @@ void init_ground_seg(py::module_& module) {
 
     py::class_<GroundSegEngine>(module, "GroundSegEngine",
                                 R"pbdoc(
-        Ground segmentation engine for classifying ground points.
+        Ground segmentation engine for classifying ground points in sensor
+        frames.
+
+        Operates on any Frame that carries a RANGE field and sensor metadata,
+        covering both LidarFrame and CameraFrame. Lidar frames may provide
+        multiple returns (GROUND, GROUND2, ...) and a staggered pixel layout;
+        camera frames have a single return and an unstaggered image. Frames
+        without a RANGE field or sensor info are skipped.
 
         Coordinate frame selection:
-            If any valid column pose in a frame is non-identity, the engine
-            treats those poses as SLAM poses and segments in that global frame.
-            Otherwise, it uses sensor extrinsics and frame-local column poses.
+            If any valid pose in a frame is non-identity, the engine treats
+            those poses as SLAM poses and segments in that global frame. A lidar
+            frame provides one pose per column (rolling shutter); a camera frame
+            provides a single rigid pose applied to every column. Otherwise,
+            the engine uses sensor extrinsics and frame-local column poses.
 
         The engine does not compute IMU gravity alignment internally. If
         gravity alignment is desired, plumb the frame set source first and write the
@@ -594,16 +608,165 @@ void init_ground_seg(py::module_& module) {
             R"pbdoc(
                 Run ground segmentation on a FrameSet.
 
-                Annotates each frame with a "GROUND" field (uint8: 1=ground,
-                0=non-ground) for the first return, and a "GROUND2" field
-                for the second return when RANGE2 is present. Returns the
-                same FrameSet after in-place annotation.
+                Annotates each supported frame (lidar or camera) with a
+                "GROUND" field (uint8: 1=ground, 0=non-ground) for the first
+                return, and a "GROUND2" field for the second return when
+                RANGE2 is present. Camera frames receive only GROUND. Returns
+                the same FrameSet after in-place annotation.
             )pbdoc");
+}
+
+void init_wall(py::module_& module) {
+    py::class_<WallSegConfig>(module, "WallSegConfig",
+                              R"pbdoc(
+        Configuration for the wall segmentation engine.
+    )pbdoc")
+        .def(py::init())
+        .def_rw("gravity_rotation", &WallSegConfig::gravity_rotation,
+                R"pbdoc(
+                4x4 rotation-only alignment applied to every frame's cloud
+                before the mask is taken, e.g. built from plumb_imu().
+                Identity when the frames are already level. Nothing on the
+                frame is rotated; the mask is simply taken in the aligned
+                frame. Default: identity
+            )pbdoc");
+
+    py::class_<WallSegEngine>(module, "WallSegEngine",
+                              R"pbdoc(
+        Wall segmentation engine for classifying wall points.
+
+        A pixel is wall only when its surface normal is near horizontal and
+        it stands on one continuous vertical surface large enough and long
+        enough to be a wall: foliage, a parked car, a fence post or plain
+        noise present near-horizontal normals in numbers and answer 0, a
+        facade answers 1. Both returns are gated together, so a wall seen by
+        both stands on one denser patch rather than two thinner ones.
+
+        Coordinate frame: each frame's cloud is dewarped by its per-column
+        poses taken relative to its first valid column and rotated by
+        WallSegConfig.gravity_rotation. The engine does not consult the IMU;
+        hand it the alignment from plumb_imu() when the frames are not level.
+        A frame that already carries "NORMALS" (and "NORMALS2") fields in
+        world coordinates is taken at its word rather than estimated again.
+    )pbdoc")
+        .def_static(
+            "create",
+            [](const WallSegConfig& config) -> std::unique_ptr<WallSegEngine> {
+                return WallSegEngine::create(config);
+            },
+            py::arg("config") = WallSegConfig{},
+            R"pbdoc(
+                Create a WallSegEngine with the given configuration.
+
+                Args:
+                    config: WallSegConfig with parameters (default: identity
+                        gravity_rotation).
+
+                Returns:
+                    A WallSegEngine instance.
+            )pbdoc")
+        .def(
+            "update",
+            [](WallSegEngine& self, FrameSet& frame_set) -> FrameSet& {
+                self.update(frame_set);
+                return frame_set;
+            },
+            py::arg("frames"),
+            R"pbdoc(
+                Run wall segmentation on a FrameSet.
+
+                Annotates each frame with a "WALL" field (uint8: 1=wall,
+                0=not) for the first return, and a "WALL2" field for the
+                second return when RANGE2 is present. Existing WALL fields
+                are replaced; a sensor that cannot be segmented is left
+                without them and logged rather than failing the set.
+                Returns the same FrameSet after in-place annotation.
+            )pbdoc");
+}
+
+void init_algorithm_plumb(py::module_& module) {
+    module.attr("PLUMB_WALLS_MIN_WALL_POINTS") = PLUMB_WALLS_MIN_WALL_POINTS;
+
+    module.def("plumb_imu", &ouster::sdk::algorithm::plumb_imu, py::arg("frames"),
+               R"pbdoc(
+        Level the body frame from IMU data.
+
+        Averages the valid accelerometer samples of the frame from the
+        sensor whose IMU reports the highest fraction of valid samples,
+        breaking ties by sample count and then lowest index (FW 3.2+ IMU
+        profiles; legacy IMU packets are not supported). Each sample is
+        first derotated into the frame of the first sample by integrating
+        the gyro, so rotation during the frame does not smear the average.
+        The anchor sensor and the gravity direction it measured are logged.
+
+        Args:
+            frames: FrameSet to sample, typically the first of a stream.
+
+        Returns:
+            Rotation-only 4x4 correction to left-multiply onto the current
+            orientation, taking the measured gravity direction to +Z; None
+            when no sensor has usable IMU data.
+    )pbdoc");
+
+    module.def(
+        "plumb_walls",
+        [](const FrameSet& frames, const Matrix4dR& gravity_rotation) {
+            return ouster::sdk::algorithm::plumb_walls(frames, gravity_rotation);
+        },
+        py::arg("frames"), py::arg("gravity_rotation") = Matrix4dR(Matrix4dR::Identity()),
+        R"pbdoc(
+        Refine the gravity alignment of a FrameSet from its wall geometry.
+
+        A frame that already carries a WALL field is read as it lies and
+        never recomputed; the frames without one are segmented here under
+        gravity_rotation, in memory only. The set is never written to.
+        The IMU is never consulted; the existing extrinsic orientation
+        plus gravity_rotation is the anchor the refinement corrects.
+        The wall point count, the solution and how sharp its minimum was
+        are logged.
+
+        Args:
+            frames: FrameSet to sample, typically the first of a stream. Not
+                modified.
+            gravity_rotation: 4x4 rotation-only alignment applied before the
+                wall mask, e.g. from plumb_imu(); identity to refine from
+                the extrinsic orientation alone.
+
+        Returns:
+            Rotation-only 4x4 correction to left-multiply onto the current
+            orientation; None when there are no usable frames, fewer than
+            PLUMB_WALLS_MIN_WALL_POINTS pixels stand on a wall, or the
+            solution pinned at the search boundary.
+    )pbdoc");
+
+    module.def("plumb", &ouster::sdk::algorithm::plumb, py::arg("frames"),
+               py::arg("use_imu") = true, py::arg("use_walls") = true,
+               R"pbdoc(
+        Plumb a FrameSet: level from the IMU, then refine from wall geometry.
+
+        plumb_imu() followed by plumb_walls() seeded with the IMU levelling.
+        Without usable IMU data the wall refinement runs from the current
+        orientation alone, which assumes it is already within the wall
+        search range of level; without a trustworthy wall solution the IMU
+        levelling stands. Each outcome is logged.
+
+        Args:
+            frames: FrameSet to sample, typically the first of a stream. Not
+                modified.
+            use_imu: run the IMU stage.
+            use_walls: run the wall stage.
+
+        Returns:
+            Rotation-only 4x4 correction to left-multiply onto the current
+            orientation; None when no requested stage produced a correction.
+    )pbdoc");
 }
 
 void init_algorithm(py::module_& module, py::module_& /*root_module*/) {
     module.doc() = "Python bindings for shared Ouster perception and mapping algorithms.";
     init_algorithm_normals(module);
     init_ground_seg(module);
+    init_wall(module);
     init_algorithm_align_clouds(module);
+    init_algorithm_plumb(module);
 }

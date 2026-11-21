@@ -1,0 +1,46 @@
+include "common.fbs";
+
+namespace ouster.sdk.osf.v2;
+
+// Serialized ouster::sdk::core::CameraFrame message.
+//
+// Mirrors the LidarScanMsg layout for the subset of members a CameraFrame
+// carries: image dimensions, generic/custom fields, object lists, a single
+// timestamp and a per-frame pose. There is no frame_id; that is a LidarFrame
+// member, and a camera frame is identified by its timestamp instead.
+//
+// Named CameraFrameMsg (not CameraFrame) to avoid visual collision with
+// ouster::sdk::core::CameraFrame at usage sites.
+table CameraFrameMsg {
+    // ===== CameraFrame dimensions ====================
+    w:uint64;
+    h:uint64;
+
+    // ===== CameraFrame data ==========================
+    // generic/custom fields (e.g. the "DEPTH" field)
+    fields:[Field];
+    // per-frame object lists
+    objects:[ObjectList];
+    // single-element frame timestamp
+    timestamp:[uint64];
+    // 4x4 body-to-world pose matrix in col-major storage (16 elements)
+    pose:[double];
+    // per-frame packet (host) timestamps. A CameraFrame has no packets, so the
+    // length is allowed to vary (typically one entry) and is used to carry
+    // per-frame timing information (e.g. for visualization). Mirrors
+    // LidarScanMsg.packet_timestamp.
+    packet_timestamp:[uint64];
+}
+
+// Stream marker for camera frame messages. Mirrors LidarScanStream: it holds a
+// back-reference to the footer sensor metadata entry (a CameraSensor entry,
+// which stores this camera's CameraInfo) that describes this camera.
+table CameraFrameStream {
+    // referenced to metadata.entry[].id of the CameraSensor entry holding this
+    // camera's CameraInfo JSON.
+    sensor_id:uint32;
+}
+
+// MetadataEntry.type: ouster/v1/os_sensor/CameraFrameStream
+root_type CameraFrameStream;
+file_identifier "oCFS";

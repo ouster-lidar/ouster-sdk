@@ -110,7 +110,7 @@ commands also have subcommands that further extend or specify what
       * Sensors and files
 
         * ``viz`` - visualizes data in a 3D point cloud viewer.
-        * ``slice`` - use the slice command to extract a subset of lidar frames from a source by specifing a frame index
+        * ``slice`` - use the slice command to extract a subset of lidar frames from a source by specifying a frame index
           interval or time duration.
         * ``clip`` - the clip command can be used to limit the range of values of frame fields.
         * ``filter`` - the filter command can be used to suppress or replace certain field measurements based on predicate.
@@ -118,13 +118,13 @@ commands also have subcommands that further extend or specify what
         * ``reduce`` - use the reduce command to downsample the vertical resolution of any ouster Lidar.
         * ``slam`` - computes trajectories by determining the change in pose between lidar frames.
         * ``stats`` - calculates statistics from the source data.
-        * ``metadata`` - displays the metadata (e.g. sensor information) associated with the source data.
+        * ``sensor_info`` - displays the metadata (e.g. sensor information) associated with the source data.
         * ``save`` - saves the source data, optionally converting to a new format.
         * ``save_raw`` - save raw packets from the sensor.
         * ``save_trajectory`` - save a trajectory of the movement of selected sensor.
         * ``normals`` - compute unit surface normals for each ``LidarFrame``.
         * ``localize`` - run localization based on the mapping output ply map.
-        * ``plumb`` - calculate the extrinsic matrix to align each sensor's Z-axis with the gravity vector using IMU data.
+        * ``plumb`` - align each sensor's Z axis with gravity, from IMU data, wall geometry, or both.
         * ``live_zones`` - query or set the list of zones live on the sensor.
 
       * Pcap and OSF files only

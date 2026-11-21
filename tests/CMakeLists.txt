@@ -17,6 +17,7 @@ set(osf_includes "")
 if(OUSTER_SDK_TEST_SOURCE STREQUAL "STATIC")
   set(LIB_TO_USE
     OusterSDK::ouster_core
+    OusterSDK::ouster_io
     )
   if (BUILD_VIZ)
     list(APPEND LIB_TO_USE OusterSDK::ouster_viz)
@@ -33,7 +34,7 @@ if(OUSTER_SDK_TEST_SOURCE STREQUAL "STATIC")
   if (BUILD_MAPPING)
     list(APPEND LIB_TO_USE OusterSDK::ouster_mapping)
   endif()
-  # Horrible hack for the internal tests that shouldnt be a thing
+  # Horrible hack for the internal tests that shouldn't be a thing
   # Please remove internal tests like this
   if (BUILD_OSF)
     get_target_property(osf_includes ouster_osf INCLUDE_DIRECTORIES)
@@ -177,6 +178,7 @@ ouster_internal_test(zone_header_test "zone_header_test.cpp" ${CMAKE_CURRENT_LIS
 if (BUILD_VIZ)
 ouster_internal_test(point_viz_indexed_test "point_viz_indexed_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_internal_test(zone_monitor_voxel_mesh_test "zone_monitor_voxel_mesh_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/zone_monitor/)
+ouster_internal_test(ouster_icon_test "ouster_icon_test.cpp" "")
 endif()
 if (BUILD_MAPPING)
 ouster_internal_test(jacobian_inline_test "jacobian_inline_test.cpp" ${CMAKE_CURRENT_LIST_DIR}/)
@@ -196,10 +198,10 @@ endif()
 ouster_test(bcompat_meta_json_test "bcompat_meta_json_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 ouster_test(beam_config_test "beam_config_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/zone_monitor/)
 ouster_test(metadata_test "metadata_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
+ouster_test(camera_model_test "camera_model_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 ouster_test(lidar_frame_test "lidar_frame_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 ouster_test(metadata_errors_test "metadata_errors_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/metadata/)
 if (BUILD_PCAP)
-ouster_test(pcap_test "pcap_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(profile_extension_test "profile_extension_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(fusa_profile_test "fusa_profile_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(frame_batcher_test "frame_batcher_test.cpp;util.h" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
@@ -212,12 +214,17 @@ ouster_test(sensor_test "sensor_test.cpp" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 endif()
 ouster_test(nmea_parsing_test "nmea_parsing_test.cpp;util.h" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(parsing_benchmark_test "parsing_benchmark_test.cpp;util.h" "" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
+ouster_internal_test(pcap_writer_test "pcap_writer_test.cpp" "")
+if (TARGET pcap_writer_test)
+  target_include_directories(pcap_writer_test PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../ouster_pcap/src)
+endif()
 endif()
 ouster_test(cartesian_test "cartesian_test.cpp;util.h" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(destagger_test "destagger_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(interp_pose_test "interp_pose_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/pcaps/)
 ouster_test(pose_test "pose_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/)
 ouster_test(object_util_test "object_util_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/)
+ouster_test(image_io_test "image_io_test.cpp" "${GTEST_FILTER}" "")
 
 ouster_test(open_source_test "open_source_test.cpp" "${GTEST_FILTER}" ${CMAKE_CURRENT_LIST_DIR}/)
 if (TARGET open_source_test)
@@ -254,7 +261,7 @@ function(build_osf_test target_name sources)
   if(OUSTER_EXTERNAL_TESTS)
     ouster_test(${target_name} ${sources} "" ${CMAKE_CURRENT_LIST_DIR}/)
     build_osf_test_common(${target_name})
-    #TODO Really shouldnt have tests that require this
+    #TODO Really shouldn't have tests that require this
     target_include_directories(${target_name}
       PRIVATE
       ${CMAKE_CURRENT_LIST_DIR}/../ouster_osf/src
@@ -297,6 +304,7 @@ build_osf_test(buffer_offset_test osf_tests/buffer_offset_test.cpp)
 build_osf_internal_test(operations_test osf_tests/operations_test.cpp)
 build_osf_internal_test(png_tools_test osf_tests/png_tools_test.cpp)
 build_osf_internal_test(frame_set_source_test osf_tests/frame_set_source_test.cpp)
+build_osf_internal_test(unknown_field_type_test osf_tests/unknown_field_type_test.cpp)
 build_osf_internal_test(reader_timestamp_idx_test
   osf_tests/reader_timestamp_idx_test.cpp)
 endif()

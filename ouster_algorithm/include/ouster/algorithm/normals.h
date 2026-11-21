@@ -3,7 +3,7 @@
  * All rights reserved.
  *
  * @file
- * @brief Normal values computation for LidarFrame
+ * @brief Normal values computation for Frame
  */
 
 #pragma once
@@ -39,7 +39,7 @@ constexpr double DEFAULT_MIN_ANGLE_INCIDENCE_RAD = 1 * M_PI / 180.0;
  *              ``Eigen::MatrixXd sensor_origins(W, 3);`` then
  *              ``for (int c = 0; c < frame.w; ++c)`` set
  *              ``sensor_origins.row(c) = (frame.get_column_pose(c) *
- *              frame.sensor_info->sensor_to_body).block<3, 1>(0,
+ *              frame.sensor_info()->sensor_to_body).block<3, 1>(0,
  * 3).transpose();``.
  *            - Sensor-frame xyz: pass zeros with shape (W, 3)
  *              (e.g. ``Eigen::MatrixXd::Zero(W, 3)``).
@@ -50,7 +50,7 @@ constexpr double DEFAULT_MIN_ANGLE_INCIDENCE_RAD = 1 * M_PI / 180.0;
  * @param[in] target_distance_m Target neighbour distance used when selecting
  *            candidate points (default: 0.025 m).
  *
- * @throws std::runtime_error if xyz shape is not (H * W, 3).
+ * @throws std::runtime_error if xyz row count is not H * W.
  * @throws std::runtime_error if sensor_origins_xyz width does not match W.
  * @throws std::runtime_error if min_angle_of_incidence_rad or
  *         target_distance_m is non-positive.
@@ -81,7 +81,7 @@ core::MatrixX3dR normals(const Eigen::Ref<const core::PointCloudXYZd> xyz,
  *              ``Eigen::MatrixXd sensor_origins(W, 3);`` then
  *              ``for (int c = 0; c < frame.w; ++c)`` set
  *              ``sensor_origins.row(c) = (frame.get_column_pose(c) *
- *              frame.sensor_info->sensor_to_body).block<3, 1>(0,
+ *              frame.sensor_info()->sensor_to_body).block<3, 1>(0,
  *                  3).transpose();``.
  *            - Sensor-frame xyz: pass zeros with shape (W, 3)
  *              (e.g. ``Eigen::MatrixXd::Zero(W, 3)``).
@@ -92,7 +92,7 @@ core::MatrixX3dR normals(const Eigen::Ref<const core::PointCloudXYZd> xyz,
  * @param[in] target_distance_m Target neighbour distance used when selecting
  *            candidate points (default: 0.025 m).
  *
- * @throws std::runtime_error if xyz or xyz2 shape is not (H * W, 3).
+ * @throws std::runtime_error if xyz or xyz2 row count is not H * W.
  * @throws std::runtime_error if range2 dimensions differ from range.
  * @throws std::runtime_error if sensor_origins_xyz width does not match W.
  * @return Pair of flattened row-major matrices (first_return_normals,

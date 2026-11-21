@@ -16,12 +16,17 @@ if(BUILD_PERCEPTION)
   list(APPEND VCPKG_MANIFEST_FEATURES "perception")
 endif()
 
+include(OusterDarwin)
+
 project(python-ouster-sdk)
 
 # ==== Options ====
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Before find_package(OusterSDK) so the SDK's static libraries are built with LTO too.
+include(OusterLTO)
 
 if(MSVC)
   # /MP – multi-processor compilation (parallel within a single CL.exe invocation)
@@ -31,11 +36,8 @@ if(MSVC)
   add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN _ENABLE_EXTENDED_ALIGNED_STORAGE)
 else()
   add_compile_options(-Wall -Wextra -Wno-error=deprecated-declarations)
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    # Parallelize linking optimization for GCC
-    add_link_options(-flto=auto)
-  endif()
-  if (NOT APPLE AND NOT MSVC)
+  # lld is faster than bfd, but it can't read GCC's LTO bytecode
+  if (NOT APPLE AND NOT MSVC AND NOT (OUSTER_LTO_ENABLED AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
     # GCC/Clang accept -fuse-ld=lld (driver name), not -fuse-ld=/path/to/ld.lld.
     find_program(LLD_PROGRAM NAMES ld.lld lld)
     if (LLD_PROGRAM)
@@ -123,6 +125,11 @@ endif()
 
 find_package(nanobind CONFIG REQUIRED)
 
+set(OUSTER_NB_LTO "")
+if(OUSTER_LTO_ENABLED)
+  set(OUSTER_NB_LTO LTO)
+endif()
+
 # Warning: All of the python binding code must be within the same static library
 # otherwise you will get random segfaults due to how nanobind works.
 #
@@ -134,6 +141,7 @@ nanobind_add_module(_bindings
   src/cpp/main.cpp
   src/cpp/common.cpp
   src/cpp/_algorithm.cpp
+  src/cpp/_io.cpp
   src/cpp/client/client_common.cpp
   src/cpp/client/client.cpp
   src/cpp/client/main.cpp
@@ -141,6 +149,7 @@ nanobind_add_module(_bindings
   src/cpp/client/data.cpp
   src/cpp/client/field.cpp
   src/cpp/client/lidar_frame.cpp
+  src/cpp/client/camera_frame.cpp
   src/cpp/client/object.cpp
   src/cpp/client/packet.cpp
   src/cpp/client/processing.cpp
@@ -160,6 +169,7 @@ nanobind_add_module(_bindings
   src/cpp/_perception.cpp
   # disable nanobind using -Os by default, which slows down bound template functions
   NOMINSIZE
+  ${OUSTER_NB_LTO}
   )
 
 target_precompile_headers(_bindings PRIVATE <nanobind/nanobind.h> <nanobind/ndarray.h> <Eigen/Dense>)
@@ -200,7 +210,11 @@ if(DEFINED OUSTER_SDK_PREBUILT_DIR)
     # statics, enum string tables, viz palettes) come from shared_library.dll
     # so the linker emits __declspec(dllimport) thunks instead of looking for
     # them in static archives (where they don't exist).
-    target_compile_definitions(_bindings PRIVATE BUILD_SHARED_LIBS_IMPORT)
+    # SKIP_OSF_METADATA_AUTO_REGISTRATION is used to skip the auto registration of the OSF metadata. 
+    #  causing ERROR: Duplicate metadata type? Already registered type found
+    target_compile_definitions(_bindings PRIVATE
+      BUILD_SHARED_LIBS_IMPORT
+      SKIP_OSF_METADATA_AUTO_REGISTRATION)
   endif()
 else()
   # Source wheel: no shared_library; link SDK static targets into _bindings.so.
@@ -211,6 +225,7 @@ else()
   target_link_libraries(_bindings
     PRIVATE
       ouster_core
+      ouster_io
       ouster_sensor
       ouster_build
       ouster_pcap

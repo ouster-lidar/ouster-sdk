@@ -8,8 +8,8 @@ namespace ouster {
 namespace sdk {
 namespace viz {
 
-auto tiny_sensor_info() -> ouster::sdk::core::SensorInfo {
-    ouster::sdk::core::SensorInfo sensor;
+auto tiny_sensor_info() -> ouster::sdk::core::LidarInfo {
+    ouster::sdk::core::LidarInfo sensor;
     sensor.format.pixels_per_column = 8;
     sensor.format.columns_per_frame = 8;
     sensor.format.pixel_shift_by_row = std::vector<int>{24, 8, -8, -24, 24, 8, -8, -24};

@@ -103,6 +103,10 @@ constexpr char METADATA_SCHEMA[] = R"({
                 "OCCUPANCY"
               ]
             },
+            "trigger_output": {
+              "enum": ["NONE", "OSSD_DUAL", "GPIO_0", "GPIO_1"],
+              "default": "NONE"
+            },
             "stl": {
               "type": "object",
               "properties": {
@@ -185,7 +189,7 @@ constexpr char METADATA_SCHEMA[] = R"({
       },
       "additionalProperties": false,
       "minItems": 1,
-      "maxItems": 128
+      "maxItems": 512
     },
     "sensor_to_body_transform": {
       "type": "array",
@@ -286,6 +290,17 @@ bool populate_zone_set(FileProvider& file_provider, ZoneSet& zone_set_config,
             continue;
         }
         zone.mode = zone_mode;
+
+        ZoneTriggerOutput trigger_mode{};
+        if (zone_json.contains("trigger_output") &&
+            !string_to_zonetriggeroutput(zone_json.at("trigger_output").as<std::string>(),
+                                         trigger_mode)) {
+            std::stringstream err;
+            err << "Invalid trigger output string for zone " << zone_id;
+            issues.critical.emplace_back(zone_json_it.key(), err.str());
+            continue;
+        }
+        zone.trigger_output = trigger_mode;
 
         // Set label
         zone.label = zone_json.get_value_or<std::string>("label", "");
@@ -396,13 +411,13 @@ ZoneSet::ZoneSet(
     }
 }
 
-void ZoneSet::render(const SensorInfo& sensor_info) {
+void ZoneSet::render(const LidarInfo& lidar_info) {
     // Change the type to ZRB since after rendering all zones will have ZRBs
     float m_per_zmbin = ouster::sdk::core::DEFAULT_M_PER_ZMBIN;
-    BeamConfig beam_config(sensor_info.w(), sensor_info.beam_altitude_angles,
-                           sensor_info.beam_azimuth_angles, sensor_info.beam_to_lidar_transform,
-                           sensor_info.lidar_to_sensor_transform, sensor_to_body_transform,
-                           m_per_zmbin, sensor_info.sn);
+    BeamConfig beam_config(lidar_info.w(), lidar_info.beam_altitude_angles,
+                           lidar_info.beam_azimuth_angles, lidar_info.beam_to_lidar_transform,
+                           lidar_info.lidar_to_sensor_transform, sensor_to_body_transform,
+                           m_per_zmbin, lidar_info.sn);
 
     Threadpool<void> pool;
     std::vector<std::future<void>> items(zones.size());
@@ -438,7 +453,7 @@ void ZoneSet::render(const SensorInfo& sensor_info) {
                 }
             }
 
-            zone.zrb->serial_number = sensor_info.sn;
+            zone.zrb->serial_number = lidar_info.sn;
         });
     }
 
@@ -486,6 +501,9 @@ void ZoneSet::save(const std::string& zip_path, ZoneSetOutputFilter zone_set_out
     std::vector<uint8_t> zip = to_zip_blob(zone_set_output_filter);  // calls check_invariants()
 
     std::ofstream file(zip_path, std::ios::binary | std::ios::out);
+    if (!file) {
+        throw std::runtime_error("ZoneSet::save: failed to open file for writing: " + zip_path);
+    }
     file.write(reinterpret_cast<char*>(zip.data()), static_cast<std::streamsize>(zip.size()));
 }
 
@@ -498,7 +516,16 @@ void ZoneSet::save_to_directory(const std::string& dir_path,
         throw std::runtime_error("Failed to create directory: " + dir_path);
     }
 
-    std::ofstream metadata_file(dir_path + "/metadata.json");
+    auto open_for_writing = [](const std::string& path, std::ios::openmode mode) {
+        std::ofstream file(path, mode);
+        if (!file) {
+            throw std::runtime_error(
+                "ZoneSet::save_to_directory: failed to open file for writing: " + path);
+        }
+        return file;
+    };
+
+    std::ofstream metadata_file = open_for_writing(dir_path + "/metadata.json", std::ios::out);
     metadata_file << metadata;
 
     for (const auto& pair : zones) {
@@ -514,7 +541,8 @@ void ZoneSet::save_to_directory(const std::string& dir_path,
                 throw std::runtime_error("Zone " + zone_id + " has an empty stl blob");
             }
             // NOLINTNEXTLINE(performance-inefficient-string-concatenation)
-            std::ofstream stl_file(dir_path + "/" + file_name, std::ios::binary | std::ios::out);
+            std::string stl_path = dir_path + "/" + file_name;
+            std::ofstream stl_file = open_for_writing(stl_path, std::ios::binary | std::ios::out);
             stl_file.write(reinterpret_cast<const char*>(blob.data()),
                            static_cast<std::streamsize>(blob.size()));
         }
@@ -526,7 +554,8 @@ void ZoneSet::save_to_directory(const std::string& dir_path,
                 throw std::runtime_error("Zone " + zone_id + " has an empty zrb blob");
             }
             // NOLINTNEXTLINE(performance-inefficient-string-concatenation)
-            std::ofstream zrb_file(dir_path + "/" + file_name, std::ios::binary | std::ios::out);
+            std::string zrb_path = dir_path + "/" + file_name;
+            std::ofstream zrb_file = open_for_writing(zrb_path, std::ios::binary | std::ios::out);
             zrb_file.write(reinterpret_cast<const char*>(blob.data()),
                            static_cast<std::streamsize>(blob.size()));
         }
@@ -550,6 +579,10 @@ std::string ZoneSet::to_json(ZoneSetOutputFilter zone_set_output_filter) const {
         result["zones"][id]["frame_count"] = zone.frame_count;
         result["zones"][id]["mode"] = to_string(zone.mode);
         result["zones"][id]["label"] = zone.label;
+
+        if (zone.trigger_output != ZoneTriggerOutput::NONE) {
+            result["zones"][id]["trigger_output"] = to_string(zone.trigger_output);
+        }
 
         // TODO[tws] dedupe stl/zrb?
         auto& stl = zone.stl;

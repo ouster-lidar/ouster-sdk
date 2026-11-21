@@ -13,8 +13,17 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
+
+#include "ouster/core/frame.h"
+#include "ouster/core/frame_set.h"
+#include "ouster/core/frame_set_source.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/packet_source.h"
+#include "ouster/core/sensor_info.h"
 
 namespace ouster {
 namespace sdk {
@@ -30,8 +39,11 @@ FrameSetSourceWrapper::FrameSetSourceWrapper(std::unique_ptr<FrameSetSource> sou
     : parent_(std::move(source)), source_(parent_.get()) {}
 
 void FrameSetSourceWrapper::close() {
-    if (parent_) {
-        parent_.reset();
+    // The wrapped source is kept alive rather than destroyed: source_ and any
+    // outstanding iterators still point at it, and close() may be called again.
+    if (source_ != nullptr) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+        close_source(const_cast<FrameSetSource&>(*source_));
     }
 }
 
@@ -98,21 +110,18 @@ const FrameSetSourceMetadata& FrameSetSourceWrapper::metadata(const std::string&
 namespace {
 // check if the sensors are configured such that sync is possible
 bool could_be_synchronized(const FrameSetSource& src) {
-    if (src.sensor_info().size() <= 1) {
+    const auto& sensor_info = src.sensor_info();
+    if (sensor_info.size() <= 1) {
         return false;
     }
     double rate = 0;
-    for (const auto& si : src.sensor_info()) {
+    for (const auto& si : sensor_info) {
         if (rate == 0) {
-            rate = si->format.fps;
-        } else if (si->format.fps != rate) {
+            rate = si->fps();
+        } else if (si->fps() != rate) {
             return false;
         }
-        if (!si->config.phase_lock_enable.value_or(false)) {
-            return false;
-        }
-        auto ts_mode = ouster::sdk::core::TimestampMode::TIME_FROM_INTERNAL_OSC;
-        if (si->config.timestamp_mode.value_or(ts_mode) == ts_mode) {
+        if (!si->could_be_synchronized()) {
             return false;
         }
     }
@@ -204,15 +213,15 @@ class DefaultCollatedFrameSetIteratorImpl : public FrameSetIteratorImpl {
     int i_ = -1;
     bool need_advance_ = false;
 
-    CollatorManager<std::shared_ptr<LidarFrame>> collator_;
+    CollatorManager<std::shared_ptr<Frame>> collator_;
 
    public:
     DefaultCollatedFrameSetIteratorImpl(const Collator* source, uint64_t delta_t,
-                                        const std::vector<int64_t>& latencies)
-        : source_(source), i_(0), collator_(source->sensor_info().size(), delta_t, latencies) {
-        // build a map of sensor_info to sensor idx
+                                        const std::vector<int64_t>& latencies_in)
+        : source_(source), i_(0), collator_(source->sensor_info().size(), delta_t, latencies_in) {
+        // build a map of lidar sensor_info to sensor idx
         int i = 0;
-        for (auto& si : source->sensor_info()) {
+        for (const auto& si : source->sensor_info()) {
             ids_[si.get()] = i++;
         }
 
@@ -269,21 +278,28 @@ class DefaultCollatedFrameSetIteratorImpl : public FrameSetIteratorImpl {
 
             int64_t timestamp = 0;
             try {
-                timestamp = static_cast<int64_t>(val[0]->get_max_valid_packet_timestamp());
+                timestamp = static_cast<int64_t>(val[0]->get_max_valid_receive_timestamp());
             } catch (const std::runtime_error& /*e*/) {
                 // leave timestamp at zero
             }
 
-            auto index_iter = ids_.find(val[0]->sensor_info.get());
+            // The sensor info identity keys the collation slot, and it now lives
+            // on the Frame base, so this is uniform across lidar and camera
+            // frames without downcasting.
+            if (!val[0] || !val[0]->sensor_info()) {
+                throw std::runtime_error("Frame has no associated sensor_info");
+            }
+            const void* id = val[0]->sensor_info().get();
+
+            auto index_iter = ids_.find(id);
             if (index_iter == ids_.end()) {
                 throw std::runtime_error(
                     "Source must use consistent sensor infos in frames and "
                     "sensor_info()");
             }
+
             bool consumed = false;
             if (collator_.collate(index_iter->second, val[0], timestamp, consumed)) {
-                // dont increment iter here or we wait until the next frame
-                // comes
                 if (consumed) {
                     need_advance_ = true;
                 }
@@ -342,55 +358,23 @@ void Collator::build_index() {
             "lock on sensors.");
 
         // calculate latencies between starts of frames
+        const auto& infos = sensor_info();
         std::vector<double> latencies;
+        latencies.reserve(infos.size());
+        for (const auto& sensor : infos) {
+            latencies.push_back(sensor->latency());
+        }
+
+        // The collation period is the common frame period shared by all
+        // synchronized sensors. could_be_synchronized() has already verified
+        // that every sensor reports the same (nonzero) fps, so any sensor's
+        // rate yields the period.
         double period = 0.0;
-        for (const auto& sensor : sensor_info()) {
-            const auto& config = sensor->config;
-            double rate = sensor->format.fps;
-            if (rate == 0) {
-                throw std::runtime_error("SensorInfo.format had an invalid FPS of 0.");
+        if (!infos.empty()) {
+            const double rate = infos.front()->fps();
+            if (rate != 0.0) {
+                period = 1.0 / rate;
             }
-            period = 1.0 / rate;
-
-            // Determine the true "phase offset" of the frame
-            // e.g. when does the frame end compared to the others
-            // This is affected by both the phase offset setting and others
-            unsigned int end_imu_zm_phase = 0;
-            unsigned int end_azi_phase = 360000;
-
-            // The phase offset always starts with the phase_lock_offset
-            unsigned int phase_offset = config.phase_lock_offset.value_or(0);
-
-            // If new IMU is enabled we always get an IMU packet and EoF
-            if (config.udp_profile_imu.value_or(ouster::sdk::core::UDPProfileIMU::LEGACY) !=
-                ouster::sdk::core::UDPProfileIMU::LEGACY) {
-                // we always get an IMU packet at EoF
-                end_imu_zm_phase = 360000;
-            }
-
-            // if ZM packets are enabled, then it's always the last packet
-            if (config.udp_port_zm.value_or(0) != 0 && !config.udp_dest_zm.value_or("").empty()) {
-                end_imu_zm_phase = 360000;
-            }
-
-            // If azimuth doesnt wrap around the frame boundary it can affect
-            // the time of the first and last packet in a frame
-            // If it wraps around the end of frame you still get a lidar packet
-            // at start and end of frame
-            auto aziw = config.azimuth_window.value_or(std::make_pair(0, 360000));
-            if (aziw.first < aziw.second) {
-                end_azi_phase = aziw.second;
-            }
-
-            // finally pick the phase we are synching off of and offset
-            phase_offset += std::max(end_imu_zm_phase, end_azi_phase);
-
-            // wrap the phase offset so its <= 360 degrees
-            phase_offset = phase_offset % 360000;
-
-            // convert latency to seconds
-            double latency = period * static_cast<double>(phase_offset) / 360000.0;
-            latencies.push_back(latency);
         }
 
         // try and offset latencies to try and minimize total
@@ -425,7 +409,8 @@ void Collator::build_index() {
 
     // calculate the length and a jump table for seeks by collating the index
     if (source_->is_indexed()) {
-        CollatorManager<int> collator(sensor_info().size(), dt_, latencies_);
+        const size_t total_streams = sensor_info().size();
+        CollatorManager<int> collator(total_streams, dt_, latencies_);
 
         // while we collate also build an index of the first frame in each
         // collated set to use for random access
@@ -488,7 +473,11 @@ size_t Collator::size_hint() const {
     if (source_->is_indexed()) {
         return size();
     }
-    return source_->size_hint() / source_->sensor_info().size();
+    const size_t total_streams = source_->sensor_info().size();
+    if (total_streams == 0) {
+        return 0;
+    }
+    return source_->size_hint() / total_streams;
 }
 
 int64_t Collator::collation_period() const {
@@ -641,7 +630,7 @@ class SlicerFrameSetIteratorImpl : public Base {
         // NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
         length_ = ((end_ - 1) - start_) / step_ + 1;
 
-        //  if slice is empty, dont bother skipping through the source
+        //  if slice is empty, don't bother skipping through the source
         if (start_ == end_) {
             first_ = false;  // skip doing any advance
             iter_ = source_->end();
@@ -658,7 +647,7 @@ class SlicerFrameSetIteratorImpl : public Base {
             first_ = false;
             offset -= 1;
         }
-        // make sure our slice isnt empty
+        // make sure our slice isn't empty
         if (iter_ == source_->end()) {
             return true;
         }
@@ -822,7 +811,7 @@ std::shared_ptr<FrameSetSource> AnyFrameSetSource::child() const {
 }
 
 void AnyFrameSetSource::close() {
-    parent_.reset();
+    FrameSetSourceWrapper::close();
 }
 
 AnyPacketSource::AnyPacketSource(std::unique_ptr<PacketSource> source)
@@ -836,7 +825,7 @@ PacketIterator AnyPacketSource::end() const {
     return source_->end();
 }
 
-const std::vector<std::shared_ptr<SensorInfo>>& AnyPacketSource::sensor_info() const {
+const std::vector<std::shared_ptr<LidarInfo>>& AnyPacketSource::sensor_info() const {
     return source_->sensor_info();
 }
 

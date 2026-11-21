@@ -24,6 +24,32 @@ inline Eigen::Matrix3d skew_symmetric(Eigen::Vector3d vector) {
     return ss_matrix;
 }
 
+namespace {
+
+// Forced inline so PoseV::exp keeps these 3x3 matrices in registers: returning them through
+// memory and reloading them right away stalls on store-to-load forwarding.
+EIGEN_ALWAYS_INLINE Eigen::Matrix3d so3_exp(const Eigen::Vector3d& rot_v, const double angle,
+                                            const double sin_angle, const double cos_angle) {
+    if (angle < NUMERIC_EPS) {
+        return Eigen::Matrix3d::Identity() + skew_symmetric(rot_v);
+    }
+    Eigen::Matrix3d axis_hat = skew_symmetric(rot_v / angle);
+    return Eigen::Matrix3d::Identity() + sin_angle * axis_hat +
+           (1 - cos_angle) * axis_hat * axis_hat;
+}
+
+EIGEN_ALWAYS_INLINE Eigen::Matrix3d so3_vee(const Eigen::Vector3d& rot_v, const double angle,
+                                            const double sin_angle, const double cos_angle) {
+    if (angle < EPS) {
+        return Eigen::Matrix3d::Identity();
+    }
+    Eigen::Matrix3d axis_hat = skew_symmetric(rot_v / angle);
+    return Eigen::Matrix3d::Identity() + (1.0 - cos_angle) * axis_hat / angle +
+           (angle - sin_angle) * axis_hat * axis_hat / angle;
+}
+
+}  // namespace
+
 RotQ RotV::q() const {
     double unused1 = 0.0;
     double unused2 = 0.0;
@@ -41,22 +67,12 @@ RotH RotV::exp(double& angle_out, double& sin_angle_out, double& cos_angle_out) 
     angle_out = norm();
     sin_angle_out = std::sin(angle_out);
     cos_angle_out = std::cos(angle_out);
-    if (angle_out < NUMERIC_EPS) {
-        return RotH(Eigen::Matrix3d::Identity() + skew_symmetric(*this));
-    }
-    Eigen::Matrix3d axis_hat = skew_symmetric(operator/(angle_out));
-    return RotH(Eigen::Matrix3d::Identity() + sin_angle_out * axis_hat +
-                (1 - cos_angle_out) * axis_hat * axis_hat);
+    return RotH(so3_exp(*this, angle_out, sin_angle_out, cos_angle_out));
 }
 
 Eigen::Matrix3d RotV::vee(const double angle, const double sin_angle,
                           const double cos_angle) const {
-    if (angle < EPS) {
-        return Eigen::Matrix3d::Identity();
-    }
-    Eigen::Matrix3d axis_hat = skew_symmetric(operator/(angle));
-    return Eigen::Matrix3d::Identity() + (1.0 - cos_angle) * axis_hat / angle +
-           (angle - sin_angle) * axis_hat * axis_hat / angle;
+    return so3_vee(*this, angle, sin_angle, cos_angle);
 }
 
 RotQ RotV::q(double& angle, double& sin_angle, double& cos_angle) const {
@@ -94,12 +110,13 @@ PoseV::PoseV() : Eigen::Vector6d(Eigen::Vector6d::Zero()) {}
  * Converts PoseV from vector format to homogeneous format.
  */
 PoseH PoseV::exp() const {
-    double angle = NAN;
-    double sin_angle = NAN;
-    double cos_angle = NAN;
+    const Eigen::Vector3d rot_v = head<3>();
+    const double angle = rot_v.norm();
+    const double sin_angle = std::sin(angle);
+    const double cos_angle = std::cos(angle);
     PoseH h;
-    h.set_rot(r().exp(angle, sin_angle, cos_angle));
-    h.set_trans(r().vee(angle, sin_angle, cos_angle) * t());
+    h.set_rot(so3_exp(rot_v, angle, sin_angle, cos_angle));
+    h.set_trans(so3_vee(rot_v, angle, sin_angle, cos_angle) * t());
     return h;
 }
 

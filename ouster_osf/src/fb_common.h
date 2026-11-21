@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <future>
 #include <nonstd/optional.hpp>
 #include <vector>
 
@@ -16,9 +17,9 @@
 #include "ouster/core/pose.h"
 #include "ouster/core/types.h"
 #include "ouster/osf/basics.h"
+#include "ouster/osf/frame_encoder.h"
 #include "ouster/osf/impl/basics.h"
 #include "ouster/osf/impl/png_tools.h"
-#include "ouster/osf/lidarframe_encoder.h"
 
 namespace ouster {
 namespace sdk {
@@ -51,26 +52,30 @@ flatbuffers::Offset<flatbuffers::Vector<const T*>> create_vector_of_structs(
 
 impl::gen::CHAN_FIELD_TYPE to_osf_enum(ouster::sdk::core::ChanFieldType field_type);
 
-ouster::sdk::core::ChanFieldType from_osf_enum(impl::gen::CHAN_FIELD_TYPE field_type);
+// The try_from_osf_enum overloads return nullopt for enum values this SDK
+// version doesn't know about, e.g. ones added by a newer SDK that wrote the OSF.
+nonstd::optional<ouster::sdk::core::ChanFieldType> try_from_osf_enum(
+    impl::gen::CHAN_FIELD_TYPE field_type);
 
 impl::gen::FIELD_CLASS to_osf_enum(ouster::sdk::core::FieldClass field_class);
 
-ouster::sdk::core::FieldClass from_osf_enum(impl::gen::FIELD_CLASS field_class);
+nonstd::optional<ouster::sdk::core::FieldClass> try_from_osf_enum(
+    impl::gen::FIELD_CLASS field_class);
 
 nonstd::optional<impl::gen::CHAN_FIELD> to_osf_enum(const std::string& f);
 
-std::string from_osf_enum(impl::gen::CHAN_FIELD f);
+nonstd::optional<std::string> try_from_osf_enum(impl::gen::CHAN_FIELD field);
 
 flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> fb_save_fields(
-    flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+    flatbuffers::FlatBufferBuilder& fbb, const FrameEncoder& encoder,
     const std::vector<std::pair<std::string, const ouster::sdk::core::Field*>>& fields);
 
 flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> fb_save_fields(
-    flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+    flatbuffers::FlatBufferBuilder& fbb, const FrameEncoder& encoder,
     const std::unordered_map<std::string, ouster::sdk::core::Field>& fields);
 
 flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>>
-fb_save_frame_channels(flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+fb_save_frame_channels(flatbuffers::FlatBufferBuilder& fbb, const FrameEncoder& encoder,
                        const ouster::sdk::core::LidarFrame& frame,
                        const ouster::sdk::core::LidarFrameFieldTypes& field_types,
                        const std::vector<int>& px_offset);
@@ -78,14 +83,18 @@ fb_save_frame_channels(flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEnco
 using AddFieldFn = std::function<ouster::sdk::core::Field&(
     const std::string&, const ouster::sdk::core::FieldDescriptor&, ouster::sdk::core::FieldClass)>;
 
-void fb_restore_fields(const flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>* fb_fields,
-                       const nonstd::optional<std::vector<std::string>>& fields_to_decode,
-                       const AddFieldFn& add_field, const core::error_handler_t& error_handler);
+std::vector<std::future<void>> fb_restore_fields(
+    const flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>* fb_fields,
+    const nonstd::optional<std::vector<std::string>>& fields_to_decode, const AddFieldFn& add_field,
+    const core::error_handler_t& error_handler);
 
-void fb_restore_channels(
+// channel_indices[i] is the index into fb_channels holding the data for
+// field_types[i].
+std::vector<std::future<void>> fb_restore_channels(
     const flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>* fb_channels,
-    const ouster::sdk::core::LidarFrameFieldTypes& field_types, const std::vector<int>& px_offset,
-    ouster::sdk::core::LidarFrame& frame, const core::error_handler_t& error_handler);
+    const ouster::sdk::core::LidarFrameFieldTypes& field_types,
+    const std::vector<size_t>& channel_indices, const std::vector<int>& px_offset,
+    ouster::sdk::core::LidarFrame& frame);
 
 flatbuffers::Offset<impl::gen::Pose> fb_save_pose(flatbuffers::FlatBufferBuilder& fbb,
                                                   const core::Pose& pose);

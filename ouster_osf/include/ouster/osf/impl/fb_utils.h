@@ -131,7 +131,7 @@ OUSTER_API_FUNCTION std::vector<T> vector_from_fb_vector(const flatbuffers::Vect
 
 /**
  * Saves the buffer content to the file with additional 4 bytes of calculated
- * CRC32 field in the end. Successfull operation writes size + 4 bytes to the
+ * CRC32 field in the end. Successful operation writes size + 4 bytes to the
  * file.
  * @TODO Change up tests to not use this stuff
  *
@@ -141,7 +141,7 @@ OUSTER_API_FUNCTION std::vector<T> vector_from_fb_vector(const flatbuffers::Vect
  * @param[in] filename full path to the file
  * @param[in] append if true appends the content to the end of the file,
  *                   otherwise - overwrite the file with the current buffer.
- * @return Number of bytes actually written to the file. Successfull write is
+ * @return Number of bytes actually written to the file. Successful write is
  *         size + 4 bytes (4 bytes for CRC field)
  */
 OUSTER_API_FUNCTION
@@ -158,7 +158,7 @@ uint64_t buffer_to_file(const uint8_t* buf, uint64_t size, const std::string& fi
  * @param[in] filename filename to save bytes
  * @param[in] append if true appends the content to the end of the file,
  *                   otherwise - overwrite the file with the current buffer.
- * @return Number of bytes actually written to the file. Successfull write is
+ * @return Number of bytes actually written to the file. Successful write is
  *         size + 4 bytes (4 bytes for CRC field)
  */
 OUSTER_API_FUNCTION

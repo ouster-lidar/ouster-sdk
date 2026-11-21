@@ -51,14 +51,15 @@ inline GLuint compile_shader(std::string shader_code, GLuint shader_type) {
     int info_log_length = 0;
 
     // Change shader version to work for opengl es
+    std::string prefix = "#version 330 core\n";
     if (GLFWContext::is_opengl_es()) {
+        prefix = "#version 310 es\n";
         if (shader_type == GL_GEOMETRY_SHADER) {
-            replace(shader_code, "#version 330 core",
-                    "#version 310 es\n#extension GL_OES_geometry_shader : enable");
-        } else {
-            replace(shader_code, "#version 330 core", "#version 310 es");
+            prefix += "#extension GL_OES_geometry_shader : enable\n";
         }
     }
+
+    shader_code = prefix + shader_code;
 
     // Compile shader
     char const* source_pointer = shader_code.c_str();
@@ -213,8 +214,6 @@ void load_texture(const F& texture, size_t width, size_t height, GLuint texture_
  */
 static const std::string POINT_VERTEX_SHADER_CODE =
     R"SHADER(
-            #version 330 core
-
             in vec3 xyz;
             in vec3 offset;
             in float range;
@@ -225,13 +224,19 @@ static const std::string POINT_VERTEX_SHADER_CODE =
             uniform mat4 proj_view;
 
             in vec4 vkey;
+            #ifndef NO_MASK
             in vec4 vmask;
+            #endif
 
             out vec4 key;
+            #ifndef NO_MASK
             out vec4 mask;
+            #endif
             void main() {
                 key = vkey;
+                #ifndef NO_MASK
                 mask = vmask;
+                #endif
 
                 // Discard any points with range == 0 by putting them at inf
                 if (range <= 0.0) {
@@ -260,11 +265,38 @@ static const std::string POINT_VERTEX_SHADER_CODE =
 
                 gl_Position = proj_view * car_pose * local_point;
             })SHADER";
+static const std::string UNORDERED_POINT_VERTEX_SHADER_CODE =
+    R"SHADER(
+            in vec3 xyz;
+
+            uniform mat4 proj_view_model;
+
+            in vec4 vkey;
+            #ifndef NO_MASK
+            in vec4 vmask;
+            #endif
+
+            out vec4 key;
+            #ifndef NO_MASK
+            out vec4 mask;
+            #endif
+            void main() {
+                key = vkey;
+
+                #ifndef NO_MASK
+                mask = vmask;
+                #endif
+
+                vec4 local_point = vec4(xyz, 1.0);
+
+                gl_Position = proj_view_model * local_point;
+            })SHADER";
 static const std::string POINT_FRAGMENT_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in lowp vec4 key;
+            #ifndef NO_MASK
             in lowp vec4 mask;
+            #endif
             uniform bool mono;
             uniform sampler2D palette;
             out lowp vec4 color;
@@ -274,13 +306,16 @@ static const std::string POINT_FRAGMENT_SHADER_CODE =
                 lowp vec3 c = mono ? texture(palette, vec2(key.r, 1)).rgb : key.rgb;
                 // compositing the mask RGBA value on top of the resolved point color c
                 // using "over" operator https://en.wikipedia.org/wiki/Alpha_compositing
+                #ifndef NO_MASK
                 lowp float color_a = mask.a + key.a * (1.0 - mask.a);
                 lowp vec3 color_rgb = mask.rgb * mask.a + c * key.a * (1.0 - mask.a);
                 color = vec4(color_rgb / color_a, color_a);
+                #else
+                color = vec4(c, key.a);
+                #endif
             })SHADER";
 static const std::string RING_VERTEX_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in vec3 ring_xyz;
             uniform mat4 proj_view;
             out vec2 ring_xy;
@@ -291,7 +326,6 @@ static const std::string RING_VERTEX_SHADER_CODE =
             })SHADER";
 static const std::string RING_FRAGMENT_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             out lowp vec4 color;
             in mediump vec2 ring_xy;
             uniform mediump float ring_range;
@@ -314,14 +348,13 @@ static const std::string RING_FRAGMENT_SHADER_CODE =
 
                 // Draw a line within the thickness
                 mediump float lineWeight = clamp(ring_thickness - rangeFromLine, 0.0f, 1.0f);
-                
+
                 // Don't draw anything outside our max radius or at the center
                 if (radius > 1000.0 || radius < ring_range*0.1) { lineWeight = 0.0; }
                 color = vec4(vec3(0.15), lineWeight);
             })SHADER";
 static const std::string CUBOID_VERTEX_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in vec3 cuboid_xyz;
             uniform vec4 cuboid_rgba;
             uniform mat4 proj_view;
@@ -332,7 +365,6 @@ static const std::string CUBOID_VERTEX_SHADER_CODE =
             })SHADER";
 static const std::string CUBOID_FRAGMENT_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in lowp vec4 rgba;
             out lowp vec4 color;
             void main() {
@@ -340,7 +372,6 @@ static const std::string CUBOID_FRAGMENT_SHADER_CODE =
             })SHADER";
 static const std::string LINES_VERTEX_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in vec3 lines_xyz;
             uniform vec4 lines_rgba;
             uniform mat4 proj_view;
@@ -351,7 +382,6 @@ static const std::string LINES_VERTEX_SHADER_CODE =
             })SHADER";
 static const std::string LINES_FRAGMENT_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in lowp vec4 rgba;
             out lowp vec4 color;
             void main() {
@@ -359,7 +389,6 @@ static const std::string LINES_FRAGMENT_SHADER_CODE =
             })SHADER";
 static const std::string IMAGE_VERTEX_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in vec2 vertex;
             in vec2 vertex_uv;
             out vec2 uv;
@@ -369,7 +398,6 @@ static const std::string IMAGE_VERTEX_SHADER_CODE =
             })SHADER";
 static const std::string IMAGE_FRAGMENT_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in mediump vec2 uv;
             uniform bool mono;
             uniform bool use_palette;
@@ -387,7 +415,6 @@ static const std::string IMAGE_FRAGMENT_SHADER_CODE =
             })SHADER";
 static const std::string mesh_vertex_shader_code =
     R"SHADER(
-#version 330 core
 in vec3 mesh_xyz;
 in vec3 mesh_normal;
 uniform vec4 mesh_face_rgba;
@@ -400,7 +427,6 @@ void main(){
 })SHADER";
 static const std::string mesh_fragment_shader_code =
     R"SHADER(
-#version 330 core
 in lowp vec4 edge_rgba;
 out lowp vec4 color;
 
@@ -410,7 +436,6 @@ void main() {
 
 static const std::string PANORAMA_VERTEX_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             layout (location = 0) in vec3 aPos;
             layout (location = 1) in vec3 aCenter;
             layout (location = 2) in vec4 aColor;
@@ -447,7 +472,6 @@ static const std::string PANORAMA_GEOMETRY_FUNCTIONS = R"SHADER(
 
 static const std::string PANORAMA_GEOMETRY_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             layout (lines) in;
             layout (line_strip, max_vertices = 64) out;
             in vec4 vViewPos[];
@@ -503,7 +527,6 @@ static const std::string PANORAMA_GEOMETRY_SHADER_CODE =
 
 static const std::string PANORAMA_FACE_GEOMETRY_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             layout (triangles) in;
             layout (triangle_strip, max_vertices = 64) out;
             in vec4 vViewPos[];
@@ -603,9 +626,95 @@ static const std::string PANORAMA_FACE_GEOMETRY_SHADER_CODE =
                 }
             })SHADER";
 
+// Pinhole projection used for camera object overlays. Unlike the lidar
+// panorama projection (azimuth uniform across columns, altitude via a 1D
+// lookup), a camera image is a perspective projection, so 3D points map to
+// pixels through the pinhole intrinsics (fx, fy, cx, cy) of the camera's
+// optical model. Points are expressed in the Ouster sensor frame (X forward,
+// Y left, Z up) by the overlay's world->sensor view matrix; this mirrors the
+// ZED metadata convention (see compute_zed_metadata) so overlays land on the
+// same pixels the RANGE cloud is built from. There is no motion / rolling
+// shutter compensation: the whole image shares one view matrix.
+static const std::string PINHOLE_PROJECT_FUNCTION = R"SHADER(
+            uniform float u_fx;
+            uniform float u_fy;
+            uniform float u_cx;
+            uniform float u_cy;
+            uniform float u_width;
+            uniform float u_height;
+            uniform float u_x0;
+            uniform float u_x1;
+            uniform float u_y0;
+            uniform float u_y1;
+            uniform float u_hshift;
+            uniform float u_aspect;
+            out vec4 fColor;
+            out vec2 fPt;
+            bool project_pinhole(vec4 view_pos, out vec2 out_pt) {
+                float x = view_pos.x; // forward
+                float y = view_pos.y; // left
+                float z = view_pos.z; // up
+                if (x <= 0.0001) { out_pt = vec2(0.0); return false; }
+                float u = (-y / x) * u_fx + u_cx;
+                float v = (-z / x) * u_fy + u_cy;
+                out_pt = vec2(2.0 * (u / u_width) - 1.0, 1.0 - 2.0 * (v / u_height));
+                return true;
+            }
+            void emit_pinhole_vertex(vec2 pt, vec4 color) {
+                float screen_x = ((pt.x + 1.0) / 2.0 * (u_x1 - u_x0) + u_x0) / u_aspect + u_hshift;
+                float screen_y = (pt.y + 1.0) / 2.0 * (u_y0 - u_y1) + u_y1;
+                gl_Position = vec4(screen_x, screen_y, 0.0, 1.0);
+                fColor = color;
+                fPt = pt;
+                EmitVertex();
+            }
+)SHADER";
+
+static const std::string PINHOLE_GEOMETRY_SHADER_CODE =
+    R"SHADER(
+            layout (lines) in;
+            layout (line_strip, max_vertices = 2) out;
+            in vec4 vViewPos[];
+            in vec4 vCenterViewPos[];
+            in vec4 vColor[];
+)SHADER" +
+    PINHOLE_PROJECT_FUNCTION +
+    R"SHADER(
+            void main() {
+                vec2 p0;
+                vec2 p1;
+                if (!project_pinhole(vViewPos[0], p0)) return;
+                if (!project_pinhole(vViewPos[1], p1)) return;
+                emit_pinhole_vertex(p0, vColor[0]);
+                emit_pinhole_vertex(p1, vColor[1]);
+                EndPrimitive();
+            })SHADER";
+
+static const std::string PINHOLE_FACE_GEOMETRY_SHADER_CODE =
+    R"SHADER(
+            layout (triangles) in;
+            layout (triangle_strip, max_vertices = 3) out;
+            in vec4 vViewPos[];
+            in vec4 vCenterViewPos[];
+            in vec4 vColor[];
+)SHADER" +
+    PINHOLE_PROJECT_FUNCTION +
+    R"SHADER(
+            void main() {
+                vec2 p0;
+                vec2 p1;
+                vec2 p2;
+                if (!project_pinhole(vViewPos[0], p0)) return;
+                if (!project_pinhole(vViewPos[1], p1)) return;
+                if (!project_pinhole(vViewPos[2], p2)) return;
+                emit_pinhole_vertex(p0, vColor[0]);
+                emit_pinhole_vertex(p1, vColor[1]);
+                emit_pinhole_vertex(p2, vColor[2]);
+                EndPrimitive();
+            })SHADER";
+
 static const std::string PANORAMA_FRAGMENT_SHADER_CODE =
     R"SHADER(
-            #version 330 core
             in lowp vec4 fColor;
             in mediump vec2 fPt;
             out lowp vec4 FragColor;
@@ -613,6 +722,100 @@ static const std::string PANORAMA_FRAGMENT_SHADER_CODE =
                 if (abs(fPt.x) > 1.0 || abs(fPt.y) > 1.0) discard;
                 FragColor = fColor;
             })SHADER";
+static const std::string EYE_DOME_VERTEX_SHADER_CODE =
+    R"SHADER(
+            layout (location = 0) in vec2 aPos;
+            layout (location = 1) in vec2 aTexCoords;
+            out vec2 TexCoords;
+            void main() {
+                TexCoords = aTexCoords;
+                gl_Position = vec4(aPos, 0.0, 1.0);
+            })SHADER";
+static const std::string EYE_DOME_FRAGMENT_SHADER_CODE =
+    R"SHADER(
+out lowp vec4 FragColor;
+in mediump vec2 TexCoords;
+
+uniform sampler2D color_texture;
+uniform sampler2D depth_texture;
+uniform bool is_ortho; // if the camera is orthographic or not
+uniform mediump vec2 neighbors[8]; // array of neighbours
+uniform mediump float step_x; // pixel horizontal step (image distance: 1/w)
+uniform mediump float step_y; // pixel vertical step (image distance: 1/h)
+
+// General constants
+const mediump float f_scale = 1.0;// to enhance the result
+const mediump float scene_size = 500.0;// approximate scene size, this constant seems good
+const mediump vec3 light_dir = vec3(0, 0, -1);// lighting direction
+
+// Remember to update these if we change the camera parameters
+const mediump float z_near = 0.1;
+const mediump float z_far = 10000.0;
+
+// Pseudo angle between two neighboring pixels
+// zi      z of current pixel
+// zj      z of its neighbour
+// delta   distance between the two
+mediump float angle_p(float zi, float zj, float delta) {
+    return max(0., zj - zi)/(delta/step_x);// just use SX as the image step
+}
+
+// zi      z of current pixel
+// zj      z of its neighbour
+// delta   distance between the two
+mediump float obscurance(float zi, float zj, float delta) {
+    return angle_p(zi, zj, delta);
+}
+
+// Invert OpenGL projection to get real depth
+mediump float ztransform(float z) {
+    if (is_ortho) {
+        mediump float Z = (z_near - z_far)*z - (z_far + z_near)/2.;
+        Z = (Z - z_near)/scene_size;
+        return 1. - Z;
+    } else {
+        mediump float Z = (z - 0.5)*2.;
+        Z = -2.*z_far*z_near/( (z_far - z_near) * (Z - (z_far + z_near)/(z_far - z_near)) );
+        Z = (Z - z_near)/scene_size;
+        return 1. - Z;
+    }
+}
+
+mediump float compute_neighbours8(float t) {
+    mediump vec4 lightp = vec4(light_dir.xyz, -dot(light_dir.xyz, vec3(0., 0., t)) );
+
+    mediump float value = 0.;
+    for (int c = 0; c < 8; c++) {
+        mediump vec2 neighbor = neighbors[c];
+
+        mediump vec2 depth_coord = TexCoords.st + vec2(step_x, step_y)*neighbor.xy;
+        mediump float z = ztransform(texture(depth_texture, depth_coord).r);
+
+        mediump float dotp = dot(vec4(vec2(step_x, step_y)*neighbor.xy, z, 1.0), lightp);
+        value += obscurance( 0., dotp, step_x);
+    }
+    return value;
+}
+
+mediump float ambient_occlusion(float z) {
+    mediump float weight = 20.;
+    mediump float f = compute_neighbours8(z)*weight;
+    f = exp(-f_scale*f);
+    return f;
+}
+
+void main() {
+    mediump float depth = texture(depth_texture, TexCoords.st).r;
+    if (depth >= 1.) {
+        discard;
+    }
+    mediump float z = ztransform(depth);
+
+    lowp float ao = ambient_occlusion(z);
+    lowp vec3 col = texture(color_texture, TexCoords).rgb;
+    FragColor = vec4(col.r*ao, col.g*ao, col.b*ao, 1);
+    gl_FragDepth = depth;
+})SHADER";
 }  // namespace impl
 }  // namespace viz
 }  // namespace sdk

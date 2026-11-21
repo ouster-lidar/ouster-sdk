@@ -15,6 +15,8 @@ using namespace ouster::sdk;
 //! [doc-etag-slam-imports]
 // NOLINTEND(google-build-using-namespace)
 
+#include <ouster/core/frame_set.h>
+
 #include <Eigen/Dense>
 #include <cmath>
 #include <cstdlib>
@@ -42,9 +44,7 @@ int main(int argc, char* argv[]) {
 
     //! [doc-stag-slam-engine]
     auto source = open_source(source_file);
-    auto slam_engine = mapping::SlamEngine::create(
-        source.sensor_info(),
-        slam_config);
+    auto slam_engine = mapping::SlamEngine::create(source.sensor_info(), slam_config);
     //! [doc-etag-slam-engine]
     // clang-format on
 
@@ -59,27 +59,25 @@ int main(int argc, char* argv[]) {
         slam_engine->update(frame_set);
         //! [doc-etag-slam-loop-update]
         //! [doc-stag-slam-loop-printpose]
-        const auto& frame = frame_set[0];
-        // Get last valid column (closest to the current pose)
-        int col = frame->get_last_valid_column();
-        // Get timestamp and pose for the column
-        auto frame_pose = frame->get_column_pose(col);
-        auto frame_ts = frame->timestamp()[col];
+        for (const auto& frame : frame_set.valid_frames()) {
+            int col = frame->get_last_valid_column();
+            auto frame_pose = frame->get_column_pose(col);
+            auto frame_ts = frame->timestamp()[col];
+            Eigen::Vector3d translation = frame_pose.block<3, 1>(0, 3);
+            Eigen::Matrix3d rot = frame_pose.block<3, 3>(0, 0);
+            auto angles = rot.eulerAngles(2, 1, 0);
+            double yaw = angles[0];
+            double pitch = angles[1];
+            double roll = angles[2];
+            std::cout << "ts = " << frame_ts << "; Translation: " << std::fixed
+                      << std::setprecision(2) << translation[0] << ", "
+                      << translation[1] << ", " << translation[2]
+                      << " (Roll: " << to_degrees(roll)
+                      << ", Pitch: " << to_degrees(pitch)
+                      << ", Yaw: " << to_degrees(yaw) << ")\n";
+        }
         //! [doc-etag-slam-loop-printpose]
-        // Extract translation
-        Eigen::Vector3d translation = frame_pose.block<3, 1>(0, 3);
-        // ZYX euler: yaw, pitch, roll
-        Eigen::Matrix3d rot = frame_pose.block<3, 3>(0, 0);
-        auto angles = rot.eulerAngles(2, 1, 0);
-        double yaw = angles[0];
-        double pitch = angles[1];
-        double roll = angles[2];
-        std::cout << "idx = " << frame->frame_id << "; frame_ts = " << frame_ts
-                  << "; Translation: " << std::fixed << std::setprecision(2)
-                  << translation[0] << ", " << translation[1] << ", " << translation[2]
-                  << " (Roll: " << to_degrees(roll)
-                  << ", Pitch: " << to_degrees(pitch)
-                  << ", Yaw: " << to_degrees(yaw) << ")\n"; }
+    }
     //! [doc-etag-slam-loop]
     // clang-format on
     std::cout << "SLAM processing complete." << std::endl;

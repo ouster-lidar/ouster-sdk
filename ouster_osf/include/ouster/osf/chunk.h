@@ -45,7 +45,7 @@ enum class ChunkValidity {
  */
 struct OUSTER_API_CLASS ChunkState {
     /**
-     * The current chunk's offset from the begining of the chunks section.
+     * The current chunk's offset from the beginning of the chunks section.
      *
      * @param[in] offset the chunk position represented as an offset in bytes
      * relative to the end of the file header.
@@ -102,7 +102,7 @@ struct OUSTER_API_CLASS ChunkState {
  */
 struct OUSTER_API_CLASS ChunkInfoNode {
     /**
-     * The chunk offset from the begining of the chunks section.
+     * The chunk offset from the beginning of the chunks section.
      *
      * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset :: offset
      */
@@ -128,7 +128,7 @@ struct OUSTER_API_CLASS ChunkInfoNode {
     uint32_t stream_id;
 
     /**
-     * Total number of messages in a `stream_id` in the whole OSF file
+     * Number of messages in this chunk
      *
      * Flat Buffer Reference:
      *   fb/streaming/streaming_info.fbs :: ChunkInfo :: message_count

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional, Sequence
 from ouster.sdk.viz import Cloud, PointViz
 from ouster.sdk.viz.model import LidarFrameVizModel
 from ouster.sdk.viz.track import Track
@@ -17,7 +17,6 @@ class AccumulatorBase:
         self._metas = model.metadata
 
         # init view cloud mode toggle
-        self._cloud_mode_ind = 0
         self._cloud_mode_name: str = ''
 
         # init cloud palette toggle
@@ -31,8 +30,8 @@ class AccumulatorBase:
         self._cloud_track: Optional[Cloud] = None
 
     @property
-    def metadata(self) -> List[core.SensorInfo]:
-        """Metadatas for the displayed sensors."""
+    def metadata(self) -> Sequence[core.SensorInfo]:
+        """Metadata for every displayed sensor, in FrameSet order."""
         return self._metas
 
     def get_palette(self, cloud_mode: CloudMode) -> CloudPaletteItem:
@@ -54,21 +53,15 @@ class AccumulatorBase:
     def _update_cloud_palette(self):
         pass
 
-    def cycle_cloud_mode(self, *, direction: int = 1):
+    def set_cloud_mode(self, mode: str):
         """Change the coloring mode of the point cloud for MAP/ACCUM clouds"""
-        all_cloud_mode_names = self._model.sorted_cloud_mode_names()
-        self._cloud_mode_ind = (self._cloud_mode_ind + direction) % len(all_cloud_mode_names)
-        self._cloud_mode_name = all_cloud_mode_names[self._cloud_mode_ind]
+        self._cloud_mode_name = mode
         self._update_cloud_mode()
 
-    def cycle_cloud_palette(self, *, direction: int = 1):
+    def set_cloud_palette(self, palette: str):
         """Change the color palette of the point cloud for MAP/ACCUM clouds"""
-        npalettes = len(self._model._palettes._cloud_palettes)
-        self._cloud_palette_ind = (self._cloud_palette_ind + direction +
-                                   npalettes) % npalettes
-        # update internal states immediately so the OSD text of frames accum
-        # is switched already to a good state (needed for LidarFrameViz osd
-        # update)
+        names = [p.name for p in self._model._palettes._cloud_palettes]
+        self._cloud_palette_ind = names.index(palette)
         self._update_cloud_palette()
 
     # TODO: likely refactor to de-duplicate logic (but not state) with LidarFrameVizModel
@@ -87,17 +80,14 @@ class AccumulatorBase:
         if sorted_cloud_mode_names == ["RING", "SENSOR", "TIMESTAMP"]:
             return
 
-        try:
-            if "RGB" in sorted_cloud_mode_names:
-                preferred_field = "RGB"
-            else:
-                preferred_field = ChanField.REFLECTIVITY
-            self._cloud_mode_ind = sorted_cloud_mode_names.index(preferred_field)
-        except ValueError:
-            # handle a situation where no desired channels are present
-            self._cloud_mode_ind = 0
+        if "RGB" in sorted_cloud_mode_names:
+            preferred_field = "RGB"
+        elif ChanField.REFLECTIVITY in sorted_cloud_mode_names:
+            preferred_field = ChanField.REFLECTIVITY
+        else:
+            preferred_field = sorted_cloud_mode_names[0]
+        self._cloud_mode_name = preferred_field
 
-        self._cloud_mode_name = sorted_cloud_mode_names[self._cloud_mode_ind]
         self._update_cloud_palette()
 
     def update(self,

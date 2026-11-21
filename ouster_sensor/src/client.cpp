@@ -49,7 +49,7 @@ namespace sdk {
 namespace core {
 // defined in types.cpp
 // NOLINTNEXTLINE (misc-use-internal-linkage)
-jsoncons::json config_to_json(const ouster::sdk::core::SensorConfig& config);
+jsoncons::json config_to_json(const ouster::sdk::core::LidarConfig& config);
 }  // namespace core
 namespace sensor {
 
@@ -72,6 +72,31 @@ int32_t get_sock_port(SOCKET sock_fd) {
         return SOCKET_ERROR;
     }
     // NOLINTEND (misc-include-cleaner)
+}
+
+// NOLINTNEXTLINE (misc-use-internal-linkage)
+void set_rcvbuf_size(SOCKET sock_fd, uint32_t rcvbuf_size) {
+    const int ircvbuf_size = static_cast<int>(rcvbuf_size);
+    // NOLINTNEXTLINE (misc-include-cleaner)
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&ircvbuf_size),
+                   sizeof(ircvbuf_size))) {
+        logger().warn("udp setsockopt(SO_RCVBUF): {}", impl::socket_get_error());
+        return;
+    }
+
+    // Validate that we successfully set the rcvbuf size
+    int actual_rcvbuf_value = 0;
+    socklen_t actual_rcvbuf_size = sizeof(actual_rcvbuf_value);
+    if (getsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<char*>(&actual_rcvbuf_value),
+                   &actual_rcvbuf_size) != 0) {
+        logger().warn("udp getsockopt(SO_RCVBUF): {}", impl::socket_get_error());
+    } else if (actual_rcvbuf_value < ircvbuf_size) {
+        logger().warn(
+            "Failed to set desired SO_RCVBUF size to {}. Actual was {}. "
+            "You may experience packet drop unless you allow a larger "
+            "receive buffer.",
+            ircvbuf_size, actual_rcvbuf_value);
+    }
 }
 
 // NOLINTNEXTLINE (misc-use-internal-linkage)
@@ -155,28 +180,8 @@ SOCKET mtp_data_socket(int port, const std::set<std::string>& udp_dest_hosts,
             continue;
         }
 
-        const int ircvbuf_size = static_cast<int>(rcvbuf_size);
-
-        // NOLINTNEXTLINE (misc-include-cleaner)
-        if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&ircvbuf_size),
-                       sizeof(ircvbuf_size))) {
-            logger().warn("udp setsockopt(SO_RCVBUF): {}", impl::socket_get_error());
-            impl::socket_close(sock_fd);
-            continue;
-        }
-
-        // Validate that we successfully set the rcvbuf size
-        int actual_rcvbuf_value = 0;
-        socklen_t actual_rcvbuf_size = sizeof(actual_rcvbuf_value);
-        if (getsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF,
-                       reinterpret_cast<char*>(&actual_rcvbuf_value), &actual_rcvbuf_size) != 0) {
-            logger().warn("udp getsockopt(SO_RCVBUF): {}", impl::socket_get_error());
-        } else if (actual_rcvbuf_value < ircvbuf_size) {
-            logger().warn(
-                "Failed to set desired SO_RCVBUF size to {}. Actual was {}. "
-                "You may experience packet drop unless you allow a larger "
-                "receive buffer.",
-                ircvbuf_size, actual_rcvbuf_value);
+        if (rcvbuf_size > 0) {
+            set_rcvbuf_size(sock_fd, rcvbuf_size);
         }
 
         return sock_fd;
@@ -259,11 +264,11 @@ jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
 }
 
 namespace {
-ouster::sdk::core::SensorConfig get_config(SensorHttp& sensor_http, bool active = true,
-                                           int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) {
+ouster::sdk::core::LidarConfig get_config(SensorHttp& sensor_http, bool active = true,
+                                          int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) {
     auto res = sensor_http.get_config_params(active, timeout_sec);
     ValidatorIssues issues;
-    ouster::sdk::core::SensorConfig config;
+    ouster::sdk::core::LidarConfig config;
     if (!parse_and_validate_config(res, config, issues)) {
         throw std::runtime_error(to_string(issues.critical));
     }
@@ -271,14 +276,14 @@ ouster::sdk::core::SensorConfig get_config(SensorHttp& sensor_http, bool active 
 }
 }  // anonymous namespace
 
-ouster::sdk::core::SensorConfig get_config(const std::string& hostname, bool active,
-                                           int timeout_sec) {
+ouster::sdk::core::LidarConfig get_config(const std::string& hostname, bool active,
+                                          int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     return get_config(*sensor_http, active, timeout_sec);
 }
 
 // NOLINTNEXTLINE (misc-use-internal-linkage)
-void set_config(SensorHttp& sensor_http, const SensorConfig& config, uint8_t config_flags,
+void set_config(SensorHttp& sensor_http, const LidarConfig& config, uint8_t config_flags,
                 int timeout_sec) {
     // reset staged config to avoid spurious errors
     jsoncons::json config_params =
@@ -339,7 +344,7 @@ void set_config(SensorHttp& sensor_http, const SensorConfig& config, uint8_t con
 
     // if configuration didn't change then skip applying the params
     // note: comparison will fail if config_params contains newer config params
-    // introduced after the verison of FW the sensor is on
+    // introduced after the version of FW the sensor is on
     if ((config_flags & CONFIG_FORCE_REINIT) != 0 || (config_params_copy != config_params)) {
         // send full string -- depends on older FWs not rejecting a blob even
         // when it contains unknown keys
@@ -356,7 +361,7 @@ void set_config(SensorHttp& sensor_http, const SensorConfig& config, uint8_t con
     }
 }
 
-void set_config(const std::string& hostname, const SensorConfig& config, uint8_t config_flags,
+void set_config(const std::string& hostname, const LidarConfig& config, uint8_t config_flags,
                 int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     set_config(*sensor_http, config, config_flags, timeout_sec);

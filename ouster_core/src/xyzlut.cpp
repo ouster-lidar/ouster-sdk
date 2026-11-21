@@ -1,7 +1,16 @@
 
 #include "ouster/core/xyzlut.h"
 
+#include <cmath>
+#include <sstream>
+#include <stdexcept>
+
+#include "ouster/core/camera_info.h"
+#include "ouster/core/camera_model.h"
 #include "ouster/core/lidar_frame.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/sensor_info.h"
+#include "ouster/core/types.h"
 
 namespace ouster {
 namespace sdk {
@@ -88,41 +97,111 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit, const mat4d& beam_to_
     return XYZLut(direction, offset, h, w);
 }
 
-XYZLut make_xyz_lut(const SensorInfo& sensor, bool use_extrinsics) {
-    mat4d transform = sensor.lidar_to_sensor_transform;
-    if (use_extrinsics) {
-        // apply extrinsics after lidar_to_sensor_transform so the
-        // resulting LUT will produce the coordinates in
-        // "extrinsics frame" instead of "sensor frame"
-        mat4d ext_transform = sensor.sensor_to_body;
-        ext_transform(0, 3) /= RANGE_UNIT;
-        ext_transform(1, 3) /= RANGE_UNIT;
-        ext_transform(2, 3) /= RANGE_UNIT;
-        transform = ext_transform * sensor.lidar_to_sensor_transform;
+namespace {
+
+// Build an XYZLut for a camera directly from its pinhole intrinsics.
+//
+// Per-pixel unit ray directions are computed from the CameraModel and expressed
+// in the Ouster sensor frame (X forward, Y left, Z up). This is algebraically
+// identical to deriving per-pixel beam angles
+// (azimuth = atan2(oy, ox), altitude = asin(oz/|o|)) and rebuilding the unit
+// vector, so the resulting LUT matches the previous beam-angle-based camera LUT
+// exactly. The offset is zero (no beam origin); the sensor->body extrinsic
+// is applied the same way as the lidar path.
+XYZLut make_camera_xyz_lut(const CameraInfo& camera) {
+    if (!camera.model) {
+        // Substituting a plausible focal length would produce a cloud wrong by
+        // an unknowable scale factor that still looks entirely reasonable, so
+        // return an empty (0x0) LUT instead. Dewarp skips frames whose LUT does
+        // not match their dimensions, so model-less cameras contribute no points.
+        return {};
     }
-    return make_xyz_lut(sensor.format.columns_per_frame, sensor.format.pixels_per_column,
-                        RANGE_UNIT, sensor.beam_to_lidar_transform, transform,
-                        sensor.beam_azimuth_angles, sensor.beam_altitude_angles);
+    const size_t w = camera.w();
+    const size_t h = camera.h();
+    if (w == 0 || h == 0) {
+        // Without an image size there is nothing to project either; treat it
+        // like a missing model.
+        return {};
+    }
+
+    const CameraModel& model = *camera.model;
+    const double fx = model.fx;
+    const double fy = model.fy;
+    const double cx = model.cx;
+    const double cy = model.cy;
+    // CameraModel's constructor enforces this, but its members are
+    // public, so a model can still be mutated into an unusable state after the
+    // fact. Rejecting it here keeps the division below well defined. The
+    // negated comparison also catches NaN.
+    if (!(fx > 0.0) || !(fy > 0.0)) {
+        std::stringstream error_stream;
+        error_stream << "camera XYZLut requires focal lengths greater than zero, got fx=" << fx
+                     << " fy=" << fy;
+        throw std::invalid_argument(error_stream.str());
+    }
+
+    ArrayX3R<double> direction = PointCloudXYZd{w * h, 3};
+    ArrayX3R<double> offset = PointCloudXYZd{w * h, 3};
+    offset.setZero();
+    for (size_t row_idx = 0; row_idx < h; row_idx++) {
+        for (size_t col_idx = 0; col_idx < w; col_idx++) {
+            const auto i = static_cast<Eigen::Index>((row_idx * w) + col_idx);
+            const double ox = 1.0;
+            const double oy = -((static_cast<double>(col_idx) - cx) / fx);
+            const double oz = -((static_cast<double>(row_idx) - cy) / fy);
+            const double magnitude = std::sqrt((ox * ox) + (oy * oy) + (oz * oz));
+            direction(i, 0) = ox / magnitude;
+            direction(i, 1) = oy / magnitude;
+            direction(i, 2) = oz / magnitude;
+        }
+    }
+
+    // Apply the sensor->body extrinsic so the LUT produces body-frame
+    // coordinates; translation is converted to the LUT's scaled units, mirroring
+    // the lidar path.
+    mat4d transform = camera.sensor_to_body;
+    transform(0, 3) /= RANGE_UNIT;
+    transform(1, 3) /= RANGE_UNIT;
+    transform(2, 3) /= RANGE_UNIT;
+    auto rot = transform.topLeftCorner(3, 3).transpose();
+    auto trans = transform.topRightCorner(3, 1).transpose();
+    direction.matrix() *= rot;
+    offset.matrix() *= rot;
+    offset.matrix() += trans.replicate(static_cast<Eigen::Index>(w * h), 1);
+
+    direction *= RANGE_UNIT;
+    offset *= RANGE_UNIT;
+
+    return XYZLut(direction, offset, h, w);
+}
+
+}  // namespace
+
+XYZLut make_xyz_lut(const SensorInfo& sensor) {
+    // Dispatch on the concrete sensor kind: cameras project from their pinhole
+    // intrinsics, lidars from their per-row beam angles + lidar transforms
+    // (both lidar-only fields, no longer on the SensorInfo base).
+    if (const auto* camera = dynamic_cast<const CameraInfo*>(&sensor)) {
+        return make_camera_xyz_lut(*camera);
+    }
+    const auto* lidar = dynamic_cast<const LidarInfo*>(&sensor);
+    if (lidar == nullptr) {
+        throw std::invalid_argument(
+            "XYZLut can only be constructed from a LidarInfo or CameraInfo");
+    }
+
+    // apply extrinsics after lidar_to_sensor_transform so the
+    // resulting LUT will produce the coordinates in
+    // "extrinsics frame" instead of "sensor frame"
+    mat4d ext_transform = lidar->sensor_to_body;
+    ext_transform(0, 3) /= RANGE_UNIT;
+    ext_transform(1, 3) /= RANGE_UNIT;
+    ext_transform(2, 3) /= RANGE_UNIT;
+    const mat4d transform = ext_transform * lidar->lidar_to_sensor_transform;
+    return make_xyz_lut(lidar->w(), lidar->h(), RANGE_UNIT, lidar->beam_to_lidar_transform,
+                        transform, lidar->beam_azimuth_angles, lidar->beam_altitude_angles);
 }
 }  // namespace impl
-
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
-PointCloudXYZd cartesian(const LidarFrame& frame, const XYZLut& lut) {
-    return cartesian(frame.field(ChanField::RANGE), lut);
-}
-OUSTER_DIAGNOSTIC_POP
-
-PointCloudXYZd cartesian(const Eigen::Ref<const img_t<uint32_t>>& range, const XYZLut& lut) {
-    if (range.cols() * range.rows() != lut.direction.rows()) {
-        throw std::invalid_argument("unexpected image dimensions");
-    }
-
-    PointCloudXYZd points(range.rows() * range.cols(), 3);
-    impl::cartesianT<double>(points, range, lut.direction, lut.offset);
-    return points;
-}
-
 }  // namespace core
 }  // namespace sdk
 }  // namespace ouster

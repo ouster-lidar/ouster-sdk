@@ -18,7 +18,7 @@ RUN /bin/sh -c "if ! [ -z \"$APT_MIRROR\" ]; then \
 RUN /bin/sh -c "if ! [ -z \"$APT_MIRROR_SECURITY\" ]; then \
         sed -i \"s|http://security.ubuntu.com/ubuntu|$APT_MIRROR_SECURITY|g\" /etc/apt/sources.list; \
     fi"
-    
+
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
 curl -4fsSL --retry 10 --retry-delay 30 --retry-all-errors \
 https://archive.ubuntu.com/ubuntu/pool/main/u/ubuntu-keyring/ubuntu-keyring_2023.11.28.1_all.deb \

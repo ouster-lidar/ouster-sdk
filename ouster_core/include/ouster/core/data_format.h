@@ -20,56 +20,54 @@ namespace ouster {
 namespace sdk {
 namespace core {
 
-/** Maximum number of profiles supported by the SDK */
-constexpr int MAX_NUM_PROFILES = 32;
-
 /** Profile indicating packet format of lidar data. */
-enum class UDPProfileLidar {
-    /** Unknown lidar profile, typically used as a fallback. */
-    UNKNOWN = 0,
+namespace UDPProfileLidar {
+/** Unknown lidar profile, typically used as a fallback. */
+static constexpr const char* UNKNOWN = "UNKNOWN";
 
-    /** Legacy lidar data */
-    LEGACY,
+/** Legacy lidar data */
+static constexpr const char* LEGACY = "LEGACY";
 
-    /** Dual Returns data */
-    RNG19_RFL8_SIG16_NIR16_DUAL,
+/** Dual Returns data */
+static constexpr const char* RNG19_RFL8_SIG16_NIR16_DUAL = "RNG19_RFL8_SIG16_NIR16_DUAL";
 
-    /** Single Returns data */
-    RNG19_RFL8_SIG16_NIR16,
+/** Single Returns data */
+static constexpr const char* RNG19_RFL8_SIG16_NIR16 = "RNG19_RFL8_SIG16_NIR16";
 
-    /** Single Returns Low Data Rate */
-    RNG15_RFL8_NIR8,
+/** Single Returns Low Data Rate */
+static constexpr const char* RNG15_RFL8_NIR8 = "RNG15_RFL8_NIR8";
 
-    /** Five Word Profile */
-    FIVE_WORD_PIXEL,
+/** Five Word Profile */
+static constexpr const char* FIVE_WORD_PIXEL = "FIVE_WORD_PIXEL";
 
-    /** Legacy Dual Returns low data profile */
-    FUSA_RNG15_RFL8_NIR8_DUAL,
+/** Legacy Dual Returns low data profile */
+static constexpr const char* FUSA_RNG15_RFL8_NIR8_DUAL = "FUSA_RNG15_RFL8_NIR8_DUAL";
 
-    /** Dual Returns low data profile */
-    RNG15_RFL8_NIR8_DUAL,
+/** Dual Returns low data profile */
+static constexpr const char* RNG15_RFL8_NIR8_DUAL = "RNG15_RFL8_NIR8_DUAL";
 
-    /** Single Return Low Data Rate Zone Monitoring */
-    RNG15_RFL8_NIR8_ZONE16,
+/** Single Return Low Data Rate Zone Monitoring */
+static constexpr const char* RNG15_RFL8_NIR8_ZONE16 = "RNG15_RFL8_NIR8_ZONE16";
 
-    /** Single Return Zone Monitoring */
-    RNG19_RFL8_SIG16_NIR16_ZONE16,
+/** Single Return Zone Monitoring */
+static constexpr const char* RNG19_RFL8_SIG16_NIR16_ZONE16 = "RNG19_RFL8_SIG16_NIR16_ZONE16";
 
-    /** Single Return Low Data Rate Window Status */
-    RNG15_RFL8_WIN8,
+/** Single Return Low Data Rate Window Status */
+static constexpr const char* RNG15_RFL8_WIN8 = "RNG15_RFL8_WIN8";
 
-    /** Dual Return Zone Monitoring */
-    RNG19_RFL8_SIG16_ZONE16_DUAL,
+/** Dual Return Zone Monitoring */
+static constexpr const char* RNG19_RFL8_SIG16_ZONE16_DUAL = "RNG19_RFL8_SIG16_ZONE16_DUAL";
 
-    /** Single Return RGB */
-    RNG19_RFL8_SIG16_NIR16_RGB16,
+/** Single Return RGB */
+static constexpr const char* RNG19_RFL8_SIG16_NIR16_RGB16 = "RNG19_RFL8_SIG16_NIR16_RGB16";
 
-    /** Dual Return RGB */
-    RNG19_RFL8_SIG16_NIR16_RGB16_DUAL,
+/** Dual Return RGB */
+static constexpr const char* RNG19_RFL8_SIG16_NIR16_RGB16_DUAL =
+    "RNG19_RFL8_SIG16_NIR16_RGB16_DUAL";
 
-    /** disabled */
-    OFF = 100,
-};
+/** disabled */
+static constexpr const char* OFF = "OFF";
+};  // namespace UDPProfileLidar
 
 /** Profile indicating packet format of IMU data. */
 enum class UDPProfileIMU {
@@ -111,10 +109,11 @@ struct OUSTER_API_CLASS DataFormat {
     uint32_t imu_packets_per_frame;        ///< imu packets per frame
     std::vector<int> pixel_shift_by_row;   ///< shift of pixels by row to enable destagger
     ColumnWindow column_window;            ///< window of columns over which sensor fires
-    UDPProfileLidar udp_profile_lidar{};   ///< profile of lidar packet
+    std::string udp_profile_lidar{};       ///< profile of lidar packet
     UDPProfileIMU udp_profile_imu{};       ///< profile of imu packet
     HeaderType header_type{};              ///< profile of lidar/imu headers
     uint16_t fps;                          ///< frames per second
+    bool imu_enabled{false};               ///< if yes, imu stream is on
     bool zone_monitoring_enabled{false};   ///< if yes, zone monitoring is on
 
     /// Return the number of valid columns per complete frame of data with the
@@ -159,26 +158,6 @@ OUSTER_API_FUNCTION
 bool operator!=(const DataFormat& lhs, const DataFormat& rhs);
 
 /**
- * Get string representation of a lidar profile.
- *
- * @param[in] profile The profile to get the string representation of.
- *
- * @return string representation of the lidar profile.
- */
-OUSTER_API_FUNCTION
-std::string to_string(UDPProfileLidar profile);
-
-/**
- * Get lidar profile from string.
- *
- * @param[in] str_val The string to decode into a lidar profile.
- *
- * @return lidar profile corresponding to the string, or nullopt on error.
- */
-OUSTER_API_FUNCTION
-nonstd::optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& str_val);
-
-/**
  * Get string representation of an IMU profile.
  *
  * @param[in] profile The profile to get the string representation of.
@@ -209,7 +188,7 @@ OUSTER_API_FUNCTION
 std::string to_string(HeaderType profile);
 
 /**
- * Get header layut profile from string
+ * Get header layout profile from string
  *
  * @param[in] str_val The string to decode into an imu profile.
  *

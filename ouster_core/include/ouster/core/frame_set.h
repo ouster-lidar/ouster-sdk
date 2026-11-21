@@ -9,11 +9,13 @@
 #include <initializer_list>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
-#include "ouster/core/deprecation.h"
+#include "ouster/core/camera_frame.h"
 #include "ouster/core/field.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/object.h"
 #include "ouster/core/types.h"
@@ -221,7 +223,22 @@ class OUSTER_API_CLASS FrameSet {
     OUSTER_API_FUNCTION FrameSet();
 
     /**
+     * Initialize a FrameSet with a single vector of base frame pointers.
+     *
+     * Entries may be null (e.g. empty slots produced by collation) and may mix
+     * concrete frame types (LidarFrame, CameraFrame, ...).
+     *
+     * @param[in] frames vector of base frame shared pointers.
+     */
+    OUSTER_API_FUNCTION
+    explicit FrameSet(std::vector<std::shared_ptr<Frame>> frames);
+
+    /**
      * Initialize a FrameSet with a vector of lidar frames.
+     *
+     * Convenience overload equivalent to constructing from a vector of base
+     * Frame pointers. To include camera (or mixed) frames, use the base
+     * std::vector<std::shared_ptr<Frame>> constructor.
      *
      * @param[in] frames vector of lidar frame shared pointers.
      */
@@ -229,15 +246,7 @@ class OUSTER_API_CLASS FrameSet {
     FrameSet(const std::vector<std::shared_ptr<LidarFrame>>& frames);
 
     /**
-     * Initialize a FrameSet with a vector of lidar frames.
-     *
-     * @param[in] frames vector of lidar frame shared pointers to steal.
-     */
-    OUSTER_API_FUNCTION
-    FrameSet(std::vector<std::shared_ptr<LidarFrame>>&& frames);
-
-    /**
-     * Initialize a FrameSet with an initializer list.
+     * Initialize a FrameSet with an initializer list of lidar frames.
      *
      * @param[in] frames initializer list of lidar frame shared pointers.
      */
@@ -245,77 +254,109 @@ class OUSTER_API_CLASS FrameSet {
     FrameSet(std::initializer_list<std::shared_ptr<LidarFrame>> frames);
 
     /**
-     * @return iterator to the beginning of the lidar frames
+     * @return iterator to the beginning of the frames
      */
     OUSTER_API_FUNCTION
-    std::vector<std::shared_ptr<LidarFrame>>::iterator begin();
+    std::vector<std::shared_ptr<Frame>>::iterator begin();
 
     /**
-     * @return iterator past the end of the lidar frames
+     * @return iterator past the end of the frames
      */
     OUSTER_API_FUNCTION
-    std::vector<std::shared_ptr<LidarFrame>>::iterator end();
+    std::vector<std::shared_ptr<Frame>>::iterator end();
 
     /**
-     * @return const iterator to the beginning of the lidar frames
+     * @return const iterator to the beginning of the frames
      */
     OUSTER_API_FUNCTION
-    std::vector<std::shared_ptr<LidarFrame>>::const_iterator begin() const;
+    std::vector<std::shared_ptr<Frame>>::const_iterator begin() const;
 
     /**
-     * @return const iterator past the end of the lidar frames
+     * @return const iterator past the end of the frames
      */
     OUSTER_API_FUNCTION
-    std::vector<std::shared_ptr<LidarFrame>>::const_iterator end() const;
+    std::vector<std::shared_ptr<Frame>>::const_iterator end() const;
 
     /**
-     * @return an iterator over valid (non-null) lidar frames
+     * @return an iterator over valid (non-null) frames
      */
     OUSTER_API_FUNCTION
-    ValidObjectIterator<LidarFrame> valid_frames() {
-        return ValidObjectIterator<LidarFrame>(frames_.begin(), frames_.end());
+    ValidObjectIterator<Frame> valid_frames() {
+        return ValidObjectIterator<Frame>(frames_.begin(), frames_.end());
     }
 
     /**
-     * @return a const iterator over valid (non-null) lidar frames
+     * @return a const iterator over valid (non-null) frames
      */
     OUSTER_API_FUNCTION
-    ValidObjectConstIterator<LidarFrame> valid_frames() const {
-        return ValidObjectConstIterator<LidarFrame>(frames_.begin(), frames_.end());
-    }
-
-    /// @deprecated Use valid_frames() instead
-    /// @copydoc valid_frames()
-    OUSTER_DEPRECATED_MSG("valid_frames()", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION
-    ValidObjectIterator<LidarFrame> valid_scans() {
-        return valid_frames();
-    }
-
-    /// @deprecated Use valid_frames() instead
-    /// @copydoc valid_frames() const
-    OUSTER_DEPRECATED_MSG("valid_frames()", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION
-    ValidObjectConstIterator<LidarFrame> valid_scans() const {
-        return valid_frames();
+    ValidObjectConstIterator<Frame> valid_frames() const {
+        return ValidObjectConstIterator<Frame>(frames_.begin(), frames_.end());
     }
 
     /**
-     * @return an iterator that yields the indices of valid (non-null) lidar
-     * frames
+     * Get the valid (non-null) frames of a single concrete frame type.
+     *
+     * Filters the frames to those whose concrete type is FrameT, discarding
+     * null slots and frames of any other kind.
+     *
+     * @note the returned positions are not frame-slot indices. Use
+     * frames() / operator[] when a frame's slot position matters (for example
+     * to index into FrameSetSource::sensor_info()).
+     *
+     * @tparam FrameT the concrete frame type to select, e.g. LidarFrame.
+     *
+     * @return a vector of shared pointers to the valid frames of type FrameT.
+     */
+    template <typename FrameT>
+    std::vector<std::shared_ptr<FrameT>> valid_frames_of() const {
+        // std::is_base_of_v is C++17; library code is C++14.
+        // NOLINTNEXTLINE(modernize-type-traits)
+        static_assert(std::is_base_of<Frame, FrameT>::value,
+                      "valid_frames_of's FrameT must derive from Frame");
+        std::vector<std::shared_ptr<FrameT>> out;
+        for (const auto& frame : frames_) {
+            if (auto typed = std::dynamic_pointer_cast<FrameT>(frame)) {
+                out.push_back(std::move(typed));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Get the valid (non-null) lidar frames, downcast to LidarFrame.
+     *
+     * Named alias for valid_frames_of<LidarFrame>().
+     *
+     * @return a vector of shared pointers to the valid lidar frames.
      */
     OUSTER_API_FUNCTION
-    ValidIndexIterator<LidarFrame> valid_indices() {
-        return ValidIndexIterator<LidarFrame>(frames_.begin(), frames_.end());
+    std::vector<std::shared_ptr<LidarFrame>> valid_lidar_frames() const;
+
+    /**
+     * Get the valid (non-null) camera frames, downcast to CameraFrame.
+     *
+     * Named alias for valid_frames_of<CameraFrame>().
+     *
+     * @return a vector of shared pointers to the valid camera frames.
+     */
+    OUSTER_API_FUNCTION
+    std::vector<std::shared_ptr<CameraFrame>> valid_camera_frames() const;
+
+    /**
+     * @return an iterator that yields the indices of valid (non-null) frames
+     */
+    OUSTER_API_FUNCTION
+    inline ValidIndexIterator<Frame> valid_indices() {
+        return ValidIndexIterator<Frame>(frames_.begin(), frames_.end());
     }
 
     /**
      * @return a const iterator that yields the indices of valid (non-null)
-     * lidar frames
+     * frames
      */
     OUSTER_API_FUNCTION
-    ValidIndexConstIterator<LidarFrame> valid_indices() const {
-        return ValidIndexConstIterator<LidarFrame>(frames_.begin(), frames_.end());
+    inline ValidIndexConstIterator<Frame> valid_indices() const {
+        return ValidIndexConstIterator<Frame>(frames_.begin(), frames_.end());
     }
 
     /**
@@ -326,7 +367,7 @@ class OUSTER_API_CLASS FrameSet {
      * @return shared ptr of frame at the given index
      */
     OUSTER_API_FUNCTION
-    const std::shared_ptr<LidarFrame>& operator[](size_t index) const;
+    const std::shared_ptr<Frame>& operator[](size_t index) const;
 
     /**
      * Returns nth frame in the FrameSet.
@@ -336,12 +377,12 @@ class OUSTER_API_CLASS FrameSet {
      * @return shared ptr of frame at the given index
      */
     OUSTER_API_FUNCTION
-    std::shared_ptr<LidarFrame>& operator[](size_t index);
+    std::shared_ptr<Frame>& operator[](size_t index);
 
     /**
-     * Returns number of lidar frames stored in the FrameSet
+     * Returns number of frames stored in the FrameSet
      *
-     * @return number of lidar frames
+     * @return number of frames
      */
     OUSTER_API_FUNCTION size_t size() const;
 
@@ -352,11 +393,12 @@ class OUSTER_API_CLASS FrameSet {
      *
      * @param[in] name string key of the field to add
      * @param[in] desc descriptor of the field to add
+     * @param[in] zero If true, zero the field otherwise memory is uninitialized.
      *
      * @return field
      */
     OUSTER_API_FUNCTION
-    Field& add_field(const std::string& name, const FieldDescriptor& desc);
+    Field& add_field(const std::string& name, const FieldDescriptor& desc, bool zero = true);
 
     /**
      * Release the field and remove it from FrameSet
@@ -409,26 +451,15 @@ class OUSTER_API_CLASS FrameSet {
     /**
      * Reference to the internal vector of frames
      *
-     * @return The vector of shared pointers to lidar frames.
+     * @return The vector of shared pointers to base frames. Entries may be null
+     *         and may be of any concrete frame type.
      */
     OUSTER_API_FUNCTION
-    std::vector<std::shared_ptr<LidarFrame>>& frames();
+    std::vector<std::shared_ptr<Frame>>& frames();
 
     /** @copydoc frames() (const overload) */
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<LidarFrame>>& frames() const;
-
-    /// @deprecated Use frames() instead
-    /// @copydoc frames()
-    OUSTER_DEPRECATED_MSG("frames()", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION
-    std::vector<std::shared_ptr<LidarFrame>>& scans();
-
-    /// @deprecated Use frames() instead
-    /// @copydoc frames() const
-    OUSTER_DEPRECATED_MSG("frames()", OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<LidarFrame>>& scans() const;
+    const std::vector<std::shared_ptr<Frame>>& frames() const;
 
     /**
      * Reference to the internal objects map
@@ -459,7 +490,7 @@ class OUSTER_API_CLASS FrameSet {
     FrameSet clone() const;
 
    private:
-    std::vector<std::shared_ptr<LidarFrame>> frames_;
+    std::vector<std::shared_ptr<Frame>> frames_;
     std::shared_ptr<std::unordered_map<std::string, Field>> fields_;
     std::shared_ptr<std::unordered_map<std::string, std::vector<Object>>> objects_;
 };
@@ -474,6 +505,17 @@ class OUSTER_API_CLASS FrameSet {
  */
 OUSTER_API_FUNCTION
 bool operator==(const FrameSet& a, const FrameSet& b);
+
+/**
+ * Compare two FrameSets for inequality.
+ *
+ * @param[in] a The first FrameSet to compare.
+ * @param[in] b The second FrameSet to compare.
+ *
+ * @return true if the FrameSets are not equal
+ */
+OUSTER_API_FUNCTION
+bool operator!=(const FrameSet& a, const FrameSet& b);
 
 }  // namespace core
 }  // namespace sdk
@@ -491,13 +533,3 @@ OUSTER_API_FUNCTION
 void swap(ouster::sdk::core::FrameSet& a, ouster::sdk::core::FrameSet& b);
 
 }  // namespace std
-
-namespace ouster {
-namespace sdk {
-namespace core {
-
-OUSTER_DEPRECATED_TYPE(LidarScanSet, FrameSet, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-
-}  // namespace core
-}  // namespace sdk
-}  // namespace ouster

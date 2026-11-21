@@ -12,6 +12,7 @@
 #include <deque>
 #include <future>
 #include <limits>
+#include <memory>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -22,11 +23,13 @@
 #include <vector>
 
 #include "ouster/algorithm/ground_seg.h"
+#include "ouster/algorithm/impl/custom_voxel_downsample.h"
 #include "ouster/algorithm/impl/ground_seg_detail.h"
 #include "ouster/algorithm/impl/spatial_hash.h"
 #include "ouster/algorithm/normals.h"
-#include "ouster/algorithm/voxel_downsample.h"
+#include "ouster/core/camera_frame.h"
 #include "ouster/core/chanfield.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/frame_set.h"
 #include "ouster/core/impl/logging.h"
 #include "ouster/core/impl/transform_typedefs.h"
@@ -34,6 +37,7 @@
 #include "ouster/core/pose_util.h"
 #include "ouster/core/typedefs.h"
 #include "ouster/core/voxel_hash_map.h"
+#include "ouster/core/xyzlut.h"
 
 using ouster::sdk::core::ArrayX3dR;
 using ouster::sdk::core::ArrayX3fR;
@@ -527,7 +531,7 @@ struct FrameNormalsFieldView {
 /// Attempt to obtain a zero-copy view of the frame's precomputed NORMALS field.
 /// Returns true and populates @p out_normals on success; false if the field is
 /// absent, has the wrong type/shape, or is stored sparsely.
-bool try_map_frame_normals_field(const ouster::sdk::core::LidarFrame& frame,
+bool try_map_frame_normals_field(const ouster::sdk::core::Frame& frame,
                                  FrameNormalsFieldView& out_normals) {
     if (!frame.has_field(ouster::sdk::core::ChanField::NORMALS)) {
         return false;
@@ -558,34 +562,51 @@ bool try_map_frame_normals_field(const ouster::sdk::core::LidarFrame& frame,
 // Frame preparation
 // ---------------------------------------------------------------------------
 
-/// Prepare features for frame matching from a raw LidarFrame.
+/// Prepare features for frame matching from a raw Frame (lidar or camera).
 ///
 /// Steps:
-///  1. Compute or load surface normals.
-///  2. Dewarp columns into a single local frame using per-column poses.
-///  3. Apply the frame's sensor_to_body extrinsic while dewarping.
-///  4. Filter to valid, finite-range returns with well-defined normals.
-///  5. Voxel-downsample to normalise point density.
-/// The returned feature clouds are the "prepared" point sets used by FFT
-/// matching, ICP, and confidence scoring.
-FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
+///  1. Project RANGE into the body frame with the sensor's cached XYZLut,
+///     which applies the frame's sensor_to_body extrinsic.
+///  2. Dewarp into a single reference frame using per-column poses (a camera
+///     has a single global-shutter pose, so all columns share it).
+///  3. Filter to valid, finite-range returns.
+///  4. Voxel-downsample to normalise point density.
+/// Lidar frames additionally load/compute surface normals and a ground mask
+/// (for point-to-plane and XY matching); camera frames carry neither and are
+/// matched point-to-point. The returned feature clouds are the "prepared" point
+/// sets used by FFT matching, ICP, and confidence scoring.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+FrameFeatures prepare_frame_features(const ouster::sdk::core::Frame& frame,
                                      const PoseH* reference_pose = nullptr) {
-    if (!frame.sensor_info) {
-        throw std::invalid_argument("frame.sensor_info is required for frame matching");
+    if (!frame.sensor_info()) {
+        throw std::invalid_argument("frame.sensor_info() is required for frame matching");
     }
     if (!frame.has_field(ouster::sdk::core::ChanField::RANGE)) {
         throw std::invalid_argument("frame must contain RANGE field for frame matching");
     }
 
+    // Lidar frames carry per-column poses/status, ground segmentation and
+    // surface normals; camera frames are global-shutter (a single pose/status)
+    // with none of those extras. The lidar-only steps below are gated on this
+    // so the same routine prepares features for both frame kinds.
+
     const auto range = frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE);
     const int frame_height = static_cast<int>(range.rows());
     const int frame_width = static_cast<int>(range.cols());
+    bool is_lidar = dynamic_cast<const ouster::sdk::core::LidarFrame*>(&frame) != nullptr;
+
+    // A lidar carries one status word per column, so only its valid column
+    // range contributes. A camera carries a single frame-level status covering
+    // the whole image; broadcast it across every column so the full image is
+    // used instead of just column 0.
+    const auto status = frame.status();
+    const bool has_column_status = status.size() == static_cast<Eigen::Index>(frame_width);
     int first_col = 0;
-    int last_col = 0;
-    try {
+    int last_col = frame_width - 1;
+    if (has_column_status) {
         first_col = frame.get_first_valid_column();
         last_col = frame.get_last_valid_column();
-    } catch (const std::exception&) {
+    } else if (status.size() == 0 || (status(0) & 1u) == 0u) {
         return {};
     }
     if (last_col < first_col) {
@@ -596,12 +617,12 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
     // extrinsic prior. The rotation is expected to be gravity-aligned, and the
     // translation is preserved so the solver estimates a correction from the
     // prior instead of aligning all sensors from the origin.
-    const Matrix4dR sensor_to_body = frame.sensor_info->sensor_to_body;
+    const Matrix4dR sensor_to_body = frame.sensor_info()->sensor_to_body;
     const Eigen::Matrix3d sensor_to_body_rotation = sensor_to_body.block<3, 3>(0, 0);
-    const bool has_sensor_to_body = !sensor_to_body.isIdentity(1e-10);
 
     const size_t n_pixels = static_cast<size_t>(frame_height) * static_cast<size_t>(frame_width);
     std::vector<uint8_t> ground_mask;
+
     // Reuse a pre-existing "GROUND" field (written by GroundSegEngine) when
     // available to avoid redundant computation.
     if (frame.has_field("GROUND")) {
@@ -619,7 +640,7 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
     if (ground_mask.empty()) {
         try {
             ground_mask = impl::get_ground_mask(frame, ALIGN_CLOUDS_GROUND_SEG_GRID_SIZE_M,
-                                                frame.sensor_info->xyzlut<double>())
+                                                *frame.sensor_info()->xyzlut<double>())
                               .front();
         } catch (const std::exception& e) {
             logger().warn(
@@ -629,12 +650,12 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
             ground_mask.clear();
         }
     }
+
     const bool have_ground_mask = !ground_mask.empty();
 
-    // Use xyzlut WITHOUT extrinsics so points start in sensor frame; the full
-    // sensor_to_body pose is applied during dewarping below.
-    const ouster::sdk::core::XYZLutT<double> lut(*frame.sensor_info, false);
-    const PointCloudXYZd points = lut(frame);
+    // The LUT bakes in sensor_to_body, so points start in the body frame and
+    // dewarping below only applies the per-column body poses.
+    const PointCloudXYZd points = (*frame.sensor_info()->xyzlut<double>())(frame);
 
     // Re-express each column pose relative to the first valid column for
     // single-frame matching.  Multi-sensor FrameSet matching passes sensor
@@ -647,13 +668,15 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
     ouster::sdk::core::MatrixX16dR rel_poses(frame_width, 16);
     MatrixX3dR sensor_origins(frame_width, 3);
     for (int col = 0; col < frame_width; ++col) {
-        const PoseH pose_c(frame.get_column_pose(col));
-        PoseH rel_pose(pose_reference_inv * pose_c);
-        if (has_sensor_to_body) {
-            rel_pose *= sensor_to_body_pose;
-        }
+        // A camera stores a single body pose (index 0); a lidar stores one per
+        // column. Broadcasting index 0 makes every column share the camera's
+        // global-shutter pose.
+        const PoseH pose_c(frame.get_column_pose(is_lidar ? col : 0));
+        const PoseH rel_pose(pose_reference_inv * pose_c);
         Eigen::Map<ouster::sdk::core::Matrix4dR>(rel_poses.row(col).data()) = rel_pose;
-        sensor_origins.row(col) = rel_pose.t().transpose();
+        // Normals are oriented toward the sensor, not the body origin.
+        const PoseH sensor_pose = rel_pose * sensor_to_body_pose;
+        sensor_origins.row(col) = sensor_pose.t().transpose();
     }
 
     PointCloudXYZd dewarped(points.rows(), points.cols());
@@ -661,12 +684,15 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
 
     // Prefer precomputed normals when available; otherwise estimate normals
     // from the dewarped geometry.
+    // Normals are a lidar-only enhancement enabling point-to-plane matching;
+    // camera features are matched point-to-point, so normals are skipped.
     FrameNormalsFieldView frame_normals_field;
     ArrayX3dR computed_normals;
-    const bool have_normals_field = try_map_frame_normals_field(frame, frame_normals_field) &&
+    const bool have_normals_field = is_lidar &&
+                                    try_map_frame_normals_field(frame, frame_normals_field) &&
                                     frame_normals_field.rows == dewarped.rows();
     bool have_normals = have_normals_field;
-    if (!have_normals_field) {
+    if (is_lidar && !have_normals_field) {
         const auto& sensor_origins_for_normals = sensor_origins;
         try {
             computed_normals =
@@ -680,7 +706,6 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
     }
 
     // Keep only valid returns with finite points and well-defined normals.
-    const auto status = frame.status();
     const Eigen::Index max_valid = static_cast<Eigen::Index>(frame_height) *
                                    static_cast<Eigen::Index>(last_col - first_col + 1);
     ArrayX3dR valid_points(max_valid, 3);
@@ -695,7 +720,9 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
                                    ? frame_normals_field.map()
                                    : Eigen::Map<const ArrayX3fR>(empty_normals, 0, 3);
     for (int col = first_col; col <= last_col; ++col) {
-        if (status[col] == 0u) {
+        // Per-column status only exists for lidar; a camera's single frame-level
+        // status was already checked above.
+        if (has_column_status && status[col] == 0u) {
             continue;
         }
         for (int row = 0; row < frame_height; ++row) {
@@ -714,7 +741,7 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
                 } else {
                     normal = computed_normals.row(idx).matrix();
                 }
-                if (have_normals_field && has_sensor_to_body) {
+                if (have_normals_field) {
                     normal = sensor_to_body_rotation * normal;
                 }
                 const double norm_val = normal.norm();
@@ -773,12 +800,12 @@ FrameFeatures prepare_frame_features(const ouster::sdk::core::LidarFrame& frame,
     // Normalize density before matching so histograms/ICP are less biased by
     // local over-sampling.
     auto downsampled =
-        algorithm::voxel_downsample_with_normals(valid_points, valid_normals, VOXEL_SIZE_COARSE);
+        impl::voxel_downsample_with_normals(valid_points, valid_normals, VOXEL_SIZE_COARSE);
     FrameFeatures features =
         make_frame_features(std::move(downsampled.first), std::move(downsampled.second));
     if (have_ground_mask && valid_xy_points.rows() > 0) {
-        auto downsampled_xy = algorithm::voxel_downsample_with_normals(
-            valid_xy_points, valid_xy_normals, VOXEL_SIZE_COARSE);
+        auto downsampled_xy = impl::voxel_downsample_with_normals(valid_xy_points, valid_xy_normals,
+                                                                  VOXEL_SIZE_COARSE);
         set_xy_matching_features(features, std::move(downsampled_xy.first),
                                  std::move(downsampled_xy.second));
     }
@@ -844,8 +871,7 @@ ArrayX3dR filter_valid_points(Eigen::Ref<const ArrayX3dR> points) {
 FrameFeatures make_point_cloud_features(ArrayX3dR points, ArrayX3dR normals,
                                         bool run_voxel_downsample) {
     if (run_voxel_downsample) {
-        auto downsampled =
-            algorithm::voxel_downsample_with_normals(points, normals, VOXEL_SIZE_COARSE);
+        auto downsampled = impl::voxel_downsample_with_normals(points, normals, VOXEL_SIZE_COARSE);
         points = downsampled.first;
         normals = downsampled.second;
     }
@@ -1306,30 +1332,18 @@ std::vector<uint8_t> make_confidence_sample_mask(Eigen::Ref<const ArrayX3dR> poi
         return {};
     }
 
-    std::vector<Eigen::Vector3d> sample_points;
-    std::vector<Eigen::Index> sample_rows;
-    sample_points.reserve(static_cast<size_t>(points.rows()));
-    sample_rows.reserve(static_cast<size_t>(points.rows()));
-    for (Eigen::Index i = 0; i < points.rows(); ++i) {
-        const Eigen::Vector3d point = points.row(i).matrix();
-        sample_points.emplace_back(point);
-        sample_rows.push_back(i);
-    }
-    if (sample_points.size() <= static_cast<size_t>(CONFIDENCE_MAX_QUERY_SAMPLES)) {
-        return {};
-    }
-
-    // Reuse the voxel-map downsample shuffle selection function
-    // TODO [hao] Once Ussama has the final shuffle select API, edit below
+    // Reuse the voxel-map downsample shuffle selection function. voxel_downsample_with_index
+    // takes points directly as a row-major array, so no copy into an
+    // intermediate std::vector<Eigen::Vector3d> is needed here.
     // TODO [hao] averaging downsample & not cap may be better. Need to experiment with it.
-    const auto downsampled = core::voxel_downsample(sample_points, VOXEL_SIZE_COARSE);
+    const auto downsampled = impl::voxel_downsample_with_index(points, VOXEL_SIZE_COARSE);
     const auto& downsampled_indices = downsampled.second;
     const size_t sample_count =
         std::min(static_cast<size_t>(CONFIDENCE_MAX_QUERY_SAMPLES), downsampled_indices.size());
 
     std::vector<uint8_t> keep(static_cast<size_t>(points.rows()), 0u);
     for (size_t i = 0; i < sample_count; ++i) {
-        keep[static_cast<size_t>(sample_rows[downsampled_indices[i]])] = 1u;
+        keep[downsampled_indices[i]] = 1u;
     }
     return keep;
 }
@@ -1893,7 +1907,8 @@ namespace {
 std::pair<PoseH, double> align_clouds_from_features_impl(const FrameFeatures& source,
                                                          const FrameFeatures& target,
                                                          const PoseH& initial_guess_pose,
-                                                         bool compute_confidence) {
+                                                         bool compute_confidence,
+                                                         bool skip_coarse = false) {
     if (static_cast<size_t>(source.points.rows()) < MIN_ICP_POINTS ||
         static_cast<size_t>(target.points.rows()) < MIN_ICP_POINTS) {
         logger().warn("Skip frame matching: src={} tgt={} (<{} points).", source.points.rows(),
@@ -1908,8 +1923,15 @@ std::pair<PoseH, double> align_clouds_from_features_impl(const FrameFeatures& so
     // initial_pairwise_alignment transforms its second argument into its first.
     // Reverse the feature arguments so the public pipeline carries
     // source_to_target_transform throughout.
+    //
+    // When skip_coarse is set (narrow-FOV inputs such as a camera with a
+    // trusted extrinsic prior), bypass the lidar-oriented global 360 deg yaw
+    // sweep and large XY translation search, which correlate unreliably on a
+    // camera's partial-FOV wedge. Instead refine locally from the full prior;
+    // the confidence guard below still reverts to the prior if ICP degrades it.
     const PoseH initial_pose =
-        initial_pairwise_alignment(target, source, initial_guess_yaw_translation);
+        skip_coarse ? initial_guess_pose
+                    : initial_pairwise_alignment(target, source, initial_guess_yaw_translation);
     const bool use_normals = frame_features_have_normals(source.points, source.normals) &&
                              frame_features_have_normals(target.points, target.normals);
     const XYMatcherParams xy_params =
@@ -1950,9 +1972,8 @@ std::pair<PoseH, double> align_clouds_from_features_impl(const FrameFeatures& so
 }
 
 std::pair<Matrix4dR, double> align_clouds_from_frames_impl(
-    const ouster::sdk::core::LidarFrame& source_frame,
-    const ouster::sdk::core::LidarFrame& target_frame, const PoseH& initial_guess_pose,
-    bool compute_confidence) {
+    const ouster::sdk::core::Frame& source_frame, const ouster::sdk::core::Frame& target_frame,
+    const PoseH& initial_guess_pose, bool compute_confidence) {
     auto source_features_future = std::async(
         std::launch::async, [&source_frame]() { return prepare_frame_features(source_frame); });
     const FrameFeatures target = prepare_frame_features(target_frame);
@@ -2007,6 +2028,10 @@ enum class MultiProjectionMode { XY_YAW, Z_ONLY, FULL };
 struct MultiValidFrame {
     size_t frame_index = 0;
     FrameFeatures features;
+    // Narrow-FOV sensor (camera) with a trusted extrinsic prior: any pair
+    // involving it refines locally instead of running the lidar-oriented global
+    // coarse search.
+    bool is_camera = false;
 };
 
 struct MultiPairwiseMatch {
@@ -2139,10 +2164,10 @@ std::pair<Matrix4dR, double> align_clouds_for_multi_mode(const FrameFeatures& so
                                                          const FrameFeatures& target,
                                                          const PoseH& initial_guess_pose,
                                                          MultiProjectionMode projection_mode,
-                                                         bool compute_score) {
+                                                         bool compute_score, bool skip_coarse) {
     if (projection_mode == MultiProjectionMode::FULL) {
-        const auto result =
-            align_clouds_from_features_impl(source, target, initial_guess_pose, compute_score);
+        const auto result = align_clouds_from_features_impl(source, target, initial_guess_pose,
+                                                            compute_score, skip_coarse);
         return {result.first.matrix(), compute_score ? result.second : 1.0};
     }
 
@@ -2155,7 +2180,17 @@ std::pair<Matrix4dR, double> align_clouds_for_multi_mode(const FrameFeatures& so
 
     PoseH pose_plumb = initial_guess_pose;
     double match_score = 1.0;
-    if (projection_mode == MultiProjectionMode::XY_YAW) {
+    if (skip_coarse) {
+        // Camera-involving pair: trust the extrinsic prior and refine locally
+        // (full 6-DoF ICP from the prior) instead of the lidar-oriented global
+        // coarse search, then project onto the requested DoF below.
+        const auto refined = align_clouds_from_features_impl(
+            source, target, initial_guess_pose, /*compute_confidence=*/true, /*skip_coarse=*/true);
+        pose_plumb = PoseH(refined.first);
+        match_score = (std::isfinite(refined.second) && refined.second > 0.0)
+                          ? refined.second
+                          : MIN_FINITE_INITIAL_MATCH_SCORE;
+    } else if (projection_mode == MultiProjectionMode::XY_YAW) {
         double initial_score = 0.0;
         pose_plumb = initial_pairwise_alignment(
             target, source, project_pose_to_yaw_translation(initial_guess_pose), &initial_score);
@@ -2201,9 +2236,10 @@ std::pair<Matrix4dR, double> run_cached_pairwise_match(const std::vector<MultiVa
     // The graph stores source-frame-from-target-frame edges. Pass the graph
     // target as the matcher source so its source-to-target result has exactly
     // the direction required by the graph.
-    const auto result =
-        align_clouds_for_multi_mode(frames[local_tgt].features, frames[local_src].features,
-                                    PoseH(initial_guess), projection_mode, compute_score);
+    const bool skip_coarse = frames[local_src].is_camera || frames[local_tgt].is_camera;
+    const auto result = align_clouds_for_multi_mode(
+        frames[local_tgt].features, frames[local_src].features, PoseH(initial_guess),
+        projection_mode, compute_score, skip_coarse);
     return {result.first, clamp01(result.second)};
 }
 
@@ -2432,22 +2468,22 @@ std::vector<std::pair<size_t, size_t>> all_multi_pairs(size_t num_nodes) {
 
 }  // namespace
 
-Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
-                       const ouster::sdk::core::LidarFrame& target_frame,
+Matrix4dR align_clouds(const ouster::sdk::core::Frame& source_frame,
+                       const ouster::sdk::core::Frame& target_frame,
                        const Matrix4dR& initial_guess) {
     return finalize_align_clouds_result(
         align_clouds_from_frames_impl(source_frame, target_frame, PoseH(initial_guess),
                                       /*compute_confidence=*/false));
 }
 
-Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
-                       const ouster::sdk::core::LidarFrame& target_frame, double& confidence) {
+Matrix4dR align_clouds(const ouster::sdk::core::Frame& source_frame,
+                       const ouster::sdk::core::Frame& target_frame, double& confidence) {
     return align_clouds(source_frame, target_frame, Matrix4dR::Identity(), confidence);
 }
 
-Matrix4dR align_clouds(const ouster::sdk::core::LidarFrame& source_frame,
-                       const ouster::sdk::core::LidarFrame& target_frame,
-                       const Matrix4dR& initial_guess, double& confidence) {
+Matrix4dR align_clouds(const ouster::sdk::core::Frame& source_frame,
+                       const ouster::sdk::core::Frame& target_frame, const Matrix4dR& initial_guess,
+                       double& confidence) {
     return finalize_align_clouds_result(
         align_clouds_from_frames_impl(source_frame, target_frame, PoseH(initial_guess),
                                       /*compute_confidence=*/true),
@@ -2464,33 +2500,39 @@ std::vector<Matrix4dR> align_clouds(const ouster::sdk::core::FrameSet& frames) {
             "align_clouds(FrameSet) requires frames[0] as the anchor frame.");
     }
     for (size_t frame_idx = 0; frame_idx < frames.size(); ++frame_idx) {
-        const auto& lidar_frame = frames[frame_idx];
-        if (!lidar_frame) {
+        const auto& frame_ptr = frames[frame_idx];
+        // The sensor-to-body extrinsic is a shared SensorInfo field, so this
+        // works uniformly for lidar and camera frames without downcasting.
+        if (!frame_ptr || !frame_ptr->sensor_info()) {
             logger().warn(
-                "align_clouds(FrameSet): frame {} is missing; leaving "
-                "output extrinsic as identity.",
+                "align_clouds(FrameSet): frame {} is missing or has null sensor_info; "
+                "leaving output extrinsic as identity.",
                 frame_idx);
             continue;
         }
-        if (!lidar_frame->sensor_info) {
-            logger().warn(
-                "align_clouds(FrameSet): frame {} has null sensor_info; "
-                "skipping.",
-                frame_idx);
-            continue;
-        }
-        aligned_extrinsics[frame_idx] = lidar_frame->sensor_info->sensor_to_body;
+        aligned_extrinsics[frame_idx] = frame_ptr->sensor_info()->sensor_to_body;
     }
-    int anchor_first_col = 0;
+    // The anchor's reference pose rebases every frame into a common frame. For a
+    // lidar anchor it is the body pose at the first valid column; for a camera
+    // anchor it is the frame's single body pose. Any other/invalid anchor is
+    // treated as a fatal condition and the input extrinsics are returned.
+    PoseH anchor_reference_pose(Matrix4dR::Identity());
     try {
-        anchor_first_col = frames[0]->get_first_valid_column();
+        if (const auto anchor_lidar =
+                std::dynamic_pointer_cast<ouster::sdk::core::LidarFrame>(frames[0])) {
+            anchor_reference_pose =
+                PoseH(anchor_lidar->get_column_pose(anchor_lidar->get_first_valid_column()));
+        } else if (std::dynamic_pointer_cast<ouster::sdk::core::CameraFrame>(frames[0])) {
+            anchor_reference_pose = PoseH(frames[0]->get_column_pose(0));
+        } else {
+            throw std::runtime_error("anchor sensor 0 is not a lidar or camera frame");
+        }
     } catch (const std::exception&) {
         logger().warn(
             "align_clouds(FrameSet): anchor sensor 0 has no valid "
-            "columns; returning input extrinsics.");
+            "pose; returning input extrinsics.");
         return aligned_extrinsics;
     }
-    const PoseH anchor_reference_pose(frames[0]->get_column_pose(anchor_first_col));
 
     // Prepare per-frame features with bounded concurrency. Each frame's ground
     // segmentation, normals, dewarp and downsample are independent, but the work
@@ -2498,11 +2540,13 @@ std::vector<Matrix4dR> align_clouds(const ouster::sdk::core::FrameSet& frames) {
     // async task per sensor.
     std::vector<FrameFeatures> prepared_features(frames.size());
     run_parallel_indexed(frames.size(), /*allow_parallel=*/true, [&](size_t frame_idx) {
-        if (!frames[frame_idx]) {
-            return;
+        const auto& frame_ptr = frames[frame_idx];
+        // prepare_frame_features handles both lidar and camera frames uniformly,
+        // so no per-kind dispatch is needed here.
+        if (frame_ptr) {
+            prepared_features[frame_idx] =
+                prepare_frame_features(*frame_ptr, &anchor_reference_pose);
         }
-        prepared_features[frame_idx] =
-            prepare_frame_features(*frames[frame_idx], &anchor_reference_pose);
     });
 
     std::vector<MultiValidFrame> valid_frames;
@@ -2514,6 +2558,8 @@ std::vector<Matrix4dR> align_clouds(const ouster::sdk::core::FrameSet& frames) {
         MultiValidFrame valid;
         valid.frame_index = frame_idx;
         valid.features = std::move(prepared_features[frame_idx]);
+        valid.is_camera =
+            std::dynamic_pointer_cast<ouster::sdk::core::CameraFrame>(frames[frame_idx]) != nullptr;
         if (!multi_frame_has_enough_features(valid)) {
             continue;
         }
@@ -2538,9 +2584,12 @@ std::vector<Matrix4dR> align_clouds(const ouster::sdk::core::FrameSet& frames) {
 
     const std::vector<Matrix4dR> base_extrinsics = aligned_extrinsics;
     if (valid_frames.size() == 2) {
+        // Camera-involving pairs trust their extrinsic prior and refine locally
+        // instead of the lidar-oriented global coarse search.
+        const bool pair_has_camera = valid_frames[0].is_camera || valid_frames[1].is_camera;
         const auto result = align_clouds_from_features_impl(
             valid_frames[1].features, valid_frames[0].features, PoseH(Matrix4dR::Identity()),
-            /*compute_confidence=*/true);
+            /*compute_confidence=*/true, /*skip_coarse=*/pair_has_camera);
         if (!std::isfinite(result.second) || result.second <= 0.0) {
             logger().warn(
                 "align_clouds(FrameSet): pairwise alignment confidence is "

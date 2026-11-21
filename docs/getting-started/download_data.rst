@@ -7,10 +7,10 @@ Download Data
 ..
    [start-download-instructions]
 
-Ouster provides multiple datasets via Ouster Studio to facilitate your learning experience with spatial perception. 
+Ouster provides multiple datasets via Ouster Studio to facilitate your learning experience with spatial perception.
 
-You can download some commonly used datasets to follow along the tutorials by clicking the `Ouster Studio`_ links 
-and using the Download button for the appropriate format such as pcap or osf.  
+You can download some commonly used datasets to follow along the tutorials by clicking the `Ouster Studio`_ links
+and using the Download button for the appropriate format such as pcap or osf.
 
 
 .. _Ouster Studio: https://studio.ouster.com/public/sample_library/public_collection
@@ -58,7 +58,7 @@ In your open python session, save the two paths to variables:
    [end-download-instructions]
 
 .. tip::
-    
+
     All Ouster sample data is provided under the `CC BY-NC-SA license`_, whether obtained
     through the above links or from the Ouster website.
 

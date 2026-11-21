@@ -26,7 +26,7 @@ namespace sdk {
 namespace core {
 
 // Forward declaration
-class SensorInfo;
+class LidarInfo;
 
 namespace impl {
 
@@ -175,6 +175,13 @@ struct OUSTER_API_CLASS FieldDescriptor {
     OUSTER_API_FUNCTION
     ChanFieldType tag() const;
 
+    /**
+     * Compare two field descriptors for equality.
+     *
+     * @param[in] other Descriptor to compare with.
+     *
+     * @return true if type, shape, strides, and element size match.
+     */
     OUSTER_API_FUNCTION
     bool operator==(const FieldDescriptor& other) const noexcept {
         return type == other.type && shape == other.shape && strides == other.strides &&
@@ -798,10 +805,6 @@ enum class FieldClass {
      */
     FRAME_FIELD = 3,
 
-    /** @deprecated Use FRAME_FIELD instead */
-    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SCAN_FIELD, FRAME_FIELD,
-                                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0),
-
     /**
      * Corresponds to fields of any dimension associated with collations of
      * frames
@@ -843,9 +846,11 @@ class OUSTER_API_CLASS Field : public FieldView {
      *
      * @param[in] desc FieldDescriptor
      * @param[in] field_class FieldClass
+     * @param[in] zero If true, zero the field after allocation rather than leave it uninitialized
      */
     OUSTER_API_FUNCTION
-    Field(const FieldDescriptor& desc, FieldClass field_class = FieldClass::PIXEL_FIELD);
+    Field(const FieldDescriptor& desc, FieldClass field_class = FieldClass::PIXEL_FIELD,
+          bool zero = true);
 
     /**
      * Copy constructor
@@ -917,7 +922,7 @@ class OUSTER_API_CLASS Field : public FieldView {
  * @return the staggered/destaggered field
  */
 OUSTER_API_FUNCTION
-Field destagger(const SensorInfo& info, const FieldView& field, bool inverse = false);
+Field destagger(const LidarInfo& info, const FieldView& field, bool inverse = false);
 
 /**
  * Acquire a uintXX_t reinterpreted view of the matching type size.

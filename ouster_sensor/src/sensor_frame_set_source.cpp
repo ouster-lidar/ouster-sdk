@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "ouster/core/impl/logging.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/open_source.h"
 
 using namespace ouster::sdk::core;
@@ -49,7 +50,7 @@ class SensorFrameSetIteratorImpl : public ouster::sdk::core::FrameSetIteratorImp
             if (source_->timeout_ > 0) {
                 int64_t now = 0;
                 if (result.second) {
-                    now = static_cast<int64_t>(result.second->get_last_valid_packet_timestamp());
+                    now = static_cast<int64_t>(result.second->get_last_valid_receive_timestamp());
                 } else {
                     auto now_sec = std::chrono::system_clock::now();
                     now = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -64,7 +65,7 @@ class SensorFrameSetIteratorImpl : public ouster::sdk::core::FrameSetIteratorImp
                 int i = 0;
                 for (const auto time : source_->last_receive_times_) {
                     if (now - time > source_->timeout_ns_) {
-                        const auto& metadata = source_->sensor_info()[i];
+                        const auto metadata = source_->client_.sensor_info()[i];
                         throw ouster::sdk::sensor::ClientTimeout(
                             "No valid frames received within " + std::to_string(source_->timeout_) +
                             " from sensor " + std::to_string(metadata->sn) +
@@ -117,12 +118,20 @@ SensorFrameSetSource::SensorFrameSetSource(const std::vector<std::string>& sourc
       id_error_count_{0},
       timeout_(options.timeout.retrieve()),
       timeout_ns_(static_cast<int64_t>(options.timeout.retrieve() * 1e9)) {
-    fields_ = resolve_field_types(sensor_info(), options.raw_headers.retrieve(),
+    fields_ = resolve_field_types(client_.sensor_info(), options.raw_headers.retrieve(),
                                   options.raw_fields.retrieve(), options.field_names.retrieve());
 
-    start_thread(options.queue_size.retrieve(), options.soft_id_check.retrieve());
+    auto queue_size = options.queue_size.retrieve();
+    auto soft_id_check = options.soft_id_check.retrieve();
 
+    // Validate the options before spawning the batcher thread. If check()
+    // throws (e.g. an unsupported parameter) after start_thread() has already
+    // assigned a joinable std::thread to batcher_thread_, stack unwinding would
+    // destroy that joinable thread and call std::terminate() (SIGABRT), since
+    // the failed constructor's destructor never runs. See issue #721.
     options.check("SensorFrameSetSource");
+
+    start_thread(queue_size, soft_id_check);
 }
 
 SensorFrameSetSource::SensorFrameSetSource(const std::vector<Sensor>& sensors,
@@ -131,13 +140,13 @@ SensorFrameSetSource::SensorFrameSetSource(const std::vector<Sensor>& sensors,
     : SensorFrameSetSource(sensors, {}, {}, config_timeout, queue_size, soft_id_check) {}
 
 SensorFrameSetSource::SensorFrameSetSource(const std::vector<Sensor>& sensors,
-                                           const std::vector<SensorInfo>& infos,
+                                           const std::vector<LidarInfo>& infos,
                                            double config_timeout, unsigned int queue_size,
                                            bool soft_id_check)
     : SensorFrameSetSource(sensors, infos, {}, config_timeout, queue_size, soft_id_check) {}
 
 SensorFrameSetSource::SensorFrameSetSource(const std::vector<Sensor>& sensors,
-                                           const std::vector<SensorInfo>& infos,
+                                           const std::vector<LidarInfo>& infos,
                                            const std::vector<LidarFrameFieldTypes>& fields,
                                            double config_timeout, unsigned int queue_size,
                                            bool soft_id_check)
@@ -166,13 +175,19 @@ SensorFrameSetSource::SensorFrameSetSource(const std::vector<Sensor>& sensors,
 }
 
 void SensorFrameSetSource::start_thread(unsigned int queue_size, bool soft_id_check) {
+    // build the combined info exposed via sensor_info()
+    combined_info_.clear();
+    for (const auto& info : client_.sensor_info()) {
+        combined_info_.push_back(info);
+    }
+
     auto now_sec = std::chrono::system_clock::now();
     int64_t now =
         std::chrono::duration_cast<std::chrono::nanoseconds>(now_sec.time_since_epoch()).count();
-    last_receive_times_.resize(sensor_info().size(), now);
+    last_receive_times_.resize(client_.sensor_info().size(), now);
     run_thread_ = true;
-    for (const auto& info : sensor_info()) {
-        orig_sensor_info_.push_back(std::make_shared<SensorInfo>(*info));
+    for (const auto& info : client_.sensor_info()) {
+        orig_sensor_info_.push_back(std::make_shared<LidarInfo>(*info));
     }
     batcher_thread_ = std::thread([this, queue_size, soft_id_check]() {
         std::vector<std::unique_ptr<LidarFrame>> frames;
@@ -205,8 +220,8 @@ void SensorFrameSetSource::start_thread(unsigned int queue_size, bool soft_id_ch
                 if (batchers[packet_event.source].batch(packet, *frames[packet_event.source])) {
                     {
                         std::unique_lock<std::mutex> lock(buffer_mutex_);
-                        frames[packet_event.source]->sensor_info =
-                            sensor_info()[packet_event.source];
+                        frames[packet_event.source]->set_sensor_info(
+                            client_.sensor_info()[packet_event.source]);
                         buffer_.emplace_back(packet_event.source,
                                              std::move(frames[packet_event.source]));
                         while (buffer_.size() > queue_size) {
@@ -229,7 +244,7 @@ SensorFrameSetSource::~SensorFrameSetSource() {
 
 std::pair<int, std::unique_ptr<LidarFrame>> SensorFrameSetSource::get_frame(double timeout_sec) {
     std::unique_lock<std::mutex> lock(buffer_mutex_);
-    // if theres anything in the queue, just pop it and leave
+    // if there's anything in the queue, just pop it and leave
     if (!buffer_.empty()) {
         auto result = std::move(buffer_.front());
         buffer_.pop_front();
@@ -250,13 +265,6 @@ std::pair<int, std::unique_ptr<LidarFrame>> SensorFrameSetSource::get_frame(doub
     buffer_.pop_front();
     return result;
 }
-
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
-std::pair<int, std::unique_ptr<LidarFrame>> SensorFrameSetSource::get_scan(double timeout_sec) {
-    return get_frame(timeout_sec);
-}
-OUSTER_DIAGNOSTIC_POP
 
 void SensorFrameSetSource::flush() {
     std::unique_lock<std::mutex> lock(buffer_mutex_);

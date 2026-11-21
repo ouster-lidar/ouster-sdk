@@ -72,10 +72,16 @@ class GLObjectOverlay {
         GLint face_hshift_id{};
         GLint face_aspect_id{};
 
+        // Pinhole (camera) projection programs. Share the panorama vertex and
+        // fragment shaders; uniform locations are looked up on demand in draw()
+        // since camera overlays are few. See common.h PINHOLE_*_SHADER_CODE.
+        GLuint pinhole_program_id{};
+        GLuint pinhole_face_program_id{};
+
         GlobalState();
         ~GlobalState();
 
-        // Make sure it cant be copied
+        // Make sure it can't be copied
         GlobalState(const GlobalState&) = delete;
         GlobalState& operator=(const GlobalState&) = delete;
     };

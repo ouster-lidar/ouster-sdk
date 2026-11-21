@@ -16,6 +16,24 @@ save the resulting objects to an OSF dataset, run
    :end-before: [doc-etag-source-detect]
    :class: doc-snippet
 
+The ``detect`` command accepts an option for each field of ``ClassicDetectionConfig``:
+
+* ``--save-instance-id-fields/--no-save-instance-id-fields``: whether to save per-pixel instance id fields.
+* ``--cluster-filter-min-side-length``: minimum side length a cluster must have to be kept (meters).
+* ``--cluster-filter-max-side-length``: maximum side length a cluster may have to be kept (meters); ignored when
+  negative.
+* ``--cluster-filter-min-vertical-size``: minimum size a cluster must have along the vertical dimension (meters).
+* ``--cluster-filter-max-volume``: maximum volume a cluster may have to be kept (cubic meters); ignored when negative.
+
+Run ``ouster-cli source <SOURCE> detect --help`` to see the default values. For example, to disable the maximum
+volume filter, run
+
+.. literalinclude:: /../python/tests/documentation/test_cli_commands.py
+   :language: bash
+   :start-after: [doc-stag-source-detect-options]
+   :end-before: [doc-etag-source-detect-options]
+   :class: doc-snippet
+
 Visualizing objects
 ^^^^^^^^^^^^^^^^^^^
 

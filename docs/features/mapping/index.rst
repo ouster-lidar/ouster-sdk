@@ -9,11 +9,12 @@ SLAM
    motion-compensation
    using-the-api
    viz-frames-accum
+   gravity_alignment/index
    point_cloud_alignment/index
 
 SLAM (Simultaneous Localization and Mapping) is a computational technique that enables a robot to
 construct a map of an unknown environment while simultaneously keeping track of its own location within that map.
-Utilizing Ouster's LiDAR sensors, SLAM leverages high-resolution distance data to achieve precise localization and detailed environmental mapping.
+Utilizing Ouster's lidar and (stereo) camera sensors, SLAM leverages high-resolution range data to achieve precise localization and detailed environmental mapping.
 
 The generated map is can be useful for subsequent tasks like path planning, obstacle avoidance, and navigation.
 
@@ -21,14 +22,17 @@ The generated map is can be useful for subsequent tasks like path planning, obst
    :alt: SLAM processing pipeline
    :width: 100%
 
-The Ouster SDK provides a robust Python and C++ API for building 3D maps from lidar sensor data.
+The Ouster SDK provides a robust Python and C++ API for building 3D maps from lidar and camera sensor data.
 This API enables developers to process raw sensor packets, accumulate point clouds, and construct spatial representations suitable for visualization, localization, and other applications.
+Lidar and camera frames are supported uniformly: their points are projected through the same
+``XYZLut`` and aggregated into a common cloud before registration, so lidar-only, camera-only, and
+mixed setups all use the same API.
 
 
 Key Capabilities
 ----------------
 
-- **Real-time SLAM**: The `SlamEngine` class uses the built in Lidar Inertial Odometry (LIO) backend for fast, incremental map generation and pose estimation from live or recorded data.
+- **Real-time SLAM**: The `SlamEngine` class uses the built in Lidar Inertial Odometry (LIO) backend for fast, incremental map generation and pose estimation from live or recorded data. It accepts lidar and (stereo) camera frames uniformly through a single mixed sensor list.
 
 - **Map-Based Localization**: The ``LocalizationEngine`` enables real-time pose tracking against a pre-built point cloud map, supporting localization in known environments. See the dedicated :doc:`Localization </features/localization/index>` section for full details.
 
@@ -49,5 +53,5 @@ Best Practices
 - **Provide Accurate Extrinsics**: Supply precise 4x4 extrinsics matrices for each sensor to ensure correct point cloud fusion.
 
 - **Tune Slam Config Parameters**: Adjust configuration settings for optimal results. These will be explained in detail in the next section.
- 
+
 Using SDK, one can configure and run SLAM using Python, C++, or via the CLI.

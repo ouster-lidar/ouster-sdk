@@ -46,7 +46,7 @@ def test_osf_save_extrinsics(tmp_path, sensor_metadata):
 
 
 def test_osf_read_old_extrinsics(tmp_path, sensor_metadata):
-    """OsfFrameSetSource's SensorInfo (from the metadata attribute)
+    """OsfFrameSetSource's LidarInfo (from the metadata attribute)
     should include extrinsics loaded from the osf metadata store."""
 
     # write an OSF with some extrinsics

@@ -82,6 +82,8 @@ def _run_sdk_prebuild(ctx, env, build_type, extra_cmake_args):
         "-DBUILD_PYTHON_MODULE=OFF",
         "-DBUILD_SHARED_LIBRARY=ON",
         "-DBUILD_PERCEPTION=ON",
+        # The install is only consumed by the pip build below, with the same toolchain.
+        "-DOUSTER_LTO_FOR_INSTALLED_LIBS=ON",
     ]
     if ctx.obj.build_options.vcpkg_toolchain:
         configure_cmd.append(

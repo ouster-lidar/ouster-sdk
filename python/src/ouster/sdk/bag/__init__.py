@@ -10,6 +10,3 @@ Includes tools for accessing raw sensor packets and assembling complete lidar fr
 
 from .bag_packet_source import BagPacketSource
 from .bag_frame_set_source import BagFrameSetSource
-
-from ouster.sdk._deprecation import deprecated_alias
-deprecated_alias("BagScanSource", "BagFrameSetSource", BagFrameSetSource, globals(), "1.0")

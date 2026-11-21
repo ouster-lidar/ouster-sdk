@@ -8,6 +8,7 @@
 #include "metadata_generated.h"
 #include "os_sensor/common_generated.h"
 #include "os_sensor/collation_stream_generated.h"
+#include "os_sensor/camera_sensor_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
 #include "os_sensor/lidar_sensor_generated.h"
 #include "ouster/core/lidar_frame.h"

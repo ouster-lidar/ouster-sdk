@@ -17,7 +17,7 @@
 namespace ouster {
 namespace sdk {
 namespace core {
-class LidarFrame;
+class Frame;
 template <typename T>
 class XYZLutT;
 using XYZLut = XYZLutT<double>;
@@ -32,7 +32,7 @@ namespace impl {
 
 // Internal helper shared with point-cloud alignment. Not part of the supported
 // public API.
-std::vector<std::vector<uint8_t>> get_ground_mask(const core::LidarFrame& frame, double grid_size,
+std::vector<std::vector<uint8_t>> get_ground_mask(const core::Frame& frame, double grid_size,
                                                   const core::XYZLut& xyz_lut);
 
 }  // namespace impl

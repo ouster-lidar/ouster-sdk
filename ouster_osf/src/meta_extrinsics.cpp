@@ -45,7 +45,7 @@ std::vector<uint8_t> Extrinsics::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(256);
     std::vector<double> extrinsic_vec(16);
 
-    // mat4d is row-major, same as OSF on-disk format — direct copy
+    // mat4d is row-major, same as OSF on-disk format -- direct copy
     std::copy(extrinsics_.data(), extrinsics_.data() + 16, extrinsic_vec.data());
     auto ext_offset = osf::impl::gen::CreateExtrinsicsDirect(
         fbb, &extrinsic_vec, ref_meta_id_, name_.empty() ? nullptr : name_.c_str());
@@ -66,7 +66,7 @@ std::unique_ptr<MetadataEntry> Extrinsics::from_buffer(const OsfBuffer& buf) {
     }
     mat4d ext_mat = mat4d::Identity();
     if ((ext_fb->extrinsics() != nullptr) && ext_fb->extrinsics()->size() == 16) {
-        // OSF stores row-major, mat4d is row-major — direct copy
+        // OSF stores row-major, mat4d is row-major -- direct copy
         std::copy(ext_fb->extrinsics()->begin(), ext_fb->extrinsics()->end(), ext_mat.data());
     }
     return std::make_unique<osf::Extrinsics>(ext_mat, ext_fb->ref_id(), name);

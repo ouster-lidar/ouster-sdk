@@ -9,7 +9,7 @@ from typing import (Iterable, Iterator, List, Callable, Tuple, Union)
 import logging
 import numpy as np
 
-from ouster.sdk._bindings.client import (SensorInfo, PacketFormat, LidarFrame,
+from ouster.sdk._bindings.client import (LidarInfo, PacketFormat, Frame,
                       LidarPacket, ImuPacket, ZonePacket, Packet, PacketSource)
 
 logger = logging.getLogger("ouster.sdk.core.core")
@@ -19,9 +19,9 @@ class Packets(PacketSource):
     """Create a :class:`PacketSource` from an existing iterator."""
 
     _it: Iterable[Union[LidarPacket, ImuPacket, ZonePacket]]
-    _metadata: List[SensorInfo]
+    _metadata: List[LidarInfo]
 
-    def __init__(self, it: Iterable[Union[LidarPacket, ImuPacket, ZonePacket]], metadata: SensorInfo):
+    def __init__(self, it: Iterable[Union[LidarPacket, ImuPacket, ZonePacket]], metadata: LidarInfo):
         """
         Args:
             it: A stream of packets
@@ -32,7 +32,7 @@ class Packets(PacketSource):
         self._metadata = [metadata]
 
     @property
-    def sensor_info(self) -> List[SensorInfo]:
+    def sensor_info(self) -> List[LidarInfo]:
         return self._metadata
 
     def __iter__(self) -> Iterator[Tuple[int, Union[LidarPacket, ImuPacket, ZonePacket]]]:
@@ -51,7 +51,7 @@ class Packets(PacketSource):
 class FrameBorder:
     """Create callable helper that indicates the cross frames packets."""
 
-    def __init__(self, meta: SensorInfo, pred: Callable[[Packet], bool] = lambda _: True):
+    def __init__(self, meta: LidarInfo, pred: Callable[[Packet], bool] = lambda _: True):
         self._last_f_id = -1
         self._last_packet_ts = None
         self._last_packet_res = False
@@ -72,17 +72,19 @@ class FrameBorder:
         return False
 
 
-def first_valid_column_pose(frame: LidarFrame) -> np.ndarray:
-    """Return first valid column pose of a LidarFrame"""
+def first_valid_column_pose(frame: Frame) -> np.ndarray:
+    """Return first valid column pose of a frame (lidar or camera)"""
     try:
-        return frame.body_to_world[frame.get_first_valid_column()]
+        # make sure to copy so we don't accidentally hold a reference to the scan
+        return np.copy(frame.body_to_world[frame.get_first_valid_column()])
     except RuntimeError:
         return np.identity(4, dtype=np.float64)
 
 
-def last_valid_column_pose(frame: LidarFrame) -> np.ndarray:
-    """Return last valid column pose of a LidarFrame"""
+def last_valid_column_pose(frame: Frame) -> np.ndarray:
+    """Return last valid column pose of a frame (lidar or camera)"""
     try:
-        return frame.body_to_world[frame.get_last_valid_column()]
+        # make sure to copy so we don't accidentally hold a reference to the scan
+        return np.copy(frame.body_to_world[frame.get_last_valid_column()])
     except RuntimeError:
         return np.identity(4, dtype=np.float64)

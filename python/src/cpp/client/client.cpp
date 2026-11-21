@@ -21,20 +21,22 @@
 #include <pyerrors.h>
 #include <warnings.h>
 
+#include <string>
+
 #include "client_common.h"
 #include "common.h"
 #include "eigen_dense.h"
 #include "ouster/core/defaults.h"
+#include "ouster/core/lidar_config.h"
 #include "ouster/core/packet.h"
-#include "ouster/core/profile_extension.h"
 #include "ouster/core/types.h"
 #include "ouster/sensor/sensor_http.h"
 #include "ouster/sensor/sensor_packet_source.h"
 
 using ouster::sdk::core::ImuPacket;
+using ouster::sdk::core::LidarConfig;
 using ouster::sdk::core::LidarPacket;
 using ouster::sdk::core::PacketType;
-using ouster::sdk::core::SensorConfig;
 using ouster::sdk::sensor::ClientEvent;
 using ouster::sdk::sensor::Sensor;
 using ouster::sdk::sensor::SensorHttp;
@@ -69,8 +71,8 @@ void init_client_client(py::module_& module, py::module_& /*unused*/) {
         });
 
     py::class_<Sensor>(module, "Sensor")
-        .def(py::init<const std::string&, const SensorConfig&>(), py::arg("hostname"),
-             py::arg("desired_config") = SensorConfig())
+        .def(py::init<const std::string&, const LidarConfig&>(), py::arg("hostname"),
+             py::arg("desired_config") = LidarConfig())
         .def(
             "fetch_metadata",
             [](Sensor& self, int timeout) { return self.fetch_metadata(timeout); },
@@ -135,6 +137,10 @@ void init_client_client(py::module_& module, py::module_& /*unused*/) {
             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("delete_static_ip", &SensorHttp::delete_static_ip,
              py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
+        .def("set_mtu", &SensorHttp::set_mtu, py::arg("mtu"),
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
+        .def("delete_mtu", &SensorHttp::delete_mtu,
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("auto_detected_udp_dest", &SensorHttp::auto_detected_udp_dest,
              py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS,
              py::arg("original_destination") = py::none())
@@ -191,8 +197,8 @@ void init_client_client(py::module_& module, py::module_& /*unused*/) {
 
     module.def(
         "set_config",
-        [](const std::string& hostname, const SensorConfig& config, bool persist,
-           bool udp_dest_auto, bool force_reinit) {
+        [](const std::string& hostname, const LidarConfig& config, bool persist, bool udp_dest_auto,
+           bool force_reinit) {
             uint8_t config_flags = 0;
             if (persist) {
                 config_flags |= ouster::sdk::sensor::CONFIG_PERSIST;
@@ -210,7 +216,7 @@ void init_client_client(py::module_& module, py::module_& /*unused*/) {
 
     Args:
         hostname (str): hostname of the sensor
-        config (SensorConfig): config to set sensor parameters to
+        config (LidarConfig): config to set sensor parameters to
         persist (bool): persist parameters after sensor disconnection (default = False)
         udp_dest_auto (bool): automatically determine sender's IP at the time command was sent
             and set it as destination of UDP traffic. Function will error out if config has
@@ -227,7 +233,7 @@ void init_client_client(py::module_& module, py::module_& /*unused*/) {
             return ouster::sdk::sensor::get_config(hostname, active);
         },
         R"(
-    Returns sensor config parameters as SensorConfig.
+    Returns sensor config parameters as LidarConfig.
 
     Args:
         hostname: hostname of the sensor

@@ -22,7 +22,7 @@ namespace impl {
  */
 class Framebuffer {
    public:
-    Framebuffer(int width, int height);
+    Framebuffer(int width, int height, bool depth_texture = false);
     ~Framebuffer();
 
     void bind();
@@ -35,14 +35,18 @@ class Framebuffer {
     bool is_complete() const;
     int width() const;
     int height() const;
+    GLuint texture() const;
+    GLuint depth_texture() const;
 
    private:
-    GLuint depth_rbo_handle_;
-    GLuint fbo_handle_;
-    GLuint texture_handle_;
+    GLuint depth_rbo_handle_{};
+    GLuint fbo_handle_{};
+    GLuint texture_handle_{};
+    GLuint depth_texture_handle_{};
     int width_;
     int height_;
     bool bound_{false};
+    bool has_depth_texture_;
 };
 
 }  // namespace impl

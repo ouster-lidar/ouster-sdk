@@ -7,8 +7,10 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 #include "ouster/core/types.h"
+#include "ouster/osf/frame_encoder.h"
 #include "ouster/osf/impl/png_tools.h"
 
 using namespace ouster::sdk::core;
@@ -37,13 +39,55 @@ namespace ouster {
 namespace sdk {
 namespace osf {
 
-impl::gen::CHAN_FIELD_TYPE to_osf_enum(ChanFieldType field_type) {
-    return static_cast<impl::gen::CHAN_FIELD_TYPE>(field_type);
-}
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define TYPE_LIST() \
+    X(VOID)         \
+    X(UINT8)        \
+    X(UINT16)       \
+    X(UINT32)       \
+    X(UINT64)       \
+    X(INT8)         \
+    X(INT16)        \
+    X(INT32)        \
+    X(INT64)        \
+    X(FLOAT16)      \
+    X(FLOAT32)      \
+    X(FLOAT64)      \
+    X(CHAR)
 
-ChanFieldType from_osf_enum(impl::gen::CHAN_FIELD_TYPE field_type) {
-    return static_cast<ChanFieldType>(field_type);
+// explicitly instantiate for each field type / block dim
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define X(type)               \
+    case ChanFieldType::type: \
+        return impl::gen::CHAN_FIELD_TYPE::type;  // NOLINT(bugprone-macro-parentheses)
+
+impl::gen::CHAN_FIELD_TYPE to_osf_enum(ChanFieldType field_type) {
+    switch (field_type) {
+        TYPE_LIST()
+        case ChanFieldType::ZONE_STATE:
+            return impl::gen::CHAN_FIELD_TYPE::ZONE_STATE_V2;
+        default:
+            throw std::runtime_error("Unhandled or invalid ChanFieldType.");
+    }
 }
+#undef X
+
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define X(type)                            \
+    case impl::gen::CHAN_FIELD_TYPE::type: \
+        return ChanFieldType::type;  // NOLINT(bugprone-macro-parentheses)
+
+optional<ChanFieldType> try_from_osf_enum(impl::gen::CHAN_FIELD_TYPE field_type) {
+    switch (field_type) {
+        TYPE_LIST()
+        case impl::gen::CHAN_FIELD_TYPE::ZONE_STATE_V2:
+        case impl::gen::CHAN_FIELD_TYPE::ZONE_STATE:
+            return ChanFieldType::ZONE_STATE;
+        default:
+            return nullopt;
+    }
+}
+#undef X
 
 impl::gen::FIELD_CLASS to_osf_enum(FieldClass field_class) {
     switch (field_class) {
@@ -62,7 +106,7 @@ impl::gen::FIELD_CLASS to_osf_enum(FieldClass field_class) {
     }
 }
 
-ouster::sdk::core::FieldClass from_osf_enum(impl::gen::FIELD_CLASS field_class) {
+optional<ouster::sdk::core::FieldClass> try_from_osf_enum(impl::gen::FIELD_CLASS field_class) {
     switch (field_class) {
         case impl::gen::FIELD_CLASS::PIXEL_FIELD:
             return FieldClass::PIXEL_FIELD;
@@ -75,7 +119,7 @@ ouster::sdk::core::FieldClass from_osf_enum(impl::gen::FIELD_CLASS field_class) 
         case impl::gen::FIELD_CLASS::COLLATION_FIELD:
             return FieldClass::COLLATION_FIELD;
         default:
-            throw std::runtime_error("Unhandled or invalid FieldClass in OSF.");
+            return nullopt;
     }
 }
 
@@ -147,12 +191,18 @@ nonstd::optional<impl::gen::CHAN_FIELD> to_osf_enum(const std::string& field_nam
     return rlookup(chanfield_strings, field_name.c_str());
 }
 
-std::string from_osf_enum(impl::gen::CHAN_FIELD field) {
-    return lookup(chanfield_strings, field).value();
+optional<std::string> try_from_osf_enum(impl::gen::CHAN_FIELD field) {
+    auto name = lookup(chanfield_strings, field);
+    if (!name) {
+        return nullopt;
+    }
+    return std::string{name.value()};
 }
 
+namespace {
+
 template <typename FieldsContainer, typename GetField>
-std::vector<FrameChannelData> encode_fields(const LidarFrameEncoder& encoder,
+std::vector<FrameChannelData> encode_fields(const FrameEncoder& encoder,
                                             const FieldsContainer& fields,
                                             const GetField& get_field,
                                             const std::vector<int>& px_offset) {
@@ -187,8 +237,10 @@ std::vector<FrameChannelData> encode_fields(const LidarFrameEncoder& encoder,
     return fields_data;
 }
 
+}  // namespace
+
 flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> fb_save_fields(
-    flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+    flatbuffers::FlatBufferBuilder& fbb, const FrameEncoder& encoder,
     const std::vector<std::pair<std::string, const Field*>>& fields) {
     if (fields.empty()) {
         return 0;
@@ -219,9 +271,10 @@ flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> 
 }
 
 flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> fb_save_fields(
-    flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+    flatbuffers::FlatBufferBuilder& fbb, const FrameEncoder& encoder,
     const std::unordered_map<std::string, Field>& fields) {
     std::vector<std::pair<std::string, const Field*>> fields_vec;
+    fields_vec.reserve(fields.size());
     for (const auto& field : fields) {
         fields_vec.emplace_back(field.first, &field.second);
     }
@@ -229,7 +282,7 @@ flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::Field>>> 
 }
 
 flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>>
-fb_save_frame_channels(flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEncoder& encoder,
+fb_save_frame_channels(flatbuffers::FlatBufferBuilder& fbb, const FrameEncoder& encoder,
                        const LidarFrame& frame, const LidarFrameFieldTypes& field_types,
                        const std::vector<int>& px_offset) {
     auto get_field = [&frame](const FieldType& field_type) -> const Field& {
@@ -247,23 +300,18 @@ fb_save_frame_channels(flatbuffers::FlatBufferBuilder& fbb, const LidarFrameEnco
     return fbb.CreateVector<flatbuffers::Offset<impl::gen::ChannelData>>(channels);
 }
 
-void fb_restore_fields(
+std::vector<std::future<void>> fb_restore_fields(
     const flatbuffers::Vector<flatbuffers::Offset<ouster::sdk::osf::v2::Field>>* fb_fields,
     const nonstd::optional<std::vector<std::string>>& fields_to_decode, const AddFieldFn& add_field,
     const core::error_handler_t& error_handler) {
     if ((fb_fields == nullptr) || fb_fields->size() == 0u) {
-        return;
+        return {};
     }
 
-    // TODO[tws] consider using std::future's exception propagation, deduplicate
-    // the try/catch logic
-    std::vector<std::pair<Severity, std::string>> errors;
-
 #ifndef OUSTER_OSF_NO_THREADING
-    std::mutex error_vector_mut;
     auto& threadpool = get_threadpool();
-    std::vector<std::future<void>> futures;
 #endif
+    std::vector<std::future<void>> futures;
 
     for (auto fb_field : *fb_fields) {
         std::string name{fb_field->name()->c_str()};
@@ -281,11 +329,29 @@ void fb_restore_fields(
                 continue;
             }
         }
-        ChanFieldType tag = from_osf_enum(fb_field->tag());
+        // Skip fields with unsupported types (e.g., from a newer SDK version)
+        auto og_tag = fb_field->tag();
+        auto maybe_tag = try_from_osf_enum(og_tag);
+        if (!maybe_tag) {
+            error_handler(Severity::OUSTER_WARNING,
+                          "Skipping field '" + name + "' with unsupported field type (tag=" +
+                              std::to_string(static_cast<int>(og_tag)) + ")");
+            continue;
+        }
+        ChanFieldType tag = maybe_tag.value();
+
+        auto og_field_class = fb_field->field_class();
+        auto maybe_field_class = try_from_osf_enum(og_field_class);
+        if (!maybe_field_class) {
+            error_handler(Severity::OUSTER_WARNING,
+                          "Skipping field '" + name + "' with unsupported field class (" +
+                              std::to_string(static_cast<int64_t>(og_field_class)) + ")");
+            continue;
+        }
+        ouster::sdk::core::FieldClass field_class = maybe_field_class.value();
 
         std::vector<size_t> shape{fb_field->shape()->begin(), fb_field->shape()->end()};
 
-        // Skip fields with unsupported types (e.g., from a newer SDK version)
         FieldDescriptor desc;
         try {
             desc = FieldDescriptor::array(tag, shape);
@@ -295,56 +361,37 @@ void fb_restore_fields(
                               std::to_string(static_cast<int>(tag)) + ")");
             continue;
         }
-        ouster::sdk::core::FieldClass field_class = from_osf_enum(fb_field->field_class());
 
-        auto& field = add_field(name, desc, field_class);
+        // NOLINTNEXTLINE(cppcoreguidelines-slicing)
+        FieldView field = add_field(name, desc, field_class);
 
         impl::EncodedFrameChannelData data;
         data.data_internal = fb_field->data()->data();
         data.size_internal = fb_field->data()->size();
 #ifndef OUSTER_OSF_NO_THREADING
-        futures.push_back(threadpool.enqueue([&, data]() {
-            try {
-                impl::decode_field(field, data);
-            } catch (const std::runtime_error& error) {
-                std::unique_lock<std::mutex> lock(error_vector_mut);
-                errors.emplace_back(Severity::OUSTER_WARNING, error.what());
-            }
-        }));
+        futures.push_back(threadpool.enqueue(
+            [field, data, og_tag]() mutable { impl::decode_field(field, data, og_tag); }));
 #else
         try {
-            impl::decode_field(field, data);
+            impl::decode_field(field, data, og_tag);
         } catch (const std::runtime_error& error) {
-            errors.push_back({Severity::OUSTER_WARNING, error.what()});
+            std::promise<void> promise;
+            futures.push_back(promise.get_future());
+            promise.set_exception(std::current_exception());
         }
 #endif
     }
-
-#ifndef OUSTER_OSF_NO_THREADING
-    for (auto& item : futures) {
-        // TODO[tws] consider using std::future's exception propagation
-        item.get();
-    }
-#endif
-
-    for (auto& err : errors) {
-        error_handler(err.first, err.second);
-    }
+    return futures;
 }
 
-void fb_restore_channels(
+std::vector<std::future<void>> fb_restore_channels(
     const flatbuffers::Vector<flatbuffers::Offset<impl::gen::ChannelData>>* fb_channels,
-    const LidarFrameFieldTypes& field_types, const std::vector<int>& px_offset, LidarFrame& frame,
-    const core::error_handler_t& error_handler) {
-    // TODO[tws] consider using std::future's exception propagation, deduplicate
-    // the try/catch logic
-    std::vector<std::pair<Severity, std::string>> errors;
-
+    const LidarFrameFieldTypes& field_types, const std::vector<size_t>& channel_indices,
+    const std::vector<int>& px_offset, LidarFrame& frame) {
 #ifndef OUSTER_OSF_NO_THREADING
-    std::mutex error_vector_mut;
     auto& threadpool = get_threadpool();
-    std::vector<std::future<void>> futures;
 #endif
+    std::vector<std::future<void>> futures;
 
     for (size_t i = 0; i < field_types.size(); i++) {
         // only decode fields in the destination lidar frame
@@ -352,42 +399,29 @@ void fb_restore_channels(
             continue;
         }
 
-        auto channel_buffer = fb_channels->Get(i)->buffer();
+        auto channel_buffer = fb_channels->Get(channel_indices[i])->buffer();
 
         impl::EncodedFrameChannelData data;
         data.data_internal = channel_buffer->data();
         data.size_internal = channel_buffer->size();
 
-        Field& field = frame.field(field_types[i].name);
+        // NOLINTNEXTLINE(cppcoreguidelines-slicing)
+        FieldView field = frame.field(field_types[i].name);
 
 #ifndef OUSTER_OSF_NO_THREADING
-        futures.push_back(threadpool.enqueue([&, data]() {
-            try {
-                impl::decode_field(field, data, px_offset);
-            } catch (const std::runtime_error& error) {
-                std::unique_lock<std::mutex> lock(error_vector_mut);
-                errors.emplace_back(Severity::OUSTER_WARNING, error.what());
-            }
-        }));
+        futures.push_back(threadpool.enqueue(
+            [&, data, field]() mutable { impl::decode_field(field, data, {}, px_offset); }));
 #else
         try {
-            impl::decode_field(field, data, px_offset);
+            impl::decode_field(field, data, {}, px_offset);
         } catch (const std::runtime_error& error) {
-            errors.push_back({Severity::OUSTER_WARNING, error.what()});
+            std::promise<void> promise;
+            futures.push_back(promise.get_future());
+            promise.set_exception(std::current_exception());
         }
 #endif
     }
-
-#ifndef OUSTER_OSF_NO_THREADING
-    for (auto& item : futures) {
-        // TODO[tws] consider using std::future's exception propagation
-        item.get();
-    }
-#endif
-
-    for (auto& err : errors) {
-        error_handler(err.first, err.second);
-    }
+    return futures;
 }
 
 flatbuffers::Offset<impl::gen::Pose> fb_save_pose(flatbuffers::FlatBufferBuilder& fbb,

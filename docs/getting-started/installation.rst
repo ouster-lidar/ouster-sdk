@@ -4,7 +4,7 @@
 Ouster SDK Installation
 =======================
 
-This section contains the installation instructions for the Ouster SDK on suported platforms in previous page.
+This section contains the installation instructions for the Ouster SDK on supported platforms in previous page.
 
 
 .. _installation-python:
@@ -32,7 +32,7 @@ To install, first ensure pip is up to date, then install the ouster-sdk package 
     1.1.1 or newer. To account for this, macOS users should install an official
     distribution of Python 3 or one provided by Homebrew, as these use OpenSSL
     1.1.1 or newer. In either case, installing OusterSDK into a Python 3
-    virtual enviroment is still recommended.
+    virtual environment is still recommended.
 
 If you're using an unsupported platform like a non-glibc-based Linux distribution, or wish to modify
 the Ouster Python SDK, you will need to build from source.
@@ -54,7 +54,7 @@ version of pip and setuptools:
       .. code::
 
         $ python3 -m pip install --upgrade pip setuptools
-   
+
    .. tab-item:: Windows x64
       :sync: windows
 
@@ -85,7 +85,7 @@ Now that your Python environment has an up-to-date pip, you can install latest o
          .. parsed-literal::
 
            $ |install_unix_fresh|
-   
+
    .. tab-item:: Windows x64
       :sync: windows
 

@@ -21,6 +21,7 @@
 
 // NOLINTBEGIN(google-build-using-namespace)
 //! [doc-stag-cpp-config-imports]
+#include "ouster/core/lidar_config.h"
 #include "ouster/core/types.h"
 #include "ouster/sensor/client.h"
 using namespace ouster::sdk;
@@ -40,7 +41,7 @@ int main(int argc, char* argv[]) {
     // 1. Get the current config on the sensor
     std::cerr << "1. Get original config of sensor... ";
     //! [doc-stag-cpp-get-config]
-    core::SensorConfig config = sensor::get_config(sensor_hostname);
+    core::LidarConfig config = sensor::get_config(sensor_hostname);
     std::cerr << "Sensor config of " << sensor_hostname << ":\n"
               << core::to_string(config) << std::endl;
     //! [doc-etag-cpp-get-config]
@@ -66,7 +67,7 @@ int main(int argc, char* argv[]) {
 
     // 3. Get the config from sensor after update
     std::cout << "\n3. Get back updated sensor config... ";
-    core::SensorConfig new_config = sensor::get_config(sensor_hostname);
+    core::LidarConfig new_config = sensor::get_config(sensor_hostname);
     std::cout << "..success! Got updated config" << std::endl;
 
     // Confirm that only what we wanted to change changed

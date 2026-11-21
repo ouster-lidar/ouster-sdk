@@ -8,7 +8,7 @@ logger = logging.Logger(__name__)
 
 
 MAX_ACTIVE_ZONES = 16
-MAX_AVAILABLE_ZONES = 128
+MAX_AVAILABLE_ZONES = 512
 
 
 class EmulatedZoneMon:
@@ -41,7 +41,8 @@ class EmulatedZoneMon:
         for zone_id, zone in zone_set.zones.items():
             if zone.zrb is None:
                 continue
-            self.max_counts[zone_id] = np.count_nonzero(zone.zrb.near_range_mm < zone.zrb.far_range_mm)
+            self.max_counts[zone_id] = int(
+                np.count_nonzero(zone.zrb.near_range_mm < zone.zrb.far_range_mm))
             self.rendered_zones[zone_id] = zone.zrb
 
     def _calc_counts(self, range_field, bitmask_field):
@@ -132,5 +133,5 @@ class EmulatedZoneMon:
                 zmu[zone_id_idx]['mean_range'] = self.zone_avgs[zone_id]
                 # OSDK-747 support error_flags
             else:
-                zmu[zone_id_idx]['id'] = 255
+                zmu[zone_id_idx]['live'] = 0
         return zmu.view(np.recarray)

@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "ouster/core/sensor_info.h"
 #include "ouster/core/visibility.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/reader.h"
@@ -42,7 +43,7 @@ class OUSTER_API_CLASS SensorInfoStreamMeta : public MetadataEntryHelper<SensorI
     /**
      * Create a SensorInfoStreamMeta object from a byte array.
      *
-     * @todo Figure out why this wasnt just done as a constructor overload.
+     * @todo Figure out why this wasn't just done as a constructor overload.
      *
      * @relates MetadataEntry::from_buffer
      *
@@ -81,15 +82,15 @@ struct OUSTER_API_CLASS MetadataTraits<SensorInfoStreamMeta> {
     }
 };
 
-/// Decoded SensorInfo message
+/// Decoded sensor metadata message
 struct OUSTER_API_CLASS SensorInfoMessage {
-    /// decoded SensorInfo structure
-    ouster::sdk::core::SensorInfo sensor_info;
+    /// decoded sensor metadata; a LidarInfo or a CameraInfo
+    std::shared_ptr<ouster::sdk::core::SensorInfo> sensor_info;
 
-    /// metadata id for the lidar sensor associated with this SensorInfo
-    uint32_t lidar_sensor_id;
+    /// metadata id for the LidarSensor/CameraSensor entry holding this metadata
+    uint32_t sensor_meta_id;
 
-    /// metadata id for the frame stream associated with this SensorInfo
+    /// metadata id for the frame stream associated with this metadata
     uint32_t frame_stream_id;
 };
 

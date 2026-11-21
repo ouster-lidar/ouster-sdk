@@ -5,12 +5,11 @@ All rights reserved.
 Ouster frame accumulation for LidarFrameViz
 """
 
-from typing import (Optional, Dict, Tuple, Callable, Any)
+from typing import Optional, List
 
 import threading
-from functools import partial
 
-from ouster.sdk._bindings.viz import PointViz, WindowCtx, Label
+from ouster.sdk._bindings.viz import PointViz, Label
 from ouster.sdk.viz.model import LidarFrameVizModel
 from ouster.sdk.viz.frames_accumulator import FramesAccumulator
 from ouster.sdk.viz.map_accumulator import MapAccumulator
@@ -18,7 +17,7 @@ from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
 from ouster.sdk.viz.track import MultiTrack
 from ouster.sdk.viz.tracks_accumulator import TracksAccumulator
 from ouster.sdk.core import FrameSet
-from ouster.sdk._deprecation import deprecated_alias
+from ouster.sdk.viz.util import VizConfig
 
 
 class LidarFrameVizAccumulators:
@@ -41,7 +40,8 @@ class LidarFrameVizAccumulators:
                  model: LidarFrameVizModel,
                  point_viz: PointViz,
                  config: LidarFrameVizAccumulatorsConfig,
-                 lock: threading.RLock):
+                 lock: threading.RLock,
+                 options: Optional[VizConfig]):
         """
         Args:
             model: a LidarFrameVizModel instance.
@@ -66,9 +66,13 @@ class LidarFrameVizAccumulators:
         track = MultiTrack(model, config)
         self._track = track
         self._config = config
-        self._ma = MapAccumulator(model, point_viz, track._tracks[0], config)
+        self._ma = MapAccumulator(model, point_viz, track.primary_track, config)
         self._sa = FramesAccumulator(model, point_viz, track)
-        self._ta = TracksAccumulator(model, point_viz, track._tracks[0])
+        self._track_accums: List[TracksAccumulator] = [
+            TracksAccumulator(model, point_viz, t) for t in track.display_tracks()
+        ]
+        self._ta = self._track_accums[0]
+        self._options = options
 
         if self._ma._map_enabled:
             self._ma.toggle_visibility(True)
@@ -80,86 +84,86 @@ class LidarFrameVizAccumulators:
         self._osd: Optional[Label] = None
         self._osd_enabled = False
 
-        # callback for any external vizs that need to hookup into the draw update
-        # (currently used by LidarFrameViz to update the OSD text)
-        self._key_press_pre_draw: Callable[[], Any] = lambda: None
-
         self._osd_enabled = True
         self._osd = Label("", 0, 1, align_right=False)
         self._viz.add(self._osd)
-        self._initialize_key_bindings()
 
         self._cloud_pt_size: float = 1
+
+        self._initialize_key_bindings()
 
     @property
     def track_accumulator(self) -> TracksAccumulator:
         """Get the TracksAccumulator instance."""
         return self._ta
 
-    def cycle_cloud_mode(self, direction) -> bool:
+    def set_cloud_mode(self, mode: str):
         with self._lock:
-            self._ma.cycle_cloud_mode(direction=direction)
-            self._sa.cycle_cloud_mode(direction=direction)
-        return True
+            self._ma.set_cloud_mode(mode)
+            self._sa.set_cloud_mode(mode)
 
-    def cycle_cloud_palette(self, direction) -> bool:
+    def set_cloud_palette(self, palette: str):
         with self._lock:
-            self._ma.cycle_cloud_palette(direction=direction)
-            self._sa.cycle_cloud_palette(direction=direction)
-        return True
+            self._ma.set_cloud_palette(palette)
+            self._sa.set_cloud_palette(palette)
 
     def _initialize_key_bindings(self) -> None:
         """Initialize key bindings and key definitions."""
+        if self._options is None:
+            return
+        self._options.option("map_point_size", self._cloud_pt_size, ('J', 0),
+                             lambda arg, val: arg._frames_accum.set_point_size(val),
+                             decrement=('J', 1), min=1, max=10,
+                             help="Increase/decrease point size of accumulated clouds or map")
+        self._options.option("view_accum", self._config._accum_max_num > 0, ('6',),
+                             lambda arg, val: arg._frames_accum.toggle_mode_accum(val),
+                             help="Toggle frames accumulation view mode (ACCUM)")
+        self._options.option("map_accum", self._ma._map_enabled, ('7',),
+                             lambda arg, val: arg._frames_accum.toggle_mode_map(val),
+                             help="Toggle overall map view mode (MAP)")
+        self._options.option("frames_accum_return_0", True, ('1', 4),
+                             lambda arg, val: arg._frames_accum.toggle_return(0, val),
+                             help="Toggle frames accumulation first return (ACCUM)")
+        self._options.option("frames_accum_return_1", True, ('2', 4),
+                             lambda arg, val: arg._frames_accum.toggle_return(1, val),
+                             help="Toggle frames accumulation second return (ACCUM)")
+        self._options.option("frame_accum_mode", "", ('K', 0),
+                             lambda arg, val: arg._frames_accum.set_cloud_mode(val),
+                             decrement=('K', 1),
+                             items=lambda arg: arg._model.sorted_cloud_mode_names(),
+                             get_value=lambda arg: arg._frames_accum._ma._cloud_mode_name,
+                             help="Cycle point cloud coloring mode of accumulated clouds or map")
 
-        # TODO[tws] typing
-        key_bindings: Dict[Tuple[int, int], Callable[[], bool]] = {
-            (ord('J'), 0): partial(self.update_point_size, amount=1),
-            (ord('J'), 1): partial(self.update_point_size, amount=-1),
-            (ord('K'), 0): partial(self.cycle_cloud_mode, direction=1),
-            (ord('K'), 1): partial(self.cycle_cloud_mode, direction=-1),
-            (ord('G'), 0): partial(self.cycle_cloud_palette, direction=1),
-            (ord('G'), 1): partial(self.cycle_cloud_palette, direction=-1),
-            (ord('6'), 0): partial(self.toggle_mode_accum),
-            (ord('7'), 0): partial(self.toggle_mode_map),
-        }
+        def get_palette_value(arg):
+            index = arg._frames_accum._ma._cloud_palette_ind
+            return arg._model._palettes._cloud_palettes[index].name
 
-        key_definitions: Dict[str, str] = {
-            'j / SHIFT+j': "Increase/decrease point size of accumulated clouds or map",
-            'k / SHIFT+k': "Cycle point cloud coloring mode of accumulated clouds or map",
-            'g / SHIFT+g': "Cycle point cloud color palette of accumulated clouds or map",
-            '6': "Toggle frames accumulation view mode (ACCUM)",
-            '7': "Toggle overall map view mode (MAP)",
-        }
-        self._key_definitions = key_definitions
+        def get_palette_list(arg):
+            return [p.name for p in arg._model._palettes._cloud_palettes]
 
-        def handle_keys(ctx: WindowCtx, key: int,
-                        mods: int) -> bool:
-            if (key, mods) in key_bindings:
-                draw = key_bindings[key, mods]()
-                if draw:
-                    # notify neighbor vizs that need to update on key press re-draw
-                    if self._key_press_pre_draw is not None:
-                        self._key_press_pre_draw()
+        self._options.option("frame_accum_palette", "", ('G', 0),
+                             lambda arg, val: arg._frames_accum.set_cloud_palette(val),
+                             decrement=('G', 1),
+                             items=get_palette_list,
+                             get_value=get_palette_value,
+                             help="Cycle point cloud color palette of accumulated clouds or map")
 
-                    # draw + _viz.update() inside
-                    self.draw()
-                else:
-                    self._viz.update()
-            return True
-
-        self._viz.push_key_handler(handle_keys)
-
-    def update_point_size(self, amount: int) -> bool:
+    def set_point_size(self, size: int) -> bool:
         """Change the point size of the MAP/ACCUM point cloud."""
         # TODO[tws] generalize
         with self._lock:
-            self._cloud_pt_size = min(10.0, max(1.0, self._cloud_pt_size + amount))
+            self._cloud_pt_size = size
             self._ma.update_point_size(self._cloud_pt_size)
             self._sa.update_point_size(self._cloud_pt_size)
         return True
 
     def toggle_sensor(self, sensor_idx, state: bool):
         self._sa.toggle_sensor(sensor_idx, state)
+
+    def toggle_return(self, return_idx, state: Optional[bool] = None) -> bool:
+        with self._lock:
+            self._sa.toggle_return(return_idx, state)
+        return True
 
     def toggle_mode_accum(self, state: Optional[bool] = None) -> bool:
         """Toggle ACCUM view"""
@@ -175,7 +179,8 @@ class LidarFrameVizAccumulators:
 
     def toggle_mode_track(self, state: Optional[bool] = None) -> bool:
         with self._lock:
-            self._ta.toggle_visibility(state)
+            for ta in self._track_accums:
+                ta.toggle_visibility(state)
         return True
 
     def toggle_osd(self, state: Optional[bool] = None) -> bool:
@@ -201,9 +206,8 @@ class LidarFrameVizAccumulators:
         accum_str = ""
         accum_states = []
         if self._config._accum_max_num > 0:
-            accum_states.append(
-                ("frame", "6",
-                 "ON" if self._sa.accum_visible else "OFF"))
+            stats = ("ON" if self._sa.accum_visible else "OFF")
+            accum_states.append(("frame", "6", stats))
         if self._ma._map_enabled:
             accum_states.append(("map", "7", "ON" if self._ma.map_visible else "OFF"))
         if accum_states:
@@ -216,6 +220,11 @@ class LidarFrameVizAccumulators:
             accum_str += f"        mode [K]: {active_cloud_mode}\n"    # TODO[tws] generalize
             accum_str += f"        palette [G]: {active_cloud_palette.name}\n"  # TODO[tws] generalize
             accum_str += f"        point size [J]: {int(self._cloud_pt_size)}"
+        if self._config._accum_max_num:
+            enabled = self._sa._return_enabled
+            accum_str += "\n        frame return ["
+            accum_str += ", ".join(["ALT+" + str(i + 1) for i in range(len(enabled))]) + "] "
+            accum_str += ", ".join([("ON" if enabled[k] else "OFF") for k in enabled])
 
         return append_with_nl(osd_text, accum_str)
 
@@ -246,7 +255,8 @@ class LidarFrameVizAccumulators:
             self._ta.update(frames, frame_num)
 
     def _draw(self) -> None:
-        self._ta._draw_track()
+        for ta in self._track_accums:
+            ta._draw_track()
         if self._ma.map_visible:
             self._ma._draw_map()
         self._draw_osd()
@@ -259,10 +269,3 @@ class LidarFrameVizAccumulators:
 
         if update:
             self._viz.update()
-
-
-# ``LidarScanVizAccumulators`` was renamed to ``LidarFrameVizAccumulators`` in
-# the scan -> frame migration. Expose the old name (with a deprecation warning)
-# so existing call sites keep working.
-deprecated_alias("LidarScanVizAccumulators", "LidarFrameVizAccumulators",
-                 LidarFrameVizAccumulators, globals(), "1.0")

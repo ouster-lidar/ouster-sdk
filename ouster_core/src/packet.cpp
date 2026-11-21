@@ -4,6 +4,10 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "ouster/core/defaults.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/types.h"
+
 namespace ouster {
 namespace sdk {
 namespace core {
@@ -17,15 +21,15 @@ Packet::Packet(PacketType type, int size) : type_(type), host_timestamp{0} {
     buf.resize(size, 0);
 }
 
-PacketValidationFailure Packet::validate(const SensorInfo& info) const {
+PacketValidationFailure Packet::validate(const LidarInfo& info) const {
     return ouster::sdk::core::validate_packet(info, *format, buf.data(), buf.size(), type_);
 }
 
-PacketValidationFailure Packet::validate(const SensorInfo& info, const PacketFormat& format) const {
+PacketValidationFailure Packet::validate(const LidarInfo& info, const PacketFormat& format) const {
     return ouster::sdk::core::validate_packet(info, format, buf.data(), buf.size(), type_);
 }
 
-PacketValidationFailure validate_packet(const SensorInfo& info, const PacketFormat& format,
+PacketValidationFailure validate_packet(const LidarInfo& info, const PacketFormat& format,
                                         const uint8_t* buf, uint64_t buf_size, PacketType type) {
     // Check if we need to guess the type
     if (type == PacketType::Unknown) {
@@ -52,7 +56,7 @@ PacketValidationFailure validate_packet(const SensorInfo& info, const PacketForm
         }
     }
 
-    // early exit if legacy IMU since we cant check the ids
+    // early exit if legacy IMU since we can't check the ids
     if (type == PacketType::Imu && format.udp_profile_imu == UDPProfileIMU::LEGACY) {
         return PacketValidationFailure::NONE;
     }
@@ -72,27 +76,15 @@ PacketValidationFailure validate_packet(const SensorInfo& info, const PacketForm
     return PacketValidationFailure::NONE;
 };
 
-LidarPacket::LidarPacket() : Packet{MY_TYPE} {}
-
-LidarPacket::LidarPacket(int size) : Packet{MY_TYPE, size} {}
-
 LidarPacket::LidarPacket(std::shared_ptr<PacketFormat> format)
     : Packet{MY_TYPE, static_cast<int>(format->lidar_packet_size)} {
     this->format = std::move(format);
 }
 
-ImuPacket::ImuPacket() : Packet{MY_TYPE} {}
-
-ImuPacket::ImuPacket(int size) : Packet{MY_TYPE, size} {}
-
 ImuPacket::ImuPacket(std::shared_ptr<PacketFormat> format)
     : Packet{MY_TYPE, static_cast<int>(format->imu_packet_size)} {
     this->format = std::move(format);
 }
-
-ZonePacket::ZonePacket() : Packet{MY_TYPE} {}
-
-ZonePacket::ZonePacket(int size) : Packet{MY_TYPE, size} {}
 
 ZonePacket::ZonePacket(std::shared_ptr<PacketFormat> format)
     : Packet{MY_TYPE, static_cast<int>(format->zone_packet_size)} {
@@ -102,8 +94,7 @@ ZonePacket::ZonePacket(std::shared_ptr<PacketFormat> format)
 Eigen::Array<float, Eigen::Dynamic, 3> ImuPacket::accel() const {
     // The legacy profile reports raw data, so we need to convert it to m/s^2
     if (format->udp_profile_imu == UDPProfileIMU::LEGACY) {
-        // The acceleration of gravity in m/s^2
-        constexpr float gravity = 9.80665;
+        constexpr float gravity = static_cast<float>(GRAVITY_MPERSEC2);
         Eigen::Array<float, Eigen::Dynamic, 3> out(1, 3);
         out(0, 0) = format->imu_la_x(buf.data()) * gravity;
         out(0, 1) = format->imu_la_y(buf.data()) * gravity;
@@ -126,12 +117,11 @@ Eigen::Array<float, Eigen::Dynamic, 3> ImuPacket::accel() const {
 Eigen::Array<float, Eigen::Dynamic, 3> ImuPacket::gyro() const {
     // The legacy profile reports raw data, so we need to convert it to rad/sec
     if (format->udp_profile_imu == UDPProfileIMU::LEGACY) {
-        // Conversion factor from degrees to radians
-        constexpr float degrees_to_radians = M_PI / 180.0;
+        constexpr auto deg_to_rad = static_cast<float>(DEG_TO_RAD);
         Eigen::Array<float, Eigen::Dynamic, 3> out(1, 3);
-        out(0, 0) = format->imu_av_x(buf.data()) * degrees_to_radians;
-        out(0, 1) = format->imu_av_y(buf.data()) * degrees_to_radians;
-        out(0, 2) = format->imu_av_z(buf.data()) * degrees_to_radians;
+        out(0, 0) = format->imu_av_x(buf.data()) * deg_to_rad;
+        out(0, 1) = format->imu_av_y(buf.data()) * deg_to_rad;
+        out(0, 2) = format->imu_av_z(buf.data()) * deg_to_rad;
         return out;
     }
 

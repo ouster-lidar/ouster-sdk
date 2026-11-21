@@ -6,12 +6,12 @@ import ouster.sdk.osf as osf
 import ouster.sdk.core as core
 from ouster.sdk import open_source
 from ouster.sdk.core import (ZoneSet, Zone, Stl, ZoneMode, CoordinateFrame,
-                             LidarMode, SensorInfo, FrameSetSourceMetadataSet,
+                             LidarMode, LidarInfo, FrameSetSourceMetadataSet,
                              LidarFrame)
 import os
 import sys
 import numpy as np
-from typing import List
+from typing import List, cast
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def input_info(test_data_dir):
     filename = test_data_dir / "pcaps" / "OS-0-128-U1_v2.3.0_1024x10.json"
     with open(filename, 'r') as f:
         data = f.read()
-    return core.SensorInfo(data)
+    return core.LidarInfo(data)
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def input_osf_file(test_data_dir):
 
 def test_header_verification_failure():
     """It should raise a RuntimeError if the provided file is not an OSF file."""
-    with pytest.raises(RuntimeError, match="OSF header verification has failed."):
+    with pytest.raises(RuntimeError, match="EOF reached"):
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"abc" * 1000)  # write some bad data to it
             f.close()   # Windows seems to have trouble with the file being open already
@@ -51,7 +51,7 @@ def test_frames_num(input_info):
                 frame1.field(core.ChanField.REFLECTIVITY)[:] = 100
                 w.save(0, frame1)
                 w.save(1, frame1)
-                frame1.packet_timestamp[:] = 1
+                frame1.receive_timestamp[:] = 1
                 w.save(0, frame1)
                 w.save(1, frame1)
         src = osf.OsfFrameSetSource(f.name)
@@ -105,7 +105,7 @@ def test_missing_streams(input_osf_file):
 
 
 def test_osf_info_modification_bug(input_osf_file):
-    """Make sure that modifying the pixel shift by row in the returned metadata doesnt break parsing"""
+    """Make sure that modifying the pixel shift by row in the returned metadata doesn't break parsing"""
     source = osf.OsfFrameSetSource(str(input_osf_file))
 
     def get_first_frame():
@@ -167,8 +167,8 @@ def test_osf_frame_set_source_out_of_bounds_access(input_osf_file):
     new_infos = [copy.deepcopy(info), copy.deepcopy(info), copy.deepcopy(info)]
     frames = [fs[0] for fs in source]
 
-    frames[0].packet_timestamp[:] = 100
-    frames[1].packet_timestamp[:] = 200
+    frames[0].receive_timestamp[:] = 100
+    frames[1].receive_timestamp[:] = 200
     collation_1 = core.FrameSet([frames[0], frames[0], frames[0]])
     collation_2 = core.FrameSet([frames[1], frames[1], frames[1]])
 
@@ -195,9 +195,9 @@ def test_osf_frame_set_source_collating(input_osf_file):
     info = input_src.sensor_info[0]
     input_src.close()
 
-    frames[0].packet_timestamp[:] = 100
-    frames[1].packet_timestamp[:] = 200
-    frames[2].packet_timestamp[:] = 300
+    frames[0].receive_timestamp[:] = 100
+    frames[1].receive_timestamp[:] = 200
+    frames[2].receive_timestamp[:] = 300
 
     new_infos = [copy.deepcopy(info), copy.deepcopy(info), copy.deepcopy(info)]
     new_infos[0].sn = 0
@@ -244,7 +244,7 @@ def test_object_lists_in_osf(input_osf_file):
     input_src.close()
 
     frame = frames[0]
-    frame.packet_timestamp[:] = 100
+    frame.receive_timestamp[:] = 100
 
     import ouster.sdk.core as core
     objects = [core.Object(), core.Object()]
@@ -302,6 +302,58 @@ def test_object_lists_in_osf(input_osf_file):
             pass
 
 
+def test_camera_frame_objects_in_collation_osf(input_info):
+    """CameraFrame objects attached to a collated FrameSet survive OSF round-trip."""
+    cam_info = core.CameraInfo()
+    cam_info.model = core.CameraModel(500.0, 501.0, 320.0, 240.0)
+
+    lidar_frame = core.LidarFrame(input_info)
+    lidar_frame.status[:] = 0x1
+    lidar_frame.receive_timestamp[:] = 100
+
+    camera_frame = core.CameraFrame()
+    # Camera frames carry a valid timestamp just like lidar frames; a
+    # zero-timestamp frame is dropped from a collation regardless of origin.
+    camera_frame.timestamp[0] = 100
+    camera_frame.receive_timestamp[0] = 100
+    obj = core.Object()
+    obj.id = 42
+    obj.creation_ts = 100
+    obj.timestamp = 200
+    obj.class_id = 3
+    obj.class_confidence = 0.75
+    obj.object_to_body.position = np.array([1.0, 2.0, 3.0])
+    obj.object_to_body.set_rotation(np.array([0.1, 0.2, 0.3]))
+    obj.body_to_world.position = np.array([10.0, 20.0, 30.0])
+    obj.body_to_world.set_rotation(np.array([0.4, 0.5, 0.6]))
+    obj.velocity = np.array([1.0, 0.0, -1.0])
+    obj.dimensions = np.array([2.0, 1.5, 0.5])
+    obj.properties["source"] = "camera_test"
+    camera_frame.objects["detections"] = [obj]
+
+    collation = core.FrameSet([lidar_frame, camera_frame])
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            with osf.Writer(f.name, [input_info]) as w:
+                w.add_sensor(cam_info)
+                w.save(collation)
+            w.close()
+        src = osf.OsfFrameSetSource(f.name)
+        assert src.is_collated is True
+        recovered = next(iter(src))
+        assert len(recovered.valid_camera_frames()) == 1
+        assert recovered.valid_camera_frames()[0] is not None
+        assert "detections" in recovered.valid_camera_frames()[0].objects
+        assert len(recovered.valid_camera_frames()[0].objects["detections"]) == 1
+        assert recovered.valid_camera_frames()[0].objects["detections"] == camera_frame.objects["detections"]
+    finally:
+        try:
+            os.unlink(f.name)
+        except (PermissionError, FileNotFoundError):
+            pass
+
+
 def test_frame_set_source_metadata_is_recoverable(tmp_path):
     def truncate_file(path, num_bytes):
         with open(path, 'r+b') as f:
@@ -309,7 +361,7 @@ def test_frame_set_source_metadata_is_recoverable(tmp_path):
             f.truncate()
 
     osf_path = tmp_path / "test.osf"
-    sensor_info = SensorInfo.from_default(LidarMode._1024x10)
+    sensor_info = LidarInfo.from_default(LidarMode._1024x10)
     writer = osf.Writer(str(osf_path), [sensor_info])
     metadata = FrameSetSourceMetadataSet()
     metadata['custom_key'] = "custom_value"
@@ -359,6 +411,33 @@ def test_frame_set_source_unfinalized_recoverable(input_osf_file, tmp_path):
     assert count == expected
 
 
+def test_seeking_same_timestamp(tmp_path, input_osf_file) -> None:
+    """test that we can seek to the nth scan even if timestamps are all the same"""
+    osf_path = tmp_path / "test.osf"
+    src1 = open_source(str(input_osf_file))
+    writer = osf.Writer(str(osf_path), src1.sensor_info)
+    base_frame = src1[0][0]
+    assert base_frame is not None
+    original_frames: List[LidarFrame] = []
+    for i in range(3):
+        frame = copy.copy(base_frame)
+        assert isinstance(frame, LidarFrame)
+        frame.frame_id = i
+        writer.save(0, frame)
+        original_frames.append(frame)
+    writer.close()
+
+    # check we can read all the frames out as expected
+    src2 = open_source(str(osf_path))
+
+    for i in range(3):
+        new_frame = src2[i][0]
+        assert new_frame is not None
+        assert isinstance(new_frame, LidarFrame)
+        assert new_frame.frame_id == i
+        assert new_frame == original_frames[i]
+
+
 @pytest.mark.parametrize("cutoff", [1, 10, 1000])
 def test_frame_set_source_osf_is_recoverable(tmp_path, input_osf_file, cutoff: int):
     def truncate_file(path, num_bytes):
@@ -372,6 +451,7 @@ def test_frame_set_source_osf_is_recoverable(tmp_path, input_osf_file, cutoff: i
     original_frames: List[LidarFrame] = []
     for frame, in src1:
         assert frame is not None
+        assert isinstance(frame, LidarFrame)
         writer.save(0, frame)
         original_frames.append(frame)
     writer.close()
@@ -383,7 +463,9 @@ def test_frame_set_source_osf_is_recoverable(tmp_path, input_osf_file, cutoff: i
     src2 = open_source(str(osf_path))
 
     # except for the client_version, the sensor_info should be identical
-    src2.sensor_info[0].client_version = src1.sensor_info[0].client_version
+    # (client_version is a lidar LidarInfo attribute; these are lidar sensors)
+    cast(LidarInfo, src2.sensor_info[0]).client_version = \
+        cast(LidarInfo, src1.sensor_info[0]).client_version
     assert src2.sensor_info[0] == src1.sensor_info[0]
 
     # there should be the same number of frames
@@ -394,3 +476,148 @@ def test_frame_set_source_osf_is_recoverable(tmp_path, input_osf_file, cutoff: i
         # and the frames should be identical to the original ones
         assert frame_sets[0] == original_frames[idx]
     assert looped == len(src1)
+
+    # also test dump on these files
+    osf.dump_metadata(str(osf_path))
+
+
+def _recovery_camera_info():
+    cam_info = core.CameraInfo()
+    cam_info.model = core.CameraModel(500.0, 501.0, 320.0, 240.0)
+    cam_info.format.columns_per_frame, cam_info.format.pixels_per_column, cam_info.sn = 16, 8, 987654
+    cam_info.format.fps = 30
+    return cam_info
+
+
+def _recovery_camera_frame(cam_info, i):
+    frame = core.CameraFrame(cam_info)
+    w, h = cam_info.format.columns_per_frame, cam_info.format.pixels_per_column
+    frame.w, frame.h = w, h
+    frame.add_field('RANGE', np.full((h, w), 2000 + i, dtype=np.uint32))
+    frame.timestamp[0] = 100000000 * (i + 1)
+    frame.receive_timestamp[0] = frame.timestamp[0]
+    frame.status[0] = 1
+    return frame
+
+
+def _write_camera_osf(path, frame_count=3):
+    """Write a camera-only OSF and return the CameraInfo it was written with."""
+    cam_info = _recovery_camera_info()
+    writer = osf.Writer(str(path), [cam_info])
+    for i in range(frame_count):
+        writer.save(core.FrameSet([_recovery_camera_frame(cam_info, i)]))
+    writer.close()
+    return cam_info
+
+
+def write_unfinalized_camera_osf_process(output_file, num_messages):
+    """Write a camera OSF and die without finalizing, like a crash mid-recording.
+
+    The writer is kept in scope until os._exit so it is never destroyed; letting
+    it go out of scope would run its destructor, which finalizes the file and
+    writes the very footer this is meant to do without.
+    """
+    cam_info = _recovery_camera_info()
+    writer = osf.Writer(str(output_file), [cam_info], chunk_size=1)
+    for i in range(num_messages):
+        writer.save(core.FrameSet([_recovery_camera_frame(cam_info, i)]))
+    assert not writer.is_closed()
+    os._exit(0)
+
+
+def test_camera_metadata_is_recoverable(tmp_path):
+    """A camera OSF whose footer never made it to disk still recovers its
+    CameraInfo, the same way a lidar OSF recovers its LidarInfo."""
+    osf_path = tmp_path / "camera.osf"
+    cam_info = _write_camera_osf(osf_path, frame_count=3)
+
+    # Drop the footer, which is what a crash mid-recording leaves behind.
+    with open(str(osf_path), 'r+b') as f:
+        f.seek(-10, os.SEEK_END)
+        f.truncate()
+
+    src = open_source(str(osf_path))
+
+    # The CameraSensor entry is recovered into the metadata store.
+    assert len(src.sensor_info) == 1
+    recovered_info = src.sensor_info[0]
+    assert isinstance(recovered_info, core.CameraInfo)
+    assert recovered_info.to_json_string() == cam_info.to_json_string()
+
+    # And the frames read back carry that CameraInfo.
+    frames = [f for f, in src]
+    assert len(frames) > 0
+    for frame in frames:
+        assert isinstance(frame, core.CameraFrame)
+        assert frame.sensor_info is not None
+        assert frame.sensor_info.to_json_string() == cam_info.to_json_string()
+
+
+def test_camera_metadata_is_recoverable_unfinalized(tmp_path):
+    """Same recovery, but for a file that was never finalized at all, so there
+    is no footer to fall back on rather than a damaged one."""
+    import multiprocessing
+
+    osf_path = tmp_path / "camera_unfinalized.osf"
+    num_messages = 5
+    ctx = multiprocessing.get_context('spawn')
+    p = ctx.Process(target=write_unfinalized_camera_osf_process,
+                    args=(osf_path, num_messages))
+    p.start()
+    p.join()
+
+    expected_info = _recovery_camera_info()
+    src = open_source(str(osf_path))
+
+    assert len(src.sensor_info) == 1
+    assert isinstance(src.sensor_info[0], core.CameraInfo)
+    assert src.sensor_info[0].to_json_string() == expected_info.to_json_string()
+
+    # As in the lidar case, the last message is lost to the chunk that was
+    # still open when the process died.
+    frames = [f for f, in src]
+    assert len(frames) == num_messages - 1
+    for i, frame in enumerate(frames):
+        assert isinstance(frame, core.CameraFrame)
+        assert frame.sensor_info.to_json_string() == expected_info.to_json_string()
+        np.testing.assert_array_equal(frame.field('RANGE'),
+                                      np.full((8, 16), 2000 + i, dtype=np.uint32))
+
+
+def test_mixed_lidar_camera_metadata_is_recoverable(tmp_path, input_info):
+    """A mixed file recovers both sensors, each as the right metadata kind and
+    wired to the right stream."""
+    osf_path = tmp_path / "mixed.osf"
+    cam_info = _recovery_camera_info()
+
+    writer = osf.Writer(str(osf_path), [input_info, cam_info])
+    for i in range(3):
+        lidar_frame = core.LidarFrame(input_info)
+        lidar_frame.status[:] = 0x1
+        lidar_frame.timestamp[:] = 100000000 * (i + 1)
+        lidar_frame.receive_timestamp[:] = lidar_frame.timestamp[0]
+        writer.save(core.FrameSet([lidar_frame, _recovery_camera_frame(cam_info, i)]))
+    writer.close()
+
+    with open(str(osf_path), 'r+b') as f:
+        f.seek(-10, os.SEEK_END)
+        f.truncate()
+
+    src = open_source(str(osf_path))
+
+    # Both sensors come back, in registration order, as their concrete types.
+    assert len(src.sensor_info) == 2
+    assert isinstance(src.sensor_info[0], LidarInfo)
+    assert isinstance(src.sensor_info[1], core.CameraInfo)
+    assert src.sensor_info[1].to_json_string() == cam_info.to_json_string()
+
+    frame_sets = list(src)
+    assert len(frame_sets) > 0
+    for frame_set in frame_sets:
+        lidar_frames = [f for f in frame_set if isinstance(f, LidarFrame)]
+        camera_frames = [f for f in frame_set if isinstance(f, core.CameraFrame)]
+        assert len(lidar_frames) == 1
+        assert len(camera_frames) == 1
+        # Each frame is associated with its own sensor's metadata, not the other's.
+        assert isinstance(lidar_frames[0].sensor_info, LidarInfo)
+        assert camera_frames[0].sensor_info.to_json_string() == cam_info.to_json_string()

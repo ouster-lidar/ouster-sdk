@@ -99,6 +99,7 @@ class ToggleLabel(Toggle):
 
     @text.setter
     def text(self, text: str):
+        self._text = text
         self._label.set_text(text)
 
     @property

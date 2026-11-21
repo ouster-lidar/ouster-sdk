@@ -31,9 +31,7 @@
 
 #include "common.h"
 #include "ouster/core/impl/build.h"
-#include "ouster/pcap/indexed_pcap_reader.h"
 #include "ouster/pcap/os_pcap.h"
-#include "ouster/pcap/pcap.h"
 #include "ouster/pcap/pcap_frame_set_source.h"
 #include "ouster/pcap/pcap_packet_source.h"
 
@@ -42,10 +40,6 @@ namespace py = nanobind;
 // WRAPPERS: Essential for handling incomplete types
 // (PlaybackHandle/RecordHandle) which are forward-declared in os_pcap.h.
 // Nanobind requires complete types for class bindings.
-struct PyPlaybackHandle {
-    std::shared_ptr<PlaybackHandle> ptr;
-};
-
 struct PyRecordHandle {
     std::shared_ptr<RecordHandle> ptr;
 };
@@ -73,42 +67,6 @@ This module is generated from the C++ code and not meant to be used directly.
     py::bind_vector<std::vector<uint8_t>>(root_m, "VectorUint8");
     py::bind_map<std::unordered_map<StreamKey, StreamData>>(root_m, "MapUdpStreams");
     py::bind_map<std::map<uint64_t, uint64_t>>(root_m, "CountMap");
-
-    py::class_<PacketInfo>(module, "PacketInfo")
-        .def("__init__",
-             [](PacketInfo* self) {
-                 PyErr_WarnEx(PyExc_FutureWarning,
-                              "Class 'PacketInfo' is "
-                              "deprecated, use 'PcapPacketSource' instead. "
-                              "The last supported version for this will be 1.0.",
-                              1);
-                 new (self) PacketInfo();
-             })
-        .def("__repr__",
-             [](const PacketInfo& data) {
-                 std::stringstream result;
-                 result << data;
-                 return result.str();
-             })
-        .def_rw("dst_ip", &PacketInfo::dst_ip)
-        .def_rw("src_ip", &PacketInfo::src_ip)
-        .def_rw("dst_port", &PacketInfo::dst_port)
-        .def_rw("src_port", &PacketInfo::src_port)
-        .def_ro("payload_size", &PacketInfo::payload_size)
-        .def_prop_rw(
-            "timestamp",
-            [](PacketInfo& packet_info) -> double {
-                return static_cast<double>(packet_info.timestamp.count()) / 1e6;
-            },
-            [](PacketInfo& packet_info, double set) {
-                std::chrono::microseconds msec{static_cast<int>(set * 1e6)};
-                packet_info.timestamp = msec;
-            })
-        .def_ro("file_offset", &PacketInfo::file_offset)
-        .def_ro("fragments_in_packet", &PacketInfo::fragments_in_packet)
-        .def_ro("ip_version", &PacketInfo::ip_version)
-        .def_ro("encapsulation_protocol", &PacketInfo::encapsulation_protocol)
-        .def_ro("network_protocol", &PacketInfo::network_protocol);
 
     py::class_<GuessedPorts>(module, "GuessedPorts")
         .def(py::init<>())
@@ -164,45 +122,6 @@ This module is generated from the C++ code and not meant to be used directly.
 
     // PCAP READING
 
-    py::class_<PyPlaybackHandle>(module, "PlaybackHandle");
-
-    // FIX: replay_initialize returns a handle given a filename.
-    // We wrap the result in our PyPlaybackHandle struct.
-    module.def(
-        "replay_initialize",
-        [](const std::string& file) -> PyPlaybackHandle {
-            PyErr_WarnEx(PyExc_FutureWarning,
-                         "Function 'replay_initialize' is "
-                         "deprecated, use 'PcapPacketSource' instead. "
-                         "The last supported version for this will be 1.0.",
-                         1);
-            return {replay_initialize(file)};
-        },
-        py::arg("file"));
-
-    module.def("replay_uninitialize", [](PyPlaybackHandle& handle) {
-        PyErr_WarnEx(PyExc_FutureWarning,
-                     "Function 'replay_uninitialize' is "
-                     "deprecated, use 'PcapPacketSource' instead. "
-                     "The last supported version for this will be 1.0.",
-                     1);
-        if (handle.ptr) {
-            replay_uninitialize(*handle.ptr);
-        }
-    });
-
-    module.def("next_packet_info", [](PyPlaybackHandle& handle, PacketInfo& packet_info) -> bool {
-        PyErr_WarnEx(PyExc_FutureWarning,
-                     "Function 'next_packet_info' is "
-                     "deprecated, use 'PcapPacketSource' instead. "
-                     "The last supported version for this will be 1.0.",
-                     1);
-        if (!handle.ptr) {
-            return false;
-        }
-        return next_packet_info(*handle.ptr, packet_info);
-    });
-
     module.def(
         "get_stream_info",
         [](const std::string& file, int packets_to_process) {
@@ -222,32 +141,6 @@ This module is generated from the C++ code and not meant to be used directly.
         py::arg("packets_to_process") = -1);
 
     module.def("guess_ports", &guess_ports);
-
-    module.def(
-        "read_packet",
-        [](PyPlaybackHandle& handle,
-           const py::ndarray<uint8_t, py::ndim<1>, py::device::cpu, py::c_contig>& buf) -> size_t {
-            PyErr_WarnEx(PyExc_FutureWarning,
-                         "Function 'read_packet' is "
-                         "deprecated, use 'PcapPacketSource' instead. "
-                         "The last supported version for this will be 1.0.",
-                         1);
-            if (!handle.ptr) {
-                return 0;
-            }
-            return read_packet(*handle.ptr, buf.data(), buf.size());
-        });
-
-    module.def("replay_reset", [](PyPlaybackHandle& handle) {
-        PyErr_WarnEx(PyExc_FutureWarning,
-                     "Function 'replay_reset' is "
-                     "deprecated, use 'PcapPacketSource' instead. "
-                     "The last supported version for this will be 1.0.",
-                     1);
-        if (handle.ptr) {
-            replay_reset(*handle.ptr);
-        }
-    });
 
     // PCAP WRITING
 
@@ -287,94 +180,7 @@ This module is generated from the C++ code and not meant to be used directly.
 
     module.attr("__version__") = ouster::sdk::SDK_VERSION;
 
-    module.def("record_packet",
-               [](PyRecordHandle& handle, const PacketInfo& info,
-                  const py::ndarray<const uint8_t, py::ndim<1>, py::c_contig>& buf) {
-                   if (!handle.ptr) {
-                       return;
-                   }
-                   record_packet(*handle.ptr, info, buf.data(), buf.size());
-               });
-
     py::exception<PcapDuplicatePortException>(module, "PcapDuplicatePortException");
-
-    py::class_<PcapReader>(module, "PcapReader",
-                           R"(
-                        PcapReader is a class with utilities for  reading packets from a PCAP file.
-                        Additional bindings may be added in the future.
-                        )");
-
-    py::class_<PcapIndex>(module, "PcapIndex",
-                          R"(
-                        PcapIndex is a class for managing indices of frames in a PCAP file.
-                        )")
-        .def("__init__",
-             [](PcapIndex* self, size_t arg) {
-                 PyErr_WarnEx(PyExc_FutureWarning,
-                              "Class 'PcapIndex' is "
-                              "deprecated, use 'PcapFrameSetSource::full_index()' instead. "
-                              "The last supported version for this will be 1.0.",
-                              1);
-                 new (self) PcapIndex(arg);
-             })
-        .def("frame_count", &PcapIndex::frame_count)
-        .def("seek_to_frame", &PcapIndex::seek_to_frame)
-        .def_prop_ro("frame_indices",
-                     [](PcapIndex& self) {
-                         std::vector<py::ndarray<uint64_t, py::ndim<1>, py::numpy>> list;
-                         list.reserve(self.frame_indices.size());
-                         for (auto& i : self.frame_indices) {
-                             size_t shape[1] = {i.size()};
-                             list.emplace_back(i.data(), 1, shape,
-                                               py::cast(self, py::rv_policy::reference));
-                         }
-                         return list;
-                     })
-        .def_ro("frame_timestamp_indices", &PcapIndex::frame_timestamp_indices)
-        .def_ro("frame_id_indices", &PcapIndex::frame_id_indices);
-
-    py::class_<IndexedPcapReader, PcapReader>(module, "IndexedPcapReader")
-        .def("__init__",
-             [](IndexedPcapReader* self, const std::string& file,
-                const std::vector<std::string>& metadata) {
-                 PyErr_WarnEx(PyExc_FutureWarning,
-                              "Class 'IndexedPcapReader' is "
-                              "deprecated, use 'PcapPacketSource' instead. "
-                              "The last supported version for this will be 1.0.",
-                              1);
-                 new (self) IndexedPcapReader(file, metadata);
-             })
-        .def("__init__",
-             [](IndexedPcapReader* self, const std::string& file,
-                const std::vector<ouster::sdk::core::SensorInfo>& metadata) {
-                 PyErr_WarnEx(PyExc_FutureWarning,
-                              "Class 'IndexedPcapReader' is "
-                              "deprecated, use 'PcapPacketSource' instead. "
-                              "The last supported version for this will be 1.0.",
-                              1);
-                 new (self) IndexedPcapReader(file, metadata);
-             })
-        .def("current_info", &IndexedPcapReader::current_info)
-        .def("next_packet", &IndexedPcapReader::next_packet)
-        .def("update_index_for_current_packet", &IndexedPcapReader::update_index_for_current_packet)
-        .def("current_frame_id",
-             [](IndexedPcapReader& reader) -> py::object {
-                 if (auto frame_id = reader.current_frame_id()) {
-                     return py::int_(*frame_id);
-                 }
-                 return py::none();
-             })
-        .def("reset", &IndexedPcapReader::reset)
-        .def("seek", &IndexedPcapReader::seek)
-        .def("build_index", &IndexedPcapReader::build_index)
-        .def("get_index", &IndexedPcapReader::get_index)
-        .def("current_data", [](IndexedPcapReader& reader) {
-            uint8_t* data = const_cast<uint8_t*>(reader.current_data());
-            size_t data_size = reader.current_length();
-            size_t shape[1] = {data_size};
-            return py::ndarray<const uint8_t, py::ndim<1>, py::numpy>(
-                data, 1, shape, py::cast(reader, py::rv_policy::reference));
-        });
 
     py::class_<PcapPacketSource, ouster::sdk::core::PacketSource>(module, "PcapPacketSource")
         .def(

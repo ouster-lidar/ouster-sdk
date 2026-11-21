@@ -16,7 +16,7 @@ from ouster.sdk import core
 # TODO: replace link when new FW 2.5/3.0 manual is up
 
 
-def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
+def xyz_proj_beam_to_sensor_transform(metadata: core.LidarInfo,
              frame: core.LidarFrame) -> np.ndarray:
     """Computes a point cloud from a frame as numpy array.
 
@@ -70,7 +70,7 @@ def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
     return xyz_sensor[:, :3].reshape(frame.h, frame.w, 3) * 0.001
 
 
-def xyz_proj_origin_to_origin_mm(metadata: core.SensorInfo,
+def xyz_proj_origin_to_origin_mm(metadata: core.LidarInfo,
              frame: core.LidarFrame) -> np.ndarray:
     """Computes a point cloud from a frame as numpy array
 

@@ -5,13 +5,20 @@ All rights reserved.
 
 import numpy as np
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import List, Optional
 import ouster.sdk.core as core
 from ouster.sdk.core import LidarFrame, FrameSet
 from .model import LidarFrameVizModel
 from .accumulators_config import LidarFrameVizAccumulatorsConfig
-from ouster.sdk._deprecation import deprecated_alias
+
+
+def _pose_from_frame(frame: core.Frame) -> np.ndarray:
+    """Return the representative pose used to plot a track point."""
+    if isinstance(frame, LidarFrame):
+        return core.last_valid_column_pose(frame)
+    # CameraFrame (and any other frame kind) use the single body-to-world pose.
+    return np.asarray(frame.body_to_world[0], dtype=np.float64)
 
 
 TRACK_INIT_POINTS_NUM: int = 100
@@ -25,10 +32,9 @@ if not logger.hasHandlers():
 
 @dataclass
 class FrameRecord:
-    """Represents a frame, its pose, and its color (aka keys) for each available cloud mode."""
+    """Represents a frame and its pose."""
     pose: np.ndarray
-    frame: LidarFrame
-    cloud_mode_keys: Dict[str, Optional[np.ndarray]] = field(default_factory = lambda: dict())
+    frame: Optional[core.Frame]
 
     @property
     def position(self):
@@ -99,6 +105,10 @@ class Track:
 
         # check is it a key frame
         if not self._is_key_frame():
+            # if not, clear the scan to save memory
+            sr = self._frame_records[self._frame_num]
+            if sr is not None:
+                sr.frame = None
             return
 
         # add new key frame
@@ -127,7 +137,7 @@ class Track:
                     self._key_frames_tail] = self._xyz_init
                 self._kf_key[self._key_frames_tail] = np.zeros(4)
 
-                # advance tail to repare room for the next write to head
+                # advance tail to prepare room for the next write to head
                 self._key_frames_tail = ((self._key_frames_tail + 1) %
                                          (self._kf_max_num + 1))
 
@@ -169,7 +179,7 @@ class Track:
                 self._kf_max_num + 1) % (self._kf_max_num + 1)
 
     def update(self,
-               frame: Optional[LidarFrame],
+               frame: Optional[core.Frame],
                frame_num: int) -> None:
         """Register the new frame and update the track and key frames"""
         self._frame_num = frame_num
@@ -183,7 +193,7 @@ class Track:
             return
 
         if frame:
-            pose = core.last_valid_column_pose(frame)
+            pose = _pose_from_frame(frame)
             self._frame_records[self._frame_num] = FrameRecord(pose=pose, frame=frame)
         self._update_track()
         self._update_accum()
@@ -219,13 +229,36 @@ class MultiTrack:
     # TODO[tws] can probably just the number of sensors instead of a LidarFrameVizModel
     def __init__(self, model: LidarFrameVizModel, config: LidarFrameVizAccumulatorsConfig):
         self._tracks = [
-            Track(config, m.sensor_to_body) for m in model.metadata
+            Track(config, model.metadata[i].sensor_to_body)
+            for i in model._sensor_frame_indices
         ]
+        self._camera_tracks = [Track(config) for _ in model._camera_frame_indices]
+        # FrameSet positions for each lidar / camera track, so lidar and camera
+        # streams may be interleaved in the unified FrameSet in any order.
+        self._sensor_frame_indices = list(model._sensor_frame_indices)
+        self._camera_frame_indices = list(model._camera_frame_indices)
         self._kf_max_num = config._accum_max_num
         self._frame_num = -1
 
+    @property
+    def primary_track(self) -> Track:
+        """Track used by map/frame accumulators. Lidar if present, else the first camera."""
+        if self._tracks:
+            return self._tracks[0]
+        return self._camera_tracks[0]
+
+    def display_tracks(self) -> List[Track]:
+        """Tracks drawn as pose trajectories: first lidar (if any) plus every camera."""
+        tracks = []
+        if self._tracks:
+            tracks.append(self._tracks[0])
+        tracks.extend(self._camera_tracks)
+        return tracks
+
     def clear(self) -> None:
         for track in self._tracks:
+            track.clear()
+        for track in self._camera_tracks:
             track.clear()
 
     def update(self,
@@ -237,12 +270,15 @@ class MultiTrack:
         else:
             self._frame_num += 1
 
-        assert len(frames) == len(self._tracks)
-        for frame, track in zip(frames, self._tracks):
+        num_lidar = len(self._tracks)
+        assert len(frames) >= num_lidar
+        # Match each track to its stream's recorded position in the unified
+        # FrameSet (lidar and camera streams may be interleaved).
+        lidar_frames = [frames[i] if i < len(frames) else None
+                        for i in self._sensor_frame_indices]
+        for frame, track in zip(lidar_frames, self._tracks):
             track.update(frame, self._frame_num)
-
-
-# ``ScanRecord`` was renamed to ``FrameRecord`` in the scan -> frame migration.
-# Expose the old name (with a deprecation warning) so existing call sites keep
-# working.
-deprecated_alias("ScanRecord", "FrameRecord", FrameRecord, globals(), "1.0")
+        camera_frames = [frames[i] if i < len(frames) else None
+                         for i in self._camera_frame_indices]
+        for frame, track in zip(camera_frames, self._camera_tracks):
+            track.update(frame, self._frame_num)

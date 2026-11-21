@@ -2,7 +2,7 @@
 # - must include() this before project() in CMakeLists.txt
 # https://vcpkg.readthedocs.io/en/latest/users/integration/
 
-# set toolchain file if VCPKG_ROOT is defind
+# set toolchain file if VCPKG_ROOT is defined
 if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   message(STATUS "Using CMAKE_TOOLCHAIN_FILE from env VCPKG_ROOT: $ENV{VCPKG_ROOT}")
   set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"

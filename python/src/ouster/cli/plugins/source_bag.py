@@ -4,7 +4,8 @@ import shutil
 from pathlib import Path
 from typing import (cast, Union, List, Iterable, Optional)
 from ouster.sdk.core import (FrameSet,
-                             SensorInfo,
+                             LidarFrame,
+                             LidarInfo,
                              LidarPacket, ImuPacket, ZonePacket,
                              PacketSource, UDPProfileIMU)
 from ouster.sdk.util import frame_to_packets  # type: ignore
@@ -21,13 +22,15 @@ from ouster.sdk.bag.bag_packet_source import _anybag_monkey, _bag2_monkey  # typ
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def bag_info(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
-    """Print information about a BAG file to stdout.
+    """Print information about a file to stdout.
+
+    Shows start and end times, duration, message counts and topics.
     """
 
     from rosbags.highlevel import AnyReader
     from rosbags.rosbag2 import Reader as Reader2
 
-    file = ctx.source_uri or ""
+    file = ctx.source_uri
 
     # monkeypatch AnyReader and Reader2 to support mcap directly
     if AnyReader.__init__ != _anybag_monkey:
@@ -52,7 +55,7 @@ def bag_info(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
 def _source_to_bag_iter(source: Union[Iterable[FrameSet], PacketSource],
                        prefix: str = "", raw: bool = False,
                        dir: str = "", filename: str = "", overwrite: bool = False,
-                       metadata: List[SensorInfo] = [],
+                       metadata: List[LidarInfo] = [],
                        duration = None, ros2 = False,
                        split: Optional[int] = None) -> Iterable[FrameSet]:
     """Create a ROSBAG saving iterator from a LidarFrame iterator
@@ -189,10 +192,18 @@ def _source_to_bag_iter(source: Union[Iterable[FrameSet], PacketSource],
                 writer = MyWriter(filename, **writer_params)
                 writer.open()
                 conns = create_connections(writer, metadata)
+                # metadata holds only lidar streams; map each lidar frame to its
+                # metadata/connection by serial number so camera frames (which
+                # have no sensor packet form) are skipped without misaligning
+                # the remaining lidar streams.
+                sn_to_idx = {m.sn: i for i, m in enumerate(metadata)}
                 should_split = False
                 for l in source():
-                    for idx, frame in enumerate(l):
-                        if frame:
+                    for frame in l:
+                        if frame is not None and isinstance(frame, LidarFrame) \
+                                and frame.sensor_info is not None \
+                                and frame.sensor_info.sn in sn_to_idx:
+                            idx = sn_to_idx[frame.sensor_info.sn]
                             packets = frame_to_packets(frame, metadata[idx])
                             for packet in packets:
                                 if should_split:
@@ -207,11 +218,9 @@ def _source_to_bag_iter(source: Union[Iterable[FrameSet], PacketSource],
                                     bag_save_metadata(writer, metadata, packet.host_timestamp)
 
                             # check for splits after a whole frame is saved to make sure
-                            # frames dont get split between files
+                            # frames don't get split between files
                             should_split = check_split()
                     yield l
-            except (KeyboardInterrupt, StopIteration):
-                pass
             finally:
                 writer.close()
         # type ignored because generators are tricky to mypy
@@ -245,8 +254,6 @@ def _source_to_bag_iter(source: Union[Iterable[FrameSet], PacketSource],
                         end_time = packet.host_timestamp + duration * 1e9
                     if packet.host_timestamp > end_time:
                         break
-        except (KeyboardInterrupt, StopIteration):
-            pass
         finally:
             writer.close()
         return None  # type: ignore

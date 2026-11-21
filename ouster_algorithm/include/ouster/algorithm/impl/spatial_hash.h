@@ -101,6 +101,19 @@ inline void for_each_neighbor_cell(const SpatialHashCell3D& center, Func&& fn) {
     }
 }
 
+// Offset applied to signed cell indices before packing into one key; bounds
+// the representable footprint to +/- (2^20 cells * cell size).
+constexpr int64_t CELL_OFFSET = static_cast<int64_t>(1) << 20;
+constexpr int64_t CELL_STRIDE = static_cast<int64_t>(1) << 21;
+
+/// Pack signed 2D cell indices into one key. A single word keys a hash map
+/// far more cheaply than SpatialHashCell2D, which matters where the lookup
+/// is memory-latency bound. Grids using this are independent: no key is ever
+/// compared across two of them.
+inline int64_t cell_key(int64_t cell_x, int64_t cell_y) {
+    return (cell_y + CELL_OFFSET) * CELL_STRIDE + (cell_x + CELL_OFFSET);
+}
+
 }  // namespace impl
 }  // namespace algorithm
 }  // namespace sdk

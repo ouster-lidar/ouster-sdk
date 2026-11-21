@@ -99,7 +99,7 @@ int socket_set_reuse(SOCKET sock);
 /**
  * Set SO_RCVTIMEO on the specified socket
  * @param[in] sock The socket file descriptor
- * @param[in] timeout_sec Timeout esconds
+ * @param[in] timeout_sec Timeout seconds
  * @return success
  */
 int socket_set_rcvtimeout(SOCKET sock, int timeout_sec);

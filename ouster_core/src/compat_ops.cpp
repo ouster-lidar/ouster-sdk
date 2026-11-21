@@ -68,7 +68,7 @@ bool is_host(const std::string& name) {
 
     // Set up the hints structure to specify the desired options (IPv4, TCP)
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;      // IPv4, todo dont care
+    hints.ai_family = AF_UNSPEC;      // IPv4, todo don't care
     hints.ai_socktype = SOCK_STREAM;  // TCP socket
 
     // Use getaddrinfo to resolve the address.

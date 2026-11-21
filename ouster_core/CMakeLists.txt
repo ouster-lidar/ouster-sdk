@@ -9,9 +9,9 @@ find_package(RobinMap REQUIRED MODULE)
 include(Coverage)
 
 # ==== Libraries ====
-add_library(ouster_core STATIC src/types.cpp src/sensor_info.cpp src/data_format.cpp src/sensor_config.cpp src/lidar_frame.cpp
-  src/image_processing.cpp src/parsing.cpp src/packet_source.cpp src/compat_ops.cpp
-  src/logging.cpp src/field.cpp src/profile_extension.cpp src/metadata.cpp src/packet.cpp
+add_library(ouster_core STATIC src/lidar_info.cpp src/data_format.cpp src/lidar_config.cpp src/frame.cpp
+  src/lidar_frame.cpp src/image_processing.cpp src/parsing.cpp src/packet_source.cpp src/compat_ops.cpp
+  src/logging.cpp src/field.cpp src/field_type.cpp src/profile_extension.cpp src/metadata.cpp src/packet.cpp
   src/open_source.cpp src/frame_set_source.cpp src/frame_set_source_utils.cpp src/io_type.cpp
   src/multi_frame_set_source.cpp
   src/frame_ops.cpp
@@ -23,6 +23,7 @@ add_library(ouster_core STATIC src/types.cpp src/sensor_info.cpp src/data_format
   src/pose_conversion.cpp
   src/cloud_io.cpp
   src/voxel_hash_map.cpp
+  src/attribute_layout.cpp
   src/error_handler.cpp
   src/zone_monitor.cpp
   src/frame_set.cpp
@@ -44,18 +45,22 @@ add_library(ouster_core STATIC src/types.cpp src/sensor_info.cpp src/data_format
   src/typedefs.cpp
   src/object.cpp
   src/object_util.cpp
+  src/signals.cpp
+  src/camera_frame.cpp
+  src/camera_info.cpp
+  src/camera_model.cpp
 )
 target_link_libraries(ouster_core
   PUBLIC
     Eigen3::Eigen
     $<BUILD_INTERFACE:ouster_build>
     Threads::Threads
-    $<BUILD_INTERFACE:tsl::robin_map>
   PRIVATE
     nmea
     ouster_build
     libzip::zip
     ${OPENSSL_LIBRARIES}
+    $<BUILD_INTERFACE:tsl::robin_map>
     )
 target_compile_definitions(ouster_core PRIVATE EIGEN_MPL2_ONLY)
 if(BUILD_SHARED_LIBRARY)
@@ -101,13 +106,6 @@ install(TARGETS ouster_core nmea ouster_build
         INCLUDES DESTINATION include)
 
 install(DIRECTORY include/ouster include/optional-lite
-  DESTINATION include
-)
-
-# voxel_hash_map.h is a public header and includes <tsl/robin_map.h>.
-# Install the vendored robin-map headers so consumers of the installed SDK
-# (e.g. Python CLI prebuilt build) can find them without needing the source tree.
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/robin-map/include/tsl
   DESTINATION include
 )
 

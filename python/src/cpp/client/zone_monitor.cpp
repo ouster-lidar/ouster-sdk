@@ -23,6 +23,9 @@
 #include <pyerrors.h>
 #include <warnings.h>
 
+#include <typeinfo>
+#include <utility>
+
 #include "client_common.h"
 #include "common.h"
 #include "eigen_dense.h"
@@ -42,9 +45,41 @@ using ouster::sdk::core::ZonePacket;
 using ouster::sdk::core::ZoneSet;
 using ouster::sdk::core::ZoneSetOutputFilter;
 using ouster::sdk::core::ZoneState;
+using ouster::sdk::core::ZoneTriggerOutput;
 using ouster::sdk::core::Zrb;
 
 NB_MAKE_OPAQUE(std::unordered_map<uint32_t, Zone>);
+
+namespace {
+
+void set_zones(ZoneSet& self, const py::dict& value) {
+    // cast every item before touching self.zones, so a bad item leaves it unchanged
+    std::unordered_map<uint32_t, Zone> new_zones;
+    try {
+        for (auto item : value) {
+            new_zones[py::cast<uint32_t>(item.first)] = py::cast<Zone>(item.second);
+        }
+    } catch (const std::bad_cast&) {
+        throw py::type_error(
+            "ZoneSet.zones must be a dict mapping non-negative int zone ids to Zone objects");
+    }
+    // update in place rather than replacing the map, so Zone references previously
+    // returned to Python for ids that are kept remain valid. This relies on
+    // std::unordered_map being node based: inserting and rehashing never invalidate
+    // references to existing elements, and erase only invalidates the erased ones.
+    for (auto it = self.zones.begin(); it != self.zones.end();) {
+        if (new_zones.count(it->first) == 0) {
+            it = self.zones.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (auto& item : new_zones) {
+        self.zones[item.first] = std::move(item.second);
+    }
+}
+
+}  // namespace
 
 void init_client_zone_monitor(py::module_& module, py::module_& /*unused*/) {
     py::class_<ZoneState>(module, "ZoneState")
@@ -71,6 +106,12 @@ void init_client_zone_monitor(py::module_& module, py::module_& /*unused*/) {
         .value("NONE", Zone::ZoneMode::NONE)
         .value("OCCUPANCY", Zone::ZoneMode::OCCUPANCY)
         .value("VACANCY", Zone::ZoneMode::VACANCY);
+
+    py::enum_<ZoneTriggerOutput>(module, "ZoneTriggerOutput")
+        .value("NONE", ZoneTriggerOutput::NONE)
+        .value("OSSD_DUAL", ZoneTriggerOutput::OSSD_DUAL)
+        .value("GPIO_0", ZoneTriggerOutput::GPIO_0)
+        .value("GPIO_1", ZoneTriggerOutput::GPIO_1);
 
     py::enum_<Stl::CoordinateFrame>(module, "CoordinateFrame")
         .value("BODY", Stl::CoordinateFrame::BODY)
@@ -138,11 +179,12 @@ void init_client_zone_monitor(py::module_& module, py::module_& /*unused*/) {
                            .def(py::init<>())
                            .def_rw("point_count", &Zone::point_count)
                            .def_rw("frame_count", &Zone::frame_count)
+                           .def_rw("trigger_output", &Zone::trigger_output)
                            .def_rw("mode", &Zone::mode)
                            .def_rw("label", &Zone::label)
                            //.def("render", &Zone::render)  // TODO[tws] either
                            // bind BeamConfig or
-                           // accept a SensorInfo
+                           // accept a LidarInfo
                            .def("__eq__", [](const Zone& lhs, const py::object& rhs) {
                                if (!py::isinstance<Zone>(rhs)) {
                                    return false;
@@ -197,14 +239,7 @@ void init_client_zone_monitor(py::module_& module, py::module_& /*unused*/) {
         .def_prop_rw(
             "zones",
             [](ZoneSet& self) -> std::unordered_map<uint32_t, Zone>* { return &self.zones; },
-            [](ZoneSet& self, const py::dict& value) {
-                for (auto item : value) {
-                    uint32_t key = py::cast<uint32_t>(item.first);
-                    Zone zone = py::cast<Zone>(item.second);
-                    self.zones[key] = zone;
-                }
-            },
-            py::rv_policy::reference_internal)
+            &set_zones, py::rv_policy::reference_internal)
         .def_rw("power_on_live_ids", &ZoneSet::power_on_live_ids)
         .def_prop_rw(
             "sensor_to_body_transform",
@@ -240,16 +275,6 @@ void init_client_zone_monitor(py::module_& module, py::module_& /*unused*/) {
         });
 
     py::class_<ZonePacket, Packet>(module, "ZonePacket")
-        .def(
-            "__init__",
-            [](ZonePacket* self, int size = 65536) {
-                PyErr_WarnEx(PyExc_FutureWarning,
-                             "ZonePacket(size: int) is deprecated, use "
-                             "ZonePacket(fmt: PacketFormat) instead",
-                             1);
-                new (self) ZonePacket(size);
-            },
-            py::arg("size") = 65536)
         .def(py::init<std::shared_ptr<PacketFormat>>())
         .def("__copy__", [](const ZonePacket& self) { return ZonePacket(self); })
         .def("__deepcopy__",

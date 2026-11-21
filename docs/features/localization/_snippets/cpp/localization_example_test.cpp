@@ -55,9 +55,9 @@ TEST(LocalizationExample, PrintsPoseForEachFrame) {
     ASSERT_FALSE(output.empty()) << "Expected pose output but got nothing";
 
     // Each line must match:
-    //   idx = <int>; ts = <int>; XYZ: <f>, <f>, <f> (R: <f>, P: <f>, Y: <f>)
+    //   ts = <int>; XYZ: <f>, <f>, <f> (R: <f>, P: <f>, Y: <f>)
     static const std::regex kLineRe(
-        R"(idx = (\d+); ts = (\d+); XYZ: ([-\d.]+), ([-\d.]+), ([-\d.]+) \(R: ([-\d.]+), P: ([-\d.]+), Y: ([-\d.]+)\))");
+        R"(ts = (\d+); XYZ: ([-\d.]+), ([-\d.]+), ([-\d.]+) \(R: ([-\d.]+), P: ([-\d.]+), Y: ([-\d.]+)\))");
 
     std::istringstream ss(output);
     std::string line;
@@ -69,17 +69,14 @@ TEST(LocalizationExample, PrintsPoseForEachFrame) {
         ASSERT_TRUE(std::regex_search(line, m, kLineRe))
             << "Line did not match expected format: " << line;
 
-        const int idx = std::stoi(m[1]);
-        const long ts = std::stol(m[2]);
-        const double x = std::stod(m[3]);
-        const double y = std::stod(m[4]);
-        const double z = std::stod(m[5]);
-        const double roll = std::stod(m[6]);
-        const double pitch = std::stod(m[7]);
-        const double yaw = std::stod(m[8]);
+        const long ts = std::stol(m[1]);
+        const double x = std::stod(m[2]);
+        const double y = std::stod(m[3]);
+        const double z = std::stod(m[4]);
+        const double roll = std::stod(m[5]);
+        const double pitch = std::stod(m[6]);
+        const double yaw = std::stod(m[7]);
 
-        EXPECT_GE(idx, 1795) << "frame_id below expected range";
-        EXPECT_LE(idx, 1797) << "frame_id above expected range";
         EXPECT_GT(ts, 0) << "timestamp must be positive";
         EXPECT_LT(std::abs(x), 1.0) << "X=" << x << " m unexpectedly far from map origin";
         EXPECT_LT(std::abs(y), 1.0) << "Y=" << y << " m unexpectedly far from map origin";

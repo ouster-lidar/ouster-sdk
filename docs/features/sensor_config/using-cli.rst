@@ -21,14 +21,14 @@ network:
    :end-before: [doc-etag-cli-discover]
    :dedent: 0
 
-    
+
 Configuring Your Sensor
 +++++++++++++++++++++++
 
 ``ouster-cli`` provides utilities for configuring your sensor with configuration parameters such as
 ``lidar_mode`` and ``azimuth_window``.
 
-To quickly auto-configure a sensor with with standard ports, azimuth window, operating mode, and
+To quickly auto-configure a sensor with standard ports, azimuth window, operating mode, and
 auto udp dest:
 
 

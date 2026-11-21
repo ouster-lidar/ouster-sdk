@@ -17,6 +17,7 @@ def init(pcap_path: str, metadata_path: str):
     # [doc-etag-lidarframe-setup]
     source = open_source(pcap_path, meta=[metadata_path])
     sensor_info = source.sensor_info[0]
+    assert isinstance(sensor_info, core.LidarInfo)
     # [doc-etag-lidarframe-setup]
 
     h = sensor_info.format.pixels_per_column

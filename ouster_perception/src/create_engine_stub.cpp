@@ -3,7 +3,11 @@
  * All rights reserved.
  */
 
+#include <ouster/core/sensor_info.h>
 #include <ouster/perception/detection_engine.h>
+
+#include <memory>
+#include <vector>
 
 namespace ouster {
 namespace sdk {

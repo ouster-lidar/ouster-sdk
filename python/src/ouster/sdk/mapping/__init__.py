@@ -9,10 +9,6 @@ It helps building maps, track poses, and process mapping results.
 
 import importlib
 
-from ouster.sdk._kwarg_aliases import install_mapping_kwarg_aliases
-
-install_mapping_kwarg_aliases(importlib.import_module("ouster.sdk._bindings.mapping"))
-
 from ouster.sdk._bindings.mapping import SlamConfig
 from ouster.sdk._bindings.mapping import LIOSlamConfig
 from ouster.sdk._bindings.mapping import SlamEngine

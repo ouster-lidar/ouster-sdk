@@ -59,7 +59,7 @@ def test_lidar_mode_misc() -> None:
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_read_info(meta: core.SensorInfo) -> None:
+def test_read_info(meta: core.LidarInfo) -> None:
     """Check the particular values in the test data."""
     assert meta.sn == 992029000352
     assert meta.fw_rev == "v2.0.0-rc.2"
@@ -96,7 +96,7 @@ def test_read_info(meta: core.SensorInfo) -> None:
     assert meta.status == "RUNNING"
     assert meta.cal == core.CalibrationStatus()
 
-    ref_config = core.SensorConfig()
+    ref_config = core.LidarConfig()
     ref_config.lidar_mode = core.LidarMode._1024x20
     assert meta.config == ref_config
     assert meta.get_version().major == 2
@@ -110,14 +110,7 @@ def test_read_info(meta: core.SensorInfo) -> None:
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_lidar_profile_from_string(meta: core.SensorInfo) -> None:
-    from_string = core.UDPProfileLidar.from_string("OFF")
-    assert from_string is not None
-    meta.format.udp_profile_lidar = from_string
-    assert meta.format.udp_profile_lidar == core.UDPProfileLidar.OFF
-
-
-def test_write_info(meta: core.SensorInfo) -> None:
+def test_write_info(meta: core.LidarInfo) -> None:
     """Check modifying metadata."""
     meta.sn = 0
     meta.fw_rev = ""
@@ -127,7 +120,7 @@ def test_write_info(meta: core.SensorInfo) -> None:
     meta.format.pixels_per_column = 0
     meta.format.column_window = (0, 0)
     meta.format.pixel_shift_by_row = []
-    meta.format.udp_profile_lidar = core.UDPProfileLidar.UNKNOWN
+    meta.format.udp_profile_lidar = core.UDPProfileLidar.LEGACY
     meta.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
     meta.format.header_type = core.HeaderType.FUSA
     meta.format.fps = 0
@@ -135,7 +128,7 @@ def test_write_info(meta: core.SensorInfo) -> None:
     meta.beam_altitude_angles = []
     meta.imu_to_sensor_transform = numpy.zeros((4, 4))
     meta.lidar_to_sensor_transform = numpy.zeros((4, 4))
-    meta.sensor_to_body = numpy.zeros((4, 4))
+    meta.sensor_to_body = numpy.eye(4)
     meta.lidar_origin_to_beam_origin_mm = 0.0
     meta.beam_to_lidar_transform = numpy.zeros((4, 4))
     meta.init_id = 0
@@ -145,14 +138,15 @@ def test_write_info(meta: core.SensorInfo) -> None:
     meta.status = ""
     meta.user_data = ""
     meta.cal = core.CalibrationStatus()
-    meta.config = core.SensorConfig()
+    meta.config = core.LidarConfig()
     meta.config.udp_port_lidar = None
     meta.config.udp_port_imu = None
     meta.config.lidar_mode = None
     meta.client_version = ""
 
-    # give some sane defaults to core.SensorInfo() (no invalid enums)
-    compared = core.SensorInfo()
+    # give some sane defaults to core.LidarInfo() (no invalid enums)
+    compared = core.LidarInfo()
+    compared.format.udp_profile_lidar = core.UDPProfileLidar.LEGACY
     compared.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
     compared.format.header_type = core.HeaderType.FUSA
 
@@ -176,7 +170,7 @@ def test_write_info(meta: core.SensorInfo) -> None:
 
     product_info = meta.get_product_info()
     # assert that product info fields are readonly
-    # type ignored because my doesnt want you to set readonly vars
+    # type ignored because mypy doesn't want you to set readonly vars
     with pytest.raises(AttributeError):
         product_info.full_product_info = ""  # type: ignore[misc]
     with pytest.raises(AttributeError):
@@ -189,7 +183,7 @@ def test_write_info(meta: core.SensorInfo) -> None:
         product_info.beam_count = 1  # type: ignore[misc]
 
 
-def test_copy_info(meta: core.SensorInfo) -> None:
+def test_copy_info(meta: core.LidarInfo) -> None:
     """Check that copy() works."""
     meta1 = copy(meta)
 
@@ -204,21 +198,21 @@ def test_copy_info(meta: core.SensorInfo) -> None:
     assert meta2 != meta
 
 
-def test_userdata(meta: core.SensorInfo) -> None:
+def test_userdata(meta: core.LidarInfo) -> None:
     meta.user_data = "test"
 
-    meta2 = core.SensorInfo(meta.to_json_string())
+    meta2 = core.LidarInfo(meta.to_json_string())
 
     assert meta2.user_data == meta.user_data
 
 
-def test_extrinsics(meta: core.SensorInfo) -> None:
+def test_extrinsics(meta: core.LidarInfo) -> None:
     copy = numpy.eye(4)
     copy[0, 0] = 5
     copy[1, 0] = 3
     meta.sensor_to_body = copy
 
-    meta2 = core.SensorInfo(meta.to_json_string())
+    meta2 = core.LidarInfo(meta.to_json_string())
 
     assert (meta2.sensor_to_body == meta.sensor_to_body).all()
 
@@ -226,13 +220,13 @@ def test_extrinsics(meta: core.SensorInfo) -> None:
 def test_parse_info() -> None:
     """Sanity check parsing from json."""
     with pytest.raises(RuntimeError):
-        core.SensorInfo('/')
+        core.LidarInfo('/')
     with pytest.raises(RuntimeError):
-        core.SensorInfo('')
+        core.LidarInfo('')
     with pytest.raises(RuntimeError):
-        core.SensorInfo('{  }')
+        core.LidarInfo('{  }')
     with pytest.raises(RuntimeError):
-        core.SensorInfo('{ "lidar_mode": "1024x10" }')
+        core.LidarInfo('{ "lidar_mode": "1024x10" }')
 
     # TODO: this should actually fail unless *all* parameters needed to
     # unambiguously interpret a sensor data stream are present
@@ -242,7 +236,7 @@ def test_parse_info() -> None:
         'beam_azimuth_angles': [1] * 64,
         'lidar_to_sensor_transform': list(range(16))
     }
-    info = core.SensorInfo(json.dumps(metadata))
+    info = core.LidarInfo(json.dumps(metadata))
 
     # check that data format defaults are populated
     assert info.format.pixels_per_column == 64
@@ -262,10 +256,10 @@ def test_parse_info() -> None:
 def test_info_length() -> None:
     """Check length of info to ensure we've added appropriately to the == operator"""
 
-    info_attributes = inspect.getmembers(core.SensorInfo, lambda a: not inspect.isroutine(a))
+    info_attributes = inspect.getmembers(core.LidarInfo, lambda a: not inspect.isroutine(a))
     info_properties = [a for a in info_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(info_properties) == 28, "Don't forget to update tests and the sensor_info == operator!"
+    assert len(info_properties) == 31, "Don't forget to update tests and the sensor_info == operator!"
 
 
 def test_equality_format() -> None:
@@ -274,7 +268,7 @@ def test_equality_format() -> None:
     data_format_attributes = inspect.getmembers(core.DataFormat, lambda a: not inspect.isroutine(a))
     data_format_properties = [a for a in data_format_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(data_format_properties) == 12, "Don't forget to update tests and the data_format == operator!"
+    assert len(data_format_properties) == 13, "Don't forget to update tests and the data_format == operator!"
 
 
 def test_skip_metadata_beam_validation() -> None:
@@ -283,11 +277,11 @@ def test_skip_metadata_beam_validation() -> None:
     all_zeros_metadata = str(Path(METADATA_DATA_DIR) / "malformed/complete_but_all_zeros_legacy.json")
 
     # test that you can simply initialize without any metadata specified
-    core.SensorInfo()
+    core.LidarInfo()
 
     with open(all_zeros_metadata, 'r') as f:
         # test that specifying skip doesn't raise error
-        core.SensorInfo(f.read())
+        core.LidarInfo(f.read())
 
 
 @pytest.mark.parametrize('metadata_key', [
@@ -305,7 +299,7 @@ def test_updated_string(metadata_base_name) -> None:
     original_string = ""
     with open(meta_path, 'r') as f:
         original_string = f.read()
-        meta = core.SensorInfo(original_string)
+        meta = core.LidarInfo(original_string)
 
     meta.format.columns_per_packet = 40
     meta.format.fps = 50  # crucial check - fps is a value that is filled in with a default value at parsing time
@@ -313,7 +307,7 @@ def test_updated_string(metadata_base_name) -> None:
 
     assert updated_metadata_string != original_string
 
-    meta2 = core.SensorInfo(updated_metadata_string)
+    meta2 = core.LidarInfo(updated_metadata_string)
     assert meta2.format.columns_per_packet == 40
     assert meta2.format.fps == 50
 
@@ -325,7 +319,7 @@ def test_zone_monitoring_enabled():
     # TWS 20251204 this would be better as a property or method, since
     # its value is derived from other fields.
 
-    sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x20)
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x20)
     assert sensor_info.config.udp_port_zm is None
     assert sensor_info.config.udp_dest_zm is None
     assert sensor_info.format.zone_monitoring_enabled is False
@@ -334,26 +328,55 @@ def test_zone_monitoring_enabled():
     sensor_info.config.udp_dest_zm = ""
     sensor_info.config.udp_port_zm = 7504
     sensor_info_json = json.loads(sensor_info.to_json_string())
-    sensor_info_new = core.SensorInfo(json.dumps(sensor_info_json))
+    sensor_info_new = core.LidarInfo(json.dumps(sensor_info_json))
     assert sensor_info_new.format.zone_monitoring_enabled is False
 
     # port is 0 -> false
     sensor_info.config.udp_dest_zm = "127.0.0.1"
     sensor_info.config.udp_port_zm = 0
     sensor_info_json = json.loads(sensor_info.to_json_string())
-    sensor_info_new = core.SensorInfo(json.dumps(sensor_info_json))
+    sensor_info_new = core.LidarInfo(json.dumps(sensor_info_json))
     assert sensor_info_new.format.zone_monitoring_enabled is False
 
     # both addr and port set -> true
     sensor_info.config.udp_dest_zm = "127.0.0.1"
     sensor_info.config.udp_port_zm = 7504
     sensor_info_json = json.loads(sensor_info.to_json_string())
-    sensor_info_new = core.SensorInfo(json.dumps(sensor_info_json))
+    sensor_info_new = core.LidarInfo(json.dumps(sensor_info_json))
     assert sensor_info_new.format.zone_monitoring_enabled is True
 
 
+def test_imu_enabled():
+    """sensor_info.format.imu_enabled should reflect whether the IMU stream
+    is enabled based on sensor_info.config udp_dest and udp_port_imu settings
+    when loading the sensor info from JSON."""
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x20)
+    assert sensor_info.format.imu_enabled is False
+
+    # destination is empty -> false
+    sensor_info.config.udp_dest = ""
+    sensor_info.config.udp_port_imu = 7503
+    sensor_info_json = json.loads(sensor_info.to_json_string())
+    sensor_info_new = core.LidarInfo(json.dumps(sensor_info_json))
+    assert sensor_info_new.format.imu_enabled is False
+
+    # port is 0 -> false
+    sensor_info.config.udp_dest = "127.0.0.1"
+    sensor_info.config.udp_port_imu = 0
+    sensor_info_json = json.loads(sensor_info.to_json_string())
+    sensor_info_new = core.LidarInfo(json.dumps(sensor_info_json))
+    assert sensor_info_new.format.imu_enabled is False
+
+    # both addr and port set -> true
+    sensor_info.config.udp_dest = "127.0.0.1"
+    sensor_info.config.udp_port_imu = 7503
+    sensor_info_json = json.loads(sensor_info.to_json_string())
+    sensor_info_new = core.LidarInfo(json.dumps(sensor_info_json))
+    assert sensor_info_new.format.imu_enabled is True
+
+
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_angle_mutability(meta: core.SensorInfo) -> None:
+def test_angle_mutability(meta: core.LidarInfo) -> None:
     """Make sure angle related properties are mutable"""
     meta.beam_altitude_angles[1] = 10000.0
     assert meta.beam_altitude_angles[1] == 10000.0
@@ -366,7 +389,7 @@ def test_angle_mutability(meta: core.SensorInfo) -> None:
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_extrinsic_mutability(meta: core.SensorInfo) -> None:
+def test_extrinsic_mutability(meta: core.LidarInfo) -> None:
     """Check that sensor_to_body is mutable and can be set to a new value."""
     new_extrinsic = numpy.eye(4)
     new_extrinsic[0, 3] = 1.0
@@ -375,3 +398,187 @@ def test_extrinsic_mutability(meta: core.SensorInfo) -> None:
 
     meta.sensor_to_body[0, 3] = 2.0
     assert meta.sensor_to_body[0, 3] == 2.0
+
+
+def test_sensor_info_to_json_string_polymorphic() -> None:
+    """to_json_string() is virtual on SensorInfo and dispatches to the concrete type."""
+    lidar = core.LidarInfo.from_default(core.LidarMode._1024x20)
+    assert type(core.SensorInfo(json_string=lidar.to_json_string())) is core.LidarInfo
+
+    camera = core.CameraInfo()
+    camera.format.columns_per_frame = 2
+    camera.format.pixels_per_column = 2
+    camera.model = core.CameraModel(100.0, 100.0, 1.0, 1.0)
+    assert type(core.SensorInfo(json_string=camera.to_json_string())) is core.CameraInfo
+
+
+def test_sensor_info_fps_polymorphic() -> None:
+    """fps is readable through SensorInfo, and derived from the data format on both kinds."""
+    lidar = core.LidarInfo.from_default(core.LidarMode._1024x20)
+    assert lidar.fps == lidar.format.fps == 20
+
+    # Both kinds derive fps from their data format, so neither has a setter.
+    with pytest.raises(AttributeError):
+        lidar.fps = 10  # type: ignore[misc]
+
+    camera = core.CameraInfo()
+    camera.format.fps = 60
+    assert camera.fps == 60
+
+    with pytest.raises(AttributeError):
+        camera.fps = 10  # type: ignore[misc]
+
+
+def test_sensor_info_latency_polymorphic() -> None:
+    """latency is readable through SensorInfo and dispatches to the concrete type."""
+    lidar = core.LidarInfo.from_default(core.LidarMode._1024x20)
+    assert 0.0 <= lidar.latency < 1.0 / lidar.fps
+
+    assert core.CameraInfo().latency == 0.0
+
+    with pytest.raises(AttributeError):
+        lidar.latency = 1.0  # type: ignore[misc]
+
+    # LidarInfo derives latency from the frame period, so it rejects a zero fps.
+    lidar.format.fps = 0
+    with pytest.raises(RuntimeError):
+        lidar.latency
+
+
+def test_sensor_info_could_be_synchronized_polymorphic() -> None:
+    """could_be_synchronized is readable through SensorInfo and dispatches to the concrete type."""
+    lidar = core.LidarInfo.from_default(core.LidarMode._1024x20)
+    assert lidar.could_be_synchronized is False
+
+    # A lidar can share a timebase once phase locked to an external time source.
+    lidar.config.phase_lock_enable = True
+    lidar.config.timestamp_mode = core.TimestampMode.TIME_FROM_PTP_1588
+    assert lidar.could_be_synchronized is True
+
+    assert core.CameraInfo().could_be_synchronized is False
+
+    with pytest.raises(AttributeError):
+        lidar.could_be_synchronized = True  # type: ignore[misc]
+
+
+def test_camera_info_fps_json_round_trip() -> None:
+    """CameraInfo serializes fps and compares on it."""
+    camera = core.CameraInfo()
+    camera.format.columns_per_frame = 2
+    camera.format.pixels_per_column = 2
+    camera.format.fps = 60
+
+    round_tripped = core.CameraInfo(camera.to_json_string())
+    assert round_tripped.fps == 60
+    assert round_tripped == camera
+
+    slower = core.CameraInfo(camera.to_json_string())
+    slower.format.fps = 30
+    assert slower != camera
+
+    # fps defaults to 0 when the metadata omits it.
+    assert core.CameraInfo(
+        '{"camera_info": {"format": {"columns_per_frame": 2, "pixels_per_column": 2}}}').fps == 0
+
+
+def test_camera_info_format_json_round_trip() -> None:
+    """CameraInfo serializes its data format and compares on it."""
+    camera = core.CameraInfo()
+    camera.format.columns_per_frame = 640
+    camera.format.pixels_per_column = 480
+    camera.format.fps = 15
+
+    round_tripped = core.CameraInfo(camera.to_json_string())
+    assert round_tripped.format.columns_per_frame == 640
+    assert round_tripped.format.pixels_per_column == 480
+    assert round_tripped.format.fps == 15
+    assert round_tripped == camera
+
+    wider = core.CameraInfo(camera.to_json_string())
+    wider.format.columns_per_frame = 1280
+    assert wider != camera
+
+
+def test_camera_info_requires_format() -> None:
+    """Camera metadata without a 'format' object, including the old flat layout, is rejected."""
+    with pytest.raises(ValueError):
+        core.CameraInfo('{"camera_info": {"sn": 1}}')
+    with pytest.raises(ValueError):
+        core.CameraInfo('{"camera_info": {"width": 2, "height": 2, "fps": 30}}')
+
+
+def _camera_json() -> str:
+    camera = core.CameraInfo()
+    camera.format.columns_per_frame = 4
+    camera.format.pixels_per_column = 2
+    camera.model = core.CameraModel(100.0, 100.0, 1.0, 1.0)
+    return camera.to_json_string()
+
+
+@pytest.mark.parametrize("factory", [
+    core.SensorInfo,
+    core.SensorInfo.from_json_string,
+    # type.__call__ skips nanobind's vectorcall fast path, so Python follows __new__
+    # with type(obj).__init__(obj, ...), as it always does on Python 3.8.
+    lambda json_string: type.__call__(core.SensorInfo, json_string),
+])
+def test_sensor_info_factory(factory) -> None:
+    """SensorInfo(json) and SensorInfo.from_json_string(json) return the concrete type for the metadata."""
+    lidar_json = core.LidarInfo.from_default(core.LidarMode._1024x20).to_json_string()
+    lidar = factory(lidar_json)
+    assert type(lidar) is core.LidarInfo
+    assert lidar == core.LidarInfo(lidar_json)
+
+    camera_json = _camera_json()
+    camera = factory(camera_json)
+    assert type(camera) is core.CameraInfo
+    assert camera == core.CameraInfo(camera_json)
+
+
+def test_sensor_info_factory_keyword() -> None:
+    """The factory and both concrete constructors share the json_string keyword."""
+    lidar_json = core.LidarInfo.from_default(core.LidarMode._1024x20).to_json_string()
+    camera_json = _camera_json()
+    assert type(core.SensorInfo(json_string=lidar_json)) is core.LidarInfo
+    assert type(core.SensorInfo(json_string=camera_json)) is core.CameraInfo
+    assert type(type.__call__(core.SensorInfo, json_string=camera_json)) is core.CameraInfo
+    assert type(core.LidarInfo(json_string=lidar_json)) is core.LidarInfo
+    assert type(core.CameraInfo(json_string=camera_json)) is core.CameraInfo
+
+
+def test_sensor_info_factory_errors() -> None:
+    """SensorInfo is abstract, and invalid metadata fails like LidarInfo does."""
+    with pytest.raises(TypeError):
+        core.SensorInfo()  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        type.__call__(core.SensorInfo)
+    with pytest.raises(Exception) as from_lidar:
+        core.LidarInfo("not json")
+    with pytest.raises(type(from_lidar.value)):
+        core.SensorInfo("not json")
+
+
+def test_concrete_sensor_info_constructors_slow_path() -> None:
+    """LidarInfo/CameraInfo construct correctly when Python calls __new__ then __init__."""
+    lidar_json = core.LidarInfo.from_default(core.LidarMode._1024x20).to_json_string()
+    assert type(type.__call__(core.LidarInfo)) is core.LidarInfo
+    assert type.__call__(core.LidarInfo, lidar_json) == core.LidarInfo(lidar_json)
+    assert type(type.__call__(core.CameraInfo)) is core.CameraInfo
+
+    class MyLidarInfo(core.LidarInfo):
+        pass
+
+    mine = MyLidarInfo(lidar_json)
+    assert type(mine) is MyLidarInfo
+    assert mine.format.columns_per_frame == 1024
+
+
+def test_beam_altitude_angles_getter() -> None:
+    """beam_altitude_angles is a property on LidarInfo that returns an ndarray view of the underlying array."""
+    lidar = core.LidarInfo.from_default(core.LidarMode._1024x20)
+    angles = lidar.beam_altitude_angles
+    assert isinstance(angles, numpy.ndarray)
+    assert angles.shape == (lidar.format.pixels_per_column,)
+    # The returned array is a copy, so modifying it doesn't change the underlying data.
+    angles[0] = 12345.0
+    assert lidar.beam_altitude_angles[0] == pytest.approx(12345.0)

@@ -73,7 +73,7 @@ int dd(float degrees) {
 }  // namespace
 
 /*
- * The camera class computes the folowing matrices:
+ * The camera class computes the following matrices:
  *
  * - Projection matrix proj, determined by view angle
  * - View matrix, relative to the target matrix, controlled by the user
@@ -239,7 +239,7 @@ mat4d Camera::get_target() const {
  * reference:
  * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix
  */
-impl::CameraData Camera::matrices(double aspect) const {
+CameraData Camera::matrices(double aspect) const {
     // calculate view matrix
     core::Matrix4dR view = (Translation3d{Vector3d::UnitZ() * -view_distance()} *
                             Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *

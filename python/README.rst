@@ -27,8 +27,8 @@ Ouster Python SDK
 ..
     [sdk-overview-start]
 
-The Ouster Sensor SDK provides developers with a comprehensive set of interfaces for interacting with Ouster sensor hardware. 
-The SDK includes a suite of tools, libraries, and APIs to access the full range of sensor features and generate recorded sensor data. 
+The Ouster Sensor SDK provides developers with a comprehensive set of interfaces for interacting with Ouster sensor hardware.
+The SDK includes a suite of tools, libraries, and APIs to access the full range of sensor features and generate recorded sensor data.
 It is designed to support prototyping, evaluation, and other non-safety-critical applications for both Python and C++ development environments.
 
 Core capabilities:
@@ -45,7 +45,7 @@ Core capabilities:
 * Localization
 * Zone monitor
 
-Additionally, in Python, the SDK also provides: 
+Additionally, in Python, the SDK also provides:
 
 * Frame-based access to lidar data as numpy datatypes
 * A responsive visualizer utility for pcap and sensor
@@ -59,7 +59,7 @@ Supported Platforms
 ..
     [python-supported-platforms-start]
 
-The Ouster SDK is distributed as pre-built binaries and can be easily installed using pip, the Python package installer.  
+The Ouster SDK is distributed as pre-built binaries and can be easily installed using pip, the Python package installer.
 The SDK is available on the Python Package Index (`PyPI`_) for the following platforms:
 
 - Most glibc-based Linux distributions on x86_64 and ARM64 platforms (``manylinux_2_28_x86_64``, ``manylinux_2_28_aarch64``)

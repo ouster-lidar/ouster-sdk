@@ -1,4 +1,4 @@
-from typing import List, Optional, Iterator
+from typing import List, Optional, Iterator, cast
 
 import copy
 
@@ -56,7 +56,9 @@ class Frames(FrameSetSource):
 
     @property
     def sensor_info(self) -> List[SensorInfo]:
-        return self._source.sensor_info
+        # This is a lidar-only test source, but the base class contract
+        # returns SensorInfo; the underlying LidarInfo objects satisfy it.
+        return cast(List[SensorInfo], self._source.sensor_info)
 
     @property
     def is_live(self) -> bool:
@@ -100,15 +102,15 @@ class Frames(FrameSetSource):
         """
         if self._source is None:
             raise ValueError("Cannot iterate a closed frame source")
-        sensors_count = len(self.sensor_info)
+        sensors_count = len(self._source.sensor_info)
         w = [0] * sensors_count
         h = [0] * sensors_count
         col_window = [(0, 0)] * sensors_count
         columns_per_packet = [0] * sensors_count
         pf = []
 
-        # construct things that dont need to reset with a loop
-        for i, sinfo in enumerate(self.sensor_info):
+        # construct things that don't need to reset with a loop
+        for i, sinfo in enumerate(self._source.sensor_info):
             w[i] = sinfo.format.columns_per_frame
             h[i] = sinfo.format.pixels_per_column
             col_window[i] = sinfo.format.column_window
@@ -127,7 +129,7 @@ class Frames(FrameSetSource):
             yielded: List[Optional[int]] = [None] * sensors_count
 
             # construct things that we need to reset with a loop
-            for i, sinfo in enumerate(self.sensor_info):
+            for i, sinfo in enumerate(self._source.sensor_info):
                 batch.append(FrameBatcher(sinfo))
                 ls_write.append(LidarFrame(
                     h[i], w[i], self._field_types[i], columns_per_packet[i]))
@@ -146,14 +148,14 @@ class Frames(FrameSetSource):
             skip_ls = lambda idx, ls: ls is None or ls.frame_id in [yielded[idx], -1]
             last_frames = sorted(
                 [(idx, ls) for idx, ls in enumerate(ls_write) if not skip_ls(idx, ls)],
-                key=lambda si: si[1].get_first_valid_packet_timestamp())
+                key=lambda si: si[1].get_first_valid_receive_timestamp())
             while last_frames:
                 idx, ls = last_frames.pop(0)
                 if not self._complete or ls.complete(col_window[idx]):
                     had_message = True
                     yield FrameSet([frame_yield_op(ls)])
 
-            # exit if we had no frames so we dont infinite loop when cycling
+            # exit if we had no frames so we don't infinite loop when cycling
             if cycle and had_message:
                 continue
             else:

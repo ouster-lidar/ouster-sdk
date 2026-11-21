@@ -1,6 +1,6 @@
-from typing import Optional, Iterator, List
+from typing import cast, Iterator, List
 from ouster.sdk._bindings.client import FrameSetSource
-from ouster.sdk.core import SensorInfo, LidarFrame, FrameSet
+from ouster.sdk.core import SensorInfo, LidarInfo, LidarFrame, FrameSet
 from ouster.sdk.core.frame_ops import reduce_by_factor, reduce_by_factor_metadata
 
 
@@ -11,11 +11,12 @@ class ReducedFrameSetSource(FrameSetSource):
 
     def __init__(self, frame_set_source: FrameSetSource, beams: List[int]) -> None:
         FrameSetSource.__init__(self)
+        # Beam reduction is a lidar concept; only lidar sensors participate.
         if len(frame_set_source.sensor_info) != len(beams):
             raise ValueError("beams should match the count of sensors")
 
         factor_list = []
-        for b, m in zip(beams, frame_set_source.sensor_info):
+        for b, m in zip(beams, cast(List[LidarInfo], frame_set_source.sensor_info)):
             f = m.format.pixels_per_column / b
             if not (f.is_integer() and f > 0):
                 raise ValueError(f"beams {b} must be divisor of {m.format.pixels_per_column}")
@@ -32,7 +33,7 @@ class ReducedFrameSetSource(FrameSetSource):
 
     @property
     def sensor_info(self) -> List[SensorInfo]:
-        return self._metadata
+        return cast(List[SensorInfo], self._metadata)
 
     @property
     def is_live(self) -> bool:
@@ -59,15 +60,16 @@ class ReducedFrameSetSource(FrameSetSource):
             return out
 
         for frames in self._frame_set_source:
-            out: List[Optional[LidarFrame]] = []
+            out: List = []
             for frame in frames:
+                if not isinstance(frame, LidarFrame):
+                    # pass through camera / other frame types (and None) unchanged
+                    out.append(frame)
+                    continue
                 for idx, info in enumerate(self._input_sensor_info):
-                    if frame is not None and info is frame.sensor_info:
+                    if info is frame.sensor_info:
                         break
-                if frame is None:
-                    out.append(None)
-                else:
-                    out.append(reduce_frame(frame, self._factors[idx], self._metadata[idx]))
+                out.append(reduce_frame(frame, self._factors[idx], self._metadata[idx]))
             yield FrameSet(out)
 
     def close(self) -> None:

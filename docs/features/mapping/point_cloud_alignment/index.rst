@@ -2,11 +2,12 @@
 Point Cloud Alignment
 =====================
 
-Point Cloud Alignment estimates the rigid transform between overlapping lidar
-frames or point clouds. It can also align a multi-sensor ``FrameSet`` to
-sensor 0, producing an extrinsic matrix for each sensor.
+Point Cloud Alignment estimates the rigid transform between overlapping
+frames or point clouds. Frames may be lidar or camera — points are projected
+through the shared ``XYZLut`` — and it can also align a multi-sensor
+``FrameSet`` to sensor 0, producing an extrinsic matrix for each sensor.
 
-Users can calibrate the extrinsics of a multi-sensor setup, register two lidar
+Users can calibrate the extrinsics of a multi-sensor setup, register two
 frames, or align two point clouds before combining or comparing them. Use the
 ``align`` CLI command for multi-sensor sources, or call
 :ouster:func:`align_clouds <py=ouster.sdk.algorithm.align_clouds|cpp=ouster::sdk::algorithm::align_clouds>`
@@ -37,8 +38,7 @@ resulting extrinsic matrices:
    :class: doc-snippet
 
 For the best results, ``align`` expects the input sensor extrinsics to be
-aligned with gravity. If the source still contains IMU packets from sensors
-running FW 3.2 or later, run ``plumb`` before ``align`` to calculate the
+aligned with gravity. Run ``plumb`` before ``align`` to calculate the
 gravity-aligned extrinsics:
 
 .. literalinclude:: ../../../../python/tests/documentation/test_cli_commands.py
@@ -47,6 +47,19 @@ gravity-aligned extrinsics:
    :end-before: [doc-etag-cli-plumb-align-viz]
    :dedent: 0
    :class: doc-snippet
+
+On sources from sensors running FW 3.2 or later, prefer
+``plumb --method imu``. It levels the sensors from a single average over the
+frame's accelerometer samples and returns immediately, while the default
+``--method all`` additionally estimates surface normals over the whole cloud to
+refine the result. ``align`` does not need that extra fraction of a degree. On
+sources without the FW 3.2+ IMU profile, use ``plumb --method walls`` to derive
+the alignment from scene geometry alone.
+
+``plumb`` levels every sensor independently, so it does not establish the
+relative yaw and translation between them; that is what ``align`` resolves. See
+:doc:`Plumb (Gravity Alignment) <../gravity_alignment/index>` for the full
+command and the API behind it.
 
 Chain ``save`` to write the frames and updated extrinsics to a new OSF file:
 
@@ -89,8 +102,8 @@ input frame, so ``aligned_extrinsics[i]`` corresponds to ``frames[i]``. In
 Python, the result has shape ``(N, 4, 4)``; in C++, it is a vector of 4 x 4
 matrices.
 
-Use ``align_clouds(source_frame, target_frame)`` to align two ``LidarFrame``
-objects:
+Use ``align_clouds(source_frame, target_frame)`` to align two ``Frame``
+objects (``LidarFrame`` or ``CameraFrame``):
 
 .. tab-set::
    :sync-group: api-lang

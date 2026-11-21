@@ -14,14 +14,16 @@ if __name__ == "__main__":
     import numpy as np
     from ouster.sdk import open_source
     from ouster.sdk.core import FieldClass
-    from ouster.sdk.core import EmulatedZoneMon, ZoneSet
+    from ouster.sdk.core import EmulatedZoneMon, ZoneSet, LidarFrame, LidarInfo
     source = open_source(args.source)
+    sensor_info = source.sensor_info[0]
+    assert isinstance(sensor_info, LidarInfo)
     if not args.zone_set:
-        zone_set = source.sensor_info[0].zone_set
+        zone_set = sensor_info.zone_set
         assert zone_set is not None, "Sensor does not have a ZoneSet configured"
     else:
         zone_set = ZoneSet(args.zone_set)
-        zone_set.render(source.sensor_info[0])
+        zone_set.render(sensor_info)
 
     emulator = EmulatedZoneMon(zone_set)
     emulator.live_zones = [0, 1, 2, 3]
@@ -29,7 +31,7 @@ if __name__ == "__main__":
     # process frames and emulate zone monitor triggers
     for frame, in source:
 
-        if frame is None:
+        if not isinstance(frame, LidarFrame):
             continue
 
         # remove any existing zone monitor fields
@@ -47,7 +49,7 @@ if __name__ == "__main__":
 
         # optionally, add the emulated zone monitor state back to the frame for further processing
         frame.add_field('ZONE_STATES', zone_states, FieldClass.FRAME_FIELD)
-        ts = frame.get_last_valid_packet_timestamp()
+        ts = frame.get_last_valid_receive_timestamp()
         frame.add_field('ZONE_PACKET_TIMESTAMP', np.array([ts], np.uint64), FieldClass.FRAME_FIELD)
 
         print([(zone.id, zone.trigger_status) for zone in frame.field('ZONE_STATES') if zone.live])

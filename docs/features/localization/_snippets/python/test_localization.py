@@ -107,7 +107,6 @@ def test_run_localization_once_prints_pose(localization_source, localization_map
 
     # Every field produced by the print() in localization.py must be present
     for line in lines:
-        assert "idx ="   in line, f"Missing 'idx =' in: {line}"
         assert "ts ="    in line, f"Missing 'ts =' in: {line}"
         assert "XYZ:"    in line, f"Missing 'XYZ:' in: {line}"
         assert "R:"      in line, f"Missing 'R:' in: {line}"
@@ -116,23 +115,27 @@ def test_run_localization_once_prints_pose(localization_source, localization_map
 
     # Parse every line and validate numeric values against the known test dataset.
     # Dataset: OS-1-128_v2.3.0_1024x10_lb_n3.osf (3 frames, sensor barely moves near map origin)
-    # Expected: idx in [1795..1797], XYZ within ~1 m of origin, angles within ~5 degrees.
+    # Expected timestamps and XYZ within ~1 m of origin, angles within ~5 degrees.
     import re
     LINE_RE = re.compile(
-        r"idx = (\d+); ts = (\d+); XYZ: ([-\d.]+), ([-\d.]+), ([-\d.]+) "
+        r"ts = (\d+); XYZ: ([-\d.]+), ([-\d.]+), ([-\d.]+) "
         r"\(R: ([-\d.]+), P: ([-\d.]+), Y: ([-\d.]+)\)"
     )
+    EXPECTED_TIMESTAMPS = [
+        991687215910,
+        991787226800,
+        991887302080,
+    ]
 
-    frame_ids = []
+    timestamps = []
     for line in lines:
         m = LINE_RE.search(line)
         assert m, f"Line did not match expected format: {line!r}"
 
-        idx, ts = int(m.group(1)), int(m.group(2))
-        x, y, z = float(m.group(3)), float(m.group(4)), float(m.group(5))
-        roll, pitch, yaw = float(m.group(6)), float(m.group(7)), float(m.group(8))
+        ts = int(m.group(1))
+        x, y, z = float(m.group(2)), float(m.group(3)), float(m.group(4))
+        roll, pitch, yaw = float(m.group(5)), float(m.group(6)), float(m.group(7))
 
-        assert 1795 <= idx <= 1797,         f"frame_id {idx} outside expected range [1795, 1797]"
         assert ts > 0,                       f"timestamp must be positive, got {ts}"
         assert abs(x) < 1.0,                f"X={x:.3f} m unexpectedly far from map origin"
         assert abs(y) < 1.0,                f"Y={y:.3f} m unexpectedly far from map origin"
@@ -140,8 +143,8 @@ def test_run_localization_once_prints_pose(localization_source, localization_map
         assert abs(roll)  < 5.0,            f"Roll={roll:.1f}° unexpectedly large"
         assert abs(pitch) < 5.0,            f"Pitch={pitch:.1f}° unexpectedly large"
         assert abs(yaw)   < 5.0,            f"Yaw={yaw:.1f}° unexpectedly large"
-        frame_ids.append(idx)
+        timestamps.append(ts)
 
-    assert len(frame_ids) == 3, f"Expected 3 frames from the test dataset, got {len(frame_ids)}"
-    assert frame_ids == sorted(frame_ids), "Frame IDs should be in ascending order"
+    assert len(timestamps) == 3, f"Expected 3 frames from the test dataset, got {len(timestamps)}"
+    assert timestamps == EXPECTED_TIMESTAMPS, f"Unexpected timestamps: {timestamps}"
 

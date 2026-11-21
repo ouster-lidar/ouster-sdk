@@ -81,6 +81,14 @@ def hil_sensor_hostname(request) -> Iterator[str]:
     yield hil_sensor_hostname
     return hil_sensor_hostname
 
+
+@pytest.fixture(scope='session')
+def hil_sensor_fw_version(hil_sensor_hostname) -> Version:
+    """Provide sensor firmware version as a fixture."""
+    fw_version = SensorHttp.create(hil_sensor_hostname).firmware_version()
+    return fw_version
+
+
 def pytest_collection_modifyitems(items, config):
     """Deselect any items marked "full" unless the --full flag is set."""
 
@@ -92,6 +100,7 @@ def pytest_collection_modifyitems(items, config):
 
     config.hook.pytest_deselected(items=deselected)
     items[:] = selected
+
 
 def log_sensor_alerts(sensor_arg):
     alerts_endpoint = f"http://{sensor_arg}/api/v1/sensor/alerts"
@@ -115,7 +124,7 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True, scope="module")
-def hil_initial_config(hil_sensor_hostname) -> Iterator[core.SensorConfig]:
+def hil_initial_config(hil_sensor_hostname, hil_sensor_fw_version) -> Iterator[core.LidarConfig]:
     """Initialize the sensor under test.
 
     Wake up sensor, set default ports and auto udp dest.
@@ -131,14 +140,17 @@ def hil_initial_config(hil_sensor_hostname) -> Iterator[core.SensorConfig]:
     try:
         # remember original configuration
         orig_cfg = sensor.get_config(hil_sensor_hostname)
+        required_imu_profile = core.UDPProfileIMU.LEGACY
+        if hil_sensor_fw_version.major >= 4:
+            required_imu_profile = core.UDPProfileIMU.ACCEL32_GYRO32_NMEA
 
         # wake up sensor and update udp settings
-        cfg = core.SensorConfig()
+        cfg = core.LidarConfig()
         cfg.operating_mode = core.OperatingMode.NORMAL
         cfg.udp_dest = None
         cfg.udp_port_lidar = 7502
         cfg.udp_port_imu = 7503
-        cfg.udp_profile_imu = core.UDPProfileIMU.LEGACY
+        cfg.udp_profile_imu = required_imu_profile
         sensor.set_config(hil_sensor_hostname, cfg, udp_dest_auto=True)
 
         with closing(sensor.SensorPacketSource(hil_sensor_hostname,
@@ -158,7 +170,7 @@ def hil_initial_config(hil_sensor_hostname) -> Iterator[core.SensorConfig]:
 
 
 @pytest.fixture
-def hil_sensor_config(hil_initial_config) -> core.SensorConfig:
+def hil_sensor_config(hil_initial_config) -> core.LidarConfig:
     """Default to initial config. Usually overridden in each test module."""
     logger.warning("Using initial config")
     return hil_initial_config

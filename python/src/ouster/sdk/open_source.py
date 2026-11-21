@@ -9,11 +9,12 @@ from ouster.sdk._bindings.client import open_packet_source as _open_packet_sourc
 from functools import partial
 
 
-def _url_to_osf_url(url: str):
+def _url_to_osf_url(url: str) -> str:
     if "http://studio.ouster.com" in url or "https://studio.ouster.com" in url:
         from ouster.sdk.util import studio
         new_url = studio.get_osf_from_data_app_link(url)
-        assert new_url is not None
+        if new_url is None:
+            raise RuntimeError("No OSF found for this Studio link. It may still be processing.")
         return new_url
     else:
         return url

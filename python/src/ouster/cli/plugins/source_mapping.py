@@ -4,7 +4,7 @@ import click
 import logging
 import numpy as np
 from functools import partial
-from ouster.sdk.core import FrameSetSource
+from ouster.sdk.core import FrameSetSource, VHMInternalStorageMode
 from ouster.cli.plugins.source import source  # type: ignore
 from ouster.sdk.core import first_valid_column_pose
 from ouster.cli.plugins.source_util import (source_multicommand,
@@ -13,7 +13,6 @@ from ouster.cli.plugins.source_util import (source_multicommand,
 from ouster.sdk.util.extrinsics import rotation_matrix_to_quaternion     # type: ignore
 from ouster.sdk.mapping import SlamConfig, SlamEngine
 import ouster.sdk._bindings.mapping as mapping_bindings
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('mapping')
@@ -53,28 +52,49 @@ def auto_loop_cell_size_m(po: mapping_bindings.PoseOptimizer) -> float:
     return base_cell_size_m + 0.004 * span_xy
 
 
+_voxel_storage_mode_lut = {x.name.lower(): x for x in VHMInternalStorageMode}
+
+
 @click.command
 @click.option('--max-range', required=False, show_default=True,
-              default=150.0, help="Max valid range")
+              default=150.0, help="Max valid range (meters)")
 @click.option('--min-range', required=False, show_default=True,
-              default=1.0, help="Min valid range")
+              default=1.0, help="Min valid range (meters)")
 @click.option('-v', '--voxel-size', required=False, default=None,
               type=float, show_default=False,
-              help="Voxel map size (meters). If not provided, "
-                   "auto generate. [default: (auto); x>0]")
+              help="Voxel grid resolution used for downsampling (meters). If not "
+                   "provided, auto generate. [default: (auto); x>0]")
+@click.option('--voxel-map-size', required=False, show_default=True,
+              default=150.0, help="Maximum distance from the robot body at which "
+                                  "points are retained in the local voxel map (meters)")
 @click.option('--max-iterations', required=False, show_default=True,
               default=500, type=int,
-              help="Maximum number of ICP registration iterations")
+              help="Max number of ICP registration iterations")
 @click.option('--deskew-method', type=click.Choice(['auto', 'none', 'constant_velocity', 'imu_deskew']),
               default='auto', show_default=True,
               help="Method used for motion compensation (deskewing) of point clouds")
+@click.option('--plumb-method', type=click.Choice(['imu', 'walls', 'all']),
+              default='all', show_default=True,
+              help="How the first frame is plumbed with IMU deskewing. Without an --initial-pose it "
+                   "sets the first anchor and the initial gravity; with one only the IMU plumb runs, "
+                   "to check that pose. imu: align estimated gravity down along world -Z. walls: "
+                   "refine the existing orientation from wall geometry only, no IMU. all: the IMU "
+                   "alignment refined by wall geometry, keeping the IMU-only result when the scene "
+                   "has too little vertical structure. The wall search is expensive, so it stops "
+                   "once the first frame set produces a pose; frame sets dropped before that, e.g. "
+                   "with no valid points, are plumbed again.")
 @click.option('--viz-local-map', is_flag=True, default=False,
-              help="When chained with viz, draw every point in the SLAM local map and update it every frame.")
+              help="When chained with 'viz', draw every point in the SLAM local map and update it every frame.")
+@click.option('--voxel-storage-mode', type=click.Choice(list(_voxel_storage_mode_lut.keys())),
+              default=VHMInternalStorageMode.AUTO.name.lower(), show_default=True, required=False,
+              help="Select data type for internal voxel storage. Auto will select the smallest representation "
+              "suitable for the voxel size")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR_UNREPEATABLE)
 def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
-                voxel_size: float, max_iterations: int,
-                deskew_method: str, viz_local_map: bool) -> None:
+                voxel_size: float, voxel_map_size: float, max_iterations: int,
+                deskew_method: str, plumb_method: str, viz_local_map: bool,
+                voxel_storage_mode: str) -> None:
     """
     Run SLAM with a SOURCE.\n
 
@@ -84,7 +104,7 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
         Small indoor: 0.1 - 0.5\n
     If voxel_size is not specified, the algorithm will use the first lidar frame to calculate it.\n
     Small voxel size could give more accurate results but take more memory and
-    longer processing. For real-time slam, considing using a slightly larger voxel size
+    longer processing. For real-time slam, consider using a slightly larger voxel size
     and use visualizer to monitor the SLAM process.
     """
 
@@ -95,6 +115,9 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
     if min_range < 0 or max_range < 0:
         raise click.UsageError("min_range and max_range must not be a negative number")
 
+    if voxel_map_size <= 0:
+        raise click.UsageError("voxel_map_size must be greater than 0")
+
     if max_iterations <= 0:
         raise click.UsageError("max_iterations must be greater than 0")
 
@@ -103,20 +126,23 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
 
     ctx.slam_local_map_viz_enabled = viz_local_map
 
-    def make_kiss_slam() -> SlamEngine:
+    def make_lio_slam() -> SlamEngine:
         config = SlamConfig.create("lio")
         config.deskew_method = deskew_method
         config.min_range = min_range
         config.max_range = max_range
         config.voxel_size = voxel_size if voxel_size is not None else 0.0
+        config.voxel_map_size = voxel_map_size
         config.max_iterations = max_iterations
-        config.initial_pose = ctx.other_options.get("initial_pose", np.eye(4))
+        config.initial_pose = ctx.other_options.get("initial_pose")
+        config.plumb_method = plumb_method
+        config.voxel_storage_mode = _voxel_storage_mode_lut[voxel_storage_mode]
 
-        return SlamEngine.create(cast(FrameSetSource, ctx.frame_set_source).sensor_info,
-                          config)
+        src = cast(FrameSetSource, ctx.frame_set_source)
+        return SlamEngine.create(src.sensor_info, config)
 
     def slam_iter(frame_set_source):
-        slam_engine = make_kiss_slam()
+        slam_engine = make_lio_slam()
         local_map_frame_id = 0
         for frames in frame_set_source():
             updated_frames = slam_engine.update(frames)
@@ -124,6 +150,7 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
                 points = slam_engine.get_point_cloud()
                 ctx.slam_local_map_viz_points = (local_map_frame_id, points)
                 local_map_frame_id += 1
+
             yield updated_frames
 
     ctx.frame_set_iter = partial(slam_iter, ctx.frame_set_iter)  # type: ignore
@@ -139,7 +166,7 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def save_trajectory(ctx: SourceCommandContext, filename: str, sensor_idx: int, tum: bool) -> None:
     """
-    Save a trajectory of the movement of selected sensor to a file
+    Save a trajectory of the movement of the selected sensor to a file.
     """
 
     saved = False

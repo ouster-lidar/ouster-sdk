@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "indexed_pcap_reader.h"
 #include "ouster/core/frame_set_source.h"
 #include "ouster/core/impl/open_source_impl.h"
 #include "ouster/core/lidar_frame.h"
@@ -46,7 +47,7 @@ class PcapFrameSetIteratorImpl : public FrameSetIteratorImpl {
         : source_(source) {
         // NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer)
         sensor_idx_ = sensor_idx < 0 ? -1 : sensor_idx;
-        packet_iter_ = source->packets_.begin();
+        packet_iter_ = source->packets_->begin();
 
         for (const auto& info : source_->internal_sensor_info_) {
             batchers_.emplace_back(*info);
@@ -75,14 +76,14 @@ class PcapFrameSetIteratorImpl : public FrameSetIteratorImpl {
                 frames_[i++].reset();
             }
 
-            packet_iter_ = source_->packets_.begin_frame(i_ + offset);
+            packet_iter_ = source_->packets_->begin_frame(i_ + offset);
             i_ += static_cast<int>(offset - 1);
             offset = 1;
         }
         for (size_t i = 0; i < offset; i++) {
             // read packets until we get a frame or run out
             while (true) {
-                if (packet_iter_ == source_->packets_.end()) {
+                if (packet_iter_ == source_->packets_->end()) {
                     // if finished return any partial frames we have
                     // todo should these be in any particular order?
                     bool found = false;
@@ -95,8 +96,9 @@ class PcapFrameSetIteratorImpl : public FrameSetIteratorImpl {
                             }
                             frame_.reset();
                             frame_.swap(frames_[i]);
+                            batchers_[i].finalize_frame(*frame_);
                             // override the sensor info from the batcher
-                            frame_->sensor_info = source_->sensor_info()[i];
+                            frame_->set_sensor_info(source_->packets_->sensor_info()[i]);
                             found = true;
                             break;
                         }
@@ -116,15 +118,21 @@ class PcapFrameSetIteratorImpl : public FrameSetIteratorImpl {
                 // todo handle other packet types in the future
                 int index = packet.first;
 
-                // skip packets from sensors we dont care about
+                // skip packets from sensors we don't care about
                 if (sensor_idx_ >= 0 && index != sensor_idx_) {
                     continue;
                 }
 
-                // allocate the frame if it hasnt already been
+                // allocate the frame if it hasn't already been
                 if (!frames_[index]) {
-                    frames_[index] = std::make_shared<LidarFrame>(
-                        source_->internal_sensor_info_[index], source_->field_types_[index]);
+                    std::vector<ouster::sdk::core::FieldType> empty_field_types;
+                    auto frame = std::make_shared<LidarFrame>(source_->internal_sensor_info_[index],
+                                                              empty_field_types);
+                    // add all fields with no zeroing as batching will fill out all bytes
+                    for (const auto& field : source_->field_types_[index]) {
+                        frame->add_field(field, false);
+                    }
+                    frames_[index] = frame;
                 }
 
                 // finally batch
@@ -132,7 +140,7 @@ class PcapFrameSetIteratorImpl : public FrameSetIteratorImpl {
                     frame_.reset();
                     frame_.swap(frames_[index]);
                     // override the sensor info from the batcher
-                    frame_->sensor_info = source_->sensor_info()[index];
+                    frame_->set_sensor_info(source_->packets_->sensor_info()[index]);
                     i_++;
                     break;
                 }
@@ -192,10 +200,15 @@ PcapFrameSetSource::PcapFrameSetSource(
 
 /// open_source compatible constructor
 PcapFrameSetSource::PcapFrameSetSource(const std::string& source, PcapFrameSetSourceOptions options)
-    : packets_(source, PacketSourceOptions(reinterpret_cast<FrameSetSourceOptions&>(options))),
+    : packets_(std::make_unique<PcapPacketSource>(
+          source, PacketSourceOptions(reinterpret_cast<FrameSetSourceOptions&>(options)))),
       indexed_(options.index.retrieve()) {
+    // build the combined info exposed via sensor_info()
+    for (const auto& info : packets_->sensor_info()) {
+        combined_info_.push_back(info);
+    }
     if (indexed_) {
-        const auto& index = packets_.reader_->get_index();
+        const auto& index = packets_->reader_->get_index();
 
         // count the frames
         num_frames_ = 0;
@@ -215,24 +228,26 @@ PcapFrameSetSource::PcapFrameSetSource(const std::string& source, PcapFrameSetSo
         }
     } else {
         // calculate estimated length if we are unindexed
-        uint64_t size = packets_.reader_->file_size();
+        uint64_t size = packets_->reader_->file_size();
 
         // get average frame size plus some overhead
         const int pcap_pkt_header = 100;
         size_t frame_size = 0;
-        for (const auto& sensor : sensor_info()) {
+        for (const auto& sensor : packets_->sensor_info()) {
             PacketFormat packet_format(*sensor);
             auto pkt_size = packet_format.lidar_packet_size + pcap_pkt_header;
             frame_size += pkt_size * sensor->format.lidar_packets_per_frame();
-            auto imu_pkt_size = packet_format.imu_packet_size + pcap_pkt_header;
-            frame_size += imu_pkt_size * sensor->format.imu_packets_per_frame;
+            if (sensor->format.imu_enabled) {
+                auto imu_pkt_size = packet_format.imu_packet_size + pcap_pkt_header;
+                frame_size += imu_pkt_size * sensor->format.imu_packets_per_frame;
+            }
             if (sensor->format.zone_monitoring_enabled) {
                 frame_size += packet_format.zone_packet_size + pcap_pkt_header;
             }
         }
 
         if (frame_size == 0) {
-            throw std::runtime_error("Unexpected frame data size of 0. SensorInfo may be corrupt.");
+            throw std::runtime_error("Unexpected frame data size of 0. LidarInfo may be corrupt.");
         }
 
         // divide size of all frames to get average frame size
@@ -242,19 +257,20 @@ PcapFrameSetSource::PcapFrameSetSource(const std::string& source, PcapFrameSetSo
         size_hint_ = size / frame_size;
     }
 
-    internal_sensor_info_.reserve(sensor_info().size());
-    for (auto& info : sensor_info()) {
-        internal_sensor_info_.push_back(std::make_shared<SensorInfo>(*info));
+    const auto& lidar_infos = packets_->sensor_info();
+    internal_sensor_info_.reserve(lidar_infos.size());
+    for (auto& info : lidar_infos) {
+        internal_sensor_info_.push_back(std::make_shared<LidarInfo>(*info));
     }
 
     field_types_ =
-        resolve_field_types(sensor_info(), options.raw_headers.retrieve(),
+        resolve_field_types(lidar_infos, options.raw_headers.retrieve(),
                             options.raw_fields.retrieve(), options.field_names.retrieve());
     options.check("PcapFrameSetSource");
 }
 
 const std::vector<std::shared_ptr<SensorInfo>>& PcapFrameSetSource::sensor_info() const {
-    return packets_.sensor_info();
+    return combined_info_;
 }
 
 size_t PcapFrameSetSource::size() const {
@@ -276,11 +292,11 @@ bool PcapFrameSetSource::is_indexed() const {
 }
 
 uint64_t PcapFrameSetSource::id_error_count() const {
-    return packets_.id_error_count();
+    return packets_->id_error_count();
 }
 
 uint64_t PcapFrameSetSource::size_error_count() const {
-    return packets_.size_error_count();
+    return packets_->size_error_count();
 }
 
 const std::vector<size_t>& PcapFrameSetSource::frames_num() const {
@@ -290,7 +306,7 @@ const std::vector<size_t>& PcapFrameSetSource::frames_num() const {
 }
 
 void PcapFrameSetSource::close() {
-    packets_.close();
+    packets_->close();
 }
 
 std::unique_ptr<FrameSetSource> PcapFrameSetSource::move() {

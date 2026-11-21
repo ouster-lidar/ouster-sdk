@@ -18,12 +18,13 @@ namespace viz {
 namespace impl {
 
 /*
- * Render a set of rings on the ground as markers to helpvisualize lidar range.
+ * Render a set of rings on the ground as markers to help visualize lidar range.
  */
 class GLRings {
     double ring_size_;
     int ring_line_width_;
     bool rings_enabled_;
+    bool rings_in_world_;
 
    public:
     struct GlobalState {
@@ -38,7 +39,7 @@ class GLRings {
         GlobalState();
         ~GlobalState();
 
-        // Make sure it cant be copied
+        // Make sure it can't be copied
         GlobalState(const GlobalState&) = delete;
         GlobalState& operator=(const GlobalState&) = delete;
     };
@@ -84,7 +85,7 @@ class GLCuboid {
         GlobalState();
         ~GlobalState();
 
-        // Make sure it cant be copied
+        // Make sure it can't be copied
         GlobalState(const GlobalState&) = delete;
         GlobalState& operator=(const GlobalState&) = delete;
     };
@@ -136,7 +137,7 @@ class GLLines {
         GlobalState();
         ~GlobalState();
 
-        // Make sure it cant be copied
+        // Make sure it can't be copied
         GlobalState(const GlobalState&) = delete;
         GlobalState& operator=(const GlobalState&) = delete;
     };
@@ -178,7 +179,7 @@ class GLLabel {
         GlobalState() = default;
         ~GlobalState() = default;
 
-        // Make sure it cant be copied
+        // Make sure it can't be copied
         GlobalState(const GlobalState&) = delete;
         GlobalState& operator=(const GlobalState&) = delete;
     };

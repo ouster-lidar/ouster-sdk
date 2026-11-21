@@ -20,7 +20,7 @@
   <!-- Point Cloud Matching -->
   <rect x="220" y="35" width="180" height="70" rx="6" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.5"/>
   <text x="310" y="64" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">Point Cloud Matching</text>
-  <text x="310" y="82" text-anchor="middle" font-size="9" fill="#64748B">ICP alignment (KISS-ICP)</text>
+  <text x="310" y="82" text-anchor="middle" font-size="9" fill="#64748B">ICP alignment</text>
 
   <!-- Arrow Point Cloud Matching -> Pose Estimate -->
   <line x1="404" y1="70" x2="456" y2="70" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr)"/>

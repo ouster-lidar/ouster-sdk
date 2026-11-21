@@ -44,7 +44,7 @@ void dewarp(Eigen::Ref<PointCloudXYZ<T>> dewarped, const Eigen::Ref<const PointC
 #pragma omp parallel for schedule(static)
 #endif
     for (int w = 0; w < W; ++w) {
-        // Map the w-th row of `poses` (flattened 4×4) back into a 4×4 matrix
+        // Map the w-th row of `poses` (flattened 4x4) back into a 4x4 matrix
         Eigen::Map<const Matrix4R<T>> pose_matrix(poses.row(w).data());
         const Matrix3R<T> rotation = pose_matrix.template topLeftCorner<3, 3>();
         const Eigen::Vector3<T> translation = pose_matrix.template topRightCorner<3, 1>();
@@ -76,7 +76,7 @@ PointCloudXYZ<T> dewarp(const Eigen::Ref<const PointCloudXYZ<T>>& points,
     // Allocate output with the same shape as input
     PointCloudXYZ<T> dewarped(points.rows(), points.cols());
 
-    // Call the in‐place overload
+    // Call the in-place overload
     dewarp<T>(dewarped, points, poses);
 
     return dewarped;
@@ -434,12 +434,17 @@ OUSTER_API_FUNCTION MatrixX16R<Scalar> interp_pose(
 }
 
 /**
- * This function takes in a LidarFrame and an XYZLut and applies dewarping to it
- * based on the poses associated with each column in the LidarFrame. It filters
- * out points with zero range and points outside the specified range limits.
+ * This function takes in a Frame and an XYZLut and applies dewarping to it
+ * based on the pose(s) associated with the frame. It filters out points with
+ * zero range and points outside the specified range limits.
  *
- * @param[in] lidar_frame The LidarFrame containing the range data and
- * associated poses.
+ * Works for any Frame that carries a uint32 RANGE field. A LidarFrame carries
+ * one pose per column and is dewarped column-by-column (rolling shutter); a
+ * single-pose frame such as a CameraFrame carries exactly one pose that is
+ * applied rigidly to every column. The only difference between the two cases is
+ * the number of poses.
+ *
+ * @param[in] frame The Frame containing the RANGE data and associated pose(s).
  * @param[in] xyzlut The XYZLut used to convert range data to 3D points.
  * @param[in] min_range Minimum range limit in meters. Points with range below
  * this value will be filtered out.
@@ -453,43 +458,46 @@ OUSTER_API_FUNCTION MatrixX16R<Scalar> interp_pose(
  * @return A vector of Eigen::Vector3<T> containing the dewarped 3D points.
  */
 template <typename T>
-OUSTER_API_FUNCTION std::vector<Eigen::Vector3<T>> dewarp(const LidarFrame& lidar_frame,
+OUSTER_API_FUNCTION std::vector<Eigen::Vector3<T>> dewarp(const Frame& frame,
                                                           const XYZLutT<T>& xyzlut,
                                                           double min_range, double max_range);
 
 /**
- * This function takes in a FrameSet and a list of XYZLut(s) then applies
- * dewarping to each LidarFrame within the set based on the poses associated
- * with each column in the LidarFrame. It filters out points with zero range and
- * points outside the specified range limits.
+ * Dewarp each frame in a FrameSet using its pose(s).
  *
- * @param[in] frame_set The set of LidarFrames to dewarp.
- * @param[in] xyzluts One XYZLut per frame in frame_set, used to project
- * range measurements into Cartesian coordinates.
+ * Each frame is projected with the XYZLut cached on its own sensor_info()
+ * (see SensorInfo::xyzlut()), so points land in the body frame before the
+ * frame's pose(s) are applied. LidarFrame frames are dewarped using their
+ * per-column poses; single-pose frames such as CameraFrame are transformed
+ * rigidly using their single pose. Frames without a RANGE field or without
+ * sensor info produce no points. Filters out points with zero range and points
+ * outside the specified range limits.
+ *
+ * @tparam T The numeric type for the output 3D points (e.g., float or double).
+ * @param[in] frame_set The set of frames to dewarp.
  * @param[in] min_range Minimum range (meters); points closer than this are
  * excluded.
  * @param[in] max_range Maximum range (meters); points farther than this are
  * excluded.
+ *
+ * @return A vector of Eigen::Vector3<T> containing the dewarped 3D points.
  */
 template <typename T>
 OUSTER_API_FUNCTION std::vector<Eigen::Vector3<T>> dewarp(const FrameSet& frame_set,
-                                                          const std::vector<XYZLutT<T>>& xyzluts,
                                                           double min_range, double max_range);
 
-// Public definitions for the 4-arg overloads declared above.
+// Public definitions for the overloads declared above.
 template <typename T>
-OUSTER_API_FUNCTION std::vector<Eigen::Vector3<T>> dewarp(const LidarFrame& lidar_frame,
+OUSTER_API_FUNCTION std::vector<Eigen::Vector3<T>> dewarp(const Frame& frame,
                                                           const XYZLutT<T>& xyzlut,
                                                           double min_range, double max_range) {
-    return impl::dewarp_impl<T>(lidar_frame, xyzlut, min_range, max_range, nullptr, nullptr);
+    return impl::dewarp_impl<T>(frame, xyzlut, min_range, max_range, nullptr, nullptr);
 }
 
 template <typename T>
 OUSTER_API_FUNCTION std::vector<Eigen::Vector3<T>> dewarp(const FrameSet& frame_set,
-                                                          const std::vector<XYZLutT<T>>& xyzluts,
                                                           double min_range, double max_range) {
-    return impl::dewarp_impl<T>(frame_set, xyzluts, min_range, max_range, nullptr, nullptr,
-                                nullptr);
+    return impl::dewarp_impl<T>(frame_set, min_range, max_range, nullptr, nullptr, nullptr);
 }
 
 }  // namespace core

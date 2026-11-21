@@ -24,6 +24,7 @@ void init_client_data(py::module_& module, py::module_& /*unused*/);
 void init_client_field(py::module_& module, py::module_& /*unused*/);
 void init_client_object(py::module_& module, py::module_& /*unused*/);
 void init_client_lidar_frame(py::module_& module, py::module_& /*unused*/);
+void init_client_camera_frame(py::module_& module, py::module_& /*unused*/);
 void init_client_misc(py::module_& module, py::module_& /*unused*/);
 void init_client_packet(py::module_& module, py::module_& /*unused*/);
 void init_client_processing(py::module_& module, py::module_& /*unused*/);
@@ -44,6 +45,7 @@ void init_client(py::module_& module, py::module_& main_module) {
     init_client_object(module, main_module);
     init_client_field(module, main_module);
     init_client_lidar_frame(module, main_module);
+    init_client_camera_frame(module, main_module);
     init_client_data(module, main_module);
     init_client_misc(module, main_module);
     init_client_packet(module, main_module);

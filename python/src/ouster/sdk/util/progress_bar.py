@@ -55,7 +55,7 @@ class ProgressBar:
                 self._iteration_time = dt
             else:
                 self._iteration_time = self._iteration_time * (1.0 - self._alpha) + dt * self._alpha
-            # make sure we dont divide by zero or have negative
+            # make sure we don't divide by zero or have negative
             if self._iteration_time <= 0:
                 self._iteration_time = 0.00001
             frame_rate = 1.0 / self._iteration_time

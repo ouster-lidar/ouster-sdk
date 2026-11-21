@@ -1083,7 +1083,7 @@ extern OUSTER_API_VAR const float GREY_PALETTE[GREY_N][3] = {
     {0.996078431372549, 0.996078431372549, 0.996078431372549},
     {1.0, 1.0, 1.0},
 };
-                                       
+
 extern OUSTER_API_VAR const size_t GREY_CAL_REF_N = 256;
 extern OUSTER_API_VAR const float GREY_CAL_REF_PALETTE[GREY_CAL_REF_N][3] = {
     {0.2, 0.2, 0.2},
@@ -1606,7 +1606,7 @@ extern OUSTER_API_VAR const float VIRIDIS_PALETTE[VIRIDIS_N][3] = {
     {0.97441665f, 0.90358991f, 0.13021494f},
     {0.98386829f, 0.90486726f, 0.13689671f},
     {0.99324789f, 0.90615657f, 0.1439362f}};
-    
+
 extern OUSTER_API_VAR const size_t VIRIDIS_CAL_REF_N = 256;
 extern OUSTER_API_VAR const float VIRIDIS_CAL_REF_PALETTE[VIRIDIS_CAL_REF_N][3] = {
     {0.26700401, 0.00487433, 0.32941519},
@@ -2127,7 +2127,7 @@ extern OUSTER_API_VAR const float MAGMA_PALETTE[MAGMA_N][3] = {
     {0.987387, 0.984288, 0.742002},
     {0.987053, 0.991438, 0.749504},
 };
-    
+
 extern OUSTER_API_VAR const size_t MAGMA_CAL_REF_N = 256;
 extern OUSTER_API_VAR const float MAGMA_CAL_REF_PALETTE[MAGMA_CAL_REF_N][3] = {
     {0.232077, 0.059889, 0.437695},

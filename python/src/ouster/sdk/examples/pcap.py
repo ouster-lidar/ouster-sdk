@@ -23,7 +23,7 @@ def pcap_3d_one_frame(source_file: str,
 
     Args:
         source: path to pcap
-        num: frame number in a given pcap file (satrs from *0*)
+        num: frame number in a given pcap file (starts from *0*)
         visualize: when False, return xyz array without opening a window
     """
     try:
@@ -48,10 +48,10 @@ def pcap_3d_one_frame(source_file: str,
         exit(1)
 
     frame = frames[0]
-    assert frame is not None
+    assert isinstance(frame, core.LidarFrame)
 
     # [doc-stag-open3d-one-frame]
-    # compute point cloud using core.SensorInfo and core.LidarFrame
+    # compute point cloud using core.LidarInfo and core.LidarFrame
     xyz = core.XYZLut(metadata)(frame)
     # [doc-etag-open3d-one-frame]
 
@@ -106,7 +106,7 @@ def pcap_display_xyz_points(source_file: str,
         exit(1)
 
     frame = frames[0]
-    assert frame is not None
+    assert isinstance(frame, core.LidarFrame)
 
     # transform data to 3d points and graph
     xyzlut = core.XYZLut(metadata)
@@ -150,6 +150,7 @@ def pcap_to_las(source_file: str,
     # open source
     source = pcap.PcapFrameSetSource(source_file)
     metadata = source.sensor_info[0]
+    assert isinstance(metadata, core.LidarInfo)
 
     if (metadata.format.udp_profile_lidar ==
             core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL):
@@ -192,6 +193,7 @@ def pcap_to_pcd(source_file: str,
     # open source
     source = pcap.PcapFrameSetSource(source_file)
     metadata = source.sensor_info[0]
+    assert isinstance(metadata, core.LidarInfo)
 
     if (metadata.format.udp_profile_lidar ==
             core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL):
@@ -261,7 +263,7 @@ def pcap_query_frame(source_file: str,
 
     Args:
         source_file: Path to pcap file
-        num: frame number in a given pcap file (satrs from *0*)
+        num: frame number in a given pcap file (starts from *0*)
     """
     # open source
     source = pcap.PcapFrameSetSource(source_file)

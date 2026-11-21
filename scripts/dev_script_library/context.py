@@ -123,7 +123,7 @@ class ClickContext:
                 else:
                     print("Please either:")
                 print(f"\t* Install a local vcpkg repo using `{script_prefix} utils "
-                      "enable-local-vcpkg` [RECOMENDED WAY].")
+                      "enable-local-vcpkg` [RECOMMENDED WAY].")
                 vcpkg_system_deps_needed("\t\t")
                 if not local_vcpkg_only:
                     print("\t* Set the VCPKG_ROOT environment variable to the vcpkg root directory.")

@@ -42,14 +42,8 @@ from .core import ImuVisualizationConfig
 from .core import CloudPaletteItem
 from .core import VizExtraMode
 
+from .model import DEFAULT_CAMERA_RANGE_MM
+
 from .accumulators import LidarFrameVizAccumulatorsConfig
 
 from .util import AxisWithLabel
-
-from ouster.sdk._deprecation import deprecated_alias
-deprecated_alias("LidarScanViz", "LidarFrameViz", LidarFrameViz, globals(), "1.0")
-deprecated_alias("LidarScanVizAccumulatorsConfig", "LidarFrameVizAccumulatorsConfig", LidarFrameVizAccumulatorsConfig, globals(), "1.0")
-deprecated_alias("ls_show", "lf_show", lf_show, globals(), "1.0")
-
-from ouster.sdk._kwarg_aliases import install_viz_python_kwarg_aliases
-install_viz_python_kwarg_aliases()

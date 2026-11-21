@@ -22,22 +22,31 @@
 #include <pyerrors.h>
 #include <warnings.h>
 
+#include <memory>
+#include <nonstd/optional.hpp>
+#include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "client_common.h"
 #include "common.h"
 #include "eigen_dense.h"
+#include "ouster/core/json_tools.h"
+#include "ouster/core/lidar_config.h"
 #include "ouster/core/lidar_frame.h"
 #include "ouster/core/metadata.h"
 #include "ouster/core/open_source.h"
 #include "ouster/core/profile_extension.h"
+#include "ouster/core/sensor_config.h"
 #include "ouster/core/types.h"
 #include "ouster/core/xyzlut.h"
 #include "ouster/sensor/client.h"
 
 using ouster::sdk::core::CalibrationStatus;
 using ouster::sdk::core::DataFormat;
+using ouster::sdk::core::LidarConfig;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::core::LidarMode;
 using ouster::sdk::core::ProductInfo;
 using ouster::sdk::core::SensorConfig;
@@ -55,14 +64,11 @@ namespace impl {
 extern OUSTER_API_VAR const Table<TimestampMode, const char*, 3> TIMESTAMP_MODE_STRINGS;
 extern OUSTER_API_VAR const Table<ouster::sdk::core::OperatingMode, const char*, 2>
     OPERATING_MODE_STRINGS;
-extern OUSTER_API_VAR const Table<ouster::sdk::core::MultipurposeIOMode, const char*, 6>
+extern OUSTER_API_VAR const Table<ouster::sdk::core::MultipurposeIOMode, const char*, 8>
     MULTIPURPOSE_IO_MODE_STRINGS;
 extern OUSTER_API_VAR const Table<ouster::sdk::core::Polarity, const char*, 2> POLARITY_STRINGS;
 extern OUSTER_API_VAR const Table<ouster::sdk::core::NMEABaudRate, const char*, 2>
     NMEA_BAUD_RATE_STRINGS;
-extern OUSTER_API_VAR
-    Table<ouster::sdk::core::UDPProfileLidar, const char*, ouster::sdk::core::MAX_NUM_PROFILES>
-        udp_profile_lidar_strings;
 extern OUSTER_API_VAR Table<ouster::sdk::core::UDPProfileIMU, const char*, 3>
     udp_profile_imu_strings;
 extern OUSTER_API_VAR Table<ouster::sdk::core::HeaderType, const char*, 2> udp_profile_type_strings;
@@ -150,6 +156,12 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
 
     :type: int
     )")
+        .def_rw("imu_enabled", &DataFormat::imu_enabled,
+                R"(
+    True if the IMU stream is enabled, otherwise False.
+
+    :type: bool
+    )")
         .def_rw("zone_monitoring_enabled", &DataFormat::zone_monitoring_enabled,
                 R"(
     True if zone monitoring is enabled, otherwise False.
@@ -232,142 +244,150 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
              })
         .def("__str__", [](const ProductInfo& product_info) { return to_string(product_info); });
 
+    // NOLINTNEXTLINE(bugprone-unused-raii)
+    py::class_<SensorConfig>(module, "SensorConfig", R"(
+    Base class for sensor configurations.
+
+    Currently has no attributes. APIs that accept a configuration take this
+    base type and downcast to the concrete type they require (e.g. LidarConfig).
+    )");
+
     auto sensor_config =
-        py::class_<SensorConfig>(module, "SensorConfig", R"(
+        py::class_<LidarConfig, SensorConfig>(module, "LidarConfig", R"(
     Corresponds to sensor config parameters.
 
     Please see sensor documentation for the meaning of each property.
     )")
-            .def(py::init<>(), "Construct an empty SensorConfig.")
+            .def(py::init<>(), "Construct an empty LidarConfig.")
             .def(
                 "__init__",
-                [](SensorConfig* self, const std::string& config_string) {
-                    new (self) SensorConfig{};
+                [](LidarConfig* self, const std::string& config_string) {
+                    new (self) LidarConfig{};
                     ValidatorIssues issues;
                     if (!ouster::sdk::core::parse_and_validate_config(config_string, *self,
                                                                       issues)) {
-                        self->~SensorConfig();
+                        self->~LidarConfig();
                         throw std::runtime_error(to_string(issues.critical));
                     }
                 },
                 py::arg("config_string"), R"(
-    Construct a SensorConfig from a json string.
+    Construct a LidarConfig from a json string.
     Args:
         config_string (str): json string to parse
     )")
             .def("__str__",
-                 [](const SensorConfig& sensor_config) { return to_string(sensor_config); })
+                 [](const LidarConfig& sensor_config) { return to_string(sensor_config); })
             .def("__eq__",
-                 [](const SensorConfig& left, const py::object& right) {
-                     if (!py::isinstance<SensorConfig>(right)) {
+                 [](const LidarConfig& left, const py::object& right) {
+                     if (!py::isinstance<LidarConfig>(right)) {
                          return false;
                      }
-                     return left == py::cast<const SensorConfig&>(right);
+                     return left == py::cast<const LidarConfig&>(right);
                  })
-            .def("__copy__", [](const SensorConfig& self) { return SensorConfig{self}; })
+            .def("__copy__", [](const LidarConfig& self) { return LidarConfig{self}; })
             .def("__deepcopy__",
-                 [](const SensorConfig& self, const py::dict&) { return SensorConfig{self}; });
+                 [](const LidarConfig& self, const py::dict&) { return LidarConfig{self}; });
 
-    def_opt(sensor_config, SensorConfig, "udp_dest", udp_dest,
+    def_opt(sensor_config, LidarConfig, "udp_dest", udp_dest,
             "Destination to which sensor sends UDP traffic.");
-    def_opt(sensor_config, SensorConfig, "udp_dest_zm", udp_dest_zm,
+    def_opt(sensor_config, LidarConfig, "udp_dest_zm", udp_dest_zm,
             "Destination to which sensor sends ZM UDP traffic.");
-    def_opt(sensor_config, SensorConfig, "udp_multicast_ttl", udp_multicast_ttl,
+    def_opt(sensor_config, LidarConfig, "udp_multicast_ttl", udp_multicast_ttl,
             "Multicast TTL for IMU and lidar UDP traffic.");
-    def_opt(sensor_config, SensorConfig, "udp_multicast_ttl_zm", udp_multicast_ttl_zm,
+    def_opt(sensor_config, LidarConfig, "udp_multicast_ttl_zm", udp_multicast_ttl_zm,
             "Multicast TTL for ZM UDP traffic.");
-    def_opt(sensor_config, SensorConfig, "udp_port_lidar", udp_port_lidar,
+    def_opt(sensor_config, LidarConfig, "udp_port_lidar", udp_port_lidar,
             "Port on UDP destination to which lidar data will be sent.");
-    def_opt(sensor_config, SensorConfig, "udp_port_imu", udp_port_imu,
+    def_opt(sensor_config, LidarConfig, "udp_port_imu", udp_port_imu,
             "Port on UDP destination to which IMU data will be sent.");
-    def_opt(sensor_config, SensorConfig, "udp_port_zm", udp_port_zm,
+    def_opt(sensor_config, LidarConfig, "udp_port_zm", udp_port_zm,
             "Port on UDP destination to which ZM data will be sent.");
-    def_opt_noconvert(sensor_config, SensorConfig, "timestamp_mode", timestamp_mode,
+    def_opt_noconvert(sensor_config, LidarConfig, "timestamp_mode", timestamp_mode,
                       "Timestamp mode of sensor. See class TimestampMode.");
-    def_opt(sensor_config, SensorConfig, "lidar_mode", lidar_mode,
+    def_opt(sensor_config, LidarConfig, "lidar_mode", lidar_mode,
             "Horizontal and Vertical Resolution rate of sensor as mode, e.g., "
             "1024x10. See class LidarMode.",
             py::rv_policy::copy);
-    def_opt_noconvert(sensor_config, SensorConfig, "operating_mode", operating_mode,
+    def_opt_noconvert(sensor_config, LidarConfig, "operating_mode", operating_mode,
                       "Operating Mode of sensor. See class OperatingMode.");
-    def_opt_noconvert(sensor_config, SensorConfig, "multipurpose_io_mode", multipurpose_io_mode,
+    def_opt_noconvert(sensor_config, LidarConfig, "multipurpose_io_mode", multipurpose_io_mode,
                       "Mode of MULTIPURPOSE_IO pin. See class MultipurposeIOMode.");
-    def_opt(sensor_config, SensorConfig, "lidar_frame_azimuth_offset", lidar_frame_azimuth_offset,
+    def_opt(sensor_config, LidarConfig, "lidar_frame_azimuth_offset", lidar_frame_azimuth_offset,
             "Origin angle for the sensor in millidegrees.");
-    def_opt(sensor_config, SensorConfig, "azimuth_window", azimuth_window,
+    def_opt(sensor_config, LidarConfig, "azimuth_window", azimuth_window,
             "Tuple representing the visible region of interest of the sensor in "
             "millidegrees, .e.g., (0, 360000) for full visibility.");
-    def_opt(sensor_config, SensorConfig, "signal_multiplier", signal_multiplier,
+    def_opt(sensor_config, LidarConfig, "signal_multiplier", signal_multiplier,
             "Multiplier for signal strength of sensor, corresponding to maximum "
             "allowable azimuth_window. Gen 2 Only.");
-    def_opt(sensor_config, SensorConfig, "sync_pulse_out_angle", sync_pulse_out_angle,
+    def_opt(sensor_config, LidarConfig, "sync_pulse_out_angle", sync_pulse_out_angle,
             "Polarity of SYNC_PULSE_OUT output. See sensor documentation for "
             "details.");
-    def_opt(sensor_config, SensorConfig, "sync_pulse_out_pulse_width", sync_pulse_out_pulse_width,
+    def_opt(sensor_config, LidarConfig, "sync_pulse_out_pulse_width", sync_pulse_out_pulse_width,
             "SYNC_PULSE_OUT pulse width in ms. See sensor documentation for "
             "details.");
-    def_opt_noconvert(sensor_config, SensorConfig, "nmea_in_polarity", nmea_in_polarity,
+    def_opt_noconvert(sensor_config, LidarConfig, "nmea_in_polarity", nmea_in_polarity,
                       "Polarity of NMEA UART input $GPRMC messages. See sensor "
                       "documentation for details.");
-    def_opt_noconvert(sensor_config, SensorConfig, "nmea_baud_rate", nmea_baud_rate,
+    def_opt_noconvert(sensor_config, LidarConfig, "nmea_baud_rate", nmea_baud_rate,
                       "Expected baud rate sensor attempts to decode for NMEA UART input "
                       "$GPRMC messages.");
-    def_opt(sensor_config, SensorConfig, "nmea_ignore_valid_char", nmea_ignore_valid_char,
+    def_opt(sensor_config, LidarConfig, "nmea_ignore_valid_char", nmea_ignore_valid_char,
             "NMEA Ignore Valid Char. True corresponds to 1 and False to 0 for "
             "property; see sensor documentation for details.");
-    def_opt(sensor_config, SensorConfig, "nmea_leap_seconds", nmea_leap_seconds,
+    def_opt(sensor_config, LidarConfig, "nmea_leap_seconds", nmea_leap_seconds,
             "Integer number of leap seconds that will be added to the UDP "
-            "timetsamp when calculating seconds since Unix Epoch time. See "
+            "timestamp when calculating seconds since Unix Epoch time. See "
             "sensor documentation for details.");
-    def_opt_noconvert(sensor_config, SensorConfig, "sync_pulse_in_polarity", sync_pulse_in_polarity,
+    def_opt_noconvert(sensor_config, LidarConfig, "sync_pulse_in_polarity", sync_pulse_in_polarity,
                       "Polarity of SYNC_PULSE_IN pin. See sensor documentation for "
                       "details.");
-    def_opt_noconvert(sensor_config, SensorConfig, "sync_pulse_out_polarity",
+    def_opt_noconvert(sensor_config, LidarConfig, "sync_pulse_out_polarity",
                       sync_pulse_out_polarity,
                       "Polarity of SYNC_PULSE_OUT output. See sensor documentation for "
                       "details.");
-    def_opt(sensor_config, SensorConfig, "sync_pulse_out_frequency", sync_pulse_out_frequency,
+    def_opt(sensor_config, LidarConfig, "sync_pulse_out_frequency", sync_pulse_out_frequency,
             "SYNC_PULSE_OUT rate. See sensor documentation for details.");
-    def_opt(sensor_config, SensorConfig, "phase_lock_enable", phase_lock_enable,
+    def_opt(sensor_config, LidarConfig, "phase_lock_enable", phase_lock_enable,
             "Enable phase lock. See sensor documentation for more details.");
-    def_opt(sensor_config, SensorConfig, "phase_lock_offset", phase_lock_offset,
+    def_opt(sensor_config, LidarConfig, "phase_lock_offset", phase_lock_offset,
             "Angle in Lidar Coordinate Frame that sensors are locked to, in "
             "millidegrees. See sensor documentation for details.");
-    def_opt(sensor_config, SensorConfig, "columns_per_packet", columns_per_packet,
+    def_opt(sensor_config, LidarConfig, "columns_per_packet", columns_per_packet,
             "Measurement blocks per UDP packet. See sensor documentation for "
             "details.");
-    def_opt(sensor_config, SensorConfig, "udp_profile_lidar", udp_profile_lidar,
+    def_opt(sensor_config, LidarConfig, "udp_profile_lidar", udp_profile_lidar,
             "UDP packet format for lidar data. See sensor documentation for "
             "details.");
-    def_opt(sensor_config, SensorConfig, "udp_profile_imu", udp_profile_imu,
+    def_opt(sensor_config, LidarConfig, "udp_profile_imu", udp_profile_imu,
             "UDP packet format for imu data. See sensor documentation for "
             "details.");
-    def_opt(sensor_config, SensorConfig, "gyro_fsr", gyro_fsr,
+    def_opt(sensor_config, LidarConfig, "gyro_fsr", gyro_fsr,
             "The gyro full scale measurement range to use. See sensor "
             "documentation for details.");
-    def_opt(sensor_config, SensorConfig, "accel_fsr", accel_fsr,
+    def_opt(sensor_config, LidarConfig, "accel_fsr", accel_fsr,
             "The accelerometer full scale measurement range to use. See sensor "
             "documentation for details.");
-    def_opt(sensor_config, SensorConfig, "return_order", return_order,
+    def_opt(sensor_config, LidarConfig, "return_order", return_order,
             "The priority of sensor returns to output. See sensor documentation "
             "for details.");
-    def_opt(sensor_config, SensorConfig, "min_range_threshold_cm", min_range_threshold_cm,
+    def_opt(sensor_config, LidarConfig, "min_range_threshold_cm", min_range_threshold_cm,
             "The minimum detection range of the sensor in cm. See sensor "
             "documentation for details.");
-    def_opt(sensor_config, SensorConfig, "imu_packets_per_frame", imu_packets_per_frame,
+    def_opt(sensor_config, LidarConfig, "imu_packets_per_frame", imu_packets_per_frame,
             "Number of IMU packets per lidar frame.");
-    def_opt_noconvert(sensor_config, SensorConfig, "header_type", header_type,
+    def_opt_noconvert(sensor_config, LidarConfig, "header_type", header_type,
                       "Type of UDP packet header to use.");
-    def_opt_noconvert(sensor_config, SensorConfig, "bloom_reduction_optimization",
+    def_opt_noconvert(sensor_config, LidarConfig, "bloom_reduction_optimization",
                       bloom_reduction_optimization,
                       "The type of bloom reduction optimization to use.");
-    def_opt(sensor_config, SensorConfig, "extra_options", extra_options,
+    def_opt(sensor_config, LidarConfig, "extra_options", extra_options,
             "Extra configuration options on the sensor. Each value should be "
             "stringized json.");
 
     module.def("parse_and_validate_sensor_config",
-               [](const std::string& metadata) -> std::tuple<SensorConfig, ValidatorIssues> {
-                   SensorConfig config;
+               [](const std::string& metadata) -> std::tuple<LidarConfig, ValidatorIssues> {
+                   LidarConfig config;
                    ValidatorIssues issues;
                    ouster::sdk::core::parse_and_validate_config(metadata, config, issues);
                    return std::make_pair(config, issues);
@@ -399,6 +419,7 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
         .def_rw("machine", &Version::machine)
         .def_rw("prerelease", &Version::prerelease)
         .def_rw("build", &Version::build)
+        .def("__str__", [](const Version& version) { return version.to_string(); })
         .def_static("from_string", &ouster::sdk::core::version_from_string);
 
     module.attr("INVALID_VERSION") = ouster::sdk::core::INVALID_VERSION;
@@ -449,8 +470,8 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
     module.def(
         "parse_and_validate_metadata",
         [](const std::string& metadata)
-            -> std::tuple<nonstd::optional<SensorInfo>, ValidatorIssues> {
-            nonstd::optional<SensorInfo> sensor_info;
+            -> std::tuple<nonstd::optional<LidarInfo>, ValidatorIssues> {
+            nonstd::optional<LidarInfo> sensor_info;
             ValidatorIssues issues;
 
             ouster::sdk::core::parse_and_validate_metadata(metadata, sensor_info, issues);
@@ -464,15 +485,15 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
         metadata (str): The metadata json to parse and validate.
 
     Returns:
-        returns (ValidatorIssues, SensorInfo): The list of issues that were encountered
-                                                and the parsed SensorInfo
+        returns (ValidatorIssues, LidarInfo): The list of issues that were encountered
+                                                and the parsed LidarInfo
     )");
 
     module.def(
         "populate_extrinsics",
         [](const std::string& extrinsics_file,
            std::vector<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>> extrinsics,
-           std::vector<std::shared_ptr<SensorInfo>>& sensor_infos) {
+           std::vector<std::shared_ptr<LidarInfo>>& sensor_infos) {
             // Nanobind with <nanobind/eigen/dense.h> handles the conversion
             // from list-of-numpy-arrays to std::vector<Eigen::Matrix>
             // automatically.
@@ -489,7 +510,7 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
     Args:
         extrinsics_file (str): Path to the file containing extrinsics data.
         extrinsics (List[np.ndarray]): A list of 4x4 pose matrices.
-        sensor_infos (List[SensorInfo]): A list of sensor metadata objects to update.
+        sensor_infos (List[LidarInfo]): A list of sensor metadata objects to update.
 
     Returns:
         None
@@ -573,73 +594,12 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
     // (understandably), so no need to pass a prefix to def_enum
     def_enum(nmea_baud_rate, ouster::sdk::core::impl::NMEA_BAUD_RATE_STRINGS, "NMEABaudRate");
 
-    static auto udp_profile_lidar =
-        py::enum_<ouster::sdk::core::UDPProfileLidar>(module, "UDPProfileLidar");
-    auto members =
-        populate_enum(udp_profile_lidar, ouster::sdk::core::impl::udp_profile_lidar_strings);
-    udp_profile_lidar.def_static(
-        "from_string",
-        [](const std::string& str) -> py::object {
-            for (auto& item : ouster::sdk::core::impl::udp_profile_lidar_strings) {
-                if (item.second != nullptr && strcmp(item.second, str.c_str()) == 0) {
-                    return py::cast(item.first);
-                }
-            }
-            return py::none();
-        },
-        "Create enum value from string.",
-        py::sig("def from_string(name: str, /) -> "
-                "typing.Optional[UDPProfileLidar]"));
-    udp_profile_lidar.def_prop_ro(
-        "value",
-        [](const ouster::sdk::core::UDPProfileLidar& self) { return static_cast<int>(self); },
-        "The value of the Enum member.");
-
-    udp_profile_lidar.def(
-        "__int__",
-        [](const ouster::sdk::core::UDPProfileLidar& self) { return static_cast<int>(self); },
-        "The value of the Enum member.");
-
-    udp_profile_lidar.def("__str__", [](const ouster::sdk::core::UDPProfileLidar& enum_member) {
-        return to_string(enum_member);
-    });
-    udp_profile_lidar.def_static(
-        "values",
-        []() {
-            std::vector<ouster::sdk::core::UDPProfileLidar> names;
-            for (auto& item : ouster::sdk::core::impl::udp_profile_lidar_strings) {
-                if (item.second != nullptr) {
-                    names.push_back(item.first);
-                }
-            }
-            return names;
-        },
-        "Returns an iterator of all UDPProfileLidar enum members.");
-
-    module.def(
-        "add_custom_profile",
-        [&](int profile_nr, const std::string& name,
-            const std::vector<std::pair<std::string, ouster::sdk::core::FieldDecodeInfo>>& fields,
-            size_t chan_data_size) {
-            PyErr_WarnEx(PyExc_FutureWarning,
-                         "add_custom_profile(profile_nr, name, fields, chan_data_size) "
-                         "is deprecated, use profile_nr = add_custom_profile(name, "
-                         "fields, chan_data_size) instead",
-                         1);
-            ouster::sdk::core::add_custom_profile(profile_nr, name, fields, chan_data_size);
-            udp_profile_lidar.value(name.c_str(),
-                                    static_cast<ouster::sdk::core::UDPProfileLidar>(profile_nr));
-        });
-
     module.def(
         "add_custom_profile",
         [&](const std::string& name,
             const std::vector<std::pair<std::string, ouster::sdk::core::FieldDecodeInfo>>& fields,
             size_t chan_data_size) {
-            auto profile_nr = ouster::sdk::core::add_custom_profile(name, fields, chan_data_size);
-            udp_profile_lidar.value(name.c_str(),
-                                    static_cast<ouster::sdk::core::UDPProfileLidar>(profile_nr));
-            return profile_nr;
+            return ouster::sdk::core::add_custom_profile(name, fields, chan_data_size);
         });
 
     auto udp_profile_imu =
@@ -668,164 +628,122 @@ void init_client_data(py::module_& module, py::module_& /*unused*/) {
 
     // Sensor Info
     auto sensor_info =
-        py::class_<SensorInfo>(module, "SensorInfo",
-                               R"(
+        py::class_<LidarInfo, SensorInfo>(module, "LidarInfo",
+                                          R"(
     Sensor Info required to interpret UDP data streams.
 
     See the sensor documentation for the meaning of each property.
     )")
-            .def(py::init<>(), R"(
+            // Constructed via py::new_ to match SensorInfo's factory __new__;
+            // see the SensorInfo binding.
+            .def(py::new_([]() { return std::make_shared<LidarInfo>(); }), R"(
         Construct an empty metadata.
     )")
-            .def(
-                "__init__",
-                [](SensorInfo* self, const std::string& json_string) {
-                    new (self) SensorInfo(json_string);
-                },
-                py::arg("json_string"), R"(
+            .def(py::new_([](const std::string& json_string) {
+                     return std::make_shared<LidarInfo>(json_string);
+                 }),
+                 py::arg("json_string"), R"(
     Args:
         json_string (str): json string to parse
     )")
-            .def_rw("sn", &SensorInfo::sn, "Sensor serial number.")
-            .def_rw("fw_rev", &SensorInfo::fw_rev, "Sensor firmware revision.")
-            .def_rw("prod_line", &SensorInfo::prod_line, "Product line, e.g., 'OS-1-128'.")
-            .def_rw("format", &SensorInfo::format,
+            .def_rw("fw_rev", &LidarInfo::fw_rev, "Sensor firmware revision.")
+            .def_rw("prod_line", &LidarInfo::prod_line, "Product line, e.g., 'OS-1-128'.")
+            .def_rw("format", &LidarInfo::format,
                     "Describes the structure of a lidar packet. See class "
                     "DataFormat.")
+            .def_prop_ro(
+                "fps", [](const LidarInfo& self) { return self.fps(); },
+                "Frames per second, e.g., 10 for LidarMode 1024x10")
             .def_prop_rw(
                 "beam_azimuth_angles",
-                [](SensorInfo& self) {
+                [](LidarInfo& self) {
                     return py::ndarray<py::numpy, double, py::c_contig>(
                         self.beam_azimuth_angles.data(), {self.beam_azimuth_angles.size()});
                 },
-                [](SensorInfo& self, const std::vector<double>& data) {
+                [](LidarInfo& self, const std::vector<double>& data) {
                     self.beam_azimuth_angles = data;
                 },
                 py::rv_policy::reference_internal,
                 "Beam azimuth angles, useful for XYZ projection.")
             .def_prop_rw(
                 "beam_altitude_angles",
-                [](SensorInfo& self) {
+                [](LidarInfo& self) {
                     return py::ndarray<py::numpy, double, py::c_contig>(
-                        self.beam_altitude_angles.data(), {self.beam_azimuth_angles.size()});
+                        self.beam_altitude_angles.data(), {self.beam_altitude_angles.size()});
                 },
-                [](SensorInfo& self, const std::vector<double>& data) {
+                [](LidarInfo& self, const std::vector<double>& data) {
                     self.beam_altitude_angles = data;
                 },
                 py::rv_policy::reference_internal,
                 "Beam altitude angles, useful for XYZ projection.")
-            .def_rw("imu_to_sensor_transform", &SensorInfo::imu_to_sensor_transform,
-                    "Homogenous transformation matrix representing IMU "
+            .def_rw("imu_to_sensor_transform", &LidarInfo::imu_to_sensor_transform,
+                    "Homogeneous transformation matrix representing IMU "
                     "offset to Sensor Coordinate Frame.")
-            .def_rw("lidar_to_sensor_transform", &SensorInfo::lidar_to_sensor_transform,
+            .def_rw("lidar_to_sensor_transform", &LidarInfo::lidar_to_sensor_transform,
                     "Homogeneous transformation matrix from Lidar "
                     "Coordinate Frame to Sensor Coordinate Frame.")
-            .def_rw("lidar_origin_to_beam_origin_mm", &SensorInfo::lidar_origin_to_beam_origin_mm,
+            .def_rw("lidar_origin_to_beam_origin_mm", &LidarInfo::lidar_origin_to_beam_origin_mm,
                     "Distance between lidar origin and beam origin in millimeters.")
-            .def_rw("beam_to_lidar_transform", &SensorInfo::beam_to_lidar_transform,
-                    "Homogenous transformation matrix reprsenting Beam to "
+            .def_rw("beam_to_lidar_transform", &LidarInfo::beam_to_lidar_transform,
+                    "Homogeneous transformation matrix representing Beam to "
                     "Lidar Transform")
-            .def_rw("sensor_to_body", &SensorInfo::sensor_to_body,
+            .def_rw("sensor_to_body", &LidarInfo::sensor_to_body,
                     "Homogeneous transformation matrix from sensor frame to "
-                    "body frame.")
-            .def_prop_rw(
-                "extrinsic",
-                [](SensorInfo& self) {
-                    PyErr_WarnEx(PyExc_FutureWarning,
-                                 "SensorInfo.extrinsic is deprecated, use "
-                                 "SensorInfo.sensor_to_body instead",
-                                 1);
-                    return py::ndarray<py::numpy, double, py::c_contig>(
-                        self.sensor_to_body.data(),
-                        {static_cast<size_t>(self.sensor_to_body.rows()),
-                         static_cast<size_t>(self.sensor_to_body.cols())});
-                },
-                [](SensorInfo& self, const ouster::sdk::core::mat4d& matrix) {
-                    PyErr_WarnEx(PyExc_FutureWarning,
-                                 "SensorInfo.extrinsic is deprecated, use "
-                                 "SensorInfo.sensor_to_body instead",
-                                 1);
-                    self.sensor_to_body = matrix;
-                },
-                py::rv_policy::reference_internal, "Deprecated: use sensor_to_body.")
-            .def_rw("init_id", &SensorInfo::init_id, "Initialization id.")
-            .def_rw("build_date", &SensorInfo::build_date, "Build date")
-            .def_rw("image_rev", &SensorInfo::image_rev, "Image rev")
-            .def_rw("prod_pn", &SensorInfo::prod_pn, "Prod pn")
-            .def_rw("status", &SensorInfo::status, "sensor status")
-            .def_rw("cal", &SensorInfo::cal, "sensor calibration")
-            .def_rw("config", &SensorInfo::config, "sensor config",
+                    "body frame. Defaults to the identity.")
+            .def_rw("init_id", &LidarInfo::init_id, "Initialization id.")
+            .def_rw("build_date", &LidarInfo::build_date, "Build date")
+            .def_rw("image_rev", &LidarInfo::image_rev, "Image rev")
+            .def_rw("prod_pn", &LidarInfo::prod_pn, "Prod pn")
+            .def_rw("status", &LidarInfo::status, "sensor status")
+            .def_rw("cal", &LidarInfo::cal, "sensor calibration")
+            .def_rw("config", &LidarInfo::config, "sensor config",
                     py::rv_policy::reference_internal)
-            .def_rw("user_data", &SensorInfo::user_data, "sensor user data")
-            .def_rw("client_version", &SensorInfo::client_version,
+            .def_rw("user_data", &LidarInfo::user_data, "sensor user data")
+            .def_rw("client_version", &LidarInfo::client_version,
                     "version of library that wrote metadata")
-            .def_static("from_default", &ouster::sdk::core::SensorInfo::from_default,
+            .def_static("from_default", &ouster::sdk::core::LidarInfo::from_default,
                         R"(
-    Create gen-1 OS-1-64 SensorInfo populated with design values.
+    Create gen-1 OS-1-64 LidarInfo populated with design values.
     )")
-            .def("to_json_string", &SensorInfo::to_json_string,
-                 R"( Return metadata string made from current entries
-    )")
-            .def("has_fields_equal", &SensorInfo::has_fields_equal, R"(Compare public fields)")
+            .def("has_fields_equal", &LidarInfo::has_fields_equal, R"(Compare public fields)")
             // only uncomment for debugging purposes!!
-            //.def("__str__", [](const SensorInfo& i) { return to_string(i); })
-            .def_prop_ro(
-                "w", [](const SensorInfo& sensor_info) { return sensor_info.w(); },
-                R"(returns the width of a frame (equivalent to format.columns_per_frame))")
-            .def_prop_ro(
-                "h", [](const SensorInfo& self) { return self.h(); },
-                R"(returns the height of a frame (equivalent to format.pixels_per_column))")
+            //.def("__str__", [](const LidarInfo& i) { return to_string(i); })
             .def("__eq__",
-                 [](const SensorInfo& left, const py::object& right) {
-                     if (!py::isinstance<SensorInfo>(right)) {
+                 [](const LidarInfo& left, const py::object& right) {
+                     if (!py::isinstance<LidarInfo>(right)) {
                          return false;
                      }
-                     return left == py::cast<const SensorInfo&>(right);
+                     return left == py::cast<const LidarInfo&>(right);
                  })
             .def("__repr__",
-                 [](const SensorInfo& self) {
+                 [](const LidarInfo& self) {
                      const auto mode = self.config.lidar_mode
                                            ? to_string(self.config.lidar_mode.value())
                                            : std::to_string(self.format.fps) + "fps";
-                     return "<ouster.sdk.client.SensorInfo " + self.prod_line + " " +
+                     return "<ouster.sdk.client.LidarInfo " + self.prod_line + " " +
                             std::to_string(self.sn) + " " + self.fw_rev + " " + mode + ">";
                  })
             .def(
-                "get_version", [](const SensorInfo& self) { return self.get_version(); },
+                "get_version", [](const LidarInfo& self) { return self.get_version(); },
                 R"(Get parsed sensor version)")
             .def(
-                "get_product_info", [](const SensorInfo& self) { return self.get_product_info(); },
+                "get_product_info", [](const LidarInfo& self) { return self.get_product_info(); },
                 R"(Get parsed product info)")
-            .def_prop_ro(
-                "xyzlut_float",
-                [](const SensorInfo& self) -> const ouster::sdk::core::XYZLutT<float>& {
-                    return self.xyzlut<float>();
-                },
-                py::rv_policy::reference_internal)
-            .def_prop_ro(
-                "xyzlut_double",
-                [](const SensorInfo& self) -> const ouster::sdk::core::XYZLutT<double>& {
-                    return self.xyzlut<double>();
-                },
-                py::rv_policy::reference_internal)
-            .def_prop_ro("num_returns", &SensorInfo::num_returns)
-            .def("clear_cache", &SensorInfo::clear_cache,
-                 "Clear cached data such as xyzluts calculated from other "
-                 "members.")
-            .def("__copy__", [](const SensorInfo& self) { return SensorInfo{self}; })
-            .def("__deepcopy__", [](const SensorInfo& sensor_info, const py::dict&) {
-                return SensorInfo{sensor_info};
+            .def_prop_ro("num_returns", &LidarInfo::num_returns)
+            .def("__copy__", [](const LidarInfo& self) { return LidarInfo{self}; })
+            .def("__deepcopy__", [](const LidarInfo& sensor_info, const py::dict&) {
+                return LidarInfo{sensor_info};
             });
     sensor_info.def_prop_rw(
         "zone_set",
-        [](const SensorInfo* obj) {
+        [](const LidarInfo* obj) {
             if (obj->zone_set.has_value()) {
                 return py::cast(obj->zone_set.value(), py::rv_policy::reference_internal,
                                 py::cast(obj));
             }
             return py::none();
         },
-        [](SensorInfo& obj, const decltype(SensorInfo::zone_set)& val) { obj.zone_set = val; },
+        [](LidarInfo& obj, const decltype(LidarInfo::zone_set)& val) { obj.zone_set = val; },
         py::arg().none(), py::for_getter(py::sig("def zone_set(self, /) -> Optional[ZoneSet]")),
         "zone monitor configuration", py::rv_policy::reference_internal);
 }

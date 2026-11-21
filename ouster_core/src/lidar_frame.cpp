@@ -23,6 +23,8 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/core/field.h"
+#include "ouster/core/frame.h"
 #include "ouster/core/impl/cartesian.h"
 #include "ouster/core/impl/logging.h"
 #include "ouster/core/impl/table.h"
@@ -47,7 +49,7 @@ namespace core {
  */
 enum FrameStatusMasks : uint64_t {
     FRAME_STATUS_THERMAL_SHUTDOWN_MASK = 0x0f,  ///< Mask to get thermal shutdown status
-    FRAME_STATUS_SHOT_LIMITING_MASK = 0xf0      ///< Mask to get shot limting status
+    FRAME_STATUS_SHOT_LIMITING_MASK = 0xf0      ///< Mask to get shot limiting status
 };
 
 //! @cond Doxygen_Suppress
@@ -65,6 +67,10 @@ LidarFrame::LidarFrame(LidarFrame&&) noexcept = default;
 LidarFrame& LidarFrame::operator=(const LidarFrame&) = default;
 LidarFrame& LidarFrame::operator=(LidarFrame&&) noexcept = default;
 LidarFrame::~LidarFrame() = default;
+
+std::shared_ptr<Frame> LidarFrame::clone() const {
+    return std::make_shared<LidarFrame>(*this);
+}
 
 namespace impl {
 
@@ -194,7 +200,8 @@ struct OUSTER_API_CLASS DefaultFieldsEntry {
 };
 
 // clang-format off
-Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_frame_fields{
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+std::vector<std::pair<const char*, DefaultFieldsEntry>> default_frame_fields{
     {{UDPProfileLidar::LEGACY,
       {LEGACY_FIELD_SLOTS.data(), LEGACY_FIELD_SLOTS.size()}},
      {UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL,
@@ -228,13 +235,13 @@ Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_frame_field
 
 namespace {
 
-LidarFrameFieldTypes lookup_frame_fields(UDPProfileLidar profile) {
+LidarFrameFieldTypes lookup_frame_fields(const std::string& profile) {
     auto end = impl::default_frame_fields.end();
     auto it = std::find_if(impl::default_frame_fields.begin(), end,
                            [profile](const auto& key_value) { return key_value.first == profile; });
 
     if (it == end || it->first == UDPProfileLidar::UNKNOWN) {
-        throw std::invalid_argument("Unknown lidar udp profile");
+        throw std::invalid_argument("Unknown lidar udp profile '" + profile + "'");
     }
 
     auto entry = it->second;
@@ -280,53 +287,22 @@ bool raw_headers_enabled(const PacketFormat& packet_format, const LidarFrame& li
 
 }  // namespace impl
 
-namespace {
-
-FieldDescriptor get_field_type_descriptor(const LidarFrame& frame, const FieldType& field_type) {
-    if (field_type.field_class == FieldClass::PIXEL_FIELD) {
-        std::vector<size_t> dims;
-        dims.push_back(frame.h);
-        dims.push_back(frame.w);
-        dims.insert(dims.end(), field_type.extra_dims.begin(), field_type.extra_dims.end());
-        return FieldDescriptor::array(field_type.element_type, dims);
-    } else if (field_type.field_class == FieldClass::COLUMN_FIELD) {
-        std::vector<size_t> dims;
-        dims.push_back(frame.w);
-        dims.insert(dims.end(), field_type.extra_dims.begin(), field_type.extra_dims.end());
-        return FieldDescriptor::array(field_type.element_type, dims);
-    } else if (field_type.field_class == FieldClass::PACKET_FIELD) {
-        std::vector<size_t> dims;
-        dims.push_back(frame.packet_count());
-        dims.insert(dims.end(), field_type.extra_dims.begin(), field_type.extra_dims.end());
-        return FieldDescriptor::array(field_type.element_type, dims);
-    } else {  // FieldClass::FRAME_FIELD
-        return FieldDescriptor::array(field_type.element_type, field_type.extra_dims);
-    }
-}
-
-}  // namespace
-
-LidarFrame::LidarFrame(const DataFormat& format)
-    : LidarFrame{format.pixels_per_column, format.columns_per_frame,
-                 get_field_types(format, Version(0, 0, 0)), format.columns_per_packet} {}
-
-LidarFrame::LidarFrame(const SensorInfo& info) : LidarFrame(std::make_shared<SensorInfo>(info)) {}
-
-LidarFrame::LidarFrame(std::shared_ptr<SensorInfo> info)
+LidarFrame::LidarFrame(std::shared_ptr<LidarInfo> info)
     : LidarFrame{info->format.pixels_per_column, info->format.columns_per_frame,
                  get_field_types(*info), info->format.columns_per_packet} {
-    sensor_info = std::move(info);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+    sensor_info_ = std::move(info);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
 }
 
-LidarFrame::LidarFrame(std::shared_ptr<SensorInfo> info, const std::vector<FieldType>& field_types)
+LidarFrame::LidarFrame(std::shared_ptr<LidarInfo> info, const std::vector<FieldType>& field_types)
     : LidarFrame{info->format.pixels_per_column, info->format.columns_per_frame, field_types,
                  info->format.columns_per_packet} {
-    sensor_info = std::move(info);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
+    sensor_info_ = std::move(info);  // NOLINT(cppcoreguidelines-prefer-member-initializer)
 }
 
 LidarFrame::LidarFrame(size_t h, size_t w, const LidarFrameFieldTypes& field_types,
-                       size_t columns_per_packet)
-    : w(w), h(h) {
+                       size_t columns_per_packet) {
+    this->w = w;
+    this->h = h;
     if (w * h == 0) {
         throw std::invalid_argument(
             "Cannot construct LidarFrame with "
@@ -343,37 +319,31 @@ LidarFrame::LidarFrame(size_t h, size_t w, const LidarFrameFieldTypes& field_typ
         add_field(field_type);
     }
 
-    timestamp_ = Field{fd_array<uint64_t>(w), FieldClass::COLUMN_FIELD};
+    init_timestamps_and_poses(w, FieldClass::COLUMN_FIELD, FieldClass::PIXEL_FIELD);
     measurement_id_ = Field{fd_array<uint16_t>(w), FieldClass::COLUMN_FIELD};
     status_ = Field{fd_array<uint32_t>(w), FieldClass::COLUMN_FIELD};
-    packet_timestamp_ = Field{fd_array<uint64_t>(packet_count_), FieldClass::PACKET_FIELD};
-    body_to_world_ = Field{fd_array<double>(w, 4, 4), {}};
+    receive_timestamp_ = Field{fd_array<uint64_t>(packet_count_), FieldClass::PACKET_FIELD};
     alert_flags_ = Field{fd_array<uint8_t>(packet_count_), FieldClass::PACKET_FIELD};
-
-    // Initialize all the poses to identity
-    auto ptr = body_to_world_.get<double>();
-    auto ident = mat4d::Identity().eval();
-    for (size_t i = 0; i < w; ++i) {
-        memcpy(&ptr[i * 4 * 4], ident.data(), static_cast<size_t>(4 * 4) * sizeof(double));
-    }
 }
 
 LidarFrame::LidarFrame(const LidarFrame& other, const LidarFrameFieldTypes& fields)
-    : timestamp_(other.timestamp_),
-      measurement_id_(other.measurement_id_),
-      status_(other.status_),
-      packet_timestamp_(other.packet_timestamp_),
-      body_to_world_(other.body_to_world_),
+    : measurement_id_(other.measurement_id_),
       alert_flags_(other.alert_flags_),
-      packet_count_(other.packet_count_),
-      w(other.w),
-      h(other.h),
-      frame_status(other.frame_status),
       frame_id(other.frame_id),
-      sensor_info(other.sensor_info) {
+      frame_status(other.frame_status) {
+    // sensor_info now lives on the Frame base and cannot be initialized in this
+    // derived member-initializer list; copy it in the body instead.
+    sensor_info_ = other.sensor_info_;
+    this->w = other.w;
+    this->h = other.h;
+    this->packet_count_ = other.packet_count_;
+    timestamp_ = other.timestamp_;
+    body_to_world_ = other.body_to_world_;
+    receive_timestamp_ = other.receive_timestamp_;
+    status_ = other.status_;
     for (const auto& field_type : fields) {
         const std::string& name = field_type.name;
-        FieldDescriptor dst_desc = get_field_type_descriptor(*this, field_type);
+        FieldDescriptor dst_desc = get_field_type_descriptor(field_type);
         if (other.has_field(name)) {
             // either copy cast or error
             const auto& src_field = other.field(name);
@@ -400,13 +370,6 @@ LidarFrame::LidarFrame(const LidarFrame& other, const LidarFrameFieldTypes& fiel
     objects() = other.objects();
 }
 
-LidarFrame::LidarFrame(size_t h, size_t w, UDPProfileLidar profile, size_t columns_per_packet)
-    : LidarFrame{h, w, impl::lookup_frame_fields(profile), columns_per_packet} {}
-
-LidarFrame::LidarFrame(size_t h, size_t w)
-    : LidarFrame{h, w, impl::lookup_frame_fields(UDPProfileLidar::LEGACY),
-                 DEFAULT_COLUMNS_PER_PACKET} {}
-
 ShotLimitingStatus LidarFrame::shot_limiting() const {
     return static_cast<ShotLimitingStatus>(
         (frame_status & FrameStatusMasks::FRAME_STATUS_SHOT_LIMITING_MASK) >>
@@ -417,165 +380,6 @@ ThermalShutdownStatus LidarFrame::thermal_shutdown() const {
     return static_cast<ThermalShutdownStatus>(
         (frame_status & FrameStatusMasks::FRAME_STATUS_THERMAL_SHUTDOWN_MASK) >>
         FrameStatusShifts::FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT);
-}
-
-Field& LidarFrame::field(const std::string& name) {
-    try {
-        return fields().at(name);
-    } catch (std::out_of_range& e) {
-        throw std::out_of_range("Field '" + name + "' not found in LidarFrame.");
-    }
-}
-
-const Field& LidarFrame::field(const std::string& name) const {
-    try {
-        return fields().at(name);
-    } catch (std::out_of_range& e) {
-        throw std::out_of_range("Field '" + name + "' not found in LidarFrame.");
-    }
-}
-
-bool LidarFrame::has_field(const std::string& name) const {
-    return fields().count(name) > 0;
-}
-
-Field& LidarFrame::add_field(const FieldType& type) {
-    if (has_field(type.name)) {
-        throw std::invalid_argument("Duplicated field '" + type.name + "'");
-    }
-
-    // just validate that we didnt add a 0 size pixel field
-    if (type.field_class == FieldClass::PIXEL_FIELD) {
-        // none of the dimensions should be zero
-        for (const auto& dim : type.extra_dims) {
-            if (dim == 0) {
-                throw std::invalid_argument("Cannot add pixel field with 0 elements.");
-            }
-        }
-    }
-
-    // no other checking is necessary
-    fields()[type.name] = Field(get_field_type_descriptor(*this, type), type.field_class);
-
-    return fields()[type.name];
-}
-
-Field& LidarFrame::add_field(const std::string& name, FieldDescriptor desc,
-                             FieldClass field_class) {
-    if (has_field(name)) {
-        throw std::invalid_argument("Duplicated field '" + name + "'");
-    }
-
-    if (field_class == FieldClass::PIXEL_FIELD) {
-        if (desc.shape.size() < 2) {
-            throw std::invalid_argument("Pixel fields must have at least 2 dimensions");
-        }
-        if (desc.shape[0] != h || desc.shape[1] != w) {
-            throw std::invalid_argument(
-                "Pixel field shape must match "
-                "LidarFrame's width and height. Was " +
-                std::to_string(desc.shape[0]) + "x" + std::to_string(desc.shape[1]) + " vs " +
-                std::to_string(h) + "x" + std::to_string(w));
-        }
-        // none of the dimensions should be zero
-        for (const auto& dim : desc.shape) {
-            if (dim == 0) {
-                throw std::invalid_argument("Cannot add pixel field with 0 elements.");
-            }
-        }
-    }
-
-    if (field_class == FieldClass::COLUMN_FIELD) {
-        if (desc.shape[0] != w) {
-            throw std::invalid_argument(
-                "Column field shape must match "
-                "LidarFrame's height. Width was " +
-                std::to_string(desc.shape[0]) + " vs required width of " + std::to_string(w));
-        }
-    }
-
-    if (field_class == FieldClass::PACKET_FIELD) {
-        if (desc.shape[0] != packet_count_) {
-            throw std::invalid_argument(
-                "Packet field shape must match "
-                "number of packets. Width was " +
-                std::to_string(desc.shape[0]) + " vs required width of " +
-                std::to_string(packet_count_));
-        }
-    }
-
-    fields()[name] = Field{desc, field_class};
-
-    return fields()[name];
-}
-
-Field LidarFrame::del_field(const std::string& name) {
-    if (!has_field(name)) {
-        throw std::invalid_argument("Attempted deleting non existing field '" + name + "'");
-    }
-
-    Field ptr;
-    field(name).swap(ptr);
-    fields().erase(name);
-    return ptr;
-}
-
-// LidarFrame::field<T>(...) is defined inline in lidar_scan.h to work around
-// an Apple Clang mangling bug for the dependent default StrideType expression
-// in Eigen::Ref. See the note in lidar_scan.h. (float16_t and other types are
-// covered by implicit instantiation wherever they are used.)
-
-namespace {
-
-FieldType get_field_type(const std::string& name, const Field& field) {
-    int offset = 0;
-    if (field.field_class() == FieldClass::PIXEL_FIELD) {
-        offset = 2;
-    } else if ((field.field_class() == FieldClass::COLUMN_FIELD) ||
-               (field.field_class() == FieldClass::PACKET_FIELD)) {
-        offset = 1;
-    }
-    std::vector<size_t> extra_dims;
-    extra_dims.insert(extra_dims.begin(), field.shape().begin() + offset, field.shape().end());
-    return FieldType(name, field.tag(), extra_dims, field.field_class());
-}
-
-}  // namespace
-
-FieldType LidarFrame::field_type(const std::string& name) const {
-    return get_field_type(name, field(name));
-}
-
-std::unordered_map<std::string, Field>& LidarFrame::fields() {
-    return fields_;
-}
-
-const std::unordered_map<std::string, Field>& LidarFrame::fields() const {
-    return fields_;
-}
-
-std::unordered_map<std::string, std::vector<Object>>& LidarFrame::objects() {
-    return objects_;
-}
-
-const std::unordered_map<std::string, std::vector<Object>>& LidarFrame::objects() const {
-    return objects_;
-}
-
-Eigen::Ref<LidarFrame::Header<uint64_t>> LidarFrame::timestamp() {
-    return timestamp_;
-}
-
-Eigen::Ref<const LidarFrame::Header<uint64_t>> LidarFrame::timestamp() const {
-    return timestamp_;
-}
-
-Eigen::Ref<LidarFrame::Header<uint64_t>> LidarFrame::packet_timestamp() {
-    return packet_timestamp_;
-}
-
-Eigen::Ref<const LidarFrame::Header<uint64_t>> LidarFrame::packet_timestamp() const {
-    return packet_timestamp_;
 }
 
 Eigen::Ref<LidarFrame::Header<uint8_t>> LidarFrame::alert_flags() {
@@ -640,167 +444,96 @@ uint64_t ts_value_or_throw(nonstd::optional<uint64_t> time) {
 }
 }  // namespace
 
-uint64_t LidarFrame::get_first_valid_packet_timestamp() const {
-    nonstd::optional<uint64_t> time = get_first_valid_lidar_packet_timestamp_internal();
-    time = min_optional(time, get_first_valid_imu_packet_timestamp_internal());
-    time = min_optional(time, get_valid_zone_packet_timestamp_internal());
+uint64_t LidarFrame::get_first_valid_receive_timestamp() const {
+    nonstd::optional<uint64_t> time = first_valid_receive_timestamp_internal();
+    time = min_optional(time, get_first_valid_imu_receive_timestamp_internal());
+    time = min_optional(time, get_valid_zone_receive_timestamp_internal());
     return ts_value_or_throw(time);
 }
 
-uint64_t LidarFrame::get_first_valid_packet_timestamp(PacketType stream) const {
+uint64_t LidarFrame::get_first_valid_receive_timestamp(PacketType stream) const {
     switch (stream) {
         case PacketType::Lidar:
-            return ts_value_or_throw(get_first_valid_lidar_packet_timestamp_internal());
+            return ts_value_or_throw(first_valid_receive_timestamp_internal());
         case PacketType::Imu:
-            return ts_value_or_throw(get_first_valid_imu_packet_timestamp_internal());
+            return ts_value_or_throw(get_first_valid_imu_receive_timestamp_internal());
         case PacketType::Zone:
-            return ts_value_or_throw(get_valid_zone_packet_timestamp_internal());
+            return ts_value_or_throw(get_valid_zone_receive_timestamp_internal());
         case PacketType::Unknown:
         default:
             throw std::runtime_error("No valid packets in LidarFrame");
     }
 }
 
-uint64_t LidarFrame::get_last_valid_packet_timestamp() const {
-    nonstd::optional<uint64_t> time = get_last_valid_lidar_packet_timestamp_internal();
-    time = max_optional(time, get_last_valid_imu_packet_timestamp_internal());
-    time = max_optional(time, get_valid_zone_packet_timestamp_internal());
+uint64_t LidarFrame::get_last_valid_receive_timestamp() const {
+    nonstd::optional<uint64_t> time = last_valid_receive_timestamp_internal();
+    time = max_optional(time, get_last_valid_imu_receive_timestamp_internal());
+    time = max_optional(time, get_valid_zone_receive_timestamp_internal());
     return ts_value_or_throw(time);
 }
 
-uint64_t LidarFrame::get_last_valid_packet_timestamp(PacketType stream) const {
+uint64_t LidarFrame::get_last_valid_receive_timestamp(PacketType stream) const {
     switch (stream) {
         case PacketType::Lidar:
-            return ts_value_or_throw(get_last_valid_lidar_packet_timestamp_internal());
+            return ts_value_or_throw(last_valid_receive_timestamp_internal());
         case PacketType::Imu:
-            return ts_value_or_throw(get_last_valid_imu_packet_timestamp_internal());
+            return ts_value_or_throw(get_last_valid_imu_receive_timestamp_internal());
         case PacketType::Zone:
-            return ts_value_or_throw(get_valid_zone_packet_timestamp_internal());
+            return ts_value_or_throw(get_valid_zone_receive_timestamp_internal());
         case PacketType::Unknown:
         default:
             throw std::runtime_error("No valid packets in LidarFrame");
     }
 }
 
-uint64_t LidarFrame::get_min_valid_packet_timestamp() const {
-    nonstd::optional<uint64_t> time = get_min_valid_lidar_packet_timestamp_internal();
-    time = min_optional(time, get_min_valid_imu_packet_timestamp_internal());
-    time = min_optional(time, get_valid_zone_packet_timestamp_internal());
+uint64_t LidarFrame::get_min_valid_receive_timestamp() const {
+    nonstd::optional<uint64_t> time = min_valid_receive_timestamp_internal();
+    time = min_optional(time, get_min_valid_imu_receive_timestamp_internal());
+    time = min_optional(time, get_valid_zone_receive_timestamp_internal());
     return ts_value_or_throw(time);
 }
 
-uint64_t LidarFrame::get_min_valid_packet_timestamp(PacketType stream) const {
+uint64_t LidarFrame::get_min_valid_receive_timestamp(PacketType stream) const {
     switch (stream) {
         case PacketType::Lidar:
-            return ts_value_or_throw(get_min_valid_lidar_packet_timestamp_internal());
+            return ts_value_or_throw(min_valid_receive_timestamp_internal());
         case PacketType::Imu:
-            return ts_value_or_throw(get_min_valid_imu_packet_timestamp_internal());
+            return ts_value_or_throw(get_min_valid_imu_receive_timestamp_internal());
         case PacketType::Zone:
-            return ts_value_or_throw(get_valid_zone_packet_timestamp_internal());
+            return ts_value_or_throw(get_valid_zone_receive_timestamp_internal());
         case PacketType::Unknown:
         default:
             throw std::runtime_error("No valid packets in LidarFrame");
     }
 }
 
-uint64_t LidarFrame::get_max_valid_packet_timestamp() const {
-    nonstd::optional<uint64_t> time = get_max_valid_lidar_packet_timestamp_internal();
-    time = max_optional(time, get_max_valid_imu_packet_timestamp_internal());
-    time = max_optional(time, get_valid_zone_packet_timestamp_internal());
+uint64_t LidarFrame::get_max_valid_receive_timestamp() const {
+    nonstd::optional<uint64_t> time = max_valid_receive_timestamp_internal();
+    time = max_optional(time, get_max_valid_imu_receive_timestamp_internal());
+    time = max_optional(time, get_valid_zone_receive_timestamp_internal());
     return ts_value_or_throw(time);
 }
 
-uint64_t LidarFrame::get_max_valid_packet_timestamp(PacketType stream) const {
+uint64_t LidarFrame::get_max_valid_receive_timestamp(PacketType stream) const {
     switch (stream) {
         case PacketType::Lidar:
-            return ts_value_or_throw(get_max_valid_lidar_packet_timestamp_internal());
+            return ts_value_or_throw(max_valid_receive_timestamp_internal());
         case PacketType::Imu:
-            return ts_value_or_throw(get_max_valid_imu_packet_timestamp_internal());
+            return ts_value_or_throw(get_max_valid_imu_receive_timestamp_internal());
         case PacketType::Zone:
-            return ts_value_or_throw(get_valid_zone_packet_timestamp_internal());
+            return ts_value_or_throw(get_valid_zone_receive_timestamp_internal());
         case PacketType::Unknown:
         default:
             throw std::runtime_error("No valid packets in LidarFrame");
     }
 }
 
-uint64_t LidarFrame::get_first_valid_lidar_packet_timestamp() const {
-    return get_first_valid_lidar_packet_timestamp_internal().value_or(0);
-}
-
-uint64_t LidarFrame::get_last_valid_lidar_packet_timestamp() const {
-    return get_last_valid_lidar_packet_timestamp_internal().value_or(0);
-}
-
-nonstd::optional<uint64_t> LidarFrame::get_first_valid_lidar_packet_timestamp_internal() const {
-    int total_packets = static_cast<int>(packet_timestamp().size());
-    int columns_per_packet = static_cast<int>(w) / total_packets;
-
-    for (int i = 0; i < total_packets; ++i) {
-        if (status()
-                .middleRows(static_cast<Eigen::Index>(i) * columns_per_packet, columns_per_packet)
-                .unaryExpr([](uint32_t status_val) { return status_val & 1; })
-                .any()) {
-            return packet_timestamp()[i];
-        }
-    }
-
-    return nonstd::nullopt;
-}
-
-nonstd::optional<uint64_t> LidarFrame::get_last_valid_lidar_packet_timestamp_internal() const {
-    int total_packets = static_cast<int>(packet_timestamp().size());
-    int columns_per_packet = static_cast<int>(w) / total_packets;
-
-    for (int i = total_packets - 1; i >= 0; --i) {
-        if (status()
-                .middleRows(static_cast<Eigen::Index>(i) * columns_per_packet, columns_per_packet)
-                .unaryExpr([](uint32_t status_val) { return status_val & 1; })
-                .any()) {
-            return packet_timestamp()[i];
-        }
-    }
-
-    return nonstd::nullopt;
-}
-
-nonstd::optional<uint64_t> LidarFrame::get_min_valid_lidar_packet_timestamp_internal() const {
-    nonstd::optional<uint64_t> time;
-    int total_packets = static_cast<int>(packet_timestamp().size());
-    int columns_per_packet = static_cast<int>(w) / total_packets;
-
-    for (int i = 0; i < total_packets; ++i) {
-        if (status()
-                .middleRows(static_cast<Eigen::Index>(i) * columns_per_packet, columns_per_packet)
-                .unaryExpr([](uint32_t status_val) { return status_val & 1; })
-                .any()) {
-            const uint64_t packet_time = packet_timestamp()[i];
-            time = time ? std::min(*time, packet_time) : packet_time;
-        }
-    }
-    return time;
-}
-
-nonstd::optional<uint64_t> LidarFrame::get_max_valid_lidar_packet_timestamp_internal() const {
-    nonstd::optional<uint64_t> time;
-    int total_packets = static_cast<int>(packet_timestamp().size());
-    int columns_per_packet = static_cast<int>(w) / total_packets;
-
-    for (int i = 0; i < total_packets; ++i) {
-        if (status()
-                .middleRows(static_cast<Eigen::Index>(i) * columns_per_packet, columns_per_packet)
-                .unaryExpr([](uint32_t status_val) { return status_val & 1; })
-                .any()) {
-            const uint64_t packet_time = packet_timestamp()[i];
-            time = time ? std::max(*time, packet_time) : packet_time;
-        }
-    }
-    return time;
-}
-
-nonstd::optional<uint64_t> LidarFrame::get_first_valid_imu_packet_timestamp_internal() const {
+nonstd::optional<uint64_t> LidarFrame::get_first_valid_imu_receive_timestamp_internal() const {
     if (has_field(IMU_PACKET_TIMESTAMP) && has_field(IMU_STATUS)) {
         ConstArrayView<uint64_t, 1> data = field(IMU_PACKET_TIMESTAMP);
+        if (data.size() == 0) {
+            return nonstd::nullopt;
+        }
         Eigen::Ref<const Header<uint16_t>> status = field(IMU_STATUS);
         int icolumns_per_packet = static_cast<int>(status.size() / data.size());
         for (size_t i = 0; i < data.size(); i++) {
@@ -816,9 +549,12 @@ nonstd::optional<uint64_t> LidarFrame::get_first_valid_imu_packet_timestamp_inte
     return nonstd::nullopt;
 }
 
-nonstd::optional<uint64_t> LidarFrame::get_last_valid_imu_packet_timestamp_internal() const {
+nonstd::optional<uint64_t> LidarFrame::get_last_valid_imu_receive_timestamp_internal() const {
     if (has_field(IMU_PACKET_TIMESTAMP) && has_field(IMU_STATUS)) {
         ConstArrayView<uint64_t, 1> data = field(IMU_PACKET_TIMESTAMP);
+        if (data.size() == 0) {
+            return nonstd::nullopt;
+        }
         ConstArrayView<uint16_t, 1> status = field(IMU_STATUS);
         Eigen::Map<const Header<uint16_t>> estatus(status.data(),
                                                    static_cast<Eigen::Index>(status.size()));
@@ -836,10 +572,13 @@ nonstd::optional<uint64_t> LidarFrame::get_last_valid_imu_packet_timestamp_inter
     return nonstd::nullopt;
 }
 
-nonstd::optional<uint64_t> LidarFrame::get_min_valid_imu_packet_timestamp_internal() const {
+nonstd::optional<uint64_t> LidarFrame::get_min_valid_imu_receive_timestamp_internal() const {
     nonstd::optional<uint64_t> time;
     if (has_field(IMU_PACKET_TIMESTAMP) && has_field(IMU_STATUS)) {
         ConstArrayView<uint64_t, 1> data = field(IMU_PACKET_TIMESTAMP);
+        if (data.size() == 0) {
+            return nonstd::nullopt;
+        }
         ConstArrayView<uint16_t, 1> status = field(IMU_STATUS);
         Eigen::Map<const Header<uint16_t>> estatus(status.data(),
                                                    static_cast<Eigen::Index>(status.size()));
@@ -858,10 +597,13 @@ nonstd::optional<uint64_t> LidarFrame::get_min_valid_imu_packet_timestamp_intern
     return time;
 }
 
-nonstd::optional<uint64_t> LidarFrame::get_max_valid_imu_packet_timestamp_internal() const {
+nonstd::optional<uint64_t> LidarFrame::get_max_valid_imu_receive_timestamp_internal() const {
     nonstd::optional<uint64_t> time;
     if (has_field(IMU_PACKET_TIMESTAMP) && has_field(IMU_STATUS)) {
         ConstArrayView<uint64_t, 1> data = field(IMU_PACKET_TIMESTAMP);
+        if (data.size() == 0) {
+            return nonstd::nullopt;
+        }
         ConstArrayView<uint16_t, 1> status = field(IMU_STATUS);
         Eigen::Map<const Header<uint16_t>> estatus(status.data(),
                                                    static_cast<Eigen::Index>(status.size()));
@@ -880,7 +622,7 @@ nonstd::optional<uint64_t> LidarFrame::get_max_valid_imu_packet_timestamp_intern
     return time;
 }
 
-nonstd::optional<uint64_t> LidarFrame::get_valid_zone_packet_timestamp_internal() const {
+nonstd::optional<uint64_t> LidarFrame::get_valid_zone_receive_timestamp_internal() const {
     if (has_field(ZONE_PACKET_TIMESTAMP)) {
         ConstArrayView<uint64_t, 1> data = field(ZONE_PACKET_TIMESTAMP);
         if (data(0) != 0) {
@@ -904,77 +646,12 @@ uint64_t column_timestamp_at_destaggered_pixel(
     return column_timestamps[staggered_col];
 }
 
-int LidarFrame::get_first_valid_column() const {
-    auto stat = status();
-    for (int i = 0; i < stat.size(); ++i) {
-        if ((stat[i] & 1) > 0) {
-            return i;
-        }
-    }
-    throw std::runtime_error("No valid columns in LidarFrame");
-}
-
-int LidarFrame::get_last_valid_column() const {
-    auto stat = status();
-    for (int i = static_cast<int>(stat.size()) - 1; i >= 0; --i) {
-        if ((stat[i] & 1) > 0) {
-            return i;
-        }
-    }
-    throw std::runtime_error("No valid columns in LidarFrame");
-}
-
 Eigen::Ref<LidarFrame::Header<uint16_t>> LidarFrame::measurement_id() {
     return measurement_id_;
 }
 
 Eigen::Ref<const LidarFrame::Header<uint16_t>> LidarFrame::measurement_id() const {
     return measurement_id_;
-}
-
-Eigen::Ref<LidarFrame::Header<uint32_t>> LidarFrame::status() {
-    return status_;
-}
-
-Eigen::Ref<const LidarFrame::Header<uint32_t>> LidarFrame::status() const {
-    return status_;
-}
-
-Field& LidarFrame::body_to_world() {
-    return body_to_world_;
-}
-
-const Field& LidarFrame::body_to_world() const {
-    return body_to_world_;
-}
-
-Field& LidarFrame::pose() {
-    return body_to_world_;
-}
-
-const Field& LidarFrame::pose() const {
-    return body_to_world_;
-}
-
-void LidarFrame::set_column_pose(int index, const Matrix4dR& pose) {
-    if (index < 0 || index >= static_cast<int>(w)) {
-        throw std::out_of_range("Column index out of range");
-    }
-    std::memcpy(
-        static_cast<char*>(body_to_world_.get()) + static_cast<size_t>(index) * 16 * sizeof(double),
-        pose.data(), sizeof(double) * 16);
-}
-
-Matrix4dR LidarFrame::get_column_pose(int index) const {
-    if (index < 0 || index >= static_cast<int>(w)) {
-        throw std::out_of_range("Column index out of range");
-    }
-    Matrix4dR out;
-    std::memcpy(out.data(),
-                static_cast<const char*>(body_to_world_.get()) +
-                    static_cast<size_t>(index) * 16 * sizeof(double),
-                sizeof(double) * 16);
-    return out;
 }
 
 bool LidarFrame::complete(ColumnWindow window) const {
@@ -997,24 +674,27 @@ bool LidarFrame::complete(ColumnWindow window) const {
 }
 
 bool LidarFrame::complete() const {
-    if (!sensor_info) {
+    if (!sensor_info_) {
         throw std::runtime_error(
-            "LidarFrame must have a valid SensorInfo in order to compute "
+            "LidarFrame must have a valid LidarInfo in order to compute "
             "completeness");
     }
-    return complete(sensor_info->format.column_window);
+    return complete(sensor_info()->format.column_window);
 }
 
-size_t LidarFrame::packet_count() const {
-    return packet_count_;
-}
-
-bool LidarFrame::equals(const LidarFrame& other) const {
-    return frame_id == other.frame_id && w == other.w && h == other.h &&
-           frame_status == other.frame_status && measurement_id_ == other.measurement_id_ &&
-           timestamp_ == other.timestamp_ && packet_timestamp_ == other.packet_timestamp_ &&
-           body_to_world() == other.body_to_world() && fields() == other.fields() &&
-           objects() == other.objects();
+bool LidarFrame::equals(const Frame& other) const {
+    if (!Frame::equals(other)) {
+        return false;
+    }
+    // Frame::equals() has established that the concrete types match, so this
+    // downcast cannot fail and does not need to be checked.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+    const auto& other_lidar = static_cast<const LidarFrame&>(other);
+    return frame_id == other_lidar.frame_id && frame_status == other_lidar.frame_status &&
+           measurement_id_ == other_lidar.measurement_id_ &&
+           alert_flags_ == other_lidar.alert_flags_ &&
+           shutdown_countdown == other_lidar.shutdown_countdown &&
+           shot_limiting_countdown == other_lidar.shot_limiting_countdown;
 }
 
 bool operator==(const LidarFrame& a, const LidarFrame& b) {
@@ -1023,16 +703,6 @@ bool operator==(const LidarFrame& a, const LidarFrame& b) {
 
 bool operator!=(const LidarFrame& a, const LidarFrame& b) {
     return !(a == b);
-}
-
-LidarFrameFieldTypes LidarFrame::field_types() const {
-    LidarFrameFieldTypes field_types_vec;
-    for (const auto& kv : fields()) {
-        field_types_vec.push_back(get_field_type(kv.first, kv.second));
-    }
-
-    std::sort(field_types_vec.begin(), field_types_vec.end());
-    return field_types_vec;
 }
 
 LidarFrameFieldTypes get_field_types(const DataFormat& format, const Version& fw_version) {
@@ -1052,7 +722,7 @@ LidarFrameFieldTypes get_field_types(const DataFormat& format, const Version& fw
      */
     using namespace ouster::sdk::core;
     using namespace ouster::sdk::core::ChanField;
-    if (format.udp_profile_imu == UDPProfileIMU::ACCEL32_GYRO32_NMEA) {
+    if (format.imu_enabled && format.udp_profile_imu == UDPProfileIMU::ACCEL32_GYRO32_NMEA) {
         field_types.emplace_back(IMU_ACC, ChanFieldType::FLOAT32,
                                  std::vector<size_t>{imu_measurements, 3}, FieldClass::FRAME_FIELD);
         field_types.emplace_back(IMU_GYRO, ChanFieldType::FLOAT32,
@@ -1112,7 +782,7 @@ LidarFrameFieldTypes get_field_types(const DataFormat& format, const Version& fw
     return field_types;
 }
 
-LidarFrameFieldTypes get_field_types(const SensorInfo& info) {
+LidarFrameFieldTypes get_field_types(const LidarInfo& info) {
     return get_field_types(info.format, info.get_version());
 }
 
@@ -1150,7 +820,7 @@ std::string to_string(const LidarFrame& lidar_frame) {
     std::stringstream string_stream;
     LidarFrameFieldTypes field_types = lidar_frame.field_types();
     string_stream << "LidarFrame: {h = " << lidar_frame.h << ", w = " << lidar_frame.w
-                  << ", packets_per_frame = " << lidar_frame.packet_timestamp().size()
+                  << ", packets_per_frame = " << lidar_frame.receive_timestamp().size()
                   << ", fid = " << lidar_frame.frame_id << "," << std::endl
                   << " frame status = " << std::hex << lidar_frame.frame_status << std::dec
                   << ", thermal_shutdown status = " << to_string(lidar_frame.thermal_shutdown())
@@ -1158,94 +828,17 @@ std::string to_string(const LidarFrame& lidar_frame) {
                   << std::endl
                   << "  field_types = " << to_string(field_types) << "," << std::endl;
 
-    auto read_eigen = [](auto ref, std::stringstream& string_stream) {
-        string_stream << "min: " << static_cast<double>(ref.minCoeff())
-                      << "; mean: " << ref.template cast<double>().mean()
-                      << "; max: " << static_cast<double>(ref.maxCoeff());
-    };
-
-    auto read_field = [&read_eigen](const Field& field_val, const std::string& name,
-                                    std::stringstream& string_stream) {
-        string_stream << "     " << name << " type:" << to_string(field_val.tag()) << " shape: (";
-
-        const auto& shape = field_val.shape();
-        for (size_t i = 0; i < shape.size(); ++i) {
-            string_stream << shape[i];
-            if (i < shape.size() - 1) {
-                string_stream << ", ";
-            }
-        }
-        string_stream << ") ";
-
-        if (field_val.bytes() > 0) {
-            if (field_val.tag() == ChanFieldType::CHAR) {
-                // Show first sentence (e.g., first NMEA string).
-                const char* data = static_cast<const char*>(field_val.get());
-                size_t max_len = NMEA_SENTENCE_LENGTH;
-                const auto& shape = field_val.shape();
-                if (!shape.empty() && shape.back() > 0) {
-                    max_len = shape.back();
-                }
-                const char* end = static_cast<const char*>(memchr(data, '\0', max_len));
-                size_t len = (end != nullptr) ? static_cast<size_t>(end - data) : max_len;
-                std::string preview;
-                preview.reserve(len);
-                for (size_t i = 0; i < len; ++i) {
-                    switch (data[i]) {
-                        case '\r':
-                            preview += "\\r";
-                            break;
-                        case '\n':
-                            preview += "\\n";
-                            break;
-                        case '\t':
-                            preview += "\\t";
-                            break;
-                        case '\\':
-                            preview += "\\\\";
-                            break;
-                        case '\b':
-                            preview += "\\b";
-                            break;
-                        case '\f':
-                            preview += "\\f";
-                            break;
-                        case '\v':
-                            preview += "\\v";
-                            break;
-                        case '"':
-                            preview += "\\\"";
-                            break;
-                        default:
-                            preview += data[i];
-                            break;
-                    }
-                }
-                bool truncated = (len == max_len && end == nullptr);
-                if (truncated) {
-                    preview += "...";
-                }
-                string_stream << "\"" << preview << "\"";
-            } else {
-                // For numeric types, show min/mean/max stats
-                // visit_field_2d will no-op for unsupported types (ZONE_STATE,
-                // etc.)
-                FieldView flat_view = field_val.reshape(1, field_val.size());
-                impl::visit_field_2d(flat_view, read_eigen, string_stream);
-            }
-        }
-        string_stream << std::endl;
-    };
-
-    for (auto&& kv : lidar_frame.fields()) {
-        read_field(kv.second, kv.first, string_stream);
-    }
+    impl::append_frame_fields(lidar_frame.fields(), string_stream);
 
     string_stream << "}";
     return string_stream.str();
 }
 
-FrameBatcher::FrameBatcher(const std::shared_ptr<SensorInfo>& info)
+std::string LidarFrame::to_string() const {
+    return ouster::sdk::core::to_string(*this);
+}
+
+FrameBatcher::FrameBatcher(const std::shared_ptr<LidarInfo>& info)
     : pf(get_format(*info)), cache_{pf}, last_init_id_{info->init_id}, sensor_info_{info} {
     if (info->format.columns_per_packet == 0) {
         throw std::invalid_argument("unexpected columns_per_packet: 0");
@@ -1255,7 +848,8 @@ FrameBatcher::FrameBatcher(const std::shared_ptr<SensorInfo>& info)
     }
     // Calculate the number of packets required to have a complete frame
     expected_lidar_packets_ = info->format.lidar_packets_per_frame();
-    if (info->format.udp_profile_imu == UDPProfileIMU::ACCEL32_GYRO32_NMEA) {
+    if (info->format.imu_enabled &&
+        info->format.udp_profile_imu == UDPProfileIMU::ACCEL32_GYRO32_NMEA) {
         expected_imu_packets_ = info->format.imu_packets_per_frame;
     }
     if (info->format.zone_monitoring_enabled) {
@@ -1263,8 +857,8 @@ FrameBatcher::FrameBatcher(const std::shared_ptr<SensorInfo>& info)
     }
 }
 
-FrameBatcher::FrameBatcher(const SensorInfo& info)
-    : FrameBatcher(std::make_shared<SensorInfo>(info)) {}
+FrameBatcher::FrameBatcher(const LidarInfo& info)
+    : FrameBatcher(std::make_shared<LidarInfo>(info)) {}
 
 namespace {
 
@@ -1530,11 +1124,11 @@ void FrameBatcher::parse_by_block(const uint8_t* packet_buf, LidarFrame& lidar_f
 void FrameBatcher::batch_lidar_packet(const LidarPacket& packet, LidarFrame& lidar_frame) {
     const uint8_t* packet_buf = packet.buf.data();
 
-    // handling packet level data: packet_timestamp
+    // handling packet level data: receive_timestamp
     const uint8_t* col0_buf = pf.nth_col(0, packet_buf);
     const uint16_t packet_id = pf.col_measurement_id(col0_buf) / pf.columns_per_packet;
-    if (packet_id < lidar_frame.packet_timestamp().rows()) {
-        lidar_frame.packet_timestamp()[packet_id] = packet.host_timestamp;
+    if (packet_id < lidar_frame.receive_timestamp().rows()) {
+        lidar_frame.receive_timestamp()[packet_id] = packet.host_timestamp;
         lidar_frame.alert_flags()[packet_id] = pf.alert_flags(packet_buf);
     }
 
@@ -1618,8 +1212,8 @@ void FrameBatcher::batch_imu_packet(const ImuPacket& packet, LidarFrame& lidar_f
     }
 
     if (lidar_frame.has_field(IMU_PACKET_TIMESTAMP)) {
-        ArrayView1<uint64_t> packet_timestamp = lidar_frame.field(IMU_PACKET_TIMESTAMP);
-        packet_timestamp(packet_id) = packet.host_timestamp;
+        ArrayView1<uint64_t> receive_timestamp = lidar_frame.field(IMU_PACKET_TIMESTAMP);
+        receive_timestamp(packet_id) = packet.host_timestamp;
     }
 
     if (lidar_frame.has_field(IMU_ALERT_FLAGS)) {
@@ -1716,7 +1310,7 @@ void FrameBatcher::start_frame(int64_t f_id, const uint8_t* packet_buf, LidarFra
     batched_zone_packets_ = 0;
     lidar_frame.frame_id = f_id;
     zero_header_cols(lidar_frame, static_cast<ptrdiff_t>(0), static_cast<ptrdiff_t>(lidar_frame.w));
-    lidar_frame.packet_timestamp().setZero();
+    lidar_frame.receive_timestamp().setZero();
 
     // zero IMU timestamps, statuses, and measurement ids in case this frame is
     // re-used
@@ -1737,7 +1331,7 @@ void FrameBatcher::start_frame(int64_t f_id, const uint8_t* packet_buf, LidarFra
     // given frame.
     lidar_frame.shutdown_countdown = pf.countdown_thermal_shutdown(packet_buf);
     lidar_frame.shot_limiting_countdown = pf.countdown_shot_limiting(packet_buf);
-    lidar_frame.sensor_info = sensor_info_;
+    lidar_frame.set_sensor_info(sensor_info_);
 }
 
 bool FrameBatcher::batch_with_caching(const Packet& packet, LidarFrame& lidar_frame) {
@@ -1837,7 +1431,7 @@ bool FrameBatcher::batch(const Packet& packet, LidarFrame& lidar_frame) {
         lidar_frame.h != sensor_info_->format.pixels_per_column) {
         throw std::invalid_argument("unexpected frame dimensions");
     }
-    if (static_cast<size_t>(lidar_frame.packet_timestamp().rows()) !=
+    if (static_cast<size_t>(lidar_frame.receive_timestamp().rows()) !=
         lidar_frame.w / pf.columns_per_packet) {
         throw std::invalid_argument("unexpected frame columns_per_packet: " +
                                     std::to_string(pf.columns_per_packet));
@@ -1883,10 +1477,6 @@ bool FrameBatcher::batch(const Packet& packet, LidarFrame& lidar_frame) {
     return batch_with_caching(packet, lidar_frame);
 }
 
-bool FrameBatcher::operator()(const Packet& packet, LidarFrame& lidar_frame) {
-    return batch(packet, lidar_frame);
-}
-
 void FrameBatcher::cache_packet(const Packet& packet) {
     cache_.push(std::make_unique<Packet>(packet));
 }
@@ -1895,7 +1485,7 @@ bool FrameBatcher::check_frame_complete(const LidarFrame& lidar_frame) const {
     bool lidar_batching_finished =
         (pf.udp_profile_lidar == UDPProfileLidar::OFF) ||
         (batched_lidar_packets_ >= expected_lidar_packets_ &&
-         static_cast<size_t>(lidar_frame.packet_timestamp().count()) == expected_lidar_packets_);
+         static_cast<size_t>(lidar_frame.receive_timestamp().count()) == expected_lidar_packets_);
     bool imu_batching_finished = batched_imu_packets_ >= expected_imu_packets_;
     bool zone_batching_finished = batched_zone_packets_ >= expected_zone_packets_;
     bool complete = lidar_batching_finished && imu_batching_finished && zone_batching_finished;
@@ -1912,7 +1502,7 @@ void FrameBatcher::finalize_frame(LidarFrame& lidar_frame) {
                    static_cast<std::ptrdiff_t>(lidar_frame.w));
     }
 
-    if (lidar_frame.sensor_info->init_id == last_init_id_ &&
+    if (lidar_frame.sensor_info()->init_id == last_init_id_ &&
         lidar_frame.frame_id <= last_frame_id_ && pf.header_type == HeaderType::FUSA) {
         throw std::runtime_error("32-bit frame id did not increase since the last frame");
     }
@@ -1958,23 +1548,301 @@ size_t FrameBatcher::get_max_cache_size() const {
     return max_cache_size_;
 }
 
-FieldType::FieldType() = default;
+namespace {
+/**
+ * OutputItT - STL compatible output iterator over Packet value type
+ */
+template <typename OutputItT>
+void frame_to_packets(const LidarFrame& ls,
+                      std::shared_ptr<ouster::sdk::core::PacketFormat> packet_format,
+                      OutputItT iter, uint32_t init_id, uint64_t prod_sn) {
+    if (!packet_format) {
+        throw std::invalid_argument("Null PacketFormat pointer");
+    }
 
-FieldType::FieldType(std::string name_in, ChanFieldType element_type_in,
-                     std::vector<size_t> extra_dims_in, FieldClass class_in)
-    : name(std::move(name_in)),
-      element_type(element_type_in),
-      extra_dims(std::move(extra_dims_in)),
-      field_class(class_in) {}
+    // this bit will not work with UDPProfileLidar::OFF
+    // TODO: fix if that is back on the menu -- Tim T.
+    size_t total_lidar_packets = ls.receive_timestamp().size();
 
-bool operator==(const FieldType& a, const FieldType& b) {
-    return a.name == b.name && a.element_type == b.element_type && a.field_class == b.field_class &&
-           a.extra_dims == b.extra_dims;
+    if (ls.w / packet_format->columns_per_packet != total_lidar_packets) {
+        std::string err =
+            "Mismatch between expected number of packets and "
+            "PacketFormat.columns_per_packet";
+        throw std::invalid_argument(err);
+    }
+
+    auto frame_id = ls.frame_id;
+
+    using namespace ouster::sdk::core::ChanField;
+
+    auto set_header = [&packet_format, &ls, frame_id, init_id, prod_sn](uint8_t* buffer) {
+        // Set shot-limiting and shutdown fields, which should be the same for
+        // all packets in the frame
+        packet_format->set_shutdown(buffer, static_cast<uint8_t>(ls.thermal_shutdown()));
+        packet_format->set_shot_limiting(buffer, static_cast<uint8_t>(ls.shot_limiting()));
+        packet_format->set_shutdown_countdown(buffer, ls.shutdown_countdown);
+        packet_format->set_shot_limiting_countdown(buffer, ls.shot_limiting_countdown);
+
+        // Set other frame-level attributes
+        packet_format->set_frame_id(buffer, frame_id);
+        packet_format->set_init_id(buffer, init_id);
+        packet_format->set_prod_sn(buffer, prod_sn);
+    };
+
+    auto emit_lidar_packet = [&packet_format, &ls, &set_header, &iter](size_t packet_id) {
+        LidarPacket lidar_packet(packet_format);
+
+        uint8_t* lidar_buf = lidar_packet.buf.data();
+        lidar_packet.host_timestamp = ls.receive_timestamp()[static_cast<Eigen::Index>(packet_id)];
+
+        set_header(lidar_buf);
+        packet_format->set_packet_type(lidar_buf, 0x1);
+
+        // Set alert flags, which may vary from packet to packet
+        packet_format->set_alert_flags(lidar_buf, ls.alert_flags()[packet_id]);
+
+        bool any_valid = false;
+        auto columns_per_packet = packet_format->columns_per_packet;
+        for (uint32_t icol = 0; icol < columns_per_packet; ++icol) {
+            uint8_t* col_buf = packet_format->nth_col(icol, lidar_buf);
+
+            auto id = (packet_id * columns_per_packet) + icol;
+
+            packet_format->set_col_status(col_buf, ls.status()[id]);
+            packet_format->set_col_measurement_id(col_buf, id);
+            packet_format->set_col_timestamp(col_buf, ls.timestamp()[id]);
+
+            any_valid |= (ls.status()[id] & 0x01);
+        }
+
+        // do not emit packet if ts == 0 and none of the columns are valid
+        if (!any_valid && !lidar_packet.host_timestamp) {
+            return;
+        }
+
+        auto pack_field = [&packet_format](auto ref_field, const std::string& i,
+                                           LidarPacket& packet) {
+            if (sizeof(ref_field.shape) / sizeof(ref_field.shape[0]) != 2) {
+                // printf("writing 3xfloat16\n");
+                auto ptr = reinterpret_cast<const float3x16_t*>(ref_field.data());
+                packet_format->set_block(ptr, ref_field.shape[1], i, packet.buf.data());
+            } else {
+                packet_format->set_block(ref_field.data(), ref_field.shape[1], i,
+                                         packet.buf.data());
+            }
+        };
+        impl::foreach_channel_field_ndim(ls, *packet_format, pack_field, lidar_packet);
+
+        if (impl::raw_headers_enabled(*packet_format, ls)) {
+            auto unpack_raw_headers = [&packet_format](auto ref_field, LidarPacket& packet) {
+                packet_format->unpack_raw_headers(ref_field, packet.buf.data());
+            };
+            impl::visit_field(ls, RAW_HEADERS, unpack_raw_headers, lidar_packet);
+        } else if (packet_format->udp_profile_lidar != UDPProfileLidar::LEGACY &&
+                   packet_format->header_type == HeaderType::STANDARD) {
+            assert(lidar_packet.buf.size() > sizeof(uint64_t));
+            uint64_t crc =
+                packet_format->calculate_crc(lidar_packet.buf.data(), lidar_packet.buf.size());
+            memcpy(lidar_packet.buf.data() + lidar_packet.buf.size() - sizeof(crc), &crc,
+                   sizeof(crc));
+        }
+
+        *iter++ = lidar_packet;
+    };
+
+    auto emit_imu_packet = [&packet_format, &ls, &set_header, &iter](size_t packet_id) {
+        ImuPacket imu_packet(packet_format);
+
+        uint8_t* imu_buf = imu_packet.buf.data();
+
+        set_header(imu_buf);
+        packet_format->set_packet_type(imu_buf, 0x2);
+
+        if (ls.has_field(IMU_ALERT_FLAGS)) {
+            ConstArrayView1<uint8_t> alert_flags = ls.field(IMU_ALERT_FLAGS);
+            packet_format->set_alert_flags(imu_buf, alert_flags(packet_id));
+        }
+
+        if (ls.has_field(IMU_PACKET_TIMESTAMP)) {
+            ConstArrayView1<uint64_t> receive_timestamp = ls.field(IMU_PACKET_TIMESTAMP);
+            imu_packet.host_timestamp = receive_timestamp(packet_id);
+        }
+
+        if (ls.has_field(POSITION_STRING)) {
+            ConstArrayView2<char> nmea_sentences = ls.field(POSITION_STRING);
+            packet_format->set_imu_nmea_sentence(imu_buf, nmea_sentences.subview(packet_id).data());
+        }
+
+        if (ls.has_field(POSITION_TIMESTAMP)) {
+            ConstArrayView1<uint64_t> nmea_ts = ls.field(POSITION_TIMESTAMP);
+            packet_format->set_imu_nmea_ts(imu_buf, nmea_ts(packet_id));
+        }
+
+        const FieldView empty{};
+        const FieldView imu_ts_fview =
+            ls.has_field(IMU_TIMESTAMP) ? ls.field(IMU_TIMESTAMP) : empty;
+        const FieldView imu_m_id_fview =
+            ls.has_field(IMU_MEASUREMENT_ID) ? ls.field(IMU_MEASUREMENT_ID) : empty;
+        const FieldView imu_status_fview = ls.has_field(IMU_STATUS) ? ls.field(IMU_STATUS) : empty;
+
+        const FieldView imu_acc_fview = ls.has_field(IMU_ACC) ? ls.field(IMU_ACC) : empty;
+
+        const FieldView imu_gyro_fview = ls.has_field(IMU_GYRO) ? ls.field(IMU_GYRO) : empty;
+
+        size_t col_offset = packet_id * packet_format->imu_measurements_per_packet;
+        for (size_t i = 0; i < packet_format->imu_measurements_per_packet; ++i) {
+            uint8_t* col_buf = packet_format->imu_nth_measurement(i, imu_buf);
+
+            if (imu_ts_fview) {
+                ConstArrayView1<uint64_t> imu_timestamp = imu_ts_fview;
+                packet_format->set_col_timestamp(col_buf, imu_timestamp(col_offset + i));
+            }
+
+            if (imu_m_id_fview) {
+                ConstArrayView1<uint16_t> imu_m_id = imu_m_id_fview;
+                packet_format->set_col_measurement_id(col_buf, imu_m_id(col_offset + i));
+            }
+
+            if (imu_status_fview) {
+                ConstArrayView1<uint16_t> imu_status = imu_status_fview;
+                packet_format->set_col_status(col_buf, imu_status(col_offset + i));
+            }
+
+            if (imu_acc_fview) {
+                ConstArrayView2<float> acc = imu_acc_fview;
+                packet_format->set_imu_la_x(col_buf, acc(col_offset + i, 0));
+                packet_format->set_imu_la_y(col_buf, acc(col_offset + i, 1));
+                packet_format->set_imu_la_z(col_buf, acc(col_offset + i, 2));
+            }
+
+            if (imu_gyro_fview) {
+                ConstArrayView2<float> gyro = imu_gyro_fview;
+                packet_format->set_imu_av_x(col_buf, gyro(col_offset + i, 0));
+                packet_format->set_imu_av_y(col_buf, gyro(col_offset + i, 1));
+                packet_format->set_imu_av_z(col_buf, gyro(col_offset + i, 2));
+            }
+        }
+
+        if (packet_format->header_type == HeaderType::STANDARD) {
+            uint64_t crc =
+                packet_format->calculate_crc(imu_packet.buf.data(), imu_packet.buf.size());
+            memcpy(imu_packet.buf.data() + imu_packet.buf.size() - sizeof(crc), &crc, sizeof(crc));
+        }
+
+        *iter++ = imu_packet;
+    };
+
+    auto emit_zm_packet = [&packet_format, &ls, &set_header, &iter]() {
+        ZonePacket zone_packet(packet_format);
+        uint8_t* zone_buf = zone_packet.buf.data();
+        set_header(zone_buf);
+        packet_format->set_packet_type(zone_buf, 0x3);
+
+        if (ls.has_field(ZONE_ALERT_FLAGS)) {
+            ConstArrayView1<uint8_t> alert_flags = ls.field(ZONE_ALERT_FLAGS);
+            packet_format->set_alert_flags(zone_buf, alert_flags(0));
+        }
+
+        if (ls.has_field(ZONE_TIMESTAMP)) {
+            ConstArrayView1<uint64_t> zone_ts = ls.field(ZONE_TIMESTAMP);
+            packet_format->set_zone_timestamp(zone_buf, zone_ts(0));
+        }
+
+        if (ls.has_field(ZONE_PACKET_TIMESTAMP)) {
+            ConstArrayView1<uint64_t> zone_packet_ts = ls.field(ZONE_PACKET_TIMESTAMP);
+            zone_packet.host_timestamp = zone_packet_ts(0);
+        }
+
+        if (ls.has_field(LIVE_ZONESET_HASH)) {
+            packet_format->set_live_zoneset_hash(zone_buf, ls.field(LIVE_ZONESET_HASH));
+        }
+
+        if (ls.has_field(ZONE_STATES)) {
+            ConstArrayView1<ZoneState> zones = ls.field(ZONE_STATES);
+            for (size_t i = 0; i < zones.shape[0]; ++i) {
+                uint8_t* buf = packet_format->zone_nth_measurement(i, zone_buf);
+                packet_format->set_zone_state(buf, zones(i));
+            }
+        }
+
+        if (packet_format->header_type == HeaderType::STANDARD) {
+            uint64_t crc =
+                packet_format->calculate_crc(zone_packet.buf.data(), zone_packet.buf.size());
+            memcpy(zone_packet.buf.data() + zone_packet.buf.size() - sizeof(crc), &crc,
+                   sizeof(crc));
+        }
+
+        *iter++ = zone_packet;
+    };
+
+    std::vector<std::tuple<uint64_t, size_t, PacketType>> packet_order;
+    packet_order.reserve(total_lidar_packets);
+    for (size_t p_id = 0; p_id < total_lidar_packets; ++p_id) {
+        packet_order.emplace_back(ls.receive_timestamp()[static_cast<Eigen::Index>(p_id)], p_id,
+                                  PacketType::Lidar);
+    }
+
+    if (packet_format->imu_enabled &&
+        packet_format->udp_profile_imu == UDPProfileIMU::ACCEL32_GYRO32_NMEA) {
+        const FieldView empty{};
+        const FieldView ts_fv =
+            ls.has_field(IMU_PACKET_TIMESTAMP) ? ls.field(IMU_PACKET_TIMESTAMP) : empty;
+
+        for (size_t p_id = 0; p_id < packet_format->imu_packets_per_frame; ++p_id) {
+            uint64_t imu_packet_ts;
+            if (ts_fv) {
+                ConstArrayView1<uint64_t> ts_v = ts_fv;
+                imu_packet_ts = ts_v(p_id);
+            } else {
+                imu_packet_ts = 0;
+            }
+
+            if (imu_packet_ts > 0) {
+                packet_order.emplace_back(imu_packet_ts, p_id, PacketType::Imu);
+            }
+        }
+    }
+
+    if (packet_format->zone_monitoring_enabled) {
+        uint64_t zone_packet_ts;
+        if (ls.has_field(ZONE_PACKET_TIMESTAMP)) {
+            ConstArrayView1<uint64_t> ts_v = ls.field(ZONE_PACKET_TIMESTAMP);
+            zone_packet_ts = ts_v(0);
+        } else {
+            zone_packet_ts = 0;
+        }
+
+        if (zone_packet_ts > 0) {
+            packet_order.emplace_back(zone_packet_ts, 0, PacketType::Zone);
+        }
+    }
+
+    std::sort(packet_order.begin(), packet_order.end());
+
+    for (auto&& t : packet_order) {
+        switch (std::get<2>(t)) {
+            case PacketType::Lidar:
+                emit_lidar_packet(std::get<1>(t));
+                break;
+            case PacketType::Imu:
+                emit_imu_packet(std::get<1>(t));
+                break;
+            case PacketType::Zone:
+                emit_zm_packet();
+                break;
+            default:
+                break;
+        }
+    }
 }
+}  // namespace
 
-bool operator!=(const FieldType& a, const FieldType& b) {
-    return a.name != b.name || a.element_type != b.element_type || a.field_class != b.field_class ||
-           a.extra_dims != b.extra_dims;
+std::vector<Packet> frame_to_packets(
+    const LidarFrame& ls, const std::shared_ptr<ouster::sdk::core::PacketFormat> packet_format,
+    uint32_t init_id, uint64_t prod_sn) {
+    std::vector<Packet> packets;
+    frame_to_packets(ls, packet_format, std::back_inserter(packets), init_id, prod_sn);
+    return packets;
 }
 
 }  // namespace core

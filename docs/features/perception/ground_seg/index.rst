@@ -4,10 +4,14 @@
 Ground Segmentation
 ===================
 
-Ground Segmentation classifies lidar returns as ground or non-ground. The
-result is stored directly on each frame as a ``uint8`` mask: ``1`` means ground
-and ``0`` means non-ground. The first-return mask is named ``GROUND`` and the
-optional second-return mask is named ``GROUND2``.
+Ground Segmentation classifies sensor returns as ground or non-ground. It runs
+on any :ouster:class:`Frame <py=ouster.sdk.core.Frame|cpp=ouster::sdk::core::Frame>`
+that carries a ``RANGE`` field and sensor metadata, so it works with both lidar
+and camera frames. The result is stored directly on each frame as a ``uint8``
+mask: ``1`` means ground and ``0`` means non-ground. The first-return mask is
+named ``GROUND`` and the optional second-return mask is named ``GROUND2``.
+Lidar frames may produce a mask per return; camera frames are single-return, so
+they receive only ``GROUND``.
 
 Users can visualize the mask, remove ground points before object detection or
 mapping, or reuse it during point cloud alignment. Use the ``ground`` CLI
@@ -39,8 +43,7 @@ available to downstream commands such as ``viz``:
    :class: doc-snippet
 
 For the best results, ``ground`` expects the input sensor extrinsics to be
-aligned with gravity. If the recording contains IMU data from sensors running
-FW 3.2 or later, run ``plumb`` before ``ground`` to calculate the
+aligned with gravity. Run ``plumb`` before ``ground`` to calculate the
 gravity-aligned extrinsics:
 
 .. literalinclude:: ../../../../python/tests/documentation/test_cli_commands.py
@@ -50,9 +53,29 @@ gravity-aligned extrinsics:
    :dedent: 0
    :class: doc-snippet
 
+On recordings from sensors running FW 3.2 or later, prefer
+``plumb --method imu``. It levels the sensors from a single average over the
+frame's accelerometer samples and returns immediately, while the default
+``--method all`` additionally estimates surface normals over the whole cloud to
+refine the result. Ground segmentation does not need that extra fraction of a
+degree:
+
+.. literalinclude:: ../../../../python/tests/documentation/test_cli_commands.py
+   :language: bash
+   :start-after: [doc-stag-cli-plumb-imu-save]
+   :end-before: [doc-etag-cli-plumb-imu-save]
+   :dedent: 0
+   :class: doc-snippet
+
+On recordings without the FW 3.2+ IMU profile, use ``plumb --method walls`` to
+derive the alignment from scene geometry alone. See
+:doc:`Plumb (Gravity Alignment) </features/mapping/gravity_alignment/index>` for
+the full command and the API behind it.
+
 For moving recordings, especially handheld recordings, run ``slam`` before
-ground segmentation. SLAM supplies a pose for each frame column so the ground
-model is built in a consistent global frame:
+ground segmentation. SLAM supplies a pose for each frame (one per column for
+lidar, a single rigid pose for camera) so the ground model is built in a
+consistent global frame:
 
 .. literalinclude:: ../../../../python/tests/documentation/test_cli_commands.py
    :language: bash
@@ -69,10 +92,10 @@ Create a
 and pass each ``FrameSet`` to :ouster:func:`update() <py=ouster.sdk.algorithm.GroundSegEngine.update|cpp=ouster::sdk::algorithm::GroundSegEngine::update>`.
 The engine modifies the frames in place but does not calculate gravity
 alignment. Before reading frames, assign each sensor a
-``SensorInfo.sensor_to_body`` whose frame is aligned with gravity. In this
-frame, ground surface normals should point along the positive Z axis. The
-examples assume ``plumb_extrinsics`` contains these gravity-aligned
-transforms.
+``SensorInfo.sensor_to_body`` (on either ``LidarInfo`` or ``CameraInfo``) whose
+frame is aligned with gravity. In this frame, ground surface normals should
+point along the positive Z axis. The examples assume ``plumb_extrinsics``
+contains these gravity-aligned transforms.
 
 .. tab-set::
    :sync-group: api-lang

@@ -6,7 +6,7 @@ from ouster.sdk import core
 import numpy as np
 
 
-def fov_vertical(info: core.SensorInfo) -> float:
+def fov_vertical(info: core.LidarInfo) -> float:
     altitude_zeros = np.count_nonzero(info.beam_altitude_angles == 0.0)
     if altitude_zeros > 1:
         altitudes = info.beam_altitude_angles[np.nonzero(
@@ -14,7 +14,7 @@ def fov_vertical(info: core.SensorInfo) -> float:
     else:
         altitudes = info.beam_altitude_angles
 
-    fov_vertical = np.max(altitudes) - np.min(altitudes)
+    fov_vertical = float(np.max(altitudes) - np.min(altitudes))
     if fov_vertical < 1e-9 and len(altitudes) > 1:
         print("WARNING: Sensor has vertical field of view of 0. Check beam_altitude_angles values.")
         fov_vertical = 1.0
@@ -22,7 +22,7 @@ def fov_vertical(info: core.SensorInfo) -> float:
     return fov_vertical
 
 
-def fov_horizontal(info: core.SensorInfo) -> float:
+def fov_horizontal(info: core.LidarInfo) -> float:
     if len(info.beam_azimuth_angles) == info.format.pixels_per_column:
         fov_horizontal = 360.0
     else:
@@ -41,7 +41,7 @@ def fov_horizontal(info: core.SensorInfo) -> float:
     return fov_horizontal
 
 
-def img_aspect_ratio(info: core.SensorInfo) -> float:
+def img_aspect_ratio(info: core.LidarInfo) -> float:
     """Returns 2D image aspect ratio based on sensor FOV angles.
 
     Uses the order:
@@ -174,9 +174,9 @@ def parse_extrinsics_from_string(extrinsics: str, degrees=True) -> np.ndarray:
 
     Parameters:
         extrinsics: a string representing a file or extrinsics in a supported format
-        degrees: whether angles should be parsed as degress (True by default)
+        degrees: whether angles should be parsed as degrees (True by default)
 
-        Acceptale extrinsics formats:
+        Acceptable extrinsics formats:
         - A json with containing a per sensor extrinsics
         - identity ; Use this to override any stored extrinsics with identity
         - X Y Z R P Y ; 'R P Y' represent euler angles (deg)

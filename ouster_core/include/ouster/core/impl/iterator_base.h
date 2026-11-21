@@ -120,7 +120,7 @@ class BaseIterator {
             do_advance(1);
         }
 
-        // throw if parents dont match
+        // throw if parents don't match
         if (parent_ != o.parent_) {
             throw std::runtime_error("Compared incompatible iterators.");
             return true;
@@ -131,7 +131,7 @@ class BaseIterator {
             return false;
         }
 
-        // if only one is end, we dont match
+        // if only one is end, we don't match
         if (!impl_) {
             return false;
         }

@@ -5,7 +5,7 @@ import math
 
 from threading import Lock
 import logging
-from ouster.sdk.core import (SensorInfo, PacketFormat, PacketValidationFailure,
+from ouster.sdk.core import (LidarInfo, PacketFormat, PacketValidationFailure,
                              LidarPacket, ImuPacket, Packet, ZonePacket)
 from ouster.sdk.util import resolve_metadata_multi
 
@@ -130,7 +130,7 @@ def _bag2_monkey(self, paths, default_typestore=None):
 class BagPacketSource(_PacketSource):
     """Read a sensors packet streams out of a bag file as an iterator."""
 
-    _metadata: List[SensorInfo]
+    _metadata: List[LidarInfo]
 
     def __init__(self,
                  bag_path: Union[str, List[str]],
@@ -219,7 +219,7 @@ class BagPacketSource(_PacketSource):
                         metadata_found = True
                         break
                 if not metadata_found:
-                    # try and fallback to metadata resolving if we couldnt find metadata in the bag
+                    # try and fallback to metadata resolving if we couldn't find metadata in the bag
                     if metadata_paths is None:
                         metadata_paths = resolve_metadata_multi(bag_path)
                     if idx < len(metadata_paths):
@@ -231,14 +231,14 @@ class BagPacketSource(_PacketSource):
             for connection, timestamp, rawdata in self._reader.messages(connections=metadata_connections):
                 if connection.topic in self._id_map:
                     msg = self._reader.deserialize(rawdata, connection.msgtype)
-                    self._metadata[self._id_map[connection.topic][0]] = SensorInfo(msg.data)  # type: ignore
+                    self._metadata[self._id_map[connection.topic][0]] = LidarInfo(msg.data)  # type: ignore
         else:
             if len(meta) != len(self._metadata):
                 raise ValueError(f"Incorrect number of metadata files provided. Expected"
                                  f" {len(self._metadata)} got {len(meta)}.")
             for idx, m in enumerate(meta):
                 with open(m, 'r') as file:
-                    self._metadata[idx] = SensorInfo(file.read())
+                    self._metadata[idx] = LidarInfo(file.read())
 
         # estimate the frame count from packet count
         self._frame_count = 0
@@ -322,7 +322,7 @@ class BagPacketSource(_PacketSource):
                         yield (idx, packet)
 
     @property
-    def sensor_info(self) -> List[SensorInfo]:
+    def sensor_info(self) -> List[LidarInfo]:
         """Metadata associated with the packet."""
         return self._metadata
 

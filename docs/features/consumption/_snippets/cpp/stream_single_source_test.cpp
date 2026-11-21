@@ -118,9 +118,9 @@ TEST(StreamSingleSourceSnippet, SelectSingleSensorPrintsFrameId) {
         FAIL() << "select_single_sensor threw: " << err.what();
         return;
     }
-    EXPECT_NE(output.find("via sensor_idx: frame_id="), std::string::npos)
+    EXPECT_NE(output.find("via sensor_idx: ts="), std::string::npos)
         << "Output: '" << output << "'";
-    EXPECT_NE(output.find("via single():   frame_id="), std::string::npos)
+    EXPECT_NE(output.find("via single():   ts="), std::string::npos)
         << "Output: '" << output << "'";
 }
 

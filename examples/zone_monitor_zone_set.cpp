@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -29,7 +30,7 @@ using namespace ouster::sdk;
 
 // Creates a ZoneSet from STL files.
 void create_stl_zone_set(const std::string& data_dir, const std::string& zip_path,
-                         const core::SensorInfo& /*sensor_info*/) {
+                         const core::LidarInfo& /*sensor_info*/) {
     // [doc-stag-stl-zone-set]
     // Define a zone from STL file
     core::Stl stl_0(data_dir + "/0.stl");
@@ -65,7 +66,7 @@ void create_stl_zone_set(const std::string& data_dir, const std::string& zip_pat
 
 // Creates a ZoneSet from ZRB files.
 void create_zrb_zone_set(const std::string& data_dir, const std::string& zip_path,
-                         const core::SensorInfo& sensor_info) {
+                         const core::LidarInfo& sensor_info) {
     // clang-format off
     // [doc-stag-zrb-zone-set]
     core::mat4d sensor_to_body_transform = core::mat4d::Identity();
@@ -164,7 +165,9 @@ int main(int argc, char* argv[]) {  // NOLINT(bugprone-exception-escape)
         auto source = open_source(sensor_hostname, [&](FrameSetSourceOptions& options) {
             options.no_auto_udp_dest = no_auto_udp_dest;
         });
-        auto sensor_info = source.sensor_info()[0];
+        // sensor_info() is the combined, frame-slot-aligned sensor list; zone
+        // monitoring is lidar-only, so downcast the first entry to LidarInfo.
+        auto sensor_info = std::dynamic_pointer_cast<core::LidarInfo>(source.sensor_info()[0]);
 
         core::ZoneSetOutputFilter output_filter{};
         if (zone_set_type == "STL") {

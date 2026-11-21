@@ -33,7 +33,7 @@ To explore the parameters you can use with the clip command, you can use the --h
    :start-after: [doc-stag-clip-help]
    :end-before: [doc-etag-clip-help]
    :dedent: 0
-  
+
 .. rubric:: **Example Usage**
 
 To keep the points within the 20 m to 50 m range and save the modified lidar frame into a PCAP file
@@ -44,7 +44,7 @@ with the visualizer on, run the following command:
    :start-after: [doc-stag-cli-clip]
    :end-before: [doc-etag-cli-clip]
    :dedent: 0
-  
+
 
 Remember, the ``clip`` command only affects the commands after it. In the following example, the
 viz command runs before the clip command, which means the point cloud modification won't be reflected
@@ -55,7 +55,7 @@ in the visualizer but will affect the subsequent save command and the saved PCAP
    :start-after: [doc-stag-clip-viz]
    :end-before: [doc-etag-clip-viz]
    :dedent: 0
-  
+
 
 Combined with SLAM Command
 --------------------------
@@ -78,7 +78,7 @@ Experiment with the following commands using a pre-recorded PCAP or OSF file:
    :start-after: [doc-stag-clip-slam-viz]
    :end-before: [doc-etag-clip-slam-viz]
    :dedent: 0
-  
+
 
 You can view the output PLY files using the open source software `CloudCompare`_
 For more details about the slam command, refer to the :ref:`SLAM Command <ouster-cli-mapping>`
@@ -109,8 +109,8 @@ Where:
 - ``SOURCE`` can be a sensor hostname or a PCAP file.
 - ``AXIS_FIELD`` can be either a field name such as ``RANGE``, ``REFLECTIVITY`` or a axis in the cartesian coordinates
   ``{X, Y, Z}`` or image coordinates ``{U, V}``.
-- ``INDICES`` The indices specifiy a range of values (e.g., ``0:10``) that map to the values of the ``AXIS_FIELD``. Any
-  value of the choosen ``AXIS_FIELD`` that matches the ``INDICES`` will be replaced by zero unless the option ``--invalid-value``
+- ``INDICES`` The indices specify a range of values (e.g., ``0:10``) that map to the values of the ``AXIS_FIELD``. Any
+  value of the chosen ``AXIS_FIELD`` that matches the ``INDICES`` will be replaced by zero unless the option ``--invalid-value``
   is set to a different value.
 - ``[OPTIONS]`` current options include:
 
@@ -140,7 +140,7 @@ command predicate, we can highlight points in the low cloud with higher reflecti
    :start-after: [doc-stag-filter-rfl]
    :end-before: [doc-etag-filter-rfl]
    :dedent: 0
-   
+
 .. figure:: /images/filter-example-reflectivity.png
    :alt: Filter by Reflectivity
    :align: center
@@ -148,7 +148,7 @@ command predicate, we can highlight points in the low cloud with higher reflecti
 
    Filter by Reflectivity
 
-  
+
 1) Filter based on cartesian coordinates:
 
 Another way to filter the point cloud is to use the cartesian coordinates of the points. For example, imagine we want to
@@ -193,7 +193,7 @@ resulting point cloud will look like this:
 
    Filter by V
 
-This can be useful to mask out certain columns (``V``) or certain beams (``U``) of the LidarFrame. 
+This can be useful to mask out certain columns (``V``) or certain beams (``U``) of the LidarFrame.
 
 .. note::
 
@@ -258,7 +258,7 @@ command you can reduce the effective vertical resolution of the sensor to 32:
 
 The reduced LidarFrames will applied to the rest of the chain, that means if you chain a ``save`` command
 afterwards the generated file will have LidarFrames with 32 beams only.
-One thing to note is that the beams are sampled uniformally across the original beam count.
+One thing to note is that the beams are sampled uniformly across the original beam count.
 
 .. note::
 

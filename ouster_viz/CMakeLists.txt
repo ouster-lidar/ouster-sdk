@@ -6,7 +6,6 @@ include(Coverage)
 find_package(glad REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(PNG REQUIRED)
 
 # ==== Libraries ====
 # use only MPL-licensed parts of eigen
@@ -14,13 +13,15 @@ add_definitions(-DEIGEN_MPL2_ONLY)
 
 add_library(ouster_viz STATIC src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp
   src/gltext.cpp src/misc.cpp src/glfw.cpp src/framebuffer.cpp src/screenshot_utils.cpp src/mesh.cpp
-  src/zone_monitor_voxel_mesh.cpp src/buffers.cpp src/object_overlay.cpp)
+  src/zone_monitor_voxel_mesh.cpp src/buffers.cpp src/object_overlay.cpp src/ouster_icon.cpp)
 target_link_libraries(ouster_viz
-  PRIVATE Eigen3::Eigen glfw ${GL_LOADER} OpenGL::GL ouster_core glad PNG::PNG)
+  PRIVATE Eigen3::Eigen glfw ${GL_LOADER} OpenGL::GL ouster_core glad ouster_io)
 
+# macOS has no per-window icon; set the application (Dock) icon via Cocoa.
 if(APPLE)
   enable_language(OBJCXX)
-  target_sources(ouster_viz PRIVATE src/glfw_macos.mm)
+  target_sources(ouster_viz PRIVATE src/macos_icon.mm src/glfw_macos.mm)
+  set_source_files_properties(src/macos_icon.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
   target_link_libraries(ouster_viz PRIVATE "-framework AppKit")
 endif()
 

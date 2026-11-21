@@ -26,7 +26,7 @@ def test_destagger_type_good(meta, dtype) -> None:
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize("shape", [(32, 1024), (32, 1024, 1), (32, 1024, 10)])
-def test_destagger_shape_good(meta: core.SensorInfo, shape) -> None:
+def test_destagger_shape_good(meta: core.LidarInfo, shape) -> None:
     """Check that (de)staggering preserves shape."""
     assert core.destagger(meta, np.zeros(shape)).shape == shape
     assert core.destagger(meta, np.zeros(shape), inverse=True).shape == shape
@@ -90,7 +90,7 @@ def test_destagger_correct(meta, frame) -> None:
     destagger_ref = reference.destagger(meta.format.pixel_shift_by_row,
                                         frame.field(core.ChanField.RANGE))
 
-    # obtain destaggered range field using core implemenation
+    # obtain destaggered range field using core implementation
     destagger_client = core.destagger(meta,
                                       frame.field(core.ChanField.RANGE))
 
@@ -112,3 +112,26 @@ def test_destagger_correct_multi(meta, frame) -> None:
     assert near_ir_stacked.dtype == np.uint16
     assert destaggered_stacked.dtype == np.uint16
     assert np.array_equal(ref_stacked, destaggered_stacked)
+
+
+def test_destagger_camera_is_noop():
+    """destagger/stagger on CameraInfo leaves image data unchanged."""
+    w, h = 8, 6
+    info = core.CameraInfo()
+    info.model = core.CameraModel(100.0, 100.0, w / 2.0, h / 2.0)
+    info.format.columns_per_frame = w
+    info.format.pixels_per_column = h
+
+    img = np.arange(h * w, dtype=np.uint32).reshape(h, w)
+    img3 = np.stack([img, img + 1, img + 2], axis=-1)
+
+    destaggered = core.destagger(info, img)
+    assert destaggered.shape == img.shape
+    assert destaggered.dtype == img.dtype
+    np.testing.assert_array_equal(destaggered, img)
+
+    destaggered3 = core.destagger(info, img3)
+    np.testing.assert_array_equal(destaggered3, img3)
+
+    staggered = core.stagger(info, destaggered)
+    np.testing.assert_array_equal(staggered, img)

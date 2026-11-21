@@ -54,12 +54,12 @@ Matrix3dR euler_to_rotation_matrix(double roll, double pitch, double yaw) {
     rot_x << 1, 0, 0,
              0, std::cos(roll), -std::sin(roll),
              0, std::sin(roll), std::cos(roll);
-    
+
     Matrix3dR rot_y;
     rot_y << std::cos(pitch), 0, std::sin(pitch),
              0, 1, 0,
              -std::sin(pitch), 0, std::cos(pitch);
-    
+
     Matrix3dR rot_z;
     rot_z << std::cos(yaw), -std::sin(yaw), 0,
              std::sin(yaw), std::cos(yaw), 0,

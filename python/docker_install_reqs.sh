@@ -8,7 +8,7 @@ PYTHON="${DOCKER_PYTHON:-$PYTHON_}"
 # Prefer uv if available; fall back to pip
 INSTALL_CMD=(uv pip install --python "${PYTHON}")
 
-"${INSTALL_CMD[@]}" -U pip pybind11 mypy flake8 flake8-formatter-junit-xml wheel pytest
+"${INSTALL_CMD[@]}" -U pip pybind11 mypy flake8 flake8-formatter-junit-xml wheel pytest "pytest-asyncio>=0.21"
 
 SCRIPT_DIR=$(cd $(dirname $0) && pwd)
 export OUSTER_SDK_PATH="${OUSTER_SDK_PATH:-$(dirname $SCRIPT_DIR)}"

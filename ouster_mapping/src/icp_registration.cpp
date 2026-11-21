@@ -16,8 +16,7 @@
 #include <tuple>
 
 using ouster::sdk::core::Matrix4dR;
-using ouster::sdk::core::VoxelHashMap3d;
-using ouster::sdk::core::VoxelHashMapXd;
+using ouster::sdk::core::VoxelHashMap;
 
 namespace {
 inline double square(double x) {
@@ -29,28 +28,28 @@ void transform_points(const Sophus::SE3d& pose, std::vector<Eigen::Vector3d>& po
                    [&](const auto& point) { return pose * point; });
 }
 
-template <typename MapT>
 ouster::sdk::mapping::Correspondences data_association(const std::vector<Eigen::Vector3d>& points,
-                                                       const MapT& voxel_map,
+                                                       const VoxelHashMap& voxel_map,
                                                        const double max_correspondance_distance) {
     const size_t num_pts = points.size();
     ouster::sdk::mapping::Correspondences output(num_pts);
     std::vector<uint8_t> valid(num_pts, 0);
 
     const double max_dist_sq = square(max_correspondance_distance);
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, num_pts), [&](const tbb::blocked_range<size_t>& r) {
-            for (size_t i = r.begin(); i < r.end(); ++i) {
-                const auto& point = points[i];
-                auto closest_neighbor_tuple = voxel_map.get_closest_neighbor(point, max_dist_sq);
-                const auto& closest_neighbor = std::get<0>(closest_neighbor_tuple);
-                const auto& distance_sq = std::get<1>(closest_neighbor_tuple);
-                if (distance_sq < max_dist_sq) {
-                    output[i] = {point, closest_neighbor.template head<3>()};
-                    valid[i] = 1;
-                }
-            }
-        });
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, num_pts),
+                      [&](const tbb::blocked_range<size_t>& r) {
+                          for (size_t i = r.begin(); i < r.end(); ++i) {
+                              const auto& point = points[i];
+                              // The position-only query allocates nothing, so the parallel
+                              // search does not contend on the heap.
+                              const auto closest_neighbor =
+                                  voxel_map.get_closest_neighbor_position(point, max_dist_sq);
+                              if (closest_neighbor.second < max_dist_sq) {
+                                  output[i] = {point, closest_neighbor.first};
+                                  valid[i] = 1;
+                              }
+                          }
+                      });
 
     size_t out = 0;
     for (size_t i = 0; i < num_pts; ++i) {
@@ -62,9 +61,9 @@ ouster::sdk::mapping::Correspondences data_association(const std::vector<Eigen::
     return output;
 }
 
-template <typename MapT>
 Matrix4dR align_points_to_map_impl(const ouster::sdk::mapping::ICPRegistration& registration,
-                                   const std::vector<Eigen::Vector3d>& frame, const MapT& voxel_map,
+                                   const std::vector<Eigen::Vector3d>& frame,
+                                   const VoxelHashMap& voxel_map,
                                    const double max_correspondence_distance,
                                    const double kernel_scale) {
     if (voxel_map.empty()) {
@@ -196,14 +195,7 @@ ICPRegistration::ICPRegistration(int max_num_iteration, double convergence_crite
 }
 
 Matrix4dR ICPRegistration::align_points_to_map(const std::vector<Eigen::Vector3d>& frame,
-                                               const VoxelHashMap3d& voxel_map,
-                                               const double max_distance,
-                                               const double kernel_scale) const {
-    return align_points_to_map_impl(*this, frame, voxel_map, max_distance, kernel_scale);
-}
-
-Matrix4dR ICPRegistration::align_points_to_map(const std::vector<Eigen::Vector3d>& frame,
-                                               const VoxelHashMapXd& voxel_map,
+                                               const VoxelHashMap& voxel_map,
                                                const double max_distance,
                                                const double kernel_scale) const {
     return align_points_to_map_impl(*this, frame, voxel_map, max_distance, kernel_scale);

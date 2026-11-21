@@ -17,7 +17,7 @@ core::Matrix4dR align_pairwise_example(const std::string& source_file) {
     const auto& source_frame = frames[1];
     auto source_to_target_transform = align_clouds(*source_frame, *target_frame);
     auto aligned_source_extrinsic =
-        source_to_target_transform * source_frame->sensor_info->sensor_to_body;
+        source_to_target_transform * source_frame->sensor_info()->sensor_to_body;
     //! [doc-etag-alignment-pairwise]
 
     return aligned_source_extrinsic;
@@ -31,6 +31,8 @@ std::vector<core::Matrix4dR> align_frame_set_example(const std::string& source_f
 
     for (std::size_t i = 0; i < aligned_extrinsics.size(); ++i) {
         source.sensor_info()[i]->sensor_to_body = aligned_extrinsics[i];
+        // drop any XYZLut cached with the old extrinsics
+        source.sensor_info()[i]->clear_cache();
     }
     //! [doc-etag-alignment-frame-set]
     // clang-format on

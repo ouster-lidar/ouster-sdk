@@ -24,7 +24,7 @@ const uint32_t CRC_BYTES_SIZE = 4;
 /** @defgroup OsfCRCFunctions Osf CRC Functions. */
 
 /**
- * Caclulate CRC value for the buffer of given size. (ZLIB version)
+ * Calculate CRC value for the buffer of given size. (ZLIB version)
  *
  * @ingroup OsfCRCFunctions
  *
@@ -36,7 +36,7 @@ OUSTER_API_FUNCTION
 uint32_t crc32(const uint8_t* buf, uint32_t size);
 
 /**
- * Caclulate and append CRC value for the buffer of given size and append
+ * Calculate and append CRC value for the buffer of given size and append
  * it to the initial crc value. (ZLIB version)
  *
  * @ingroup OsfCRCFunctions

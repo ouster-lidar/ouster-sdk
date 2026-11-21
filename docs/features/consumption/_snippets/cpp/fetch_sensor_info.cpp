@@ -1,5 +1,6 @@
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include "ouster/core/types.h"
@@ -11,7 +12,9 @@ void fetch_sensor_info(const std::string& sensor_hostname) {
     // clang-format off
     //! [doc-stag-fetch-sensor-info]
     sensor::SensorFrameSetSource source(sensor_hostname);
-    auto sensor_info = source.sensor_info()[0];
+    // sensor_info() is the combined, frame-slot-aligned sensor list; downcast
+    // the entry to LidarInfo to read lidar-specific fields.
+    auto sensor_info = std::dynamic_pointer_cast<core::LidarInfo>(source.sensor_info()[0]);
     std::cout << "Retrieved sensor info:\n";
     std::cout << "  serial no:        " << sensor_info->sn << "\n";
     std::cout << "  firmware version: " << sensor_info->fw_rev << "\n";

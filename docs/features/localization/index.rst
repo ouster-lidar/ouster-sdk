@@ -25,7 +25,10 @@ fusion, and frame-to-map alignment, exposing them through a simple CLI command a
 Python/C++ API.
 
 Localization does not require GPS, GNSS, or other expensive secondary sensors. A single Ouster
-LiDAR can be used by SDK to reliably estimate the sensor's position based entirely on relative pose changes within the environment.
+sensor — a lidar or a (stereo) camera — can be used by the SDK to reliably estimate the sensor's
+position based entirely on relative pose changes within the environment. Lidar and camera frames are
+supported uniformly: they are aggregated into a common point cloud before registration, so lidar-only,
+camera-only, and mixed setups all use the same API.
 
 Typical applications include:
 
@@ -40,8 +43,8 @@ How it Works
 
 The SDK's localization engine uses an *Iterative Closest Point* (ICP) approach to match frames with the map.
 The key difference from SLAM is that the internal map uses a **static map constraint**. The engine loads a
-pre-built point cloud once at construction time and never modifies it. Each incoming batch of lidar frames is
-aligned to this fixed reference to determine where the sensor is.
+pre-built point cloud once at construction time and never modifies it. Each incoming batch of frames
+(lidar and/or camera) is aligned to this fixed reference to determine where the sensor is.
 
 .. figure:: /images/localization_overview.svg
    :align: center
@@ -49,7 +52,8 @@ aligned to this fixed reference to determine where the sensor is.
    :width: 100%
 
    Source data is aligned against a static reference map using ICP. The map feeds into point cloud matching
-   as a read-only input. The output is a per-column SE(3) pose written into each ``LidarFrame``.
+   as a read-only input. The output is an SE(3) pose written into each ``Frame`` (per measurement column
+   for a ``LidarFrame``; a single rigid pose for a ``CameraFrame``).
 
 At the heart of the engine is **frame-to-map registration** using Iterative Closest Point (ICP).
 For each incoming frame the algorithm:
@@ -123,9 +127,10 @@ Key Capabilities
   aggregating their points into a single frame before registration. This provides a wider field of
   view and improves robustness in feature-poor environments.
 
-- **Per-Column Pose Output**: Rather than a single pose per frame, the engine computes a unique SE(3)
-  transform for every measurement column, enabling sub-frame trajectory precision for high-speed
-  motion.
+- **Per-Column Pose Output**: For a ``LidarFrame``, rather than a single pose per frame, the engine
+  computes a unique SE(3) transform for every measurement column, enabling sub-frame trajectory
+  precision for high-speed motion. A ``CameraFrame`` (global shutter) carries a single rigid pose.
+  In both cases the poses are written into ``frame.body_to_world``.
 
 - **Custom Solver Integration**: The SDK can serve as a data provider — use ``XYZLut`` to convert
   frames to Cartesian point clouds for your own solver, then inject poses back into the frame for

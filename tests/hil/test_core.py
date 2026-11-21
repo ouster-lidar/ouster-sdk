@@ -13,7 +13,8 @@ import requests
 import pytest
 
 from ouster.sdk import core, sensor
-from ouster.sdk.core import UDPProfileLidar, TimestampMode, LidarMode, PacketFormat, ColHeader, FrameSet, ZoneSet
+from ouster.sdk.core import UDPProfileIMU, UDPProfileLidar, TimestampMode, \
+        LidarMode, PacketFormat, ColHeader, FrameSet, ZoneSet
 from ouster.sdk.sensor import SensorHttp
 from ouster.sdk._bindings import client as _client
 
@@ -73,12 +74,14 @@ def azimuth_window(request):
 
 @pytest.fixture
 def hil_sensor_config(hil_initial_config, lidar_port, imu_port, lidar_mode,
-                      azimuth_window, udp_profile_lidar) -> None:
+                      azimuth_window, udp_profile_lidar, hil_sensor_fw_version) -> None:
     logger.debug(f"lidar port: {lidar_port} imu_port: {imu_port}")
     hil_initial_config.udp_port_lidar = lidar_port
     hil_initial_config.udp_port_imu = imu_port
     hil_initial_config.lidar_mode = lidar_mode
     hil_initial_config.azimuth_window = azimuth_window
+    if udp_profile_lidar == UDPProfileLidar.LEGACY and hil_sensor_fw_version.major >= 4:
+        pytest.skip(f"Skip legacy UDP profile test as FW version {hil_sensor_fw_version} >= 4.0 which removed legacy UDP profile")
     hil_initial_config.udp_profile_lidar = udp_profile_lidar
     return hil_initial_config
 
@@ -206,7 +209,7 @@ def get_zone_set_if_it_exists(hostname: str) -> Optional[ZoneSet]:
 
 
 def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firmware, lowest_metadata_endpoint_fw) -> None:
-    """Test that SensorInfo matches when from sensor http endpoint"""
+    """Test that LidarInfo matches when from sensor http endpoint"""
 
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
@@ -221,7 +224,7 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
         http_userdata_endpoint = "http://" + hostname + "/api/v1/user/data"
 
         metadata_response = requests.get(http_metadata_endpoint)
-        metadata = core.SensorInfo(core.SensorInfo(metadata_response.text).to_json_string())
+        metadata = core.LidarInfo(core.LidarInfo(metadata_response.text).to_json_string())
         metadata.zone_set = get_zone_set_if_it_exists(hostname)
 
         userdata_response = requests.get(http_userdata_endpoint)
@@ -233,10 +236,10 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
         assert metadata.user_data == src.sensor_info[0].user_data
         assert metadata.zone_set == src.sensor_info[0].zone_set
 
-        # TODO[tws] decide whether we want the ZoneSet to be in the SensorInfo JSON itself
+        # TODO[tws] decide whether we want the ZoneSet to be in the LidarInfo JSON itself
         assert metadata.config == src.sensor_info[0].config
         assert metadata.has_fields_equal(src.sensor_info[0])
-        assert type(metadata) == type(src.sensor_info[0])
+        assert type(metadata) is type(src.sensor_info[0])
 
         meta_via_requests = json.loads(metadata_response.text)
         meta_via_curl = json.loads(src.sensor_info[0].to_json_string())
@@ -263,7 +266,7 @@ def test_frames_consecutive(hil_configured_sensor) -> None:
         take(10, frame_sets) # flush
         ss = take(10, frame_sets)
 
-    assert all(s is not None and s.complete() for s, in ss), "Received incomplete frames"
+    assert all(isinstance(s, core.LidarFrame) and s.complete() for s, in ss), "Received incomplete frames"
     assert n_frame_id_gaps(ss) == 0, "Gap in frame ids"
 
 
@@ -281,7 +284,7 @@ def test_frames_read_gap(hil_configured_sensor) -> None:
         ss += take(10, frame_sets)
 
     assert len(ss) == 20
-    assert all(s is not None and s.complete() for s, in ss), "Received incomplete frames"
+    assert all(isinstance(s, core.LidarFrame) and s.complete() for s, in ss), "Received incomplete frames"
     assert n_frame_id_gaps(ss) == 1, "Did not get exactly one gap in frame ids"
 
 
@@ -301,11 +304,17 @@ def test_frames_read_timeout(hil_configured_sensor) -> None:
             next(iter(frame_sets))
 
 
-def test_frames_read_timeout_only_imu(hil_configured_sensor, imu_port) -> None:
-    """Test timeout reading frames when only IMU packets are arriving."""
-
+def test_frames_read_timeout_only_legacy_imu(hil_configured_sensor, imu_port) -> None:
+    """Test timeout reading frames when only LEGACY IMU packets are arriving.
+    This is because LEGACY IMU packets do not get batched,
+    but packets with ACCEL32_GYRO32_NMEA do.
+    """
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
+
+    cfg = sensor.get_config(hil_configured_sensor)
+    if cfg.udp_profile_imu != UDPProfileIMU.LEGACY:
+        pytest.skip(f"Skip test as sensor is not configured to LEGACY IMU profile")
 
     with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
         metadata = src.sensor_info

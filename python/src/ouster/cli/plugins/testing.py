@@ -35,7 +35,7 @@ def testing_time(pcap_file: str, json: IO) -> None:
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
-    info = core.SensorInfo(json.read())
+    info = core.LidarInfo(json.read())
 
     click.echo("Initializing replay and client...")
     replay = pcap._replay(pcap_file, info, "127.0.1.1", 7502, 7503)
@@ -75,7 +75,7 @@ def compute_digest(file: str, meta: str, check: str, save: bool) -> None:
         raise click.ClickException("Failed to resolve metadata.")
 
     with open(resolved_meta, 'r') as json:
-        info = core.SensorInfo(json.read())
+        info = core.LidarInfo(json.read())
 
     packets: core.PacketSource
     if path.splitext(file)[1] == ".pcap":

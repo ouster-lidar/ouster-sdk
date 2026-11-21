@@ -48,7 +48,7 @@ except ImportError:
     pass
 
 
-# boilerplate for selecting / deslecting interactive tests
+# boilerplate for selecting / deselecting interactive tests
 def pytest_addoption(parser):
     parser.addoption("--interactive",
                      action="store_true",
@@ -90,6 +90,11 @@ def pytest_collection_modifyitems(items, config) -> None:
     else:
         selected = non_interactive
         all_deselected.extend(interactive)
+
+    if config.option.performance:
+        environ["OUSTER_OSF_CRC"] = "0"
+    else:
+        environ["OUSTER_OSF_CRC"] = "1"
 
     slow_enabled = environ.get("ENABLE_SLOW_DOC_TESTS", "0") == "1"
     non_slow_it, slow_it = partition(
@@ -156,31 +161,31 @@ def stream_digest(base_name: str):
 def meta(base_name: str):
     meta_path = path.join(PCAPS_DATA_DIR, f"{base_name}.json")
     with open(meta_path, 'r') as f:
-        return core.SensorInfo(f.read())
+        return core.LidarInfo(f.read())
 
 
 @pytest.fixture
 def meta_2_0():
     meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['legacy-2.0']}.json")
     with open(meta_path, 'r') as f:
-        return core.SensorInfo(f.read())
+        return core.LidarInfo(f.read())
 
 
 @pytest.fixture
-def real_pcap_path(base_name: str, meta: core.SensorInfo) -> str:
+def real_pcap_path(base_name: str, meta: core.LidarInfo) -> str:
     return path.join(PCAPS_DATA_DIR, f"{base_name}.pcap")
 
 
 @pytest.fixture
 def real_pcap(real_pcap_path: str,
-              meta: core.SensorInfo) -> Iterator[pcap.PcapPacketSource]:
+              meta: core.LidarInfo) -> Iterator[pcap.PcapPacketSource]:
     pcap_obj = pcap.PcapPacketSource(real_pcap_path, sensor_info=[meta])
     yield pcap_obj
     pcap_obj.close()
 
 
 @pytest.fixture
-def packet(real_pcap_path: str, meta: core.SensorInfo) -> core.LidarPacket:
+def packet(real_pcap_path: str, meta: core.LidarInfo) -> core.LidarPacket:
     # note: don't want to depend on the pcap fixture, since this consumes the
     # iterator and it can be shared
     with closing(pcap.PcapPacketSource(real_pcap_path, sensor_info=[meta])) as real_pcap:
@@ -192,7 +197,7 @@ def packet(real_pcap_path: str, meta: core.SensorInfo) -> core.LidarPacket:
 
 @pytest.fixture
 def packets(real_pcap_path: str,
-            meta: core.SensorInfo) -> core.PacketSource:
+            meta: core.LidarInfo) -> core.PacketSource:
     with closing(pcap.PcapPacketSource(real_pcap_path, sensor_info=[meta])) as real_pcap:
         ps = list(real_pcap)
         list2 = []
@@ -289,6 +294,9 @@ class MockPointViz():
         def set_ring_line_width(*args, **kwargs):
             pass
 
+        def set_ring_anchor_in_world(*args, **kwargs):
+            pass
+
     def __init__(self):
         self.items = set()
 
@@ -306,6 +314,9 @@ class MockPointViz():
         pass
 
     def add_default_controls(*args, **kwargs):
+        pass
+
+    def set_background_color(*args, **kwargs):
         pass
 
     @property

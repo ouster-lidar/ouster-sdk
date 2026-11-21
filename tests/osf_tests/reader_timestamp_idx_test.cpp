@@ -23,14 +23,14 @@ namespace sdk {
 namespace osf {
 namespace {
 
-using ouster::sdk::core::SensorInfo;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::osf::get_random_lidar_frame;
 
 class ReaderTimestampIdxTest : public OsfTestWithDataAndFiles {};
 
 std::string write_minimal_streaming_osf(const std::string& test_data_dir,
                                         const std::string& output_path) {
-    const SensorInfo sinfo = ouster::sdk::core::metadata_from_json(
+    const LidarInfo sinfo = ouster::sdk::core::metadata_from_json(
         path_concat(test_data_dir, "pcaps/OS-1-128_v2.3.0_1024x10.json"));
     Writer writer(output_path);
     const auto sensor_id = writer.add_sensor(sinfo);

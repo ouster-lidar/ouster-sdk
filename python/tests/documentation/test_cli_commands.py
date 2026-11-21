@@ -176,6 +176,14 @@ def PERCEPTION_OSF_PATH():
 
 
 @pytest.fixture
+def IMU_OSF_PATH():
+    p = TESTS_DIR / "osfs" / "OS-1-256_pitched_imu_n1.osf"
+    if not p.exists():
+        pytest.skip(f"Test fixture not found: {p}")
+    return str(p)
+
+
+@pytest.fixture
 def SAMPLE_DATA_PCAP_PATH():
     p = TESTS_DIR / "pcaps" / "OS-0-128-U1_v2.3.0_1024x10.pcap"
     if not p.exists():
@@ -482,6 +490,8 @@ ouster-cli source {VALID_INPUT_SOURCE} save --dir {CSV_OUTPUT_DIR} ".csv"
     args, _ = command_to_args(command)
     result = runner.invoke(core.cli, args)
     assert result.exit_code == 0, f"Output:\n{result.output}"
+    csvs = list(Path(CSV_OUTPUT_DIR).glob("*.csv"))
+    assert csvs, f"Expected CSV output in {CSV_OUTPUT_DIR}, found none"
 
 
 def test_record_png(runner, SAMPLE_DATA_OSF_PATH, tmp_path):
@@ -496,6 +506,36 @@ ouster-cli source {VALID_INPUT_SOURCE} save --dir {PNG_OUTPUT_DIR} ".png"
     args, _ = command_to_args(command)
     result = runner.invoke(core.cli, args)
     assert result.exit_code == 0, f"Output:\n{result.output}"
+    pngs = list(Path(PNG_OUTPUT_DIR).glob("*.png"))
+    assert pngs, f"Expected PNG output in {PNG_OUTPUT_DIR}, found none"
+
+
+@pytest.mark.parametrize("ext", [".osf", ".pcap", ".csv"])
+def test_save_dir_option(runner, SAMPLE_DATA_OSF_PATH, tmp_path, ext):
+    """The --dir option must place saved files in the given directory, not cwd."""
+    out_dir = tmp_path / "save_output"
+    args = [
+        "source", SAMPLE_DATA_OSF_PATH, "save",
+        "--dir", str(out_dir), "--overwrite", ext,
+    ]
+    result = runner.invoke(core.cli, args)
+    assert result.exit_code == 0, f"Output:\n{result.output}"
+    produced = [p for p in out_dir.glob("*") if p.is_file()]
+    assert produced, f"Expected {ext} output in {out_dir}, found none"
+
+
+@pytest.mark.parametrize("ext", [".pcap", ".bag"])
+def test_save_raw_dir_option(runner, SAMPLE_DATA_PCAP_PATH, tmp_path, ext):
+    """save_raw --dir must place raw output files in the given directory, not cwd."""
+    out_dir = tmp_path / "save_raw_output"
+    args = [
+        "source", SAMPLE_DATA_PCAP_PATH, "save_raw",
+        "--dir", str(out_dir), "--overwrite", ext,
+    ]
+    result = runner.invoke(core.cli, args)
+    assert result.exit_code == 0, f"Output:\n{result.output}"
+    produced = [p for p in out_dir.glob(f"*{ext}") if p.is_file()]
+    assert produced, f"Expected {ext} output in {out_dir}, found none"
 
 
 def test_sensor_replay_help(runner, SAMPLE_DATA_OSF_PATH):
@@ -772,10 +812,11 @@ ouster-cli source {HOSTNAME_OR_VALID_IN_FILENAME} filter --filtered-fields REFLE
 
 @pytest.mark.interactive
 def test_mask(runner, SAMPLE_DATA_OSF_PATH, tmp_path):
-    from PIL import Image
+    import numpy as np
+    from ouster.sdk.io import write_png
     HOSTNAME_OR_VALID_IN_FILENAME = SAMPLE_DATA_OSF_PATH
     MASK_IMAGE = str(tmp_path / "mask.png")
-    Image.new('L', (1024, 128), 255).save(MASK_IMAGE)
+    write_png(MASK_IMAGE, np.full((128, 1024), 255, dtype=np.uint8))
     command = f"""
 # [doc-stag-mask]
 ouster-cli source {HOSTNAME_OR_VALID_IN_FILENAME} mask --fields RANGE {MASK_IMAGE} viz
@@ -876,6 +917,47 @@ ouster-cli source {OSF_PATH} ground viz
     args[args.index("{OSF_PATH}")] = SAMPLE_DATA_OSF_PATH
     result = runner.invoke(core.cli, args)
     assert result.exit_code == 0, f"Output:\n{result.output}"
+
+
+@pytest.mark.interactive
+def test_cli_plumb_viz(runner, SAMPLE_DATA_PCAP_PATH):
+    command = """
+# [doc-stag-cli-plumb-viz]
+ouster-cli source {SOURCE_PATH} plumb viz
+# [doc-etag-cli-plumb-viz]
+    """
+    args, _ = command_to_args(command)
+    args[args.index("{SOURCE_PATH}")] = SAMPLE_DATA_PCAP_PATH
+    result = runner.invoke(core.cli, args)
+    assert result.exit_code == 0, f"Output:\n{result.output}"
+
+
+def test_cli_plumb_imu_save(runner, IMU_OSF_PATH, tmp_path):
+    command = """
+# [doc-stag-cli-plumb-imu-save]
+ouster-cli source {SOURCE_PATH} plumb --method imu save plumbed.osf
+# [doc-etag-cli-plumb-imu-save]
+    """
+    args, _ = command_to_args(command)
+    args[args.index("{SOURCE_PATH}")] = IMU_OSF_PATH
+    args[args.index("plumbed.osf")] = str(tmp_path / "plumbed.osf")
+    result = runner.invoke(core.cli, args)
+    assert result.exit_code == 0, f"Output:\n{result.output}"
+    assert (tmp_path / "plumbed.osf").is_file()
+
+
+def test_cli_plumb_walls_save(runner, SAMPLE_DATA_PCAP_PATH, tmp_path):
+    command = """
+# [doc-stag-cli-plumb-walls-save]
+ouster-cli source {SOURCE_PATH} plumb --method walls save plumbed.osf
+# [doc-etag-cli-plumb-walls-save]
+    """
+    args, _ = command_to_args(command)
+    args[args.index("{SOURCE_PATH}")] = SAMPLE_DATA_PCAP_PATH
+    args[args.index("plumbed.osf")] = str(tmp_path / "plumbed.osf")
+    result = runner.invoke(core.cli, args)
+    assert result.exit_code == 0, f"Output:\n{result.output}"
+    assert (tmp_path / "plumbed.osf").is_file()
 
 
 @pytest.mark.interactive
@@ -1483,6 +1565,21 @@ def test_source_detect(runner, PERCEPTION_OSF_PATH, tmp_path):
 # [doc-stag-source-detect]
 ouster-cli source {OSF_FILE} detect save {OUTPUT_OSF_FILE}
 # [doc-etag-source-detect]
+    """
+    args, _ = command_to_args(command)
+    result = runner.invoke(core.cli, args)
+    assert result.exit_code == 0, f"Output:\n{result.output}"
+    assert "Saving OSF file" in result.output
+
+
+@pytest.mark.perception
+def test_source_detect_options(runner, PERCEPTION_OSF_PATH, tmp_path):
+    OSF_FILE = PERCEPTION_OSF_PATH
+    OUTPUT_OSF_FILE = str(tmp_path / "output.osf")
+    command = f"""
+# [doc-stag-source-detect-options]
+ouster-cli source {OSF_FILE} detect --cluster-filter-max-volume -1 save {OUTPUT_OSF_FILE}
+# [doc-etag-source-detect-options]
     """
     args, _ = command_to_args(command)
     result = runner.invoke(core.cli, args)

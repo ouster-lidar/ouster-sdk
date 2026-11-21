@@ -62,6 +62,19 @@ class OUSTER_API_CLASS OsfBuffer {
     void load_data(const uint8_t* data, uint64_t size);
 
     /**
+     * @brief Load buffer with a shared pointer to existing memory.
+     *
+     * Takes ownership of the provided contents.
+     *
+     * @param[in] data Shared pointer to data buffer
+     * @param[in] size Size of the data in bytes
+     *
+     * @throws std::logic_error if data is empty.
+     */
+    OUSTER_API_FUNCTION
+    void load_data(const std::shared_ptr<uint8_t>& data, uint64_t size);
+
+    /**
      * @brief Load buffer by moving from a provided vector.
      *
      * Takes ownership of the provided vector contents.
@@ -140,7 +153,8 @@ class OUSTER_API_CLASS OsfBuffer {
     const uint8_t* memory_mapped_data_{nullptr};
 
     // allows sharing the data between instances of OsfBuffer
-    std::shared_ptr<std::vector<uint8_t>> non_memory_mapped_data_;
+    std::shared_ptr<uint8_t> non_memory_mapped_data_;
+    std::shared_ptr<std::vector<uint8_t>> non_memory_mapped_vector_;
     uint64_t size_{0};
     uint64_t offset_{0};
     bool has_value_{false};

@@ -3,46 +3,61 @@
 #include <ouster/core/impl/logging.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
-#include "ouster/core/pose_util.h"
+#include "ouster/algorithm/impl/custom_voxel_downsample.h"
+#include "ouster/core/impl/dewarp_impl.h"
+#include "ouster/core/lidar_frame.h"
+#include "ouster/core/lidar_info.h"
+#include "ouster/core/sensor_info.h"
+#include "ouster/core/typedefs.h"
+#include "ouster/core/voxel_hash_map.h"
+#include "ouster/mapping/deskew_method.h"
+#include "ouster/mapping/localization_engine.h"
 #include "slam_util.h"
 
 using ouster::sdk::core::logger;
-using ouster::sdk::core::VoxelHashMap3d;
+using ouster::sdk::core::VoxelHashMap;
+
+namespace {
+// Points the ICP local map keeps per voxel: enough for a dense surface sample
+// to match against.
+constexpr std::size_t LOCAL_MAP_MAX_POINTS_PER_VOXEL = 20;
+}  // namespace
 
 namespace ouster {
 namespace sdk {
 namespace mapping {
 
-LIOLocalization::LIOLocalization(const std::vector<std::shared_ptr<core::SensorInfo>>& infos,
+LIOLocalization::LIOLocalization(const std::vector<std::shared_ptr<core::SensorInfo>>& sensor_infos,
                                  LIOLocalizationConfig config,
                                  const Eigen::Ref<const core::PointCloudXYZf> map)
-    : LocalizationEngine(infos),
+    : LocalizationEngine(sensor_infos),
       map_(map),
-      active_time_correction_(infos),
+      active_time_correction_(sensor_infos_),
       config_(std::move(config)) {
-    if (infos.empty()) {
+    if (sensor_infos_.empty()) {
         throw std::invalid_argument("No sensor info provided for localization");
-    }
-
-    xyz_lut_.reserve(infos.size());
-    for (const auto& info : infos) {
-        xyz_lut_.emplace_back(*info, true);
     }
 
     if (config.voxel_size > 0.0) {
         initialize_components();
     }
 
-    deskew_method_ =
-        DeskewMethodFactory::create(config_.deskew_method, infos, config_.initial_pose);
+    if (impl::contains_lidar(sensor_infos_)) {
+        deskew_method_ = DeskewMethodFactory::create(config_.deskew_method, sensor_infos_,
+                                                     config_.initial_pose, config_.plumb_method,
+                                                     /*gravity_from_initial_pose=*/false);
+    }
 }
 
 /*
@@ -64,8 +79,8 @@ LIOLocalization::LIOLocalization(const std::vector<std::shared_ptr<core::SensorI
  *  • Point-cloud aggregation:
  *      - Merge valid points and their (possibly offset) timestamps.
  *      - Abort early if no points remain.
- *  • SLAM registration:
- *      - Register the aggregated frame with KISS-ICP.
+ *  • Registration:
+ *      - Use ICP to register the aggregated frame to the world map.
  *      - No map update.
  *  • Pose interpolation:
  *      - Interpolate between the last and new localization poses.
@@ -89,10 +104,15 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
 
     active_time_correction_.update(frame_set);
 
-    // Select the midest point of the frame set
+    // Select the middle point of the frame set
     const auto ts_range = impl::compute_frame_ts_range(frame_set);
+    const bool has_lidar = impl::contains_lidar(sensor_infos_);
 
-    if (ts_range.second <= ts_range.first) {
+    if (ts_range.first == std::numeric_limits<uint64_t>::max()) {
+        logger().warn("None of the frame timestamps are valid. Skipping the frame set!");
+        return;
+    }
+    if (has_lidar && ts_range.second <= ts_range.first) {
         logger().warn(
             "None of the frame timestamps are valid or the frame set collation "
             "duration is zero. This prevents timestamp normalization. Skipping "
@@ -109,8 +129,13 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
         // near the initial pose in the map; later frames re-register globally.
         // frame_count_ only advances once a frame is actually registered, so a
         // skipped first frame still leaves the seed in place.
-        impl::init_valid_column_poses(frame_set, config_.initial_pose);
+        const core::Matrix4dR seed_pose =
+            config_.initial_pose.value_or(core::Matrix4dR::Identity());
+        impl::init_valid_column_poses(frame_set, seed_pose);
+        impl::init_camera_poses(frame_set, seed_pose);
     }
+
+    impl::update_camera_poses(frame_set);
 
     // If too much lidar data is missing, trust the deskew method's open-loop
     // prediction for this frame instead of letting sparse data produce a bad
@@ -118,10 +143,20 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
     size_t expected_lidar_columns = 0;
     size_t received_lidar_columns = 0;
     for (size_t idx : frame_set.valid_indices()) {
-        expected_lidar_columns +=
-            static_cast<size_t>(infos_[idx]->format.valid_columns_per_frame());
-        const auto& frame = frame_set[idx];
-        Eigen::Ref<const core::LidarFrame::Header<uint32_t>> status = frame->status();
+        auto lidar = std::dynamic_pointer_cast<core::LidarFrame>(frame_set[idx]);
+        if (!lidar) {
+            continue;
+        }
+        // sensor_infos_ shares the FrameSet index space, so dispatch on the
+        // matching entry's concrete type; this makes no assumption about lidar
+        // vs. camera ordering within the set.
+        if (idx < sensor_infos_.size()) {
+            if (auto lidar_info = std::dynamic_pointer_cast<core::LidarInfo>(sensor_infos_[idx])) {
+                expected_lidar_columns +=
+                    static_cast<size_t>(lidar_info->format.valid_columns_per_frame());
+            }
+        }
+        Eigen::Ref<const core::LidarFrame::Header<uint32_t>> status = lidar->status();
         received_lidar_columns += impl::count_valid_columns(status);
     }
 
@@ -130,26 +165,26 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
                                                       static_cast<double>(expected_lidar_columns)
                                                 : 1.0;
 
-    // Dewarp: range data + world-frame column poses -> world-frame 3D points,
-    // keeping per-point (frame_idx, col_idx, col_timestamp) provenance so we
-    // can map the downsampled median back to a concrete source column.
+    // Dewarp every RANGE-carrying frame into one world-frame cloud. Lidar
+    // frames use their per-column poses (rolling shutter); camera frames use
+    // their single global-shutter pose. Both go through the shared dewarp path.
     std::vector<uint32_t> frame_idxs;
     std::vector<uint32_t> col_idxs;
     std::vector<uint64_t> timestamps_ns;
-    auto frame =
-        core::impl::dewarp_impl<double>(frame_set, xyz_lut_, config_.min_range, config_.max_range,
-                                        &frame_idxs, &col_idxs, &timestamps_ns);
+    std::vector<Eigen::Vector3d> frame = core::impl::dewarp_impl<double>(
+        frame_set, config_.min_range, config_.max_range, &frame_idxs, &col_idxs, &timestamps_ns);
 
     if (frame.empty()) {
         logger().warn("No valid points found in the frame set. Skipping this update.");
         active_time_correction_.reset(frame_set);
+        impl::update_camera_poses(frame_set);
         return;
     }
 
-    // Single-pass voxel downsample. Localization never updates the map, so
-    // the stratifying fine-pass used in SLAM is unnecessary here. The
-    // returned index map is used below to thread provenance.
-    const auto downsampled = core::voxel_downsample(frame, config_.voxel_size * 1.5);
+    // Single voxel downsample in world frame, as in SLAM. The returned index
+    // map is used below to thread provenance.
+    const auto downsampled =
+        algorithm::impl::voxel_downsample_with_index(frame, config_.voxel_size);
     const auto& source = downsampled.first;
     const auto& ds_idx = downsampled.second;
 
@@ -169,9 +204,9 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
     const int median_col_idx = static_cast<int>(col_idxs[median_orig]);
     const uint64_t median_ts_ns = timestamps_ns[median_orig];
 
-    // World-frame pose of the chosen median-timestamp column
+    // World-frame pose of the chosen median-timestamp source (lidar column or camera).
     core::Matrix4dR median_point_pose =
-        frame_set[median_frame_idx]->get_column_pose(median_col_idx);
+        impl::source_point_pose(frame_set, static_cast<uint32_t>(median_frame_idx), median_col_idx);
 
     if (valid_lidar_column_ratio < min_valid_lidar_column_ratio) {
         logger().warn(
@@ -187,6 +222,7 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
         }
 
         active_time_correction_.reset(frame_set);
+        impl::update_camera_poses(frame_set);
         return;
     }
 
@@ -205,7 +241,7 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
 
     // Solve a refined initial velocity from the corrected anchor for the next
     // frame's deskew prediction, without modifying the current frame's poses.
-    if (deskew_method_) {
+    if (deskew_method_ && median_frame_idx < frame_set.size()) {
         core::Matrix4dR pose = frame_set[median_frame_idx]->get_column_pose(median_col_idx);
         deskew_method_->finalize_after_registration(frame_set, static_cast<int64_t>(median_ts_ns),
                                                     pose);
@@ -215,19 +251,32 @@ void LIOLocalization::update(core::FrameSet& frame_set) {
     // Re-anchor object poses to the corrected per-column poses, interpolated at
     // each object's timestamp.
     impl::update_object_poses(frame_set);
+    impl::update_camera_poses(frame_set);
+}
+
+core::VoxelHashMap& LIOLocalization::get_local_map() const {
+    if (!this->local_map_) {
+        throw std::logic_error(
+            "LIOLocalization must be initialized prior to accessing the internal voxel hash map");
+    }
+
+    return *this->local_map_;
 }
 
 void LIOLocalization::initialize_components() {
     adaptive_threshold_ = std::make_unique<AdaptiveThreshold>(config_.max_range);
-    local_map_ = std::make_unique<VoxelHashMap3d>(config_.voxel_size, config_.max_range);
+    local_map_ = VoxelHashMap::create(
+        config_.voxel_size, LOCAL_MAP_MAX_POINTS_PER_VOXEL, /*min_points_per_voxel=*/1,
+        core::VoxelDownsampleStrategy::FIRST_N_POINT, core::AttributeLayout(),
+        config_.voxel_map_size, config_.voxel_storage_mode);
     registration_ = std::make_unique<ICPRegistration>(config_.max_iterations);
 
-    std::vector<Eigen::Vector3d> vec3d;
-    vec3d.resize(map_.rows());
-    for (int i = 0; i < map_.rows(); ++i) {
-        vec3d[i] = map_.row(i).cast<double>();
+    local_map_->add_points(map_.cast<double>().array().eval());
+    if (std::isfinite(config_.voxel_map_size)) {
+        Eigen::Vector3d origin =
+            config_.initial_pose.value_or(core::Matrix4dR::Identity()).block<3, 1>(0, 3);
+        local_map_->remove_voxels_far_from_location(origin);
     }
-    local_map_->add_points(vec3d);
     // Clear the map points after loading them into the local map
     map_.resize(0, 3);
 }

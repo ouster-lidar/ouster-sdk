@@ -58,8 +58,14 @@
 #define OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(old_symbol, new_symbol, deprecation_version)   \
     old_symbol OUSTER_DEPRECATED_MSG(new_symbol, deprecation_version) = new_symbol
 
+// These must be object-like macros expanding to string literals: they are
+// concatenated into the [[deprecated("...")]] attribute in OUSTER_DEPRECATED_MSG
+// via adjacent string-literal concatenation, which a constexpr cannot do.
+// NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define OUSTER_DEPRECATED_LAST_SUPPORTED_0_16 "0.16"
 #define OUSTER_DEPRECATED_LAST_SUPPORTED_1_0 "1.0"
+#define OUSTER_DEPRECATED_LAST_SUPPORTED_2_0 "2.0"
+// NOLINTEND(cppcoreguidelines-macro-usage)
 
 // Emit a compile-time warning when a deprecated header is included.
 // Usage (at the top of a deprecated forwarding header):

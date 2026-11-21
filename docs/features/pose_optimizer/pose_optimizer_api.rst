@@ -143,7 +143,7 @@ This differs from pose-to-pose constraints which match two selected lidar frame 
 Typical use cases:
 
 - loop-closure correspondences using specific landmark points in large environments
-- feature tracking of distinct geometric features across multiple frames  
+- feature tracking of distinct geometric features across multiple frames
 - reducing drift by matching structural edges, corners, or distinctive boundaries
 - constraining poses using manually selected point correspondences
 

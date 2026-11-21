@@ -4,6 +4,7 @@ All rights reserved.
 """
 
 from copy import copy
+import gc
 import numpy as np
 import pytest
 
@@ -13,7 +14,7 @@ from ouster.sdk.examples import reference
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_xyz_lut_dims(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> None:
+def test_xyz_lut_dims(stream_digest: digest.StreamDigest, meta: core.LidarInfo) -> None:
     """Check that (in)valid dimensions are handled when creating xyzlut."""
     w = meta.format.columns_per_frame
     h = meta.format.pixels_per_column
@@ -52,7 +53,7 @@ def test_xyz_lut_dims(stream_digest: digest.StreamDigest, meta: core.SensorInfo)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> None:
+def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: core.LidarInfo) -> None:
     """Check that invalid beam angle dimensions are handled by xyzlut."""
     meta1 = copy(meta)
     core.XYZLut(meta1)
@@ -61,7 +62,7 @@ def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: core.SensorInf
     with pytest.raises(ValueError):
         core.XYZLut(meta1)
 
-    meta1.beam_azimuth_angles = meta1.beam_azimuth_angles[:-2]
+    meta1.beam_azimuth_angles = list(meta1.beam_azimuth_angles[:-2])
     with pytest.raises(ValueError):
         core.XYZLut(meta1)
 
@@ -72,11 +73,11 @@ def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: core.SensorInf
     meta2 = copy(meta)
     core.XYZLut(meta2)
 
-    meta2.beam_azimuth_angles = meta1.beam_altitude_angles + [0.0]
+    meta2.beam_azimuth_angles = list(meta1.beam_altitude_angles) + [0.0]
     with pytest.raises(ValueError):
         core.XYZLut(meta2)
 
-    meta2.beam_azimuth_angles = meta1.beam_altitude_angles[:-2]
+    meta2.beam_azimuth_angles = list(meta1.beam_altitude_angles[:-2])
     with pytest.raises(ValueError):
         core.XYZLut(meta2)
 
@@ -86,7 +87,7 @@ def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: core.SensorInf
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_xyz_lut_frame_dims(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> None:
+def test_xyz_lut_frame_dims(stream_digest: digest.StreamDigest, meta: core.LidarInfo) -> None:
     """Check that (in)valid lidar frame dimensions are handled by xyzlut."""
     w = meta.format.columns_per_frame
     h = meta.format.pixels_per_column
@@ -118,7 +119,7 @@ def test_xyz_lut_frame_dims(stream_digest: digest.StreamDigest, meta: core.Senso
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_xyz_calcs(stream_digest: digest.StreamDigest,
-                   frame: core.LidarFrame, meta: core.SensorInfo) -> None:
+                   frame: core.LidarFrame, meta: core.LidarInfo) -> None:
     """Compare the optimized xyz projection to a reference implementation."""
 
     # compute 3d points using reference implementation
@@ -137,7 +138,7 @@ def test_xyz_calcs(stream_digest: digest.StreamDigest,
 
 
 def test_xyz_range(stream_digest: digest.StreamDigest, frame: core.LidarFrame,
-                   meta: core.SensorInfo) -> None:
+                   meta: core.LidarInfo) -> None:
     """Test that projection works on an ndarrays as well."""
     xyzlut = core.XYZLut(meta)
 
@@ -145,3 +146,42 @@ def test_xyz_range(stream_digest: digest.StreamDigest, frame: core.LidarFrame,
     xyz_from_frame = xyzlut(frame)
     xyz_from_range = xyzlut(range)
     assert np.array_equal(xyz_from_frame, xyz_from_range)
+
+
+@pytest.mark.parametrize("lut_attr, lut_type", [("xyzlut_double", core.XYZLut),
+                                                ("xyzlut_float", core.XYZLutFloat)])
+def test_cached_xyzlut_views_outlive_clear_cache_and_info(lut_attr, lut_type) -> None:
+    """Views into a cached LUT outlive the LUT, clear_cache(), and the info."""
+    info = core.LidarInfo.from_default(core.LidarMode._512x10)
+    expected_lut = lut_type(info)
+
+    lut = getattr(info, lut_attr)
+    assert getattr(info, lut_attr) is lut
+    direction = lut.direction
+    offset = lut.offset
+    info.clear_cache()
+    assert getattr(info, lut_attr) is not lut
+    del info, lut
+    gc.collect()
+
+    for _ in range(50):
+        _ = core.LidarInfo.from_default(core.LidarMode._512x10).xyzlut_double
+
+    np.testing.assert_array_equal(direction, expected_lut.direction)
+    np.testing.assert_array_equal(offset, expected_lut.offset)
+
+
+@pytest.mark.parametrize("lut_attr, lut_type", [("xyzlut_double", core.XYZLut),
+                                                ("xyzlut_float", core.XYZLutFloat)])
+def test_cached_xyzlut_call_outlives_clear_cache_and_info(lut_attr, lut_type) -> None:
+    """A cached LUT can still project after clear_cache() and after its info is gone."""
+    info = core.LidarInfo.from_default(core.LidarMode._512x10)
+    rng = np.full((info.h, info.w), 5000, dtype=np.uint32)
+    expected = lut_type(info)(rng)
+
+    lut = getattr(info, lut_attr)
+    info.clear_cache()
+    del info
+    gc.collect()
+
+    np.testing.assert_allclose(lut(rng), expected)

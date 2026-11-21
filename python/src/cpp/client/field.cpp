@@ -9,6 +9,8 @@
  * file changes. See the mypy documentation for details.
  */
 
+#include "ouster/core/field.h"
+
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
@@ -18,22 +20,28 @@
 #include <pyerrors.h>
 #include <warnings.h>
 
+#include <memory>
 #include <sstream>
 
 #include "client_common.h"
 #include "common.h"
 #include "eigen_dense.h"
+#include "ouster/core/chanfield.h"
+#include "ouster/core/data_format.h"
+#include "ouster/core/field_decode_info.h"
+#include "ouster/core/field_type.h"
 #include "ouster/core/lidar_frame.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/open_source.h"
 #include "ouster/core/profile_extension.h"
-#include "ouster/core/types.h"
+#include "ouster/core/version.h"
 
 using ouster::sdk::core::ChanFieldType;
 using ouster::sdk::core::DataFormat;
 using ouster::sdk::core::FieldClass;
 using ouster::sdk::core::FieldDecodeInfo;
 using ouster::sdk::core::FieldType;
-using ouster::sdk::core::SensorInfo;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::core::Version;
 
 namespace ouster {
@@ -51,8 +59,6 @@ void init_client_field(py::module_& module, py::module_& /*unused*/) {
     auto field_class = py::enum_<FieldClass>(module, "FieldClass", "LidarFrame field classes",
                                              py::is_arithmetic());
     def_enum(field_class, ouster::sdk::core::impl::FIELD_CLASS_STRINGS, "FieldClass");
-    // Deprecated alias: SCAN_FIELD was renamed to FRAME_FIELD
-    field_class.value("SCAN_FIELD", FieldClass::FRAME_FIELD);
 
     py::class_<FieldType>(module, "FieldType", R"(
     Describes a field.
@@ -174,7 +180,7 @@ void init_client_field(py::module_& module, py::module_& /*unused*/) {
 
     module.def(
         "resolve_field_types",
-        [](const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& metadata,
+        [](const std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>>& metadata,
            bool raw_headers, bool raw_fields,
            const nonstd::optional<std::vector<std::string>>& field_names) {
             return ouster::sdk::core::resolve_field_types(metadata, raw_headers, raw_fields,
@@ -189,7 +195,7 @@ void init_client_field(py::module_& module, py::module_& /*unused*/) {
     the provided sensor metadata and field names.
 
     Args:
-        metadata (List[SensorInfo]): A list of sensor metadata objects.
+        metadata (List[LidarInfo]): A list of sensor metadata objects.
         raw_headers (bool): Whether to include raw headers in the resolution. Default is False.
         raw_fields (bool): Whether to include raw fields in the resolution. Default is False.
         field_names (List[str]): A list of field names to resolve. Default is an empty list.
@@ -200,9 +206,9 @@ void init_client_field(py::module_& module, py::module_& /*unused*/) {
 
     module.def(
         "get_field_types",
-        [](const SensorInfo& info) { return ouster::sdk::core::get_field_types(info); },
+        [](const LidarInfo& info) { return ouster::sdk::core::get_field_types(info); },
         R"(
-    Extracts LidarFrame fields with types for a given SensorInfo
+    Extracts LidarFrame fields with types for a given LidarInfo
 
     Args:
         info: sensor metadata for which to find fields types
@@ -218,7 +224,7 @@ void init_client_field(py::module_& module, py::module_& /*unused*/) {
             return ouster::sdk::core::get_field_types(format, fw_version);
         },
         R"(
-    Extracts LidarFrame fields with types for a given SensorInfo
+    Extracts LidarFrame fields with types for a given LidarInfo
 
     Args:
         info: sensor data format for which to find field types

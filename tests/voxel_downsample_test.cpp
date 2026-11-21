@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
+#include <ouster/algorithm/impl/custom_voxel_downsample.h>
 #include <ouster/core/eigen_hash.h>
+#include <ouster/core/impl/voxel_hash_map_t.h>
 #include <ouster/core/voxel_hash_map.h>
 #include <tsl/robin_map.h>
 
@@ -15,7 +17,7 @@
 #include "util.h"
 
 using Voxel = Eigen::Vector3i;
-using ouster::sdk::core::voxel_downsample;
+using ouster::sdk::algorithm::impl::voxel_downsample_with_index;
 using ouster::sdk::core::VoxelHashMap3d;
 
 // V0: Original first-in-wins (no randomization).
@@ -34,14 +36,14 @@ static std::vector<Eigen::Vector3d> VoxelDownsampleLegacy(const std::vector<Eige
 }
 
 TEST(VoxelDownsampleTest, EmptyInput) {
-    auto result = voxel_downsample({}, 1.0);
+    auto result = voxel_downsample_with_index({}, 1.0);
     EXPECT_TRUE(result.first.empty());
     EXPECT_TRUE(result.second.empty());
 }
 
 TEST(VoxelDownsampleTest, SinglePoint) {
     std::vector<Eigen::Vector3d> frame = {{1.5, 2.5, 3.5}};
-    auto result = voxel_downsample(frame, 1.0);
+    auto result = voxel_downsample_with_index(frame, 1.0);
     ASSERT_EQ(result.first.size(), 1u);
     EXPECT_EQ(result.first[0], frame[0]);
     ASSERT_EQ(result.second.size(), 1u);
@@ -51,7 +53,7 @@ TEST(VoxelDownsampleTest, SinglePoint) {
 TEST(VoxelDownsampleTest, PointsInDistinctVoxelsAllPreserved) {
     const double vs = 1.0;
     std::vector<Eigen::Vector3d> frame = {{0.5, 0.5, 0.5}, {1.5, 0.5, 0.5}, {0.5, 1.5, 0.5}};
-    auto result = voxel_downsample(frame, vs);
+    auto result = voxel_downsample_with_index(frame, vs);
     EXPECT_EQ(result.first.size(), frame.size());
     EXPECT_EQ(result.second.size(), frame.size());
 }
@@ -63,7 +65,7 @@ TEST(VoxelDownsampleTest, OutputPointsComeFromInput) {
     std::vector<Eigen::Vector3d> frame(500);
     for (auto& pt : frame) pt = Eigen::Vector3d(dist(gen), dist(gen), dist(gen));
 
-    auto pts = voxel_downsample(frame, vs).first;
+    auto pts = voxel_downsample_with_index(frame, vs).first;
     for (const auto& rpt : pts) {
         bool found = std::any_of(frame.begin(), frame.end(),
                                  [&](const Eigen::Vector3d& p) { return p == rpt; });
@@ -78,7 +80,7 @@ TEST(VoxelDownsampleTest, OneRepresentativePerVoxel) {
     std::vector<Eigen::Vector3d> frame(1000);
     for (auto& pt : frame) pt = Eigen::Vector3d(dist(gen), dist(gen), dist(gen));
 
-    auto pts = voxel_downsample(frame, vs).first;
+    auto pts = voxel_downsample_with_index(frame, vs).first;
     std::unordered_set<Voxel> voxels;
     for (const auto& pt : pts) {
         auto v = VoxelHashMap3d::point_to_voxel(pt, 1.0 / vs);
@@ -93,8 +95,8 @@ TEST(VoxelDownsampleTest, DeterministicWithFixedSeed) {
     std::vector<Eigen::Vector3d> frame(1000);
     for (auto& pt : frame) pt = Eigen::Vector3d(dist(gen), dist(gen), dist(gen));
 
-    auto r1 = voxel_downsample(frame, vs);
-    auto r2 = voxel_downsample(frame, vs);
+    auto r1 = voxel_downsample_with_index(frame, vs);
+    auto r2 = voxel_downsample_with_index(frame, vs);
     ASSERT_EQ(r1.first.size(), r2.first.size());
     for (size_t i = 0; i < r1.first.size(); ++i) {
         EXPECT_EQ(r1.first[i], r2.first[i]);
@@ -109,7 +111,7 @@ TEST(VoxelDownsampleTest, IndicesMatchOutputPoints) {
     std::vector<Eigen::Vector3d> frame(1000);
     for (auto& pt : frame) pt = Eigen::Vector3d(dist(gen), dist(gen), dist(gen));
 
-    auto result = voxel_downsample(frame, vs);
+    auto result = voxel_downsample_with_index(frame, vs);
     const auto& pts = result.first;
     const auto& idx = result.second;
 
@@ -128,7 +130,7 @@ TEST(VoxelDownsampleTest, IndicesAreUnique) {
     std::vector<Eigen::Vector3d> frame(500);
     for (auto& pt : frame) pt = Eigen::Vector3d(dist(gen), dist(gen), dist(gen));
 
-    auto idx = voxel_downsample(frame, vs).second;
+    auto idx = voxel_downsample_with_index(frame, vs).second;
 
     std::unordered_set<uint32_t> index_set(idx.begin(), idx.end());
     EXPECT_EQ(index_set.size(), idx.size()) << "Duplicate indices found";
@@ -149,7 +151,7 @@ TEST(VoxelDownsampleTest, DoesNotAlwaysPickFirstPoint) {
     for (int t = 0; t < n_trials; ++t) {
         auto frame = base_frame;
         std::shuffle(frame.begin(), frame.end(), shuffle_rng);
-        auto pts = voxel_downsample(frame, vs).first;
+        auto pts = voxel_downsample_with_index(frame, vs).first;
         ASSERT_EQ(pts.size(), 1u);
         for (int i = 0; i < n_points; ++i) {
             if (pts[0] == base_frame[i]) {
@@ -176,7 +178,7 @@ TEST(VoxelDownsampleTest, UniformSelectionAcrossVoxel) {
     for (int trial = 0; trial < n_trials; ++trial) {
         auto frame = base_frame;
         std::shuffle(frame.begin(), frame.end(), shuffle_rng);
-        auto pts = voxel_downsample(frame, vs).first;
+        auto pts = voxel_downsample_with_index(frame, vs).first;
         ASSERT_EQ(pts.size(), 1u);
         for (int i = 0; i < n_points; ++i) {
             if (pts[0] == base_frame[i]) {
@@ -244,7 +246,7 @@ TEST(VoxelDownsampleTest, Performance) {
 
     using DsFn = std::vector<Eigen::Vector3d> (*)(const std::vector<Eigen::Vector3d>&, double);
     static auto CurrentImpl = [](const std::vector<Eigen::Vector3d>& f, double vs) {
-        return voxel_downsample(f, vs).first;
+        return voxel_downsample_with_index(f, vs).first;
     };
     struct Variant {
         const char* name;

@@ -47,7 +47,7 @@ class GLImage {
         GlobalState();
         ~GlobalState();
 
-        // Make sure it cant be copied
+        // Make sure it can't be copied
         GlobalState(const GlobalState&) = delete;
         GlobalState& operator=(const GlobalState&) = delete;
     };

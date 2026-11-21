@@ -20,6 +20,7 @@ endif()
 
 # configure vcpkg from environment variables, if present
 include(VcpkgEnv)
+include(OusterDarwin)
 
 # Extract version: prefer VERSION.generated from local versioning file, else repo VERSION.
 set(_VERSION_GENERATED "${CMAKE_CURRENT_LIST_DIR}/VERSION.generated")
@@ -112,6 +113,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   endif()
 
   include(CTest)
+  include(OusterLTO)
 else()
   set(OUSTER_TOP_LEVEL OFF)
 endif()
@@ -129,6 +131,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND OUSTER_USE_EIGEN_MAX_ALIGN_BYTES
 endif()
 
 add_subdirectory(ouster_algorithm)
+add_subdirectory(ouster_io)
 
 if(BUILD_SENSOR)
   add_subdirectory(ouster_sensor)

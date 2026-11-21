@@ -476,7 +476,7 @@ class ClangThrowMap(Clang):
                 import tqdm
                 self._tqdm = tqdm.tqdm
             except ImportError:
-                print("tqdm not found, cant display progress bar. please install tqdm")
+                print("tqdm not found, can't display progress bar. please install tqdm")
                 progress_bar = False
 
         self._progress_bar = progress_bar

@@ -1,6 +1,6 @@
 from .conftest import MockPointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
-from ouster.sdk.core import SensorInfo, LidarMode, LidarFrame, ChanField
+from ouster.sdk.core import LidarInfo, LidarMode, LidarFrame, ChanField
 from ouster.sdk.viz.model import LidarFrameVizModel
 from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig
 from ouster.sdk.viz.track import MultiTrack
@@ -10,8 +10,8 @@ def test_use_default_view_modes():
     """It should add/remove the Clouds used to render
     the track and key frames depending on visibility."""
     infos = [
-        SensorInfo.from_default(LidarMode._2048x10),
-        SensorInfo.from_default(LidarMode._2048x10)
+        LidarInfo.from_default(LidarMode._2048x10),
+        LidarInfo.from_default(LidarMode._2048x10)
     ]
     for info in infos:
         info.image_rev = 'ousteros-image-prod-bootes-v3.0.1'  # needed for "is_norm_reflectivity_mode"
@@ -32,13 +32,13 @@ def test_use_default_view_modes():
 
     accum._use_default_view_modes()
     assert accum.active_cloud_mode == ChanField.REFLECTIVITY
-    accum.cycle_cloud_palette()
+    accum.set_cloud_palette("Ouster Colors")
 
     assert accum.get_palette(
         model._sensors[0]._cloud_modes.get(accum.active_cloud_mode)
     ).name == 'Cal. Ref. Ouster Colors'
 
-    accum.cycle_cloud_mode()
+    accum.set_cloud_mode("RING")
     assert accum.active_cloud_mode == "RING"
 
     # Only REFLECTIVITY uses Cal Ref palettes; other channels use regular palettes
@@ -50,5 +50,5 @@ def test_use_default_view_modes():
     accum._use_default_view_modes()
     assert accum.active_cloud_mode == "RING"
 
-    accum.cycle_cloud_mode()
+    accum.set_cloud_mode("SENSOR")
     assert accum.active_cloud_mode == "SENSOR"

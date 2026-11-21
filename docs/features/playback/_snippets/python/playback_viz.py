@@ -33,5 +33,5 @@ def show_lidar_frames_range(source_url: str, stop: int = 10) -> None:
     from ouster.sdk import viz
     frame_set_source = open_source(source_url)
     # [doc-stag-viz-frame-show-slice]
-    viz.lf_show(frame_set_source[0:stop])  # type: ignore[arg-type]
+    viz.lf_show(frame_set_source[0:stop])
     # [doc-etag-viz-frame-show-slice]

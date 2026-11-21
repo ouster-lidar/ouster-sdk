@@ -1,8 +1,6 @@
 import os
 import numpy as np
-import ouster.sdk._bindings.pcap as _pcap
-from ouster.sdk.core import LidarMode, SensorInfo, UDPProfileLidar, ChanField, PacketFormat, LidarPacket
-from ouster.sdk.pcap import PacketInfo
+from ouster.sdk.core import LidarMode, LidarInfo, UDPProfileLidar, ChanField, PacketFormat, LidarPacket
 from ouster.sdk import core, pcap, open_packet_source
 from ouster.sdk.util import (resolve_metadata)
 from tests.conftest import PCAPS_DATA_DIR
@@ -11,7 +9,7 @@ from tests.conftest import PCAPS_DATA_DIR
 def test_fusa_parsing_profile():
     dataset_name = 'OS-1-128_767798045_1024x10_20230712_120049'
     meta = open(os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.json')).read()
-    si = SensorInfo(meta)
+    si = LidarInfo(meta)
     packet_format = PacketFormat(si)
     assert packet_format.udp_profile_lidar == UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL
 
@@ -19,8 +17,8 @@ def test_fusa_parsing_profile():
 def test_fusa_fields():
     dataset_name = 'OS-1-128_767798045_1024x10_20230712_120049'
     meta = open(os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.json')).read()
-    si = SensorInfo(meta)
-    pcap = _pcap.replay_initialize(os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.pcap'))
+    si = LidarInfo(meta)
+    pcap_data = pcap.PcapPacketSource(os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.pcap'), sensor_info=[si])
     packet_format = PacketFormat(si)
 
     # check preconditions
@@ -31,11 +29,8 @@ def test_fusa_fields():
     assert si.format.udp_profile_lidar == UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL
     assert si.config.lidar_mode == LidarMode._1024x10
 
-    buf = bytearray(2**16)
-    packet_info = PacketInfo()
-    _pcap.next_packet_info(pcap, packet_info)
-    _pcap.read_packet(pcap, buf)
-    arr = np.frombuffer(buf, dtype=np.uint8)
+    sensor_idx, packet = next(iter(pcap_data))
+    arr = packet.buf
     assert packet_format.packet_type(arr) == 1
     assert packet_format.frame_id(arr) == 229
     assert packet_format.init_id(arr) == si.init_id
@@ -86,7 +81,7 @@ def test_packet_crc():
     pcap_name = os.path.join(PCAPS_DATA_DIR, 'crc_test.pcap')
     info_name = os.path.join(PCAPS_DATA_DIR, "crc_test.json")
     meta = open(info_name).read()
-    si = SensorInfo(meta)
+    si = LidarInfo(meta)
     pf = PacketFormat(si)
     source = pcap.PcapPacketSource(pcap_name, sensor_info=[si])
     count = 0
@@ -102,7 +97,7 @@ def test_fusa_reading_pcap():
     dataset_name = 'OS-1-128_767798045_1024x10_20230712_120049'
     pcap_name = os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.pcap')
     meta = open(resolve_metadata(pcap_name)).read()
-    si = SensorInfo(meta)
+    si = LidarInfo(meta)
     source = pcap.PcapFrameSetSource(pcap_name, sensor_info=[si])
     frames = list(iter(source))
     assert len(frames) == 1

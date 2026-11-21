@@ -15,13 +15,14 @@
 #include <utility>
 #include <vector>
 
+#include "indexed_pcap_reader.h"
 #include "ouster/core/compat_ops.h"
 #include "ouster/core/impl/open_source_impl.h"
+#include "ouster/core/lidar_info.h"
 #include "ouster/core/open_source.h"
 #include "ouster/core/packet.h"
 #include "ouster/core/packet_source.h"
 #include "ouster/core/types.h"
-#include "ouster/pcap/indexed_pcap_reader.h"
 
 using namespace ouster::sdk::core;
 namespace ouster {
@@ -76,14 +77,11 @@ class PcapPacketIteratorImpl : public PacketIteratorImpl {
             auto& idx = res.second;
 
             // increment our errors
-            OUSTER_DIAGNOSTIC_PUSH
-            OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
-            if (res.first == IdxErrorType::Size) {
+            if (res.first == IdxErrorType::SIZE) {
                 source_->size_error_count_++;
-            } else if (res.first == IdxErrorType::Id) {
+            } else if (res.first == IdxErrorType::ID) {
                 source_->id_error_count_++;
             }
-            OUSTER_DIAGNOSTIC_POP
             if (!idx) {
                 // no idea who this is from, try again
                 offset++;
@@ -211,7 +209,8 @@ std::vector<std::string> resolve_metadata_multi(const std::string& data_path) {
     return found;
 }
 
-std::vector<SensorInfo> find_metadata(const std::string& file, PcapPacketSourceOptions& options) {
+namespace {
+std::vector<LidarInfo> find_metadata(const std::string& file, PcapPacketSourceOptions& options) {
     bool has_sensor_info = !options.sensor_info.retrieve().empty();
     bool has_meta = !options.meta.retrieve().empty();
     if (has_sensor_info && has_meta) {
@@ -222,20 +221,19 @@ std::vector<SensorInfo> find_metadata(const std::string& file, PcapPacketSourceO
         return options.sensor_info.retrieve();
     }
     auto meta = has_meta ? options.meta.retrieve() : resolve_metadata_multi(file);
-    std::vector<SensorInfo> list;
+    std::vector<LidarInfo> list;
     for (const auto& file : meta) {
         auto temp_info = metadata_from_json(file);
         list.push_back(temp_info);
     }
     return list;
 }
+}  // namespace
 
 PcapPacketSource::PcapPacketSource(const std::string& file,
                                    const std::function<void(PcapPacketSourceOptions&)>& options)
     : PcapPacketSource(file, ouster::sdk::impl::get_packet_options(options)) {}
 
-OUSTER_DIAGNOSTIC_PUSH
-OUSTER_DIAGNOSTIC_IGNORE_DEPRECATED
 PcapPacketSource::PcapPacketSource(
     const std::string& file,         ///< [in] sensor hostnames to connect to, for
                                      ///< multiple comma separate
@@ -251,7 +249,7 @@ PcapPacketSource::PcapPacketSource(
 
     // Determine metadata
     for (const auto& info : reader_->sensor_info()) {
-        sensor_info_.emplace_back(new SensorInfo(info));
+        sensor_info_.emplace_back(new LidarInfo(info));
     }
 
     populate_extrinsics(options.extrinsics_file.retrieve(), options.extrinsics.retrieve(),
@@ -263,7 +261,8 @@ PcapPacketSource::PcapPacketSource(
 
     options.check("PcapPacketSource");
 }
-OUSTER_DIAGNOSTIC_POP
+
+PcapPacketSource::~PcapPacketSource() = default;
 
 bool PcapPacketSource::is_live() const {
     return false;
@@ -277,7 +276,7 @@ uint64_t PcapPacketSource::size_error_count() const {
     return size_error_count_;
 }
 
-const std::vector<std::shared_ptr<SensorInfo>>& PcapPacketSource::sensor_info() const {
+const std::vector<std::shared_ptr<LidarInfo>>& PcapPacketSource::sensor_info() const {
     return sensor_info_;
 }
 

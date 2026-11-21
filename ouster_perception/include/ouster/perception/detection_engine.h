@@ -10,8 +10,9 @@
 #include <type_traits>
 #include <unordered_map>
 
+#include "ouster/core/frame.h"
 #include "ouster/core/frame_set.h"
-#include "ouster/core/lidar_frame.h"
+#include "ouster/core/sensor_info.h"
 #include "ouster/core/visibility.h"
 
 namespace ouster {
@@ -100,19 +101,23 @@ class OUSTER_API_CLASS DetectionEngine {
     virtual const std::unordered_map<uint64_t, std::string>& class_map() const = 0;
 
     /**
-     * Detect objects in a LidarFrame.
+     * Detect objects in a Frame.
      * Objects will be saved into the frame.
      *
-     * @param[in] frame lidar frame
+     * The frame must carry a RANGE field. A LidarFrame and a CameraFrame are
+     * both accepted; a camera image needs no motion compensation, but its
+     * points are still placed in the world using the frame's pose.
+     *
+     * @param[in] frame sensor frame
      */
     OUSTER_API_FUNCTION
-    virtual void update(core::LidarFrame& frame) = 0;
+    virtual void update(core::Frame& frame) = 0;
 
     /**
      * Detect objects in a FrameSet.
      * Objects will be saved into the frame_set
      *
-     * @param[in] frame_set collation of lidar frames
+     * @param[in] frame_set collation of sensor frames
      */
     OUSTER_API_FUNCTION
     virtual void update(core::FrameSet& frame_set) = 0;
@@ -120,7 +125,8 @@ class OUSTER_API_CLASS DetectionEngine {
     /**
      * Creates and initializes classic detection engine with default config.
      *
-     * @param[in] sensor_infos a vector of SensorInfo pointers
+     * @param[in] sensor_infos a vector of SensorInfo pointers, which may mix
+     *            LidarInfo and CameraInfo
      * @param[in] config config for the classic engine (defaults to
      *            ClassicDetectionConfig{})
      * @return unique_ptr to detection engine
@@ -135,7 +141,8 @@ class OUSTER_API_CLASS DetectionEngine {
      *
      * Currently only "classic" is supported.
      *
-     * @param[in] sensor_infos a vector of SensorInfo pointers
+     * @param[in] sensor_infos a vector of SensorInfo pointers, which may mix
+     *            LidarInfo and CameraInfo
      * @param[in] kind backend identifier (e.g. "classic")
      * @return unique_ptr to detection engine
      * @throws std::invalid_argument if kind is not recognised

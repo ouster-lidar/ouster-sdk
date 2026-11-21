@@ -3,4 +3,3 @@ document.addEventListener('DOMContentLoaded', () => {
       window.CollapsibleLists.apply();
     }
   });
-  

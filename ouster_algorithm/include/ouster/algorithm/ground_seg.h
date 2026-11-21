@@ -1,19 +1,13 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
-#include <vector>
 
 #include "ouster/core/visibility.h"
 
 namespace ouster {
 namespace sdk {
 namespace core {
-class LidarFrame;
 class FrameSet;
-template <typename T>
-class XYZLutT;
-using XYZLut = XYZLutT<double>;
 }  // namespace core
 }  // namespace sdk
 }  // namespace ouster
@@ -30,15 +24,22 @@ struct OUSTER_API_CLASS GroundSegConfig {
 
 /**
  * @class GroundSegEngine
- * @brief Ground segmentation engine for classifying ground points in lidar
+ * @brief Ground segmentation engine for classifying ground points in sensor
  *        frames.
  *
  * This class provides an interface for running ground segmentation on
- * FrameSet data, annotating each frame with a per-pixel ground mask.
+ * FrameSet data, annotating each frame with a per-pixel ground mask. It
+ * operates on any Frame that carries a RANGE field and sensor metadata,
+ * covering both LidarFrame and CameraFrame. Lidar frames may provide multiple
+ * returns (GROUND, GROUND2, ...) and a staggered pixel layout; camera frames
+ * have a single return and an unstaggered image. Frames without a RANGE field
+ * or sensor info are skipped.
  *
  * Coordinate frame selection:
- * - If any valid column pose in a frame is non-identity, the engine treats
- * those poses as SLAM poses and segments in that global frame.
+ * - If any valid pose in a frame is non-identity, the engine treats those
+ * poses as SLAM poses and segments in that global frame. A lidar frame
+ * provides one pose per column (rolling shutter); a camera frame provides a
+ * single rigid pose applied to every column.
  * - Otherwise, the engine uses sensor extrinsics and frame-local column poses.
  *
  * The engine does not compute IMU gravity alignment internally. If gravity
@@ -60,8 +61,9 @@ class OUSTER_API_CLASS GroundSegEngine {
     virtual ~GroundSegEngine() = default;
 
     /**
-     * @brief Run ground segmentation on a FrameSet, annotating each frame
-     *        with a "GROUND" field (uint8: 1 = ground, 0 = non-ground).
+     * @brief Run ground segmentation on a FrameSet, annotating each supported
+     *        frame (lidar or camera) with a "GROUND" field (uint8: 1 = ground,
+     *        0 = non-ground).
      *
      * Example:
      * @code{.cpp}
@@ -71,6 +73,10 @@ class OUSTER_API_CLASS GroundSegEngine {
      * auto ground = ouster::sdk::algorithm::GroundSegEngine::create();
      * ground->update(frames);
      * @endcode
+     *
+     * If a frame contains precomputed "NORMALS" or "NORMALS2" fields, their
+     * vectors must be expressed in the global coordinate frame used for
+     * segmentation.
      *
      * @param[in,out] frames FrameSet to annotate in place.
      */

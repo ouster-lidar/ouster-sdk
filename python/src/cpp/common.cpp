@@ -1,6 +1,33 @@
 #include "common.h"
 
+#include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
+
+#include <stdexcept>
+#include <vector>
+
+#include "ouster/core/lidar_config.h"
+#include "ouster/core/lidar_info.h"
+
+namespace {
+// The 'sensor_config' option accepts the SensorConfig base type. Downcast each
+// entry to the concrete LidarConfig the sensor sources require, failing with a
+// clear error if a bare SensorConfig (or any non-LidarConfig) is provided.
+std::vector<ouster::sdk::core::LidarConfig> cast_sensor_configs(py::handle value) {
+    using ouster::sdk::core::LidarConfig;
+    std::vector<LidarConfig> configs;
+    py::sequence seq = py::cast<py::sequence>(value);
+    for (py::handle item : seq) {
+        if (!py::isinstance<LidarConfig>(item)) {
+            throw std::invalid_argument(
+                "'sensor_config' entries must be LidarConfig instances; a bare "
+                "SensorConfig cannot be used to configure a lidar.");
+        }
+        configs.push_back(py::cast<LidarConfig>(item));
+    }
+    return configs;
+}
+}  // namespace
 
 void parse_packet_source_options(const py::kwargs& args,
                                  ouster::sdk::PacketSourceOptions& options) {
@@ -29,10 +56,9 @@ void parse_packet_source_options(const py::kwargs& args,
         } else if (key == "timeout") {
             options.timeout = py::cast<float>(item.second);
         } else if (key == "sensor_info") {
-            options.sensor_info = py::cast<std::vector<ouster::sdk::core::SensorInfo>>(item.second);
+            options.sensor_info = py::cast<std::vector<ouster::sdk::core::LidarInfo>>(item.second);
         } else if (key == "sensor_config") {
-            options.sensor_config =
-                py::cast<std::vector<ouster::sdk::core::SensorConfig>>(item.second);
+            options.sensor_config = cast_sensor_configs(item.second);
         } else if (key == "extrinsics") {
             // OPTIMIZATION: Nanobind handles the iteration, shape checking
             // (4x4), and row-major copying automatically via the caster.
@@ -99,10 +125,9 @@ void parse_frame_set_source_options(const py::kwargs& args,
                 options.timeout = py::cast<float>(item.second);
             } else if (key == "sensor_info") {
                 options.sensor_info =
-                    py::cast<std::vector<ouster::sdk::core::SensorInfo>>(item.second);
+                    py::cast<std::vector<ouster::sdk::core::LidarInfo>>(item.second);
             } else if (key == "sensor_config") {
-                options.sensor_config =
-                    py::cast<std::vector<ouster::sdk::core::SensorConfig>>(item.second);
+                options.sensor_config = cast_sensor_configs(item.second);
             } else if (key == "extrinsics") {
                 // OPTIMIZATION: Nanobind automatically converts
                 // list-of-numpy-arrays to std::vector<Eigen::Matrix>.
@@ -306,23 +331,23 @@ py::object OusterDtype::otype() const {
             };
 
             add_field("live", "uint8", 0);
-            add_field("id", "uint8", 1);
-            add_field("error_flags", "uint8", 2);
-            add_field("trigger_type", "uint8", 3);
-            add_field("trigger_status", "uint8", 4);
-            add_field("triggered_frames", "uint32", 5);
-            add_field("count", "uint32", 9);
-            add_field("occlusion_count", "uint32", 13);
-            add_field("invalid_count", "uint32", 17);
-            add_field("max_count", "uint32", 21);
-            add_field("min_range", "uint32", 25);
-            add_field("max_range", "uint32", 29);
-            add_field("mean_range", "uint32", 33);
+            add_field("id", "uint16", 1);
+            add_field("error_flags", "uint8", 3);
+            add_field("trigger_type", "uint8", 4);
+            add_field("trigger_status", "uint8", 5);
+            add_field("triggered_frames", "uint32", 6);
+            add_field("count", "uint32", 10);
+            add_field("occlusion_count", "uint32", 14);
+            add_field("invalid_count", "uint32", 18);
+            add_field("max_count", "uint32", 22);
+            add_field("min_range", "uint32", 26);
+            add_field("max_range", "uint32", 30);
+            add_field("mean_range", "uint32", 34);
 
             dtype_dict["names"] = names;
             dtype_dict["formats"] = formats;
             dtype_dict["offsets"] = offsets;
-            dtype_dict["itemsize"] = 37;  // Explicitly set packed size
+            dtype_dict["itemsize"] = 38;  // Explicitly set packed size
 
             return numpy.attr("dtype")(dtype_dict);
         }

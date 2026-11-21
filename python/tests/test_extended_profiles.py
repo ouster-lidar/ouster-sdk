@@ -6,8 +6,7 @@ import pytest
 import numpy as np
 
 from ouster.sdk import core
-from ouster.sdk.core import (ChanField, FieldDecodeInfo, add_custom_profile,
-                             UDPProfileLidar)
+from ouster.sdk.core import (ChanField, FieldDecodeInfo, add_custom_profile)
 from tests.multi import Frames
 
 
@@ -28,9 +27,7 @@ def test_add_custom_profile() -> None:
     ]
     chan_data_size = 16
 
-    profile_nr = add_custom_profile(profile_name, fields, chan_data_size)
-
-    assert str(UDPProfileLidar(profile_nr)) == profile_name
+    add_custom_profile(profile_name, fields, chan_data_size)
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
@@ -49,11 +46,11 @@ def test_custom_copycat_profile_matches_original(packets: core.PacketSource) -> 
         (ChanField.WINDOW, FieldDecodeInfo(np.uint8, 15, 0, 0)),
     ]
 
-    profile_nr = add_custom_profile("DUAL_COPYCAT", custom_fields, 16)
+    add_custom_profile("DUAL_COPYCAT", custom_fields, 16)
 
     ls_orig = next(iter(Frames(packets)))[0]
     assert ls_orig is not None
-    packets.sensor_info[0].format.udp_profile_lidar = UDPProfileLidar(profile_nr)
+    packets.sensor_info[0].format.udp_profile_lidar = "DUAL_COPYCAT"
     ls_custom = next(iter(Frames(packets)))[0]
     assert ls_custom is not None
 

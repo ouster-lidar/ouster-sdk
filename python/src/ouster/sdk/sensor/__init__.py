@@ -10,9 +10,6 @@ It includes classes for streaming packets and frames from a sensor, configuring 
 from ouster.sdk._bindings.client import SensorPacketSource
 from ouster.sdk._bindings.client import SensorFrameSetSource
 
-from ouster.sdk._deprecation import deprecated_alias
-deprecated_alias("SensorScanSource", "SensorFrameSetSource", SensorFrameSetSource, globals(), "1.0")
-
 from ouster.sdk._bindings.client import get_config
 from ouster.sdk._bindings.client import set_config
 from ouster.sdk._bindings.client import SensorHttp

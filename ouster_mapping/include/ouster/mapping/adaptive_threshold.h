@@ -25,8 +25,8 @@ struct OUSTER_API_CLASS AdaptiveThreshold {
     OUSTER_API_FUNCTION
     void update_model_deviation(const core::Matrix4dR& current_deviation);
 
-    /// @brief Returns the KISS-ICP adaptive threshold used in registration.
-    /// @return The KISS-ICP adaptive threshold used in registration.
+    /// @brief Returns the adaptive threshold used in ICP registration.
+    /// @return The adaptive threshold used in ICP registration.
     OUSTER_API_FUNCTION
     inline double compute_threshold() const {
         return std::sqrt(model_sse_ / num_samples_);

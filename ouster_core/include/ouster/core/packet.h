@@ -14,7 +14,6 @@
 #include <string>
 #include <vector>
 
-#include "ouster/core/deprecation.h"
 #include "ouster/core/zone_state.h"
 #include "types.h"
 
@@ -60,15 +59,15 @@ struct OUSTER_API_CLASS Packet {
     }
 
     /// Validates that the packet matches the expected format and metadata.
-    /// @return a PacketValdationFailure with either NONE or a failure reason.
+    /// @return a PacketValidationFailure with either NONE or a failure reason.
     OUSTER_API_FUNCTION
-    PacketValidationFailure validate(const SensorInfo& info  ///< [in] expected sensor_metadata
+    PacketValidationFailure validate(const LidarInfo& info  ///< [in] expected sensor_metadata
     ) const;
 
     /// Validates that the packet matches the expected format and metadata.
-    /// @return a PacketValdationFailure with either NONE or a failure reason.
+    /// @return a PacketValidationFailure with either NONE or a failure reason.
     OUSTER_API_FUNCTION PacketValidationFailure validate(
-        const SensorInfo& info,     ///< [in] expected sensor_metadata
+        const LidarInfo& info,      ///< [in] expected sensor_metadata
         const PacketFormat& format  ///< [in] expected PacketFormat
     ) const;
 
@@ -202,7 +201,7 @@ struct OUSTER_API_CLASS Packet {
 ///                 try and guess the packet type
 /// @return Result of the validation
 OUSTER_API_FUNCTION
-PacketValidationFailure validate_packet(const SensorInfo& info, const PacketFormat& format,
+PacketValidationFailure validate_packet(const LidarInfo& info, const PacketFormat& format,
                                         const uint8_t* buf, uint64_t buf_size,
                                         PacketType type = PacketType::Unknown);
 
@@ -213,17 +212,6 @@ struct OUSTER_API_CLASS LidarPacket : public Packet {
     /// PacketType enum for this packet type
     const static PacketType MY_TYPE = PacketType::Lidar;
 
-    /// Construct a new empty Lidar Packet
-    OUSTER_DEPRECATED_MSG(LidarPacket(std::shared_ptr<PacketFormat>),
-                          OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION LidarPacket();
-
-    /// Construct a new Lidar packet with a pre-allocated size
-    OUSTER_DEPRECATED_MSG(LidarPacket(std::shared_ptr<PacketFormat>),
-                          OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION LidarPacket(int size  ///< [in] size in bytes to allocate
-    );
-
     /**
      * Construct a new Lidar packet with a known format
      * @param[in] format the packet format to use for parsing this packet.
@@ -231,16 +219,16 @@ struct OUSTER_API_CLASS LidarPacket : public Packet {
     OUSTER_API_FUNCTION LidarPacket(std::shared_ptr<PacketFormat> format);
 
     /// Validates that the packet matches the expected format and metadata.
-    /// @return a PacketValdationFailure with either NONE or a failure reason.
+    /// @return a PacketValidationFailure with either NONE or a failure reason.
     OUSTER_API_FUNCTION PacketValidationFailure validate(
-        const SensorInfo& info,     ///< [in] expected sensor_metadata
+        const LidarInfo& info,      ///< [in] expected sensor_metadata
         const PacketFormat& format  ///< [in] expected PacketFormat
     ) const;
 
     /// Validates that the packet matches the expected format and metadata.
-    /// @return a PacketValdationFailure with either NONE or a failure reason.
+    /// @return a PacketValidationFailure with either NONE or a failure reason.
     OUSTER_API_FUNCTION PacketValidationFailure validate(
-        const SensorInfo& info  ///< [in] expected sensor_metadata
+        const LidarInfo& info  ///< [in] expected sensor_metadata
     ) const;
 
     /// Get pointer to the nth column in the packet.
@@ -331,17 +319,6 @@ struct OUSTER_API_CLASS ImuPacket : public Packet {
     /// PacketType enum for this packet type
     const static PacketType MY_TYPE = PacketType::Imu;
 
-    /// Construct a new empty Imu Packet
-    OUSTER_DEPRECATED_MSG(ImuPacket(std::shared_ptr<PacketFormat>),
-                          OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION ImuPacket();
-
-    /// Construct a new Imu packet with a pre-allocated size
-    OUSTER_DEPRECATED_MSG(ImuPacket(std::shared_ptr<PacketFormat>),
-                          OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION ImuPacket(int size  ///< [in] size in bytes to allocate
-    );
-
     /**
      * Construct a new Imu packet with a known format
      * @param[in] format the packet format to use for parsing this packet.
@@ -416,17 +393,6 @@ struct OUSTER_API_CLASS ZonePacket : public Packet {
 
     /// PacketType enum for this packet type
     const static PacketType MY_TYPE = PacketType::Zone;
-
-    /// Construct a new empty Zone Packet
-    OUSTER_DEPRECATED_MSG(ZonePacket(std::shared_ptr<PacketFormat>),
-                          OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION ZonePacket();
-
-    /// Construct a new Imu packet with a pre-allocated size
-    OUSTER_DEPRECATED_MSG(ZonePacket(std::shared_ptr<PacketFormat>),
-                          OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-    OUSTER_API_FUNCTION ZonePacket(int size  ///< [in] size in bytes to allocate
-    );
 
     /**
      * Construct a new Zone packet with a known format

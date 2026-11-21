@@ -30,9 +30,7 @@ def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
 
     Parses all metadata entries, output is in JSON format.
     """
-    file = ctx.source_uri or ""
-
-    print(osf.dump_metadata(_url_to_osf_url(file), not short))
+    print(osf.dump_metadata(_url_to_osf_url(ctx.source_uri), not short))
 
 
 @click.command
@@ -46,18 +44,20 @@ def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
 def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
              verbose: bool) -> None:
     """
-    Read an OSF file and print messages type, timestamp and counts to stdout.
-    Useful to check chunks layout and decoding of all known messages (-d option).
+    Print information about a file to stdout.
+
+    Shows the OSF file layout, streams, message counts and time ranges.
     """
-    file = ctx.source_uri or ""
+    file = ctx.source_uri
 
     from ouster.sdk._bindings.osf import LidarFrameStream
 
     reader = osf.Reader(_url_to_osf_url(file))
 
-    orig_layout = "Streaming" if reader.has_stream_info else "Standard"
-    if orig_layout == "Streaming" and reader.has_message_idx:
-        orig_layout = "Streaming, Indexed"
+    if not reader.has_stream_info:
+        orig_layout = "Standard"
+    else:
+        orig_layout = "Streaming, Indexed" if reader.has_message_idx else "Streaming, Not Indexed"
 
     # count of messages in each stream
     lidar_streams: Dict[int, Dict[str, Any]]
@@ -100,6 +100,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
             obj["type"] = reader.meta_store[sensor_id].type
             obj["fields"] = []
             obj["sensor"] = sensors[sensor_id]
+            obj["avg_size"] = stats.message_avg_size
             lidar_streams[sensor_id] = obj
 
             if start == 0:
@@ -192,6 +193,8 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         print(f"  FW Version: {sensor.image_rev}")
         if verbose:
             print(f"  Sensor SN: {sensor.sn}")
+            if 'avg_size' in stream:
+                print(f"  Avg Size: {stream['avg_size']} bytes")
             print("  Fields:")
             if stream["fields"] is None:
                 print("  NO CONSISTENT FIELD TYPE")
@@ -211,6 +214,8 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         print(f"  Duration: {end - start} seconds")
         if end - start:
             print(f"  Rate: {count / (end - start)} Hz")
+        if verbose and ('avg_size' in stream):
+            print(f"  Avg Size: {stream['avg_size']} bytes")
 
 
 @click.command
@@ -218,13 +223,13 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
 @click.option('-v',
               '--verbose',
               is_flag=True,
-              help="Verbose LidarFrame outputs (only when used with -d option)")
+              help="Verbose LidarFrame outputs (only when used with '-d' option)")
 @click.option('-r',
               '--check-raw-headers',
               is_flag=True,
               help="Check RAW_HEADERS fields by reconstructing lidar_packets"
               " and batching LidarFrame back (without fields data) and compare."
-              "(applies only when used with -d option)")
+              " (applies only when used with '-d' option)")
 @click.option('-s',
               '--standard',
               is_flag=True,
@@ -236,10 +241,10 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
               decode: bool, verbose: bool, check_raw_headers: bool,
               standard: bool) -> None:
     """
-    Read an OSF file and print messages type, timestamp and counts to stdout.
+    Read an OSF file and print message types, timestamps and counts to stdout.
     Useful to check chunks layout and decoding of all known messages (-d option).
     """
-    file = ctx.source_uri or ""
+    file = ctx.source_uri
 
     # NOTE[pb]: Mypy quirks or some of our Python packages structure quirks, idk :(
     from ouster.sdk.util.parsing import frame_to_packets, packets_to_frame, cut_raw32_words  # type: ignore
@@ -305,7 +310,7 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
                             ls_rec_no_raw32 = cut_raw32_words(ls_rec)
 
                             assert ls_rec_no_raw32 == ls_no_raw32, "LidarFrame should be" \
-                                " equal when recontructed from RAW_HEADERS fields" \
+                                " equal when reconstructed from RAW_HEADERS fields" \
                                 " packets back"
 
                             d += "[RAW_HEADERS: OK]"

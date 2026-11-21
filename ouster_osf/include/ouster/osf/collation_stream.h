@@ -83,25 +83,37 @@ struct OUSTER_API_CLASS MetadataTraits<CollationStreamMeta> {
     }
 };
 
-/// Frame id typedef, which is a sensor id + frame index pair.
+/// Frame id typedef: a unified sensor index + message index pair. The sensor
+/// index is the sensor's position in the file's registration order (the same
+/// order exposed by sensor_info()); the message index is the frame's position
+/// within that sensor's frame stream.
 using FrameUniqueId = std::pair<uint32_t /*sensor_id*/, uint64_t /*frame_idx*/>;
 
-/// Resolve frame functor.
-/// Collation stream does not encode frame set sources directly, so we need an
-/// external functor to resolve them.
-using ResolveFrameFn = std::function<std::shared_ptr<ouster::sdk::core::LidarFrame>(FrameUniqueId)>;
+/// Resolve a frame (lidar or camera) from its FrameUniqueId. The collation
+/// stream stores only index references, not the frames themselves, so an
+/// external functor resolves each one. The concrete frame type is determined by
+/// the referenced sensor. Returns nullptr for a null / unresolvable slot.
+using ResolveFrameFn = std::function<std::shared_ptr<ouster::sdk::core::Frame>(FrameUniqueId)>;
 
-/// Special case of frame id which denotes a missing LidarFrame
-constexpr FrameUniqueId INVALID_FRAME_UID = FrameUniqueId{0xFFFF, 0};
+/// Sentinel message index (in the unified CollationMsg::frame_ids) for a null
+/// slot.
+constexpr uint64_t INVALID_COLLATION_FRAME_INDEX = 0xFFFFFFFFFFFFFFFFull;
+
+/// Sentinel scan id for a null slot in the legacy, lidar-only
+/// CollationMsg::scan_ids field. This is the exact {sensor_id, scan_idx}
+/// sentinel that SDK versions predating camera support both write and skip on
+/// read, so emitting it keeps those older readers from dereferencing a missing
+/// frame.
+constexpr FrameUniqueId LEGACY_INVALID_SCAN_ID = FrameUniqueId{0xFFFFu, 0u};
 
 /**
  * CollationStream that encodes FrameSet objects into the messages.
  *
  * Object type: ouster::sdk::core::FrameSet
- * Meta type: CollationStreamMeta (sensor_meta_id, field_types)
+ * Meta type: CollationStreamMeta (marker only)
  *
  * Flatbuffer definition file:
- *   fb/os_sensor/lidar_scan_stream.fbs
+ *   fb/os_sensor/collation_stream.fbs
  */
 class OUSTER_API_CLASS CollationStream
     : public MessageStream<CollationStreamMeta, ouster::sdk::core::FrameSet> {
@@ -114,23 +126,37 @@ class OUSTER_API_CLASS CollationStream
      * algorithm defined in make_msg() function. The function is the same for
      * all streams types ...
      *
-     * @param[in] receive_ts The receive timestamp to use for the lidar frame.
-     * @param[in] sensor_ts The sensor timestamp to use for the lidar frame.
-     * @param[in] collation The lidar frame collation to write.
-     * @param[in] frame_uids The lidar frame unique ids to reference.
+     * @param[in] receive_ts The receive timestamp to use for the collation.
+     * @param[in] sensor_ts The sensor timestamp to use for the collation.
+     * @param[in] collation The frame collation to write.
+     * @param[in] frame_indices Per-slot message index, positionally aligned to
+     *                          the collation's frames (slot k references the
+     *                          k-th registered sensor, by unified index). Use
+     *                          INVALID_COLLATION_FRAME_INDEX for a null slot.
+     *                          Written to the unified `frame_ids` field.
+     * @param[in] legacy_scan_ids Backward-compatible, lidar-only collation
+     *                          entries written to the legacy `scan_ids` field:
+     *                          one per lidar slot, in per-lidar index order,
+     *                          with a null slot encoded as
+     *                          {sensor_id=0xFFFF, scan_idx=0} (the sentinel
+     *                          understood by SDKs that predate camera support).
      */
     void save(const ouster::sdk::osf::ts_t receive_ts, const ouster::sdk::osf::ts_t sensor_ts,
-              const obj_type& collation, const std::vector<FrameUniqueId>& frame_uids);
+              const obj_type& collation, const std::vector<uint64_t>& frame_indices,
+              const std::vector<FrameUniqueId>& legacy_scan_ids);
 
     /**
      * Encode/serialize the object to the buffer of bytes.
      *
-     * @param[in] collation The lidar frame collation to turn into a buffer.
-     * @param[in] frame_uids The lidar frame ids to reference.
-     * @return The byte vector representation of lidar_frame.
+     * @param[in] collation The frame collation to turn into a buffer.
+     * @param[in] frame_indices Per-slot (unified) message index (see save()).
+     * @param[in] legacy_scan_ids Lidar-only legacy collation entries (see
+     *                          save()).
+     * @return The byte vector representation of the collation.
      */
     std::vector<uint8_t> make_msg(const obj_type& collation,
-                                  const std::vector<FrameUniqueId>& frame_uids);
+                                  const std::vector<uint64_t>& frame_indices,
+                                  const std::vector<FrameUniqueId>& legacy_scan_ids);
 
     /**
      * Decode/deserialize the object from bytes buffer using the concrete
@@ -139,10 +165,10 @@ class OUSTER_API_CLASS CollationStream
      * @param[in] msg The MessageRef to decode into an instance of the data type
      * associated with this data stream.
      * @param[in] meta The concrete metadata type to use for decoding.
-     * @param[in] meta_provider Used to reconstruct any references to other
-     *                          metadata entries dependencies
-     *                          (like sensor_meta_id)
-     * @param[in] resolve_frame functor resolving frame ids into lidar frames
+     * @param[in] meta_provider Provides the file's metadata entries.
+     * @param[in] resolve_frame Functor resolving a FrameUniqueId (unified sensor
+     *                          index + message index) into a Frame (lidar or
+     *                          camera). Returns nullptr for a null slot.
      * @return Pointer to the decoded object.
      */
     static std::unique_ptr<obj_type> decode_msg(const MessageRef& msg, const meta_type& meta,
@@ -178,20 +204,6 @@ class OUSTER_API_CLASS CollationStream
      */
     meta_type meta_;
 };
-
-}  // namespace osf
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace osf {
-
-OUSTER_DEPRECATED_TYPE(ScanId, FrameUniqueId, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(ResolveScanFn, ResolveFrameFn, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_CONSTEXP(INVALID_SCAN_ID, INVALID_FRAME_UID, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
 
 }  // namespace osf
 }  // namespace sdk

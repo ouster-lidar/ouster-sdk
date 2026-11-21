@@ -7,7 +7,7 @@ Using ``ouster-cli`` is a fastest way to visualize data from a connected sensor,
 or OSF files with SLAM poses:
 
 If you've installed the ``ouster-sdk`` (see :ref:`Python Installation <installation-python>`) then
-you're all set to visualize with below command. 
+you're all set to visualize with below command.
 
 The following replays lidar data saved in a pcap file and visualizes the output. It will look for a
 metadata json file with the same name as the PCAP file by default, but you can specify the metadata
@@ -55,7 +55,7 @@ Set ``SENSOR_HOSTNAME`` to your sensor's hostname or IP before running:
             $ ping -c1 <SENSOR_HOSTNAME>
             PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
             64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
-      
+
       .. tab-item:: Windows x64
          :sync: windows
 
@@ -108,26 +108,26 @@ Press ``?`` while the visualizer window is focused to print the current key bind
 below summarizes the defaults:
 
 **Camera**
-    ================ ===============================================
-        Key          What it does
-    ================ ===============================================
-    ``shift``        Camera translation with mouse drag
-    ``w``            Camera pitch down
-    ``s``            Camera pitch up
-    ``a``            Camera yaw right
-    ``d``            Camera yaw left
-    ``q``            Camera roll left
-    ``e``            Camera roll right
-    ``shift+r``      Reset camera orientation
-    ``ctrl+r``       Set camera to the birds-eye view
-    ``shift+1``      Top-down view
-    ``shift+2``      Front-facing view
-    ``shift+3``      Left-facing view
-    ``u``            Cycle camera mode
-    ``= / -``        Dolly in/out
-    ``0``            Toggle orthographic camera
-    ``ctrl+- / ctrl+=`` Increase/decrease field of view (perspective only)
-    ================ ===============================================
+    ======================== ===============================================
+        Key                  What it does
+    ======================== ===============================================
+    ``shift``                Camera translation with mouse drag
+    ``w``                    Camera pitch down
+    ``s``                    Camera pitch up
+    ``a``                    Camera yaw right
+    ``d``                    Camera yaw left
+    ``q``                    Camera roll left
+    ``e``                    Camera roll right
+    ``shift+r``              Reset camera orientation
+    ``ctrl+r``               Set camera to the birds-eye view
+    ``shift+1``              Top-down view
+    ``shift+2``              Front-facing view
+    ``shift+3``              Left-facing view
+    ``u``                    Cycle camera mode
+    ``= / -``                Dolly in/out
+    ``0``                    Toggle orthographic camera
+    ``ctrl+- / ctrl+=``      Increase/decrease field of view (perspective only)
+    ======================== ===============================================
 
 **Playback**
     ================ ===============================================
@@ -151,26 +151,29 @@ below summarizes the defaults:
     ================ ===============================================
 
 **3D View**
-    ================ ===============================================
-        Key          What it does
-    ================ ===============================================
-    ``p / P``        Increase/decrease point size
-    ``m / M``        Cycle point cloud coloring mode
-    ``f / F``        Cycle point cloud color palette
-    ``ctrl+1`` … ``ctrl+9`` Toggle sensor 1–9 point cloud(s)
-    ``1``            Toggle first return point cloud visibility
-    ``2``            Toggle second return point cloud visibility
-    ``6``            Toggle frames accumulation view mode (ACCUM)
-    ``7``            Toggle overall map view mode (MAP)
-    ``8``            Toggle track view mode
-    ``9``            Toggle axis helpers at frame origin
-    ``' / shift+'``  Increase/decrease spacing in range markers
-    ``ctrl + '``     Cycle through thickness of range markers or hide
-    ``c``            Cycle current highlight mode
-    ``j / J``        Increase/decrease point size of accumulated clouds or map
-    ``k / K``        Cycle point cloud coloring mode of accumulated clouds or map
-    ``g / G``        Cycle point cloud color palette of accumulated clouds or map
-    ================ ===============================================
+    ======================== ===============================================
+        Key                  What it does
+    ======================== ===============================================
+    ``p / P``                Increase/decrease point size
+    ``m / M``                Cycle point cloud coloring mode
+    ``f / F``                Cycle point cloud color palette
+    ``ctrl+1`` … ``ctrl+9``  Toggle sensor 1–9 point cloud(s)
+    ``1``                    Toggle first return point cloud visibility
+    ``2``                    Toggle second return point cloud visibility
+    ``alt+1``                Toggle first return of accumulated clouds (ACCUM)
+    ``alt+2``                Toggle second return of accumulated clouds (ACCUM)
+    ``ctrl+e``               Toggle eye-dome lighting
+    ``6``                    Toggle frames accumulation view mode (ACCUM)
+    ``7``                    Toggle overall map view mode (MAP)
+    ``8``                    Toggle track view mode
+    ``9``                    Toggle axis helpers at frame origin
+    ``' / shift+'``          Increase/decrease spacing in range markers
+    ``ctrl + '``             Cycle through thickness of range markers or hide
+    ``c``                    Cycle current highlight mode
+    ``j / J``                Increase/decrease point size of accumulated clouds or map
+    ``k / K``                Cycle point cloud coloring mode of accumulated clouds or map
+    ``g / G``                Cycle point cloud color palette of accumulated clouds or map
+    ======================== ===============================================
 
 **Other**
     ================ ===============================================

@@ -21,7 +21,7 @@ namespace core {
 using cf_type = const char*;
 /**
  * @namespace ChanField
- * Tag to identitify a paricular value reported in the sensor channel data
+ * Tag to identify a particular value reported in the sensor channel data
  * block. */
 namespace ChanField {
 static constexpr cf_type RANGE = "RANGE";      ///< 1st return range in mm
@@ -44,6 +44,8 @@ static constexpr cf_type NORMALS = "NORMALS";      ///< 1st return normal values
 static constexpr cf_type NORMALS2 = "NORMALS2";    ///< 2nd return normal values
 static constexpr cf_type GROUND = "GROUND";        ///< 1st return ground mask
 static constexpr cf_type GROUND2 = "GROUND2";      ///< 2nd return ground mask
+static constexpr cf_type WALL = "WALL";            ///< 1st return wall mask
+static constexpr cf_type WALL2 = "WALL2";          ///< 2nd return wall mask
 static constexpr cf_type WINDOW = "WINDOW";        ///< window blockage
 static constexpr cf_type R = "R";                  ///< Red channel
 static constexpr cf_type G = "G";                  ///< Green channel
@@ -63,7 +65,7 @@ static constexpr cf_type RAW32_WORD3 = "RAW32_WORD3";  ///< raw word access to p
 static constexpr cf_type RAW32_WORD4 = "RAW32_WORD4";  ///< raw word access to packet for dev use
 
 static constexpr cf_type IMU_ACC = "IMU_ACC";    ///< IMU accelerometer read in g
-static constexpr cf_type IMU_GYRO = "IMU_GYRO";  ///< IMU gyroscope read in degrees/second
+static constexpr cf_type IMU_GYRO = "IMU_GYRO";  ///< IMU gyroscope read in radians per second
 static constexpr cf_type IMU_TIMESTAMP =
     "IMU_TIMESTAMP";  ///< timestamps corresponding to IMU measurements
 static constexpr cf_type IMU_MEASUREMENT_ID =
@@ -78,7 +80,7 @@ static constexpr cf_type POSITION_TIMESTAMP = "POSITION_TIMESTAMP";  ///< nmea t
 // TODO: check questionable naming -- Tim T.
 static constexpr cf_type LIVE_ZONESET_HASH =
     "LIVE_ZONESET_HASH";  ///< cryptographic hash of all zone configs and output
-                          ///< product hashes. used to simplifiy client
+                          ///< product hashes. used to simplify client
                           ///< verification that config data has not changed on
                           ///< sensor
 static constexpr cf_type ZONE_TIMESTAMP = "ZONE_TIMESTAMP";  ///< zone monitoring timestamp
@@ -106,7 +108,6 @@ inline OUSTER_API_FUNCTION std::string return_field_name(const std::string& base
 
 /*
  * Value types for a Field.
- * THESE ENUM VALUES ARE SAVED DIRECTLY TO OSF AND MUST NOT CHANGE
  */
 enum class ChanFieldType {
     VOID = 0,

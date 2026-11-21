@@ -653,8 +653,11 @@ def pose_frames(
         elif isinstance(obj, core.FrameSet):
             # collated frame sets: List[FrameSet]
             if poses is not None:
+                # Pose interpolation is lidar-specific (uses per-column status);
+                # pass camera / other frame types (and None) through unchanged.
                 yield [
-                    poses(frame) if frame is not None else None for frame in obj
+                    poses(frame) if isinstance(frame, core.LidarFrame) else frame
+                    for frame in obj
                 ]
             else:
                 yield obj
@@ -678,11 +681,12 @@ def load_kitti_poses(file: str) -> np.ndarray:
     return poses
 
 
-def make_kiss_traj_poses(poses: Union[Sequence[Pose], np.ndarray]) -> TrajPoses:
-    """Makes a traj poses from kiss poses.
+def make_frame_traj_poses(poses: Union[Sequence[Pose], np.ndarray]) -> TrajPoses:
+    """Makes a traj poses from per-frame poses.
 
     Args:
-        poses: pose for every frame in the sequence as returned by KissICP
+        poses: one pose per frame in the sequence, e.g. as returned by a
+               SLAM engine
 
     Returns:
         trajectory poses timestamped by the frame index mid point: 0.5
@@ -717,7 +721,7 @@ def pose_frames_from_kitti(
     poses = load_kitti_poses(kitti_poses)
 
     # make time indexed poses starting from 0.5
-    traj_poses = make_kiss_traj_poses(poses)
+    traj_poses = make_frame_traj_poses(poses)
     traj_eval = TrajectoryEvaluator(traj_poses, time_bounds=1.5)
 
     norm_col_ts: Optional[np.ndarray]

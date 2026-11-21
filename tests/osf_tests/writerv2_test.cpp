@@ -26,7 +26,7 @@ namespace {
 
 using ouster::sdk::core::FrameSet;
 using ouster::sdk::core::LidarFrame;
-using ouster::sdk::core::SensorInfo;
+using ouster::sdk::core::LidarInfo;
 using ouster::sdk::osf::get_random_lidar_frame;
 
 class WriterV2Test : public osf::OsfTestWithDataAndFiles {};
@@ -39,22 +39,15 @@ TEST_F(WriterV2Test, WriterV2AccessorTest) {
     const auto info2 = core::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-0-128-U1_v2.3.0_1024x10.json"));
     {
-        std::vector<SensorInfo> info_compare = {info};
         Writer writer(output_osf_filename, info, {}, chunk_size);
         EXPECT_EQ(writer.chunk_size(), chunk_size);
-        EXPECT_EQ(writer.sensor_info().size(), 1);
         EXPECT_EQ(writer.filename(), output_osf_filename);
-        EXPECT_EQ(writer.sensor_info(), info_compare);
-        EXPECT_EQ(writer.sensor_info()[0], info);
     }
     {
-        std::vector<SensorInfo> info_compare = {info, info2};
+        std::vector<LidarInfo> info_compare = {info, info2};
         Writer writer(output_osf_filename, info_compare, {}, chunk_size);
-        EXPECT_EQ(writer.sensor_info().size(), 2);
-
-        EXPECT_EQ(writer.sensor_info(), info_compare);
-        EXPECT_EQ(writer.sensor_info()[0], info);
-        EXPECT_EQ(writer.sensor_info()[1], info2);
+        EXPECT_EQ(writer.chunk_size(), chunk_size);
+        EXPECT_EQ(writer.filename(), output_osf_filename);
     }
 }
 
@@ -84,7 +77,7 @@ TEST_F(WriterV2Test, WriterV2BoundingTest) {
     } catch (const std::logic_error& e) {
         EXPECT_EQ(std::string(e.what()),
                   "ERROR: Frames passed in to writer "
-                  "does not match number of sensor infos");
+                  "does not match number of registered lidar + camera streams");
         caught = true;
     } catch (...) {
         FAIL();

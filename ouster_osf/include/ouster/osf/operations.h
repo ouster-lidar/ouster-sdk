@@ -9,9 +9,11 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "ouster/core/sensor_info.h"
 #include "ouster/core/types.h"
 #include "ouster/core/visibility.h"
 #include "ouster/osf/basics.h"
@@ -66,7 +68,29 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
                                   const std::string& backup_file_name);
 
 /**
- * Modify an OSF files SensorInfo metadata.
+ * Modify an OSF files sensor metadata.
+ *
+ * Replaces every sensor metadata entry in the footer with @p new_metadata,
+ * dispatching each entry on its concrete type: a
+ * ouster::sdk::core::LidarInfo is written as a LidarSensor entry and a
+ * ouster::sdk::core::CameraInfo as a CameraSensor entry. The new entries
+ * reuse the footer ids of the entries they replace, in order, so frame streams
+ * and Extrinsics that reference a sensor by id keep resolving.
+ *
+ * @throws std::invalid_argument if an entry is neither a LidarInfo nor a
+ *         CameraInfo.
+ *
+ * @param[in] file_name The OSF file to modify.
+ * @param[in] new_metadata The new metadata for the OSF file
+ * @return The number of the bytes written to the OSF file.
+ */
+OUSTER_API_FUNCTION
+int64_t osf_file_modify_metadata(
+    const std::string& file_name,
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>& new_metadata);
+
+/**
+ * Modify an OSF files LidarInfo metadata.
  *
  * @param[in] file_name The OSF file to modify.
  * @param[out] new_metadata The new metadata for the OSF file
@@ -74,7 +98,7 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
  */
 OUSTER_API_FUNCTION
 int64_t osf_file_modify_metadata(const std::string& file_name,
-                                 const std::vector<ouster::sdk::core::SensorInfo>& new_metadata);
+                                 const std::vector<ouster::sdk::core::LidarInfo>& new_metadata);
 
 }  // namespace osf
 }  // namespace sdk

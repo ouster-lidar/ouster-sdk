@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -15,17 +16,12 @@ void iterate_source(core::FrameSetSource& source, std::size_t limit = 5) {
     // clang-format off
     // [doc-stag-multi-sensorframesetsource-loop]
     for (const auto& frame_set : source) {
-        for (std::size_t idx = 0; idx < frame_set.size();++idx) {
-            const auto& frame = frame_set[idx];
-            if (frame) {
-                std::cout << "frame: " << count
-                          << " id=" << frame->frame_id << "\n";
-                // [doc-etag-multi-sensorframesetsource-loop]
-                // clang-format on
-            } else {
-                continue;
-            }
+        for (const auto& frame : frame_set.valid_frames()) {
+            std::cout << "frame: " << count
+                      << " ts=" << frame->timestamp()[0] << "\n";
         }
+        // [doc-etag-multi-sensorframesetsource-loop]
+        // clang-format on
         if (++count >= limit) {
             break;
         }
@@ -43,8 +39,8 @@ void stream_multi_sensor(const std::vector<std::string>& hostnames, std::size_t 
     iterate_source(source, limit);
 }
 
+// clang-format off
 void stream_multi_open_source(const std::vector<std::string>& hostnames, std::size_t limit = 5) {
-    // clang-format off
     // [doc-stag-multi-opensource-sensor]
     // Replace with actual hostnames
     // auto hostnames = {"os-xxxx.local", "os-yyyy.local"};
@@ -52,15 +48,14 @@ void stream_multi_open_source(const std::vector<std::string>& hostnames, std::si
     //! [doc-etag-multi-opensource-sensor]
     std::size_t count = 0;
     for (const auto& frame_set : source) {
-        for (std::size_t idx = 0; idx < frame_set.size();++idx) {
-            const auto& frame = frame_set[idx];
-            if (frame) {
-                std::cout << "frame: " << count
-                          << " id=" << frame->frame_id << "\n";
-            } }
-        if (++count >= limit) { break; } }
-    // clang-format on
+        for (const auto& frame : frame_set.valid_frames()) {
+            std::cout << "frame: " << count
+                      << " ts=" << frame->timestamp()[0] << "\n";
+            }
+            if (++count >= limit) { break; }
+        }
 }
+// clang-format on
 
 void stream_multi_open_source(const std::vector<std::string>& hostnames,
                               const std::vector<std::string>& metadata_paths,
@@ -78,14 +73,9 @@ void replay_multi_recording(const std::vector<std::string>& paths, std::size_t l
 
     std::size_t count = 0;
     for (const auto& frame_set : source) {
-        for (std::size_t idx = 0; idx < frame_set.size();++idx) {
-            const auto& frame = frame_set[idx];
-            if (frame) {
-                std::cout << "frame: " << count
-                          << " id=" << frame->frame_id << "\n";
-            } else {
-                continue;
-            }
+        for (const auto& frame : frame_set.valid_frames()) {
+            std::cout << "frame: " << count
+                      << " ts=" << frame->timestamp()[0] << "\n";
         }
         if (++count >= limit) {
             break;

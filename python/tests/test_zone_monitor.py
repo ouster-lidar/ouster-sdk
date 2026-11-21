@@ -3,14 +3,14 @@ import pathlib
 import pytest
 import json
 import numpy as np
-from ouster.sdk.core import SensorInfo, FieldClass, ZoneSet, Zone, ZoneMode, Stl, Zrb, \
-    CoordinateFrame, EmulatedZoneMon, ZoneSetOutputFilter
+from ouster.sdk.core import LidarInfo, FieldClass, ZoneSet, Zone, ZoneMode, Stl, Zrb, \
+    CoordinateFrame, EmulatedZoneMon, ZoneSetOutputFilter, ZoneTriggerOutput
 from ouster.sdk import open_source
 
 
 def create_test_zone_set(test_data_dir: pathlib.Path):
     sensor_info_json = open(test_data_dir / "zone_monitor" / "785.json").read()
-    sensor_info = SensorInfo(sensor_info_json)
+    sensor_info = LidarInfo(sensor_info_json)
     zone_set = ZoneSet()
     sensor_to_body_transform = np.eye(4)
     sensor_to_body_transform[2, 3] = 1.0
@@ -24,6 +24,7 @@ def create_test_zone_set(test_data_dir: pathlib.Path):
         zone.stl = Stl(str(stl_path))
         zone.stl.coordinate_frame = CoordinateFrame.BODY
         zone.mode = ZoneMode.OCCUPANCY
+        zone.trigger_output = ZoneTriggerOutput.OSSD_DUAL
         zone_set.zones[i] = zone
     zone_set.zones[1].frame_count = 4  # make one zone different
     zone_set.render(sensor_info)
@@ -48,6 +49,25 @@ def test_zone_set_zip(test_data_dir, tmp_path):
     zsc.save(str(result_zip_path), ZoneSetOutputFilter.STL_AND_ZRB)
     result_zsc = ZoneSet(str(result_zip_path))
     assert zsc == result_zsc
+
+
+def test_zone_set_save_throws_if_file_cannot_be_opened(test_data_dir, tmp_path):
+    zip_path = tmp_path / "missing_dir" / "zones.zip"
+    test_zsc = create_test_zone_set(test_data_dir)
+    with pytest.raises(RuntimeError, match="failed to open file for writing"):
+        test_zsc.save(str(zip_path), ZoneSetOutputFilter.STL_AND_ZRB)
+    assert not zip_path.exists()
+
+
+@pytest.mark.parametrize("blocked_file", ["metadata.json", "stl", "zrb"])
+def test_zone_set_save_to_directory_throws_if_file_cannot_be_opened(test_data_dir, tmp_path, blocked_file):
+    """A directory where save_to_directory needs to write a file makes it throw."""
+    test_zsc = create_test_zone_set(test_data_dir)
+    stl_filename = test_zsc.zones[0].stl.filename or "0.stl"
+    blocked = {"metadata.json": "metadata.json", "stl": stl_filename, "zrb": "0.zrb"}[blocked_file]
+    (tmp_path / blocked).mkdir()
+    with pytest.raises(RuntimeError, match=f"failed to open file for writing: .*{blocked}"):
+        test_zsc.save_to_directory(str(tmp_path), ZoneSetOutputFilter.STL_AND_ZRB)
 
 
 def test_zone_set_directory(test_data_dir, tmp_path):
@@ -75,6 +95,7 @@ def test_zone_set_to_json_stl(test_data_dir):
     zone.point_count = 1
     zone.frame_count = 1
     zone.mode = ZoneMode.OCCUPANCY
+    zone.trigger_output = ZoneTriggerOutput.GPIO_0
     stl = Stl(f'{test_data_dir}/zone_monitor/0.stl')
     stl.coordinate_frame = CoordinateFrame.BODY
     zone.stl = stl
@@ -94,6 +115,7 @@ def test_zone_set_to_json_stl(test_data_dir):
                 'frame_count': 1,
                 'mode': str(zone.mode.name),
                 'point_count': 1,
+                'trigger_output': 'GPIO_0',
                 'stl': {
                     'file_name': '0.stl',
                     'coordinate_frame': str(stl.coordinate_frame.name),
@@ -128,6 +150,7 @@ def test_zone_set_to_json_zrb(test_data_dir, tmp_path):
                     "frame_count": 2,
                     "mode": "OCCUPANCY",
                     "point_count": 50,
+                    'trigger_output': 'OSSD_DUAL',
                     'stl': {
                         'coordinate_frame': 'BODY',
                         'file_name': '0.stl',
@@ -142,6 +165,7 @@ def test_zone_set_to_json_zrb(test_data_dir, tmp_path):
                     "frame_count": 4,
                     "mode": "OCCUPANCY",
                     "point_count": 50,
+                    'trigger_output': 'OSSD_DUAL',
                     'stl': {
                         'coordinate_frame': 'BODY',
                         'file_name': '1.stl',
@@ -166,10 +190,50 @@ def test_zone_set_properties(test_data_dir):
     expected_zone.point_count = 50
     expected_zone.frame_count = 4
     expected_zone.mode = ZoneMode.OCCUPANCY
+    expected_zone.trigger_output = ZoneTriggerOutput.OSSD_DUAL
     zone = zsc.zones[1]
     assert zone.point_count == expected_zone.point_count
     assert zone.frame_count == expected_zone.frame_count
     assert zone.mode == expected_zone.mode
+    assert zone.trigger_output == expected_zone.trigger_output
+
+
+def test_zone_set_zones_assignment_replaces_zones(test_data_dir):
+    """Assigning a dict to zones replaces the zone set's zones rather than merging into them."""
+    zsc = create_test_zone_set(test_data_dir)
+    assert set(zsc.zones.keys()) == {0, 1}
+    zone_1 = zsc.zones[1]
+    zsc.zones = {1: zone_1, 7: zsc.zones[0]}
+    assert set(zsc.zones.keys()) == {1, 7}
+    assert zsc.zones[1].frame_count == 4
+    assert zsc.zones[7].frame_count == 2
+    zsc.zones = {}
+    assert len(zsc.zones) == 0
+
+
+def test_zone_set_zones_assignment_keeps_references_to_kept_zones_valid(test_data_dir):
+    """A Zone obtained from zones before an assignment still refers to that zone id's
+    entry afterwards, as long as the id is kept."""
+    zsc = create_test_zone_set(test_data_dir)
+    kept = zsc.zones[1]
+    replacement = Zone()
+    replacement.point_count = 50
+    replacement.frame_count = 9
+    replacement.mode = ZoneMode.VACANCY
+    zsc.zones = {1: replacement}
+    assert kept.frame_count == 9
+    assert kept.mode == ZoneMode.VACANCY
+
+
+@pytest.mark.parametrize("bad_zones", [
+    lambda zone: {0: zone, 1: "not a zone"},
+    lambda zone: {0: zone, -1: zone},
+])
+def test_zone_set_zones_assignment_with_invalid_item_leaves_zones_unchanged(test_data_dir, bad_zones):
+    zsc = create_test_zone_set(test_data_dir)
+    with pytest.raises(TypeError, match="ZoneSet.zones must be a dict mapping"):
+        zsc.zones = bad_zones(zsc.zones[0])
+    assert set(zsc.zones.keys()) == {0, 1}
 
 
 def test_mesh_bindings(test_data_dir):
@@ -197,7 +261,7 @@ def test_mesh_bindings(test_data_dir):
 
 
 def test_zrb_from_stl(test_data_dir):
-    sensor_info = SensorInfo(open(f'{test_data_dir}/zone_monitor/785.json').read())
+    sensor_info = LidarInfo(open(f'{test_data_dir}/zone_monitor/785.json').read())
     zone = Zone()
     zone.point_count = 1
     zone.frame_count = 1
@@ -219,7 +283,7 @@ def test_zrb_from_stl(test_data_dir):
 
 
 def test_zone_render_older_fw(test_data_dir):
-    sensor_info = SensorInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
+    sensor_info = LidarInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
     assert sensor_info.fw_rev == "v3.0.1"
     zone = Zone()
     zone.point_count = 1
@@ -252,8 +316,8 @@ def test_emulated_zone_mon_init(test_data_dir):
     assert ezm.zone_mins == {}
     assert ezm.zone_maxes == {}
     assert ezm.zone_avgs == {}
-    assert ezm.zone_triggers == [0] * 128
-    assert ezm.zone_alerts == [0] * 128
+    assert ezm.zone_triggers == [0] * 512
+    assert ezm.zone_alerts == [0] * 512
     assert ezm.triggered_zone_ids == []
     assert ezm.update_count == 0
     assert set(ezm.rendered_zones.keys()) == set(range(2))
@@ -283,7 +347,7 @@ def test_max_count(test_data_dir):
 
 def test_emulated_zone_mon_every_zone_must_have_a_zrb(test_data_dir):
     """It should require all zones to have a Zrb."""
-    sensor_info = SensorInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
+    sensor_info = LidarInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
     zone_set = create_test_zone_set(test_data_dir)
     zone_set.zones[0].zrb = None
     with pytest.raises(ValueError, match="EmulatedZoneMon: all zones in ZoneSet must have a valid ZRB"):
@@ -321,6 +385,7 @@ def test_emulated_zone_mon_new_fields(test_data_dir):
     assert zone_zero['max_range'] == 1019
     assert zone_zero['mean_range'] == 832
     assert zone_zero['count'] == 1094
+    assert 'trigger_output' not in zone_zero
     assert zone_zero['trigger_type'] == ZoneMode.OCCUPANCY.value
     assert zone_zero['trigger_status'] == 1
     assert zone_zero['triggered_frames'] == 10553
@@ -407,7 +472,7 @@ def test_blob_renders_zrb_zones(test_data_dir):
 
 def test_emulated_zone_mon_get_packet(test_data_dir):
     """It should calculate counts correctly."""
-    sensor_info = SensorInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
+    sensor_info = LidarInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
     zone_set = ZoneSet()
     zone_set.sensor_to_body_transform = np.eye(4)
     zone = Zone()
@@ -439,7 +504,7 @@ def test_emulated_zone_mon_get_packet(test_data_dir):
 
 def test_point_count_sanity_check(test_data_dir):
     """It should fail if a zrb has no data."""
-    sensor_info = SensorInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
+    sensor_info = LidarInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
     zone_set = ZoneSet()
     zone_set.sensor_to_body_transform = np.eye(4)
     zone1 = Zone()
@@ -504,7 +569,7 @@ def test_zrb_zone_set_save_without_render(test_data_dir):
     )
 
     # rendering should populate ZRBs
-    zone_set.render(SensorInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read()))
+    zone_set.render(LidarInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read()))
     assert all(zone.zrb for zone in zone_set.zones.values())
 
 
@@ -596,7 +661,7 @@ def test_zone_states_dtype(test_data_dir):
     frame, = next(iter(source))
     expected_dtype = np.dtype((np.record, [
             ('live', 'u1'),
-            ('id', 'u1'),
+            ('id', 'u2'),
             ('error_flags', 'u1'),
             ('trigger_type', 'u1'),
             ('trigger_status', 'u1'),
@@ -629,3 +694,12 @@ def test_zone_states_dtype(test_data_dir):
     zone_states_emulated[0].live
     assert frame.field('ZONE_STATES').dtype == expected_dtype
     assert recarrays_equal(frame.field("ZONE_STATES"), zone_states_emulated)
+
+
+def test_hold_in_scope(test_data_dir):
+    """Validate that the underlying data is held in scope for zone fields"""
+    src = open_source(str(test_data_dir / "osfs" / "old_zone_packet.osf"))
+    scan = next(iter(src))[0]
+    zones = scan.field("ZONE_STATES")
+    zones2 = next(iter(src))[0].field("ZONE_STATES")
+    assert np.array_equal(zones, zones2)

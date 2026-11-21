@@ -6,7 +6,7 @@ from ouster.sdk.examples import reference
 
 def _fake_metadata(h: int, w: int, prod_line: str = "OS-1-64"):
     """Build minimal metadata with identity transforms and zero angles."""
-    info = core.SensorInfo()
+    info = core.LidarInfo()
     info.format.columns_per_packet = 16
     info.format.pixels_per_column = h
     info.format.columns_per_frame = w
@@ -20,7 +20,7 @@ def _fake_metadata(h: int, w: int, prod_line: str = "OS-1-64"):
     return info
 
 
-def _make_frame(meta: core.SensorInfo, ranges_mm) -> core.LidarFrame:
+def _make_frame(meta: core.LidarInfo, ranges_mm) -> core.LidarFrame:
     frame = core.LidarFrame(meta)
     frame.measurement_id[:] = np.arange(frame.w)
     frame.field(core.ChanField.RANGE)[:] = ranges_mm

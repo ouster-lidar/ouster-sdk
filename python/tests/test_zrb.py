@@ -1,7 +1,7 @@
 import pytest
 import tempfile
 import numpy as np
-from ouster.sdk.core import SensorInfo, Zrb
+from ouster.sdk.core import LidarInfo, Zrb
 
 
 def test_client_rendered_zone_write_checks():
@@ -18,7 +18,7 @@ def test_client_rendered_zone_write_checks():
 
 
 def test_client_rendered_zone_write_valid(test_data_dir):
-    sensor_info = SensorInfo(open(f'{test_data_dir}/zone_monitor/785.json').read())
+    sensor_info = LidarInfo(open(f'{test_data_dir}/zone_monitor/785.json').read())
     max_error = 4  # in mm
     zrb = Zrb()
     zrb.serial_number = 122247000785
@@ -60,7 +60,7 @@ def test_client_rendered_zone_write_valid(test_data_dir):
 
 def test_fail_zrb_zoneset_zrb_has_no_data(test_data_dir):
     """It should fail if a zrb has no data."""
-    sensor_info = SensorInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
+    sensor_info = LidarInfo(open(f'{test_data_dir}/pcaps/OS-0-128_v3.0.1_1024x10.2.json').read())
     zrb = Zrb()
     zrb.serial_number = sensor_info.sn
     with pytest.raises(RuntimeError, match="Zrb::save: near image data missing"):

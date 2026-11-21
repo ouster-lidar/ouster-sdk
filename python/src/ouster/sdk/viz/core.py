@@ -7,6 +7,7 @@ Sensor data visualization tools.
 Visualize lidar data using OpenGL.
 """
 
+import collections.abc
 from collections import deque
 from functools import partial
 from enum import Enum, auto
@@ -16,32 +17,39 @@ import queue
 import time
 from datetime import datetime, timezone
 from typing import (Callable, ClassVar, cast, Deque, Dict, Iterable, Iterator, List,
-                    Optional, Tuple, TypeVar, Union)
+                    Optional, Sequence, Tuple, TypeVar, Union)
 import logging
 
 import numpy as np
 
-from ouster.sdk._deprecation import warn_deprecated
 from ouster.sdk import core
-from ouster.sdk.core import LidarFrame, ChanField, FrameSet, FrameSetSource, SensorInfo
+from ouster.sdk.core import (Frame, LidarFrame, CameraFrame, ChanField, FrameSet, FrameSetSource,
+                             SensorInfo)
 from ouster.sdk._bindings.viz import (PointVizNotRunningError, PointViz, Cloud, Label, WindowCtx,
                    add_default_controls, MouseButton, MouseButtonEvent, EventModifierKeys,
                    distinct_palette, MouseEventType)
 from ouster.sdk._bindings.viz import Image, Cuboid, Camera, TargetDisplay, ObjectOverlay  # noqa: F401
+from ouster.sdk.io import GifWriter
 from ouster.sdk.viz.model import VizExtraMode, LidarFrameVizModel, \
         ObjectColorMode, ObjectViewMode, discrete_rainbow_palette  # noqa: F401
 from . import util as vizu
 from ouster.sdk.viz.view_mode import ImageMode, CloudMode, CloudPaletteItem  # noqa: F401
 from ouster.sdk.viz.accumulators import LidarFrameVizAccumulators
 from ouster.sdk.viz.accumulators_config import LidarFrameVizAccumulatorsConfig, MAP_MAX_POINTS_NUM, MAP_SELECT_RATIO
-from ouster.sdk.viz.model import SensorModel, ZoneSelectionMode, ZoneRenderMode
+from ouster.sdk.viz.model import (SensorModel, CameraModel, ZoneSelectionMode, ZoneRenderMode,
+                                  DEFAULT_CAMERA_FRUSTUM_FAR, DEFAULT_CAMERA_RANGE_MM)
+from ouster.sdk.viz.util import VizConfig
 import weakref
-
-import PIL.Image as PILImage
 
 logger = logging.getLogger("viz-logger")
 
 T = TypeVar('T')
+
+
+def _resize_nearest(image: np.ndarray, height: int, width: int) -> np.ndarray:
+    rows = ((2 * np.arange(height) + 1) * image.shape[0]) // (2 * height)
+    cols = ((2 * np.arange(width) + 1) * image.shape[1]) // (2 * width)
+    return image[rows[:, None], cols]
 
 
 class ImuVisualizationConfig:
@@ -108,16 +116,38 @@ def _frame_buffer_resize_handler(weak_self, ctx: WindowCtx):
         return True
 
 
-def _valid_or_zero_ts(frame: LidarFrame):
+def _valid_or_zero_ts(frame: core.Frame):
     # TODO: this may need addressing or refactoring
-    try:
-        return frame.get_first_valid_packet_timestamp()
-    except RuntimeError:
-        return 0
+    if isinstance(frame, LidarFrame):
+        try:
+            return frame.get_first_valid_receive_timestamp()
+        except RuntimeError:
+            return 0
+    # Non-lidar frames (e.g. CameraFrame) have no packets but still carry
+    # per-frame timing via receive_timestamp; use the first nonzero entry.
+    pts = frame.receive_timestamp
+    nonzero = pts[pts != 0]
+    return int(nonzero[0]) if nonzero.size else 0
+
+
+def _frame_set_has_content(frames: FrameSet) -> bool:
+    """True when the FrameSet contains lidar or camera data."""
+    return len(frames) > 0
+
+
+def _frame_set_is_loop_sentinel(frames: FrameSet) -> bool:
+    """True for the empty FrameSet yielded to signal playback loop."""
+    return len(frames) == 0
 
 
 def _get_timestamp(frames: FrameSet):
-    return min([_valid_or_zero_ts(s) for s in frames if s])
+    ts = [t for t in (_valid_or_zero_ts(s) for s in frames if s is not None) if t]
+    receive_timestamp = getattr(frames, "receive_timestamp", 0)
+    if receive_timestamp:
+        ts.append(receive_timestamp)
+    if not ts:
+        return 0
+    return min(ts)
 
 
 class LidarFrameViz:
@@ -140,16 +170,14 @@ class LidarFrameViz:
         HIGHLIGHT_ZONES = 4
         HIGHLIGHT_OBJECTS = 5
 
-    class ImagesLayout(Enum):
-        HORIZONTAL = 0
-        VERTICAL = 1
-
     class CameraMode(Enum):
         FOLLOW = 0
         FOLLOW_ROTATION_LOCKED = 1
-        FIXED = 2
-        FOLLOW_SMOOTH = 3
-        FOLLOW_SMOOTH_ROTATION_LOCK = 4
+        FOLLOW_WORLD_ROTATION_LOCKED = 2
+        FIXED = 3
+        FOLLOW_SMOOTH = 4
+        FOLLOW_SMOOTH_ROTATION_LOCK = 5
+        FOLLOW_SMOOTH_WORLD_ROTATION_LOCK = 6
 
     class TrackViewMode(Enum):
         OFF = 0
@@ -179,26 +207,43 @@ class LidarFrameViz:
 
     def __init__(
             self,
-            metas: List[SensorInfo],
+            metas: Sequence[SensorInfo],
             point_viz: Optional[PointViz] = None,
             accumulators_config: Optional[LidarFrameVizAccumulatorsConfig] = None,
             imu_viz_config: ImuVisualizationConfig = ImuVisualizationConfig(),
             *,
             _img_aspect_ratio: float = 0,
             _buflen = 50,
-            _add_default_controls = True) -> None:
+            _add_default_controls = True,
+            camera_frustum_far: float = DEFAULT_CAMERA_FRUSTUM_FAR,
+            camera_default_range_mm: int = DEFAULT_CAMERA_RANGE_MM,
+            background_color: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)) -> None:
         """
         Args:
-            metas: sensor metadata used to interpret frames
+            metas: sensor metadata used to interpret frames. May be a combined
+                   collection of LidarInfo and CameraInfo.
             viz: use an existing PointViz instance instead of creating one
+            camera_frustum_far: distance (m) from each camera's origin to the
+                   far plane of its 3D FOV frustum wireframe.
+            camera_default_range_mm: distance (mm) at which to draw the pixels
+                   of a camera frame that has no RANGE field, so its images show
+                   as a 3D point cloud; 0 draws no cloud for such frames. It is
+                   a forward distance, so the image forms a flat plane.
         """
         self._viz = point_viz or PointViz("Ouster Viz")
         self._add_default_controls = _add_default_controls
 
         # used to synchronize key handlers and _draw()
         self._lock = threading.RLock()
-        self._model = LidarFrameVizModel(self._viz, metas, _img_aspect_ratio=_img_aspect_ratio)
-        self._imu_acc_scale = [{'IMU_ACC': 1, 'IMU_GYRO': 1} for m in metas]
+        self._model = LidarFrameVizModel(self._viz, metas,
+                                         _img_aspect_ratio=_img_aspect_ratio,
+                                         camera_frustum_far=camera_frustum_far,
+                                         camera_default_range_mm=camera_default_range_mm)
+        # One scale entry per stream (lidars first, then cameras), matching the
+        # frame positions used by imu_plot(). Cameras with IMU data are plotted
+        # alongside lidars.
+        self._imu_acc_scale = [{'IMU_ACC': 1, 'IMU_GYRO': 1}
+                               for _ in self._model._stream_models()]
         self._imu_viz_num_frames = _buflen
         self.update_on_input = True
 
@@ -209,28 +254,31 @@ class LidarFrameViz:
         self._image_size_initialized = False
         self._image_view_mode = LidarFrameViz.ImageViewMode.ALL
 
+        self._viz.set_background_color(background_color)
+        self._background_color = background_color
+
+        def on_change(real_self):
+            real_self.draw(update=real_self.update_on_input)
+        self.config = VizConfig(self._viz, weakref.ref(self), on_change=on_change)
+
         # initial point size in frame clouds
         for label in self._model._aoi_labels:
             self._viz.add(label)
 
         self._frames_accum: Optional[LidarFrameVizAccumulators] = None
-        if accumulators_config:
+        if accumulators_config and metas:
             self._frames_accum = LidarFrameVizAccumulators(
                 self._model,
                 self._viz,
                 accumulators_config,
-                self._lock
+                self._lock,
+                self.config
             )
 
             # TODO[tws]: decide the fate of FramesAccumulator's OSD
             self._frames_accum.toggle_osd(False)
             if hasattr(self, "_osd_text_extra"):
                 self._osd_text_extra = self._frames_accum.osd_text
-                # if we add the extra text to the _frame_viz we also want to
-                # draw(w/o update) its state when frames accum keys cause the
-                # re-draw of FramesAccumulator state (osd included)
-                self._frames_accum._key_press_pre_draw = (
-                    lambda: self.draw(update=False))
 
         self._imu_viz_config = imu_viz_config
         self._osd_scale = 1
@@ -239,9 +287,15 @@ class LidarFrameViz:
         for sensor in self._model._sensors:
             [self._viz.add(image) for image in sensor._images]
             [self._viz.add(cloud) for cloud in sensor._clouds]
+            assert sensor._object_overlay is not None
             self._viz.add(sensor._object_overlay)
-
-        self._images_layout = LidarFrameViz.ImagesLayout.HORIZONTAL
+        for camera in self._model._cameras:
+            [self._viz.add(image) for image in camera._images]
+            if camera._object_overlay is not None:
+                self._viz.add(camera._object_overlay)
+            # Frustum follows the axis-marker toggle (initially shown).
+            self._set_frustum_visible(camera, True)
+            # camera clouds are added lazily once frame dimensions are known
 
         # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
         # initialize masks to just green with zero opacity
@@ -261,14 +315,17 @@ class LidarFrameViz:
         self._osd = Label("", 0, 1)
         self._viz.add(self._osd)
 
+        self._eye_dome = False
+
         # initialize frame axis helpers
         self._frame_axis_enabled = True
-        self._frame_axis = []
-        # sensors axis
-        for idx, sensor in enumerate(self._model._sensors):
-            self._frame_axis.append(
+        # One scene axis per stream, in _stream_models() order (lidar and camera
+        # streams may be interleaved); each stream supplies its own initial pose.
+        self._stream_axis: List[vizu.AxisWithLabel] = []
+        for idx, stream in enumerate(self._model._stream_models()):
+            self._stream_axis.append(
                 vizu.AxisWithLabel(self._viz,
-                                   pose=sensor._meta.sensor_to_body,
+                                   pose=stream.axis_pose(),
                                    label=str(idx + 1),
                                    thickness=3))
         # map origin axis
@@ -287,7 +344,7 @@ class LidarFrameViz:
         self._per_frame_pose_trajectory: Deque[Cloud] = deque(maxlen=100)
         self._per_frame_pose_trajectory_axis: Deque[vizu.AxisWithLabel] = deque(maxlen=15)
 
-        self._camera_mode = LidarFrameViz.CameraMode.FOLLOW
+        self._camera_mode = LidarFrameViz.CameraMode.FOLLOW_WORLD_ROTATION_LOCKED
         # TODO[UN]: assign a key to select a sensor to be tracked
         # also what to do in case tracked sensor is hidden?
         self._tracked_sensor = 0
@@ -301,26 +358,29 @@ class LidarFrameViz:
         self._frame_set: FrameSet = FrameSet()
         self._frame_num = -1
         self._first_frame_ts = None
-        self._setup_controls()
         self._zone_selection_mode = ZoneSelectionMode.LIVE
         self._zone_render_mode = ZoneRenderMode.STL
         self.set_zone_selection_and_render_modes(self._zone_selection_mode, self._zone_render_mode)
 
-        if hasattr(self, "_key_definitions") and self._frames_accum:
-            self._key_definitions.update(
-                getattr(self._frames_accum, "_key_definitions", {}))
+        self._setup_controls()
 
     def imu_plot(self, frames, imu_viz_config):
         img_h = self._imu_viz_config.imu_plot_height_pixels // self._imu_viz_config.downsample_factor
         img_w = self._imu_viz_config.imu_plot_width_pixels // self._imu_viz_config.downsample_factor
 
+        stream_frame_indices = self._model._stream_frame_indices()
+
         def add_field(field_name, img, color, sensor_idx):
+            # Map this stream's index to its position in the unified FrameSet
+            # (lidar and camera streams may be interleaved).
+            frame_idx = (stream_frame_indices[sensor_idx]
+                         if sensor_idx < len(stream_frame_indices) else sensor_idx)
             # Find first valid frame to get measurements_per_frame
-            # (handles case where frames[0] is None due to collation gaps or missing data)
+            # (handles case where a frame is None due to collation gaps or missing data)
             first_valid = None
             for s in frames:
-                if s[sensor_idx] is not None and s[sensor_idx].has_field(field_name):
-                    first_valid = s[sensor_idx]
+                if s[frame_idx] is not None and s[frame_idx].has_field(field_name):
+                    first_valid = s[frame_idx]
                     break
             if first_valid is None:
                 return  # No valid frames with this field in the buffer
@@ -329,7 +389,7 @@ class LidarFrameViz:
             all_frame_values = np.full((measurements_per_frame * len(frames),), np.nan)
             self._imu_acc_scale[sensor_idx][field_name] = 1.0
             for idx, frame in enumerate(frames):
-                frame = frames[idx][sensor_idx]
+                frame = frames[idx][frame_idx]
                 if frame is None:
                     continue  # NaN values left for missing frames create visual gaps
                 field_values = frame.field(field_name)[::-1]
@@ -368,7 +428,10 @@ class LidarFrameViz:
             indices = np.column_stack((scaled, pixel_x)).T
             img[indices[0], img_w - indices[1] - 1] = color
 
-        for sensor_idx, sensor in enumerate(self._model._sensors):
+        # Iterate all streams (lidars then cameras). add_field() maps each
+        # stream index to its FrameSet position via _stream_frame_indices(), so
+        # it works for both lidar and camera streams in any (interleaved) order.
+        for sensor_idx, sensor in enumerate(self._model._stream_models()):
             img = np.zeros((img_h, img_w, 4), np.float32)
             assert img.shape[2] == 4
             for field in imu_viz_config._fields:
@@ -377,9 +440,9 @@ class LidarFrameViz:
 
     # TODO[tws] likely remove
     @property
-    def metadata(self) -> List[SensorInfo]:
-        """Metadatas for the displayed sensors."""
-        return self._model._metas
+    def metadata(self) -> Sequence[SensorInfo]:
+        """Metadata for every displayed sensor, in FrameSet order."""
+        return self._model.metadata
 
     def set_class_maps(self, class_maps: core.ClassMapSet) -> None:
         """Set the class maps for the visualizer."""
@@ -392,7 +455,10 @@ class LidarFrameViz:
         return self._osd_state
 
     def cycle_osd_scale(self):
-        self._osd_scale = max(0, (self._osd_scale + 1) % 5)
+        self.set_osd_scale(max(0, (self._osd_scale + 1) % 5))
+
+    def set_osd_scale(self, scale):
+        self._osd_scale = scale
         if self._on_osd_scale:
             self._on_osd_scale()
 
@@ -411,53 +477,42 @@ class LidarFrameViz:
             self._viz.camera.set_yaw(90)
         self._viz.update()
 
-    def toggle_sky(self) -> None:
+    def toggle_sky(self, value: Optional[bool] = None) -> None:
         """Toggle showing the color the sky in the pointcloud where there is no return"""
         with self._lock:
             for idx, sensor in enumerate(self._model._sensors):
-                sensor._show_sky = not sensor._show_sky
-                sensor.update_clouds(self._model._cloud_mode_name, self._frame_set[idx])
+                if value is not None:
+                    sensor._show_sky = value
+                else:
+                    sensor._show_sky = not sensor._show_sky
+                frame_idx = self._model._sensor_frame_indices[idx]
+                if frame_idx < len(self._frame_set):
+                    sensor.update_clouds(self._model._cloud_mode_name,
+                                         cast(Optional[LidarFrame], self._frame_set[frame_idx]))
             self._viz.update()
+
+    def toggle_eye_dome(self, value: Optional[bool] = None) -> None:
+        with self._lock:
+            if value is not None:
+                self._eye_dome = value
+            else:
+                self._eye_dome = not self._eye_dome
+            self._viz.enable_eye_dome_lighting(self._eye_dome)
+            if self._eye_dome:
+                if self._background_color == (0.0, 0.0, 0.0, 1.0):
+                    self._viz.set_background_color((0.5, 0.5, 0.5, 1.0))
+                self._viz.set_notification("Enabled eye-dome lighting")
+            else:
+                self._viz.set_background_color(self._background_color)
+                self._viz.set_notification("Disabled eye-dome lighting")
 
     def _setup_controls(self) -> None:
         # key bindings. will be called from rendering thread, must be synchronized
         key_bindings: Dict[Tuple[int, int], Callable[[LidarFrameViz], None]] = {
-            (ord('I'), 0): partial(LidarFrameViz.update_image_size, amount=+1),
-            (ord('I'), 1): partial(LidarFrameViz.update_image_size, amount=-1),
-            (ord('I'), 2): LidarFrameViz.cycle_img_view_mode,
-            (ord('P'), 0): partial(LidarFrameViz.update_point_size, amount=+1),
-            (ord('P'), 1): partial(LidarFrameViz.update_point_size, amount=-1),
-            (ord('1'), 0): partial(LidarFrameViz.toggle_cloud, i=0),
-            (ord('2'), 0): partial(LidarFrameViz.toggle_cloud, i=1),
-            (ord('B'), 0): partial(LidarFrameViz.cycle_img_mode, i=0, direction=+1),
-            (ord('B'), 1): partial(LidarFrameViz.cycle_img_mode, i=0, direction=-1),
-            (ord('N'), 0): partial(LidarFrameViz.cycle_img_mode, i=1, direction=+1),
-            (ord('N'), 1): partial(LidarFrameViz.cycle_img_mode, i=1, direction=-1),
-            (ord('M'), 0): partial(LidarFrameViz.cycle_cloud_mode, direction=+1),
-            (ord('M'), 1): partial(LidarFrameViz.cycle_cloud_mode, direction=-1),
-            (ord('F'), 0): partial(LidarFrameViz.cycle_cloud_palette, direction=+1),
-            (ord('F'), 1): partial(LidarFrameViz.cycle_cloud_palette, direction=-1),
-            (ord("'"), 0): partial(LidarFrameViz.update_ring_size, amount=+1),
-            (ord("'"), 1): partial(LidarFrameViz.update_ring_size, amount=-1),
-            (ord("'"), 2): LidarFrameViz.cicle_ring_line_width,
-            (ord("O"), 0): LidarFrameViz.toggle_osd,
-            (ord('U'), 0): partial(LidarFrameViz.cycle_camera_mode, direction=+1),
-            (ord('U'), 1): partial(LidarFrameViz.cycle_camera_mode, direction=-1),
-            (ord("O"), 2): LidarFrameViz.cycle_osd_scale,
-            (ord('C'), 0): partial(LidarFrameViz.update_flags_mode, direction=+1),
-            (ord('C'), 1): partial(LidarFrameViz.update_flags_mode, direction=-1),
-            (ord('C'), 2): LidarFrameViz.cycle_flags_palette,
-            (ord('C'), 3): LidarFrameViz.cycle_object_color_mode,
-            (ord('5'), 0): LidarFrameViz.cycle_object_view_mode,
-            (ord('8'), 0): LidarFrameViz.toggle_track_view_mode,
-            (ord('9'), 0): LidarFrameViz.toggle_axis_markers,
             (ord('/'), 1): LidarFrameViz.toggle_help,
-            (ord('Y'), 0): LidarFrameViz.cycle_zone_selection_mode,
-            (ord('Y'), 2): LidarFrameViz.cycle_zone_render_mode,
             (ord('1'), 1): partial(LidarFrameViz.set_view, view='top'),
             (ord('2'), 1): partial(LidarFrameViz.set_view, view='forward'),
             (ord('3'), 1): partial(LidarFrameViz.set_view, view='left'),
-            (ord('S'), 2): LidarFrameViz.toggle_sky,
         }
 
         self._key_definitions: Dict[str, str] = {
@@ -467,8 +522,6 @@ class LidarFrameViz:
             'd': "Camera yaw left",
             'q': "Camera roll left",
             'e': "Camera roll right",
-            "i / SHIFT+i": "Increase/decrease size of displayed 2D images",
-            "p / SHIFT+p": "Increase/decrease point size",
             "SHIFT+r": "Reset camera orientation",
             "SHIFT+1": "Top-down view",
             "SHIFT+2": "Front-facing view",
@@ -476,33 +529,108 @@ class LidarFrameViz:
             "CTRL+r": "Camera bird-eye view",
             "0": "Toggle orthographic camera",
             "CTRL+- / CTRL+=": "Increase/decrease field of view (perspective only)",
-            "1": "Toggle first return point cloud",
-            "2": "Toggle second return point cloud",
-            "b": "Cycle top 2D image",
-            "n": "Cycle bottom 2D image",
-            'm': "Cycle through point cloud coloring mode",
-            'f': "Cycle through point cloud color palette",
-            'c': "Cycle current highlight mode",
-            'CTRL+c': "Cycle object palette",
-            'CTRL+SHIFT+c': "Cycle object color attribute",
-            'y': "Cycle displayed zone set.",
-            'CTRL+y': "Cycle zone render mode.",
-            'u': "Cycle camera mode",
-            "5": "Cycle object display mode",
-            "8": "Toggle track view mode",
-            "9": "Toggle axis helpers at frame origin",
             '?': "Print keys to standard out",
             "= / -": "Dolly in and out",
-            "\" / SHIFT+\"": "Increase/decrease spacing in range markers",
-            "CTRL+\"": "Cycle through thickness of range markers or hide",
-            "CTRL+i": "Flip or hide 2D images",
-            "CTRL+o": "Cycle on-screen display scale",
-            "CTRL+s": "Toggle sky visualization",
             'SHIFT': "Camera Translation with mouse drag",
             'ESC': "Exit the application",
         }
 
-        self._setup_sensor_toggle_keys(self._model._sensors, key_bindings)
+        self.config.option("show_return_1", True, ('1', 0),
+                           lambda arg, val: arg.toggle_cloud(0, val),
+                           help="Toggle first return point cloud")
+        self.config.option("show_return_2", True, ('2', 0),
+                           lambda arg, val: arg.toggle_cloud(1, val),
+                           help="Toggle second return point cloud")
+        self.config.option("track_view_mode", self._track_view_mode, ('8', 0),
+                           lambda arg, val: arg.set_track_view_mode(val),
+                           help="Toggle track view mode")
+        self.config.option("object_view_mode", self._model._object_view_mode, ('5', 0),
+                           lambda arg, val: arg.set_object_view_mode(val),
+                           help="Cycle object display mode")
+        self.config.option("image_mode", self._image_view_mode, ('I', 2),
+                           lambda arg, val: arg.set_img_view_mode(val),
+                           help="Flip or hide 2D images")
+        self.config.option("flags_mode", self._flags_mode, ('C', 0),
+                           lambda arg, val: arg.update_flags_mode(val, 0),
+                           decrement=('C', 1),
+                           help="Cycle current highlight mode")
+        self.config.option("camera_mode", self._camera_mode, ('U', 0),
+                           lambda arg, val: arg.cycle_camera_mode(0, val),
+                           decrement=('U', 1), help="Cycle camera mode")
+        self.config.option("point_size", 2, ('P', 0),
+                           lambda arg, val: arg.set_point_size(val), min=1, max=10,
+                           decrement=('P', 1),
+                           help="Increase/decrease point size")
+        self.config.option("osd_size", self._osd_scale, ('O', 2),
+                           lambda arg, val: arg.set_osd_scale(val), min=0, max=4,
+                           help="Cycle on-screen display scale")
+        self.config.option("show_osd", True, ('O',),
+                           lambda arg, val: arg.toggle_osd(val),
+                           help="Toggle OSD")
+        self.config.option("ring_width", 2, ("'", 2),
+                           lambda arg, val: arg.cicle_ring_line_width(val),
+                           min=0, max=9,
+                           help="Cycle through thickness of range markers or hide")
+        self.config.option("ring_size", self._ring_size, ("'", 0),
+                           lambda arg, val: arg.update_ring_size(0, val),
+                           min=-2, max=3, decrement=("'", 1),
+                           help="Increase/decrease spacing in range markers")
+        self.config.option("image_size", 4, ('I', 0),
+                           lambda arg, val: arg.set_image_size(val),
+                           min=0, max=20, decrement=("I", 1),
+                           help="Increase/decrease size of displayed 2D images")
+        self.config.option("show_sky", False, ('S', 2),
+                           lambda arg, val: arg.toggle_sky(val),
+                           help="Toggle sky visualization")
+        self.config.option("eye_dome", False, ('E', 2),
+                           lambda arg, val: arg.toggle_eye_dome(val),
+                           help="Toggle eye-dome lighting")
+        self.config.option("flags_palette", self._flags_palette, ('C', 2),
+                           lambda arg, val: arg.cycle_flags_palette(val),
+                           help="Toggle flags palette")
+        self.config.option("object_color_mode", self._model._object_color_mode, ('C', 3),
+                           lambda arg, val: arg.cycle_object_color_mode(val),
+                           help="Cycle object color attribute")
+        self.config.option("axis_markers", True, ('9',),
+                           lambda arg, val: arg.toggle_axis_markers(val),
+                           help="Toggle axis helpers at frame origin")
+        self.config.option("zone_selection_mode", self._zone_selection_mode, ('Y', 0),
+                           lambda arg, val: arg.set_zone_selection_mode(val),
+                           help="Cycle displayed zone set.")
+        self.config.option("zone_render_mode", self._zone_render_mode, ('Y', 2),
+                           lambda arg, val: arg.set_zone_render_mode(val),
+                           help="Cycle zone render mode.")
+        self.config.option("cloud_mode", "", ('M', 0),
+                           lambda arg, val: arg.select_cloud_mode(val, True),
+                           decrement=('M', 1),
+                           items=lambda arg: arg._model.sorted_cloud_mode_names(),
+                           get_value=lambda arg: arg._model._cloud_mode_name,
+                           help="Cycle through point cloud coloring mode")
+        self.config.option("image_mode_0", "", ('B', 0),
+                           lambda arg, val: arg.select_img_mode(0, val, True),
+                           decrement=('B', 1),
+                           items=lambda arg: arg._model.sorted_image_mode_names(),
+                           get_value=lambda arg: arg._model._image_mode_names[0],
+                           help="Cycle top 2D image")
+        self.config.option("image_mode_1", "", ('N', 0),
+                           lambda arg, val: arg.select_img_mode(1, val, True),
+                           decrement=('N', 1),
+                           items=lambda arg: arg._model.sorted_image_mode_names(),
+                           get_value=lambda arg: arg._model._image_mode_names[1],
+                           help="Cycle bottom 2D image")
+        self.config.option("cloud_palette", "", ('F', 0),
+                           lambda arg, val: arg.set_cloud_palette(val),
+                           decrement=('F', 1),
+                           items=lambda arg: [p.name for p in arg._model._palettes._cloud_palettes],
+                           get_value=lambda arg: arg._model._palettes.get_current_palette().name,
+                           help="Cycle through point cloud color palette")
+
+        # add sensor/camera toggle keys
+        self._setup_sensor_toggle_keys(self._model._stream_models())
+
+        conf_keys = self.config.key_definitions()
+        for key in conf_keys:
+            self._key_definitions[key] = conf_keys[key]
 
         def handle_keys(weak_self, ctx: WindowCtx, key: int,
                         mods: int) -> bool:
@@ -527,25 +655,23 @@ class LidarFrameViz:
 
     MAX_SENSOR_TOGGLE_KEYS = 9
 
-    def _setup_sensor_toggle_keys(self, sensors: List[SensorModel],
-        key_bindings: Dict[Tuple[int, int],
-        Callable[['LidarFrameViz'], None]]) -> None:
+    def _setup_sensor_toggle_keys(self, streams: List[Union[SensorModel, CameraModel]]) -> None:
+        for stream_index in range(min(len(streams), LidarFrameViz.MAX_SENSOR_TOGGLE_KEYS)):
+            cb = lambda arg, val, idx=stream_index: arg.toggle_sensor(idx, enabled=val)
+            self.config.option("toggle_sensor_" + str(stream_index), True,
+                               (str(stream_index + 1), 2), cb,
+                               help=f"Toggle stream {stream_index + 1} point cloud(s)")
 
-        for sensor_index in range(min(len(self._model._sensors), LidarFrameViz.MAX_SENSOR_TOGGLE_KEYS)):
-            key_bindings[(ord(str(sensor_index + 1)), 2)] = \
-                partial(LidarFrameViz.toggle_sensor, sensor_index=sensor_index)
-            self._key_definitions[f"CTRL+{str(sensor_index + 1)}"] = f"Toggle sensor {sensor_index + 1} point cloud(s)"
-
-    def select_img_mode(self, i: int, mode: str) -> bool:
+    def select_img_mode(self, i: int, mode: str, force: bool = False) -> bool:
         """Change the displayed field of the i'th image."""
         with self._lock:
-            res = self._model.select_image_mode(i, mode)
+            res = self._model.select_image_mode(i, mode, force)
             self._model.update_aoi()
             self._model.update_aoi_label(self._frame_set)
 
             # Note, updating the image mode needs the current frame
             # because ImageMode.enabled requires it.
-            if len(self._frame_set) == len(self._model._sensors):
+            if len(self._frame_set) == len(self._model._stream_models()):
                 self._model.update(self._frame_set, False)
             return res
 
@@ -558,17 +684,17 @@ class LidarFrameViz:
 
             # Note, updating the image mode needs the current frame
             # because ImageMode.enabled requires it.
-            if len(self._frame_set) == len(self._model._sensors):
+            if len(self._frame_set) == len(self._model._stream_models()):
                 self._model.update(self._frame_set, False)
 
-    def select_cloud_mode(self, mode: str) -> bool:
+    def select_cloud_mode(self, mode: str, force: bool = False) -> bool:
         """Change the coloring mode of the 3D point cloud."""
         with self._lock:
-            res = self._model.select_cloud_mode(mode)
+            res = self._model.select_cloud_mode(mode, force)
 
             # Note, updating the cloud mode needs the current frame
             # because CloudMode.enabled requires it.
-            if len(self._frame_set) == len(self._model._sensors):
+            if len(self._frame_set) == len(self._model._stream_models()):
                 self._model.update(self._frame_set, False)
             return res
 
@@ -581,7 +707,7 @@ class LidarFrameViz:
 
             # Note, updating the cloud mode needs the current frame
             # because CloudMode.enabled requires it.
-            if len(self._frame_set) == len(self._model._sensors):
+            if len(self._frame_set) == len(self._model._stream_models()):
                 self._model.update(self._frame_set, False)
             self._viz.set_notification(f"Cloud mode: {self._model._cloud_mode_name.replace('_', ' ')}")
 
@@ -593,63 +719,83 @@ class LidarFrameViz:
             self._model.update_cloud_palettes()
             self._viz.set_notification(f"Cloud palette: {self._model._palettes.get_current_palette().name}")
 
-    def toggle_cloud(self, i: int) -> None:
+    def set_cloud_palette(self, name: str) -> None:
+        with self._lock:
+            self._model._palettes.set_palette_by_name(name)
+            self._model.update_cloud_palettes()
+            self._viz.set_notification(f"Cloud palette: {self._model._palettes.get_current_palette().name}")
+
+    def toggle_cloud(self, i: int, enable: Optional[bool] = None) -> None:
         """Toggle whether the i'th return is displayed."""
         with self._lock:
             if i >= len(self._model._cloud_enabled):
                 return
-            if self._model._cloud_enabled[i]:
-                self._model._cloud_enabled[i] = False
-                for sensor in self._model._sensors:
-                    # TODO[tws] encapsulate
-                    if i < len(sensor._clouds):
-                        self._viz.remove(sensor._clouds[i])
+            if enable is not None:
+                self._model._cloud_enabled[i] = enable
             else:
-                self._model._cloud_enabled[i] = True
-                for sensor in self._model._sensors:
-                    # TODO[tws] encapsulate
-                    if i < len(sensor._clouds) and sensor._enabled:
-                        self._viz.add(sensor._clouds[i])
+                self._model._cloud_enabled[i] = not self._model._cloud_enabled[i]
+            if not self._model._cloud_enabled[i]:
+                for stream in self._model._stream_models():
+                    if i < len(stream._clouds):
+                        self._viz.remove(stream._clouds[i])
+            else:
+                for stream in self._model._stream_models():
+                    if i < len(stream._clouds) and stream._enabled:
+                        self._viz.add(stream._clouds[i])
 
-    def toggle_sensor(self, sensor_index: int) -> None:
-        """Toggle whether the i'th sensor data is displayed."""
+    def toggle_sensor(self, sensor_index: int, enabled: Optional[bool] = None) -> None:
+        """Toggle whether the i'th sensor or camera stream is displayed."""
         with self._lock:
-            sensor = self._model._sensors[sensor_index]
-            sensor._enabled = not sensor._enabled
-            if sensor._enabled:
-                for i, cld in enumerate(sensor._clouds):
+            streams = self._model._stream_models()
+            if sensor_index >= len(streams):
+                return
+            stream = streams[sensor_index]
+            stream._enabled = (not stream._enabled) if enabled is None else enabled
+            if stream._enabled:
+                for i, cld in enumerate(stream._clouds):
                     if i < len(self._model._cloud_enabled) and self._model._cloud_enabled[i]:
                         self._viz.add(cld)
-                for img in sensor._images:
+                for img in stream._images:
                     self._viz.add(img)
-                self._viz.add(sensor._object_overlay)
-                self._frame_axis[sensor_index].enable()
+                if stream._object_overlay is not None:
+                    self._viz.add(stream._object_overlay)
+                # Frustum is shown only when axis markers are also on.
+                self._set_frustum_visible(stream, self._frame_axis_enabled)
+                if sensor_index < len(self._stream_axis):
+                    self._stream_axis[sensor_index].enable()
             else:
-                for cld in sensor._clouds:
+                for cld in stream._clouds:
                     self._viz.remove(cld)
-                for img in sensor._images:
+                for img in stream._images:
                     self._viz.remove(img)
-                self._viz.remove(sensor._object_overlay)
-                self._frame_axis[sensor_index].disable()
-            sensor.update_zones()
+                if stream._object_overlay is not None:
+                    self._viz.remove(stream._object_overlay)
+                self._set_frustum_visible(stream, False)
+                if sensor_index < len(self._stream_axis):
+                    self._stream_axis[sensor_index].disable()
+                # a no-op for streams without zones (cameras)
+                stream.update_zones()
 
-            #  clear the selection if we're hiding the sensor
+            #  clear the selection if we're hiding the stream
             if any([selection._sensor_index == sensor_index for selection in self._model._current_selection]):
                 self._model.clear_aoi()
 
-            if self._frames_accum:
-                self._frames_accum.toggle_sensor(sensor_index, sensor._enabled)
+            if self._frames_accum and isinstance(stream, SensorModel):
+                self._frames_accum.toggle_sensor(sensor_index, stream._enabled)
 
         self.update_image_size(0)
 
-    def update_point_size(self, amount: int) -> None:
+    def set_point_size(self, size: int) -> None:
         """Change the point size of the 3D cloud."""
         with self._lock:
             # TODO refactor add to model
-            self._model._cloud_pt_size = min(10.0,
-                                      max(1.0, self._model._cloud_pt_size + amount))
-            self._model._set_cloud_pt_size(self._model._cloud_pt_size)
+            self._model._set_cloud_pt_size(size)
             self._viz.set_notification(f"Point size: {int(self._model._cloud_pt_size)}")
+
+    def set_image_size(self, amount: int) -> None:
+        """Set the size of the 2D image and position image labels."""
+        with self._lock:
+            self._model.set_image_size(amount)
 
     def update_image_size(self, amount: int) -> None:
         """Change the size of the 2D image and position image labels."""
@@ -661,15 +807,11 @@ class LidarFrameViz:
         with self._lock:
             self._model.toggle_flip_images()
 
-    def cycle_img_view_mode(self) -> None:
+    def set_img_view_mode(self, mode):
         with self._lock:
-            modes = list(LidarFrameViz.ImageViewMode)
-            current_index = modes.index(self._image_view_mode)
-            next_index = (current_index + 1) % len(modes)
-            self._image_view_mode = modes[next_index]
+            self._image_view_mode = mode
             self._viz.set_notification(
                 f"Image view mode: {self._image_view_mode.name.replace('_', ' ')}")
-
             if self._image_view_mode == LidarFrameViz.ImageViewMode.ALL:
                 self._model.flip_images(False)
                 self._model.show_one_image(False)
@@ -683,18 +825,24 @@ class LidarFrameViz:
                 self._model.flip_images(True)
                 self._model.show_one_image(True)
 
-    def update_ring_size(self, amount: int) -> None:
+    def update_ring_size(self, amount: int, setpoint: Optional[int] = None) -> None:
         """Change distance ring size."""
         with self._lock:
-            self._ring_size = min(3, max(-2, self._ring_size + amount))
+            if setpoint is not None:
+                self._ring_size = setpoint
+            else:
+                self._ring_size = min(3, max(-2, self._ring_size + amount))
             self._viz.target_display.set_ring_size(self._ring_size)
             self._viz.set_notification(
                 f"Ring size: {self._viz.target_display.get_ring_size_m()} meters")
 
-    def cicle_ring_line_width(self) -> None:
+    def cicle_ring_line_width(self, width: Optional[int] = None) -> None:
         """Change rings line width."""
         with self._lock:
-            self._ring_line_width = max(0, (self._ring_line_width + 1) % 10)
+            if width is not None:
+                self._ring_line_width = width
+            else:
+                self._ring_line_width = max(0, (self._ring_line_width + 1) % 10)
             self._viz.target_display.set_ring_line_width(self._ring_line_width)
             self._viz.target_display.enable_rings(self._ring_line_width != 0)
             self._viz.set_notification(f"Ring width: {self._ring_line_width} pixels")
@@ -702,18 +850,22 @@ class LidarFrameViz:
     def toggle_osd(self, state: Optional[bool] = None) -> None:
         """Show or hide the on-screen display."""
         with self._lock:
-            if self._osd_state != LidarFrameViz.OsdState.DEFAULT:
+            show = self._osd_state != LidarFrameViz.OsdState.DEFAULT if state is None else state
+            if show:
                 self._osd_state = LidarFrameViz.OsdState.DEFAULT
             else:
                 self._osd_state = LidarFrameViz.OsdState.NONE
 
-    def cycle_camera_mode(self, direction: int = 1) -> None:
+    def cycle_camera_mode(self, direction: int = 1, mode: 'Optional[LidarFrameViz.CameraMode]' = None) -> None:
         """Toggle the camera follow mode."""
         with self._lock:
-            modes = list(LidarFrameViz.CameraMode)
-            current_index = modes.index(self._camera_mode)
-            next_index = (current_index + direction) % len(modes)
-            self._camera_mode = modes[next_index]
+            if mode is not None:
+                self._camera_mode = mode
+            else:
+                modes = list(LidarFrameViz.CameraMode)
+                current_index = modes.index(self._camera_mode)
+                next_index = (current_index + direction) % len(modes)
+                self._camera_mode = modes[next_index]
             self._camera_pose_history.clear()
             self._interpolant = 1.0
             self._viz.set_notification(
@@ -741,7 +893,8 @@ class LidarFrameViz:
                 return
 
             # reset the cloud range field (since HIDE_BLOOM will modify it)
-            for frame, sensor in zip(self._frame_set, self._model._sensors):
+            for frame, sensor in zip(self._model._lidar_frames(self._frame_set),
+                                     self._model._sensors):
                 if not frame:
                     continue
                 for i, range_field in ((0, ChanField.RANGE),
@@ -751,15 +904,16 @@ class LidarFrameViz:
 
             # TODO[UN]: need to be done as part of the combined lidar mode
             # set mask on all points in the second cloud, clear other mask
+            # todo fix this not working on startup if there are no clouds
             for i, sensor in enumerate(self._model._sensors):
-                if self._flags_mode == LidarFrameViz.FlagsMode.HIGHLIGHT_SECOND:
-                    sensor._cloud_masks[0][:, :, 3] = 0
-                    sensor._cloud_masks[1][:, :, 3] = 255
-                else:
-                    sensor._cloud_masks[0][:, :, 3] = 0
-                    sensor._cloud_masks[1][:, :, 3] = 0
+                sensor._cloud_masks[0][:, :, 3] = 0
                 sensor._clouds[0].set_mask(sensor._cloud_masks[0])
-                sensor._clouds[1].set_mask(sensor._cloud_masks[1])
+                if len(sensor._cloud_masks) > 1:
+                    if self._flags_mode == LidarFrameViz.FlagsMode.HIGHLIGHT_SECOND:
+                        sensor._cloud_masks[1][:, :, 3] = 255
+                    else:
+                        sensor._cloud_masks[1][:, :, 3] = 0
+                    sensor._clouds[1].set_mask(sensor._cloud_masks[1])
 
             # update masks based on AOI if one is set
             if self._flags_mode == LidarFrameViz.FlagsMode.NONE:
@@ -769,7 +923,11 @@ class LidarFrameViz:
     def _draw_update_flags_mode(self) -> None:
         """Apply selected FlagsMode to the cloud"""
         # set a cloud mask based where first flags bit is set
-        for frame, sensor in zip(self._frame_set, self._model._sensors):
+        for frame, sensor in zip(self._model._lidar_frames(self._frame_set),
+                                 self._model._sensors):
+            # Frames are matched to lidar sensors by recorded FrameSet position;
+            # flags masks are lidar-specific.
+            frame = cast(Optional[LidarFrame], frame)
             if not frame:
                 continue
             if self._flags_mode == LidarFrameViz.FlagsMode.HIGHLIGHT_BLOOM:
@@ -798,12 +956,15 @@ class LidarFrameViz:
                 sensor.update_object_id_cloud_and_image_masks(frame, self._model._flags_palette)
                 sensor._clouds[0].set_mask(sensor._cloud_masks[0])
 
-    def cycle_flags_palette(self) -> None:
+    def cycle_flags_palette(self, value: 'Optional[LidarFrameViz.FlagsPalette]' = None) -> None:
         """Cycle the palette used for flags modes."""
         with self._lock:
-            self._flags_palette = self.FlagsPalette(
-                (self._flags_palette.value + 1) %
-                len(self.FlagsPalette.__members__))
+            if value is not None:
+                self._flags_palette = value
+            else:
+                self._flags_palette = self.FlagsPalette(
+                    (self._flags_palette.value + 1) %
+                    len(self.FlagsPalette.__members__))
             # TODO create a mapping
             palette = distinct_palette \
                 if self._flags_palette == self.FlagsPalette.DISTINCT \
@@ -812,12 +973,15 @@ class LidarFrameViz:
             self._viz.set_notification(
                 f"Flags palette: {self._flags_palette.name.replace('_', ' ')}")
 
-    def cycle_object_color_mode(self) -> None:
+    def cycle_object_color_mode(self, value: 'Optional[ObjectColorMode]' = None) -> None:
         """Cycle the mode used for object highlighting."""
         with self._lock:
-            self._model._object_color_mode = ObjectColorMode(
-                (self._model._object_color_mode.value + 1) %
-                len(ObjectColorMode.__members__))
+            if value is not None:
+                self._model._object_color_mode = value
+            else:
+                self._model._object_color_mode = ObjectColorMode(
+                    (self._model._object_color_mode.value + 1) %
+                    len(ObjectColorMode.__members__))
             palette = distinct_palette \
                 if self._flags_palette == self.FlagsPalette.DISTINCT \
                 else discrete_rainbow_palette
@@ -834,45 +998,78 @@ class LidarFrameViz:
             self._viz.set_notification(
                 f"Object visibility: {self._model._object_view_mode.name.replace('_', ' ')}")
 
+    def set_object_view_mode(self, mode: ObjectViewMode) -> None:
+        with self._lock:
+            self._model._object_view_mode = mode
+            if self._frame_set:
+                self._model.update_objects(self._frame_set)
+            self._viz.set_notification(
+                f"Object visibility: {self._model._object_view_mode.name.replace('_', ' ')}")
+
     def toggle_track_view_mode(self) -> None:
         """Cycle through the track view modes"""
         with self._lock:
-            if self._track_view_mode == LidarFrameViz.TrackViewMode.TRACK_PLUS_PER_FRAME_TRAJECTORY:
+            self.set_track_view_mode(LidarFrameViz.TrackViewMode(
+                (self._track_view_mode.value + 1) %
+                len(LidarFrameViz.TrackViewMode.__members__)))
+
+    def set_track_view_mode(self, mode: "LidarFrameViz.TrackViewMode") -> None:
+        """Set the track view mode"""
+        with self._lock:
+            self._track_view_mode = mode
+            if self._track_view_mode == LidarFrameViz.TrackViewMode.OFF:
                 if self._frames_accum:
-                    self._frames_accum.track_accumulator.toggle_visibility(False)
-                self._track_view_mode = LidarFrameViz.TrackViewMode.OFF
+                    self._frames_accum.toggle_mode_track(False)
                 for trajectory in self._per_frame_pose_trajectory:
                     self._viz.remove(trajectory)
                 for axis in self._per_frame_pose_trajectory_axis:
                     axis.disable()
-            elif self._track_view_mode == LidarFrameViz.TrackViewMode.OFF:
-                self._track_view_mode = LidarFrameViz.TrackViewMode.TRACK_ONLY
-                if self._frames_accum:
-                    self._frames_accum.track_accumulator.toggle_visibility(True)
             elif self._track_view_mode == LidarFrameViz.TrackViewMode.TRACK_ONLY:
-                self._track_view_mode = LidarFrameViz.TrackViewMode.TRACK_PLUS_PER_FRAME_TRAJECTORY
+                if self._frames_accum:
+                    self._frames_accum.toggle_mode_track(True)
+            elif self._track_view_mode == LidarFrameViz.TrackViewMode.TRACK_PLUS_PER_FRAME_TRAJECTORY:
                 for trajectory in self._per_frame_pose_trajectory:
                     self._viz.add(trajectory)
                 for axis in self._per_frame_pose_trajectory_axis:
                     axis.enable()
             self._viz.set_notification(f"Track: {self._track_view_mode.name.replace('_', ' ')}")
 
-    def toggle_axis_markers(self) -> None:
+    def _set_frustum_visible(self, stream: Union[SensorModel, CameraModel],
+                             visible: bool) -> None:
+        """Add/remove a stream's FOV frustum from the scene, idempotently."""
+        if stream._frustum is None:
+            return
+        if visible and not stream._frustum_in_viz:
+            self._viz.add(stream._frustum)
+            stream._frustum_in_viz = True
+        elif not visible and stream._frustum_in_viz:
+            self._viz.remove(stream._frustum)
+            stream._frustum_in_viz = False
+
+    def toggle_axis_markers(self, show: Optional[bool] = None) -> None:
         """Toggle the helper axis of a frame ON/OFF"""
         with self._lock:
-            if self._frame_axis_enabled:
+            do_show = show if show is not None else self._frame_axis_enabled
+            if not do_show:
                 self._frame_axis_enabled = False
                 self._map_origin_axis.disable()
                 self._base_link_axis.disable()
-                for axis in self._frame_axis:
+                for axis in self._stream_axis:
                     axis.disable()
+                # Camera FOV frustums follow the axis markers.
+                for stream in self._model._stream_models():
+                    self._set_frustum_visible(stream, False)
             else:
                 self._frame_axis_enabled = True
                 self._map_origin_axis.enable()
                 self._base_link_axis.enable()
-                for axis, sensor in zip(self._frame_axis, self._model._sensors):
-                    if sensor._enabled:
+                for axis, stream in zip(self._stream_axis, self._model._stream_models()):
+                    if stream._enabled:
                         axis.enable()
+                # Camera FOV frustums follow the axis markers (only for
+                # currently-enabled streams).
+                for stream in self._model._stream_models():
+                    self._set_frustum_visible(stream, stream._enabled)
             self._viz.set_notification(
                 f"Axis markers: {'ON' if self._frame_axis_enabled else 'OFF'}")
 
@@ -907,9 +1104,13 @@ class LidarFrameViz:
             self._update_fine_frame_trajectory()
 
             self._model.update_aoi_label(self._frame_set)
-            frame = self._frame_set[self._tracked_sensor]
-            if frame is not None:
+            frame = (self._frame_set[self._tracked_sensor]
+                     if len(self._frame_set) > self._tracked_sensor else None)
+            if isinstance(frame, LidarFrame):
                 self._frame_pose_history.append(core.last_valid_column_pose(frame))
+            elif any(f is not None for f in self._camera_frames()):
+                # camera-only: follow the camera body pose
+                self._frame_pose_history.append(self._get_pose_with_min_ts())
             self._interpolant = 1.0
 
     def draw(self, update: bool = True, update_camera: bool = True) -> None:
@@ -951,32 +1152,40 @@ class LidarFrameViz:
         return result
 
     def show_all_imu_plots(self):
-        [s._imu_plot.show() for s in self._model._sensors]
+        [s._imu_plot.show() for s in self._model._stream_models()]
 
     def hide_all_imu_plots(self):
-        [s._imu_plot.hide() for s in self._model._sensors]
+        [s._imu_plot.hide() for s in self._model._stream_models()]
 
     def show_all_sensor_labels(self):
-        [s._sensor_label.show() for s in self._model._sensors]
+        self.show_all_stream_labels()
 
     def hide_all_sensor_labels(self):
-        [s._sensor_label.hide() for s in self._model._sensors]
+        self.hide_all_stream_labels()
+
+    def show_all_stream_labels(self):
+        for stream in self._model._stream_models():
+            stream._sensor_label.show()
+
+    def hide_all_stream_labels(self):
+        for stream in self._model._stream_models():
+            stream._sensor_label.hide()
 
     def text_scale(self):
         return self._osd_scale / 2 + 0.5
 
-    def _update_multi_viz_osd(self):
+    def _update_multi_viz_osd(self) -> None:
         text_scale = self.text_scale()
         self._osd.set_scale(text_scale)
 
         # handle OSD modes "NONE" and "HELP"
         if self._osd_state == LidarFrameViz.OsdState.NONE:
-            self.hide_all_sensor_labels()
+            self.hide_all_stream_labels()
             self.hide_all_imu_plots()
             self._osd.set_text("")
             return
         elif self._osd_state == LidarFrameViz.OsdState.HELP:
-            self.hide_all_sensor_labels()
+            self.hide_all_stream_labels()
             self.hide_all_imu_plots()
             on_screen_help_text = []
             for key_binding in self._key_definitions:
@@ -984,14 +1193,15 @@ class LidarFrameViz:
             self._osd.set_text('\n'.join(on_screen_help_text))
             return
 
-        self.show_all_sensor_labels()
+        self.show_all_stream_labels()
         self.show_all_imu_plots()
 
         # create the OSD text
         osd_str = ""
-        cloud_idxs_str = str([i + 1 for i in range(len(self._model._cloud_enabled))])
+        num_clouds = len(self._model._cloud_present)
+        cloud_idxs_str = str([i + 1 for i in range(num_clouds)])
         cloud_states_str = ", ".join(
-            ["ON" if e else "OFF" for e in self._model._cloud_enabled])
+            ["ON" if self._model._cloud_enabled[idx] else "OFF" for idx in range(num_clouds)])
 
         img_keys = 'B, N'
         cld_keys = 'M'
@@ -1007,9 +1217,9 @@ class LidarFrameViz:
         if osd_str_extra:
             osd_str_extra += "\n"
 
-        valid_frames = [s for s in self._frame_set if s]
-        if not valid_frames:
-            return  # Skip update if no frames available yet
+        if not _frame_set_has_content(self._frame_set):
+            self._osd.set_text(osd_str)
+            return
 
         first_frame_ts = _get_timestamp(self._frame_set) * 1e-9
         if self._first_frame_ts is None:
@@ -1027,66 +1237,80 @@ class LidarFrameViz:
         label_height_accum = self._osd.text_height / view_h
         img_height_accum = 0
 
-        # add the individual sensor labels and imu images from bottom to top
-        # one at a time positioned based on the heights of the previously added items
-        # so use a reverse index to index into the sensor models
-        for idx in range(len(self._model._sensors)):
-            rev_idx = len(self._model._sensors) - idx - 1
-            sensor = self._model._sensors[rev_idx]
+        streams = self._model._stream_models()
+        # Frames aligned to _stream_models() order, so lidar and camera streams
+        # may be interleaved in any registration order.
+        stream_frames = self._model._stream_frames(self._frame_set)
+
+        # add stream labels and IMU plots from bottom to top
+        for idx in range(len(streams)):
+            rev_idx = len(streams) - idx - 1
+            stream = streams[rev_idx]
+            frame = stream_frames[rev_idx] if rev_idx < len(stream_frames) else None
             img_bottom = -(1 - label_height_accum) * 2 + 1 + (img_height_accum * 2)
-            if sensor._has_imu_data:
-                sensor._imu_plot.show()
+            # Both lidar and camera streams may carry IMU data and get a plot.
+            if stream._has_imu_data:
+                stream._imu_plot.show()
                 img_height_accum += img_height
             else:
-                sensor._imu_plot.hide()
-            label_bottom = 1 - label_height_accum - img_height_accum
-            sensor._sensor_label.position = (0.0, label_bottom)
-            sensor._sensor_label.scale = text_scale
-
+                stream._imu_plot.hide()
             img_left = 75 * text_scale / view_h
             img_top = img_bottom + img_height * 2
-            sensor._imu_plot.hshift = -1
-            sensor._imu_plot.position = (img_left, img_width - img_left, img_bottom, img_top)
-            meta = sensor._meta
-            cloud_state = "ON" if sensor._enabled else "OFF"
-            enabled_clouds_str = f"sensor [CTRL+{rev_idx + 1}]: {cloud_state}"
-            frame = self._frame_set[rev_idx]
-            if frame:
-                frame_ts = _valid_or_zero_ts(frame) * 1e-9 - self._first_frame_ts    # show relative time
-                enabled_clouds_str += f"   frame id: {frame.frame_id}   ts: {frame_ts:0.2f}\n"
-            else:
-                enabled_clouds_str += "\n"
-            profile_str = str(meta.format.udp_profile_lidar).replace('_', '..')
-            version_str = LidarFrameViz._format_version(meta.get_version())
-            enabled_clouds_str += f"        {profile_str}   {meta.config.lidar_mode}"
-            enabled_clouds_str += f"\n        {meta.prod_line}   {meta.sn}   {version_str}"
-            default_color = (1.0, 1.0, 1.0, 1.0)
+            stream._imu_plot.hshift = -1
+            stream._imu_plot.position = (img_left, img_width - img_left, img_bottom, img_top)
+
+            label_bottom = 1 - label_height_accum - img_height_accum
+            stream._sensor_label.position = (0.0, label_bottom)
+            stream._sensor_label.scale = text_scale
+
+            # relative display timestamp, computed once here so the streams
+            # don't need to know about playback state
+            valid_ts: Optional[float] = None
             if frame is not None:
-                if frame.shot_limiting() != core.ShotLimitingStatus.NORMAL:
-                    enabled_clouds_str += f"\n        WARNING: Shot limiting status: {frame.shot_limiting()}"
-                    default_color = (1.0, 0.6, 0.0, 1.0)
-                if frame.thermal_shutdown() != core.ThermalShutdownStatus.NORMAL:
-                    enabled_clouds_str += f"\n        WARNING: Thermal shutdown status: {frame.thermal_shutdown()}"
-                    default_color = (1.0, 0.0, 0.0, 1.0)
-            sensor._sensor_label.text = enabled_clouds_str
-            if self._model._cloud_mode_name == "SENSOR":
-                color = sensor._color
-                sensor._sensor_label.rgba = (color[0] / 255, color[1] / 255, color[2] / 255, 1)
-            else:
-                sensor._sensor_label.rgba = default_color
-            label_height_accum += sensor._sensor_label.text_height / view_h
+                ts = _valid_or_zero_ts(frame) * 1e-9
+                if self._first_frame_ts is not None and ts > 0:
+                    valid_ts = ts - self._first_frame_ts
+            ctrl_index = rev_idx + 1 if rev_idx < LidarFrameViz.MAX_SENSOR_TOGGLE_KEYS else None
+            label_str, rgba = stream.osd_label(
+                ctrl_index, frame,
+                cloud_mode_name=self._model._cloud_mode_name,
+                valid_ts=valid_ts)
+            stream._sensor_label.text = label_str
+            stream._sensor_label.rgba = rgba
+
+            label_height_accum += stream._sensor_label.text_height / view_h
+
+    def _camera_frames(self) -> List:
+        """Camera frames from the unified FrameSet, one entry per known camera.
+
+        Uses each camera's recorded FrameSet position, so lidar and camera
+        streams may be interleaved in any order. Returns None for a camera whose
+        frame is missing.
+        """
+        if not isinstance(self._frame_set, FrameSet):
+            return []
+        return [self._frame_set[i] if i < len(self._frame_set) else None
+                for i in self._model._camera_frame_indices]
 
     def _get_pose_with_min_ts(self) -> np.ndarray:
-        first_frame = min([s for s in self._frame_set if s], key=lambda s: _valid_or_zero_ts(s))
-        return core.last_valid_column_pose(first_frame)
+        lidar_frames = [s for s in self._frame_set if isinstance(s, LidarFrame)]
+        if lidar_frames:
+            first_frame = min(lidar_frames, key=lambda s: _valid_or_zero_ts(s))
+            return core.last_valid_column_pose(first_frame)
+        # camera-only: use the first available camera body pose
+        for frame in self._camera_frames():
+            if frame is not None:
+                return np.asarray(frame.body_to_world[0], dtype=np.float64)
+        return np.eye(4)
 
     def _interpolate_camera_pose(self):
         if not self._frame_pose_history:
-            if not self._frame_set:
+            if not _frame_set_has_content(self._frame_set):
                 return np.eye(4)
-            frame = self._frame_set[self._tracked_sensor]
-            if frame is not None:
-                return core.last_valid_column_pose(frame)
+            if len(self._frame_set) > self._tracked_sensor:
+                frame = self._frame_set[self._tracked_sensor]
+                if isinstance(frame, LidarFrame):
+                    return core.last_valid_column_pose(frame)
             return self._get_pose_with_min_ts()
         n = len(self._frame_pose_history)
         if n == 1:
@@ -1102,15 +1326,22 @@ class LidarFrameViz:
                                 np.stack([p1, p2]))[0]
 
     def _apply_scene_poses(self) -> None:
-        if not self._frame_set:
+        if not _frame_set_has_content(self._frame_set):
             return
 
         # frame with the minimal timestamp determines the
-        # center of the system (by it's frame pose)
+        # center of the system (by its frame pose)
         pose = self._get_pose_with_min_ts()
         self._base_link_axis.pose = pose
-        for axis, sensor in zip(self._frame_axis, self._model._sensors):
-            axis.pose = pose @ sensor._meta.sensor_to_body
+        # Each stream computes its own axis pose for the current frame: lidars
+        # use the base pose composed with their extrinsics, cameras project
+        # their own body pose into the world. ``None`` leaves the axis unchanged.
+        stream_frames = self._model._stream_frames(self._frame_set)
+        for idx, stream in enumerate(self._model._stream_models()):
+            frame = stream_frames[idx] if idx < len(stream_frames) else None
+            new_pose = stream.scene_axis_pose(pose, frame)
+            if new_pose is not None:
+                self._stream_axis[idx].pose = new_pose
 
     def _draw_update_scene_poses(self) -> None:
         """Update axis poses from the current frames."""
@@ -1120,7 +1351,7 @@ class LidarFrameViz:
     def _draw_update_camera_pose(self, update_camera_history: bool = True) -> None:
         """Apply poses from the frames to the scene"""
         with self._lock:
-            if not self._frame_set:
+            if not _frame_set_has_content(self._frame_set):
                 return
 
             self._apply_scene_poses()
@@ -1132,6 +1363,10 @@ class LidarFrameViz:
             elif self._camera_mode == LidarFrameViz.CameraMode.FOLLOW_ROTATION_LOCKED:
                 # only change the position and keep the rotation part
                 self._camera_pose[:3, 3] = frame_pose[:3, 3]
+            elif self._camera_mode == LidarFrameViz.CameraMode.FOLLOW_WORLD_ROTATION_LOCKED:
+                # only change the position and keep rotation aligned with the world
+                self._camera_pose[:3, 3] = frame_pose[:3, 3]
+                self._camera_pose[:3, :3] = np.eye(3)
             elif self._camera_mode == LidarFrameViz.CameraMode.FIXED:
                 pass
             elif self._camera_mode == LidarFrameViz.CameraMode.FOLLOW_SMOOTH:
@@ -1144,6 +1379,10 @@ class LidarFrameViz:
             elif self._camera_mode == LidarFrameViz.CameraMode.FOLLOW_SMOOTH_ROTATION_LOCK:
                 avg_t = np.mean([p[:3, 3] for p in self._camera_pose_history], axis=0)
                 self._camera_pose[:3, 3] = avg_t
+            elif self._camera_mode == LidarFrameViz.CameraMode.FOLLOW_SMOOTH_WORLD_ROTATION_LOCK:
+                avg_t = np.mean([p[:3, 3] for p in self._camera_pose_history], axis=0)
+                self._camera_pose[:3, 3] = avg_t
+                self._camera_pose[:3, :3] = np.eye(3)
 
             self._viz.camera.set_target(np.linalg.inv(self._camera_pose))
 
@@ -1161,9 +1400,11 @@ class LidarFrameViz:
 
     def _update_fine_frame_trajectory(self) -> None:
         """Draw markers for each pose in the frame."""
+        if len(self._frame_set) <= self._tracked_sensor:
+            return
 
         frame = self._frame_set[self._tracked_sensor]
-        if frame is None:
+        if not isinstance(frame, LidarFrame):
             return
 
         valid_poses = (np.bitwise_and(frame.status, 1) == 1)
@@ -1226,6 +1467,20 @@ class LidarFrameViz:
         for sensor in self._model._sensors:
             sensor.set_zone_selection_and_render_mode(sel_mode, render_mode)
 
+    def set_zone_selection_mode(self, sel_mode: ZoneSelectionMode) -> None:
+        with self._lock:
+            self._zone_selection_mode = sel_mode
+            self._viz.set_notification(
+                f"Zone Selection Mode: {self._zone_selection_mode.name.replace('_', ' ')}")
+            self.set_zone_selection_and_render_modes(self._zone_selection_mode, self._zone_render_mode)
+
+    def set_zone_render_mode(self, render_mode: ZoneRenderMode) -> None:
+        with self._lock:
+            self._zone_render_mode = render_mode
+            self._viz.set_notification(
+                f"Zone Render Mode: {self._zone_render_mode.name.replace('_', ' ')}")
+            self.set_zone_selection_and_render_modes(self._zone_selection_mode, self._zone_render_mode)
+
     def cycle_zone_selection_mode(self) -> None:
         with self._lock:
             self._zone_selection_mode = ZoneSelectionMode(
@@ -1279,7 +1534,7 @@ class _Seekable:
         elif self._next_ind == self._read_ind + 1:
             t = next(self._it)
             # detect a loop signaled by empty collation
-            if len(t) == 0:
+            if _frame_set_is_loop_sentinel(t):
                 self._next_ind = 0
                 self._read_ind = -1
                 return FrameSet()
@@ -1306,12 +1561,6 @@ class _Seekable:
     def frame_num(self) -> int:
         """Returns the most-recently read frame number, starting at zero."""
         return self._next_ind
-
-    @property
-    def scan_num(self) -> int:
-        """Deprecated: use frame_num."""
-        warn_deprecated("scan_num is deprecated, use frame_num")
-        return self.frame_num
 
     def seek(self, ind: int) -> bool:
         """Update iterator position to index `ind`.
@@ -1407,7 +1656,7 @@ class SimpleViz:
 
     _playback_rates: ClassVar[Tuple[float, ...]]
     _playback_rates = (0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 0.0)
-    _images: List[Tuple[PILImage.Image, float]] = []
+    _images: List[Tuple[np.ndarray, float]] = []
 
     def __init__(self,
                  metadata: Union[List[SensorInfo], SensorInfo],
@@ -1431,7 +1680,9 @@ class SimpleViz:
                  _override_lidar_frame_viz: Optional[LidarFrameViz] = None,
                  _buflen: int = 50,
                  video_format: str = "png",
-                 clear_on_loop: bool = False, subframes = 0) -> None:
+                 clear_on_loop: bool = False, subframes = 0,
+                 background_color: Tuple[float, float, float, float] = (0, 0, 0, 1),
+                 camera_default_range_mm: int = DEFAULT_CAMERA_RANGE_MM) -> None:
         """
         Args:
             arg: Metadata associated with the frames to be visualized or a
@@ -1442,6 +1693,10 @@ class SimpleViz:
                       stop after the very first frame use 0
             on_eof: What to do when the source ends. One of 'exit', 'stop' or 'loop'
             video_format: Format for saving continuous screenshots. One of 'png' or 'gif'
+            camera_default_range_mm: distance (mm) at which to draw the pixels
+                  of a camera frame that has no RANGE field, as a forward
+                  distance; 0 draws no cloud for such frames. Ignored with
+                  ``_override_lidar_frame_viz``.
         Raises:
             ValueError: if the specified rate isn't one of the options
         """
@@ -1449,7 +1704,9 @@ class SimpleViz:
         if on_eof not in valid:
             raise ValueError(f"on_eof must be one of {valid}, was '{on_eof}'")
 
-        self._metadata = [metadata] if isinstance(metadata, SensorInfo) else metadata
+        self._metadata = metadata
+        if not self._metadata:
+            raise ValueError("SimpleViz requires at least one LidarInfo or CameraInfo")
         if _override_pointviz and _override_lidar_frame_viz and _override_lidar_frame_viz._viz != _override_pointviz:
             raise ValueError('SimpleViz cannot use two different PointViz instances simultaneously.')
         if _override_lidar_frame_viz:
@@ -1473,6 +1730,8 @@ class SimpleViz:
             map_select_ratio=map_select_ratio,
             map_max_points=map_max_points
         )
+        if isinstance(self._metadata, SensorInfo):
+            self._metadata = [self._metadata]
         self._frame_viz = _override_lidar_frame_viz if _override_lidar_frame_viz \
             else LidarFrameViz(
                 self._metadata,
@@ -1480,7 +1739,9 @@ class SimpleViz:
                 accum_config,
                 imu_viz_config,
                 _buflen=_buflen,
-                _add_default_controls=False
+                _add_default_controls=False,
+                camera_default_range_mm=camera_default_range_mm,
+                background_color=background_color
             )
 
         self._lock = threading.Lock()
@@ -1526,7 +1787,6 @@ class SimpleViz:
             (ord('.'), 0): partial(SimpleViz.seek_relative, n_frames=1),
             (ord('.'), 2): partial(SimpleViz.seek_relative, n_frames=10),
             (ord(' '), 0): SimpleViz.toggle_pause,
-            (ord('O'), 0): SimpleViz.toggle_osd,
             (ord('/'), 1): SimpleViz.toggle_help,
             (ord('X'), 1): SimpleViz.toggle_img_recording,
             (ord('Z'), 1): SimpleViz.screenshot,
@@ -1537,8 +1797,22 @@ class SimpleViz:
             (ord('H'), 1): partial(SimpleViz.adjust_subframes, direction=-1)
         }
 
+        # replace the scan viz on change with ours
+        found = False
+        for opt in self._frame_viz.config.options:
+            if opt.name == "show_osd":
+                weak_self = weakref.ref(self)
+
+                def on_change(arg, val):
+                    this = weak_self()
+                    if this is not None:
+                        this.toggle_osd(val)
+                opt.on_change = on_change
+                found = True
+                break
+        assert found
+
         key_definitions: Dict[str, str] = {
-            'o': "Toggle information overlay",
             'SHIFT+x': "Toggle a continuous saving of screenshots",
             'CTRL+x': "Toggle continuous screenshot format.",
             'SHIFT+z': "Take a screenshot",
@@ -1649,7 +1923,7 @@ class SimpleViz:
     def toggle_osd(self, state: Optional[bool] = None) -> None:
         """Show or hide the on-screen display."""
         with self._cv:
-            self._frame_viz.toggle_osd()
+            self._frame_viz.toggle_osd(state)
             self._update_right_osd()
             self._frame_viz.draw()
 
@@ -1781,14 +2055,22 @@ class SimpleViz:
                 pix = self._viz.get_screenshot(width, height)
             frame_time = self._recording_data_time(
                 frame_ts, frame_duration, interpolant, prev_frame_time)
-            self._images.append((PILImage.fromarray(pix), frame_time))
+            self._images.append((pix, frame_time))
         except PointVizNotRunningError:
             pass
 
-    def _lidar_frame_period(self) -> float:
+    def _frame_period(self) -> float:
         if isinstance(self._frame_viz, LidarFrameViz):
-            # TODO[UN]: per sensor frame period
-            return 1.0 / (self._metadata[0].format.fps)
+            infos = (list(self._metadata)
+                     if isinstance(self._metadata, collections.abc.Sequence)
+                     else [self._metadata])
+            # A sensor reports 0 when its metadata carries no frame rate, as a
+            # camera recorded before fps was serialized does. Take the rate from
+            # the first sensor that has one.
+            for info in infos:
+                if info.fps:
+                    return 1.0 / info.fps
+            return 1.0 / 30.0
         else:
             # if some other frame viz that is not derived from LidarFrameViz
             # we default to 10 Hz
@@ -1846,7 +2128,7 @@ class SimpleViz:
                     frames = seekable.last_n(self._frame_viz._imu_viz_num_frames)
                     frame_idx = seekable.frame_num
                     # an empty array indicates that a loop occurred
-                    if len(frame) == 0:
+                    if _frame_set_is_loop_sentinel(frame):
                         if self._clear_on_loop:
                             self._frame_viz.clear_trajectory()
                         self._frame_viz.clear_pose_histories()
@@ -1861,16 +2143,16 @@ class SimpleViz:
                         if last_frame_time is None:
                             frame_ts = 0
                         else:
-                            frame_ts = last_frame_time + self._lidar_frame_period()
+                            frame_ts = last_frame_time + self._frame_period()
 
                     # reset playback on loop
                     if looped:
                         last_time_update = time.monotonic()
-                        last_sim_time = frame_ts - self._lidar_frame_period()
+                        last_sim_time = frame_ts - self._frame_period()
                         looped = False
                     frame_duration = (frame_ts - last_frame_time if last_frame_time
-                                     else self._lidar_frame_period())
-                    prev_frame_time = last_frame_time
+                                     else self._frame_period())
+                    prev_frame_time: Optional[float] = last_frame_time
                     last_frame_time = frame_ts
 
                     if last_sim_time is None or last_time_update is None:
@@ -1966,12 +2248,6 @@ class SimpleViz:
         else:
             return 0.0
 
-    @property
-    def scans_per_sec(self) -> float:
-        """Deprecated: use frames_per_sec."""
-        warn_deprecated("scans_per_sec is deprecated, use frames_per_sec")
-        return self.frames_per_sec
-
     def _save_gif(self, filename=None) -> None:
         if len(self._images) == 0:
             return
@@ -1980,19 +2256,17 @@ class SimpleViz:
             filename = f"viz_gif_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.gif"
 
         print("Saving gif to " + filename)
-        start = self._images[0][0]
+        images = [image for image, _ in self._images]
         rate = SimpleViz._playback_rates[self._rate_ind]
         # live => rate of 1.0
         if rate <= 0.0:
             rate = 1.0
 
         # calculate durations in ms between frames
-        default_dt = (self._lidar_frame_period() / (self._subframes + 1)
-                      if self._subframes else self._lidar_frame_period())
-        images = []
+        default_dt = (self._frame_period() / (self._subframes + 1)
+                      if self._subframes else self._frame_period())
         durations = []
         for i in range(1, len(self._images)):
-            images.append(self._images[i][0])
             dt = self._images[i][1] - self._images[i - 1][1]
             if dt <= 0:
                 dt = default_dt
@@ -2002,7 +2276,19 @@ class SimpleViz:
 
         # save in a background thread to avoid freezing the viz
         def run_in_thread():
-            start.save(filename, save_all=True, append_images=images, duration=durations, loop=0)
+            # a GIF has a single size, so frames captured after a resolution
+            # change are scaled to the size of the first frame
+            height, width = images[0].shape[:2]
+            try:
+                with GifWriter(filename, width, height) as writer:
+                    for image, duration in zip(images, durations):
+                        if image.shape[:2] != (height, width):
+                            image = _resize_nearest(image, height, width)
+                        writer.add_frame(image, duration)
+            except (RuntimeError, ValueError) as e:
+                self._viz.set_notification("Failed Saving GIF")
+                print(f"Failed Saving GIF: {e}")
+                return
             self._viz.set_notification("Finished Saving GIF")
             print("Finished Saving GIF")
 
@@ -2087,8 +2373,12 @@ class SimpleViz:
             self._frame_viz._model.finish()
 
 
-def lf_show(frames: Union[FrameSetSource, LidarFrame, FrameSet, List[Optional[LidarFrame]],
-                         List[List[Optional[LidarFrame]]]],
+AnyFrames = Union[FrameSetSource, CameraFrame, LidarFrame, FrameSet,
+                  List[Optional[Union[Frame, LidarFrame, CameraFrame]]],
+                  List[List[Optional[LidarFrame]]]]
+
+
+def lf_show(frames: AnyFrames,
             *,
             title: Optional[str] = None) -> None:
     """[BETA] Display a set of LidarFrames in an interactive window.
@@ -2105,12 +2395,21 @@ def lf_show(frames: Union[FrameSetSource, LidarFrame, FrameSet, List[Optional[Li
     """
 
     def compose_title(sensor_infos: List[SensorInfo]) -> str:
-        return ",".join([str(si.sn) for si in sensor_infos])
+        names = [str(si.sn) for si in sensor_infos if si.sn]
+        return ",".join(names) if names else "camera"
 
     def get_sensor_infos(frames: Union[FrameSetSource, List[FrameSet]]) -> List[SensorInfo]:
-        return [s.sensor_info for s in frames[0] if s is not None]
+        # Return the combined sensor infos (LidarInfo for lidars, CameraInfo
+        # for cameras) using the unified accessors.
+        if isinstance(frames, FrameSetSource):
+            return list(frames.sensor_info)
+        infos: List[SensorInfo] = []
+        for s in frames[0]:
+            if isinstance(s, (LidarFrame, CameraFrame)) and s.sensor_info is not None:
+                infos.append(s.sensor_info)
+        return infos
 
-    def normalize(frames: Union[LidarFrame, FrameSet, List[Optional[LidarFrame]], List[List[Optional[LidarFrame]]]]
+    def normalize(frames: AnyFrames
                   ) -> List[FrameSet]:
         if isinstance(frames, LidarFrame):
             return cast(List[FrameSet], [FrameSet([frames])])

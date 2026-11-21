@@ -47,6 +47,8 @@ struct GLFWContext {
     // NOLINTNEXTLINE(readability-make-member-function-const)
     void visible(bool);
 
+    void set_title(const std::string& title);
+
     static bool is_opengl_es();
 
     static float ui_scale();

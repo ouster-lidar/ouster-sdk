@@ -3,10 +3,10 @@ import logging
 import os
 
 import numpy as np
-from PIL import Image as PILImage
 from plyfile import PlyData  # type: ignore  # noqa
 
 import ouster.sdk.viz as viz
+from ouster.sdk.io import write_png
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('PNG_Maker')
@@ -19,7 +19,7 @@ max_plot_points = 50000000
 
 
 def get_doll_dist(points):
-    # to linearize the plot camera zoon in distance
+    # to linearize the plot camera zoom in distance
     lidar_default_range = 150
     min_camera_dist = 2
     # bigger number make camera more zoom in
@@ -75,9 +75,7 @@ def output_ext_verify(filename):
 
 
 def screenshot_and_save_png(viz, screenshot_path: str):
-    pixels = viz.get_screenshot()
-    PILImage.fromarray(pixels).convert(
-            "RGB").save(screenshot_path)
+    write_png(screenshot_path, viz.get_screenshot())
     logger.info(f"Screenshot is saved at {screenshot_path}")
     return screenshot_path
 

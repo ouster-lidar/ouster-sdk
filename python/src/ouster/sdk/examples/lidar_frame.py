@@ -3,7 +3,7 @@ import numpy as np
 from ouster.sdk import core
 
 
-def lidar_frame_example(info: core.SensorInfo) -> core.LidarFrame:
+def lidar_frame_example(info: core.LidarInfo) -> core.LidarFrame:
     # ![doc-stag-python-lidarframe-constructor]
     frame = core.LidarFrame(info)
     # ![doc-etag-python-lidarframe-constructor]
@@ -59,5 +59,5 @@ if __name__ == "__main__":
         raise RuntimeError("Usage: python lidar_frame.py <metadata.json>")
 
     with open(args.json_file, "r") as f:
-        info = core.SensorInfo(f.read())
+        info = core.LidarInfo(f.read())
         lidar_frame_example(info)

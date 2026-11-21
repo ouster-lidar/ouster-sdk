@@ -16,8 +16,8 @@ Building on Linux / macOS
 Recommended method with vcpkg
 +++++++++++++++++++++++++++++
 
-It is now recommended to use ``vcpkg`` to install dependencies across all platforms. 
-The list of required dependencies is defined in the ``vcpkg.json`` file located at the root of the repository. 
+It is now recommended to use ``vcpkg`` to install dependencies across all platforms.
+The list of required dependencies is defined in the ``vcpkg.json`` file located at the root of the repository.
 vcpkg manifest mode is used to manage ouster-sdk dependencies in a consistent and reproducible way.
 
 To install ``vcpkg``, please follow the instructions in the `vcpkg documentation`_.
@@ -78,6 +78,9 @@ defaults:
    -DBUILD_TESTING=ON                 # Build tests
    -DBUILD_SHARED_LIBRARY=ON          # Build the shared library and binary artifacts
 
+On Linux, see :ref:`glibc-tuning` for glibc settings that make frame reading faster and more
+consistent.
+
 
 Building on Windows
 -------------------
@@ -93,8 +96,8 @@ for dependencies. Follow the official documentation to set up your build environ
 * `Vcpkg is installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-Since, ``VCPKG_MANIFEST_MODE`` is set to ``ON``, the dependencies will be installed the build if the 
-``CMAKE_TOOLCHAIN_FILE`` is set correctly. 
+Since, ``VCPKG_MANIFEST_MODE`` is set to ``ON``, the dependencies will be installed the build if the
+``CMAKE_TOOLCHAIN_FILE`` is set correctly.
 
 .. code:: powershell
 
@@ -160,7 +163,7 @@ sensor data.
 Building Against The Library
 -----------------------------
 
-Navigate to ``examples`` under the ouster-sdk source directory, which should contain several linux 
+Navigate to ``examples`` under the ouster-sdk source directory, which should contain several linux
 example folders building against the sdk library. To run each use the example.bash script.
 
 1. compiled_in_linking_example - Compile ouster_sdk as a sub-project under a larger codebase.

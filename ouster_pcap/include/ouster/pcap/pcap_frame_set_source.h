@@ -63,7 +63,7 @@ class OUSTER_API_CLASS PcapFrameSetSource
       ouster::sdk::impl::FrameSetSourceBuilder<ouster::sdk::core::IoType::PCAP,
                                                PcapFrameSetSource> {
     friend class PcapFrameSetIteratorImpl;
-    PcapPacketSource packets_;
+    std::unique_ptr<PcapPacketSource> packets_;
 
     size_t num_frames_;
     std::vector<size_t> frames_count_;
@@ -72,7 +72,9 @@ class OUSTER_API_CLASS PcapFrameSetSource
     std::vector<std::vector<std::pair<uint64_t, uint64_t>>> index_;
     std::vector<std::pair<uint64_t, uint64_t>> real_index_;
 
-    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> internal_sensor_info_;
+    std::vector<std::shared_ptr<ouster::sdk::core::LidarInfo>> internal_sensor_info_;
+    // combined lidar (+ future camera) info exposed via sensor_info()
+    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> combined_info_;
 
     bool indexed_ = false;
 
@@ -160,20 +162,6 @@ class OUSTER_API_CLASS PcapFrameSetSource
         const std::vector<std::string>& sources, const FrameSetSourceOptions& options, bool collate,
         int sensor_idx = -1);
 };
-}  // namespace pcap
-}  // namespace sdk
-}  // namespace ouster
-
-#include "ouster/core/deprecation.h"
-
-namespace ouster {
-namespace sdk {
-namespace pcap {
-
-OUSTER_DEPRECATED_TYPE(PcapScanSource, PcapFrameSetSource, OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-OUSTER_DEPRECATED_TYPE(PcapScanSourceOptions, PcapFrameSetSourceOptions,
-                       OUSTER_DEPRECATED_LAST_SUPPORTED_1_0)
-
 }  // namespace pcap
 }  // namespace sdk
 }  // namespace ouster

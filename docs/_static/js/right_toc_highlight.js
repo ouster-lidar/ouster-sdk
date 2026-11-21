@@ -51,8 +51,8 @@
         }
       }
 
-      const finalId = candidateId || 
-                     (isAtBottom && scrollY > 200 ? lastHeading.id : 
+      const finalId = candidateId ||
+                     (isAtBottom && scrollY > 200 ? lastHeading.id :
                      (scrollY > 100 && headings[1] ? headings[1].id : headings[0].id));
 
       setActive(finalId);

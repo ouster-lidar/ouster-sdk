@@ -61,13 +61,14 @@ core::AnyFrameSetSource osf_fixture() {
     return source;
 }
 
-const std::vector<int> expected_frames = {58684, 58685, 58686, 58687, 58688,
-                                          58689, 58690, 58691, 58692, 58693};
+const std::vector<uint64_t> expected_timestamps = {
+    6846799867874ULL, 6846900123055ULL, 6847000286697ULL, 6847100062339ULL, 6847199947465ULL,
+    6847299965077ULL, 6847400189932ULL, 6847500129960ULL, 6847599960666ULL, 6847699872269ULL};
 
-std::string frames_to_string(const std::vector<int>& frames) {
+std::string timestamps_to_string(const std::vector<uint64_t>& timestamps) {
     std::ostringstream oss;
-    for (int frame : frames) {
-        oss << frame << '\n';
+    for (uint64_t ts : timestamps) {
+        oss << ts << '\n';
     }
     return oss.str();
 }
@@ -79,8 +80,8 @@ TEST(ProcessingSlicingCpp, PrintTenthFrameExamplePrintsExpectedFrames) {
     const auto output =
         capture_stdout([&]() { ouster::docs::print_nth_frame_example_cpp(source); });
 
-    std::vector<int> expected = {expected_frames.at(9), expected_frames.at(9)};
-    EXPECT_EQ(output, frames_to_string(expected));
+    std::vector<uint64_t> expected = {expected_timestamps.at(9), expected_timestamps.at(9)};
+    EXPECT_EQ(output, timestamps_to_string(expected));
 }
 
 TEST(ProcessingSlicingCpp, PrintLastFrameExamplePrintsExpectedFrame) {
@@ -88,7 +89,7 @@ TEST(ProcessingSlicingCpp, PrintLastFrameExamplePrintsExpectedFrame) {
     const auto output =
         capture_stdout([&]() { ouster::docs::print_last_frame_example_cpp(source); });
 
-    EXPECT_EQ(output, frames_to_string(std::vector<int>{expected_frames.back()}));
+    EXPECT_EQ(output, timestamps_to_string(std::vector<uint64_t>{expected_timestamps.back()}));
 }
 
 TEST(ProcessingSlicingCpp, PrintFirstTenFramesExamplePrintsExpectedFrames) {
@@ -96,8 +97,8 @@ TEST(ProcessingSlicingCpp, PrintFirstTenFramesExamplePrintsExpectedFrames) {
     const auto output =
         capture_stdout([&]() { ouster::docs::print_first_n_frames_example_cpp(source); });
 
-    std::vector<int> expected(expected_frames.begin(), expected_frames.begin() + 9);
-    EXPECT_EQ(output, frames_to_string(expected));
+    std::vector<uint64_t> expected(expected_timestamps.begin(), expected_timestamps.begin() + 9);
+    EXPECT_EQ(output, timestamps_to_string(expected));
 }
 
 TEST(ProcessingSlicingCpp, PrintStepSlicedFramesExamplePrintsExpectedFrames) {
@@ -105,11 +106,11 @@ TEST(ProcessingSlicingCpp, PrintStepSlicedFramesExamplePrintsExpectedFrames) {
     const auto output =
         capture_stdout([&]() { ouster::docs::print_step_sliced_frames_example_cpp(source); });
 
-    std::vector<int> expected;
+    std::vector<uint64_t> expected;
     for (size_t i = 0; i < 10; i += 2) {
-        expected.push_back(expected_frames.at(i));
+        expected.push_back(expected_timestamps.at(i));
     }
-    EXPECT_EQ(output, frames_to_string(expected));
+    EXPECT_EQ(output, timestamps_to_string(expected));
 }
 
 TEST(ProcessingSlicingCpp, FirstValidColumnExamplePrintsColumnIndex) {

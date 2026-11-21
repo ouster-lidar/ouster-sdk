@@ -12,8 +12,10 @@ from ouster.sdk import open_source, SourceURLException
 
 import ouster.sdk._bindings.osf as osf
 import ouster.sdk.core as core
-from ouster.sdk.core import ChanField, FieldType, LidarMode, LidarFrame, SensorInfo, Severity, init_logger, FrameSet
-from ouster.sdk._bindings.osf import LidarFrameStream, Encoder, PngLidarFrameEncoder
+from ouster.sdk.core import ChanField, FieldType, LidarMode, LidarFrame, LidarInfo, Severity, init_logger, FrameSet
+from ouster.sdk._bindings.osf import (
+    LidarFrameStream, Encoder, PngFrameEncoder, ZPngFrameEncoder,
+)
 from ouster.sdk.osf import OsfDropFrameError
 
 
@@ -27,7 +29,7 @@ def input_info(test_data_dir):
     filename = test_data_dir / "pcaps" / "OS-0-128-U1_v2.3.0_1024x10.json"
     with open(filename, 'r') as f:
         data = f.read()
-    return core.SensorInfo(data)
+    return core.LidarInfo(data)
 
 
 # Test that we can save a subset of frame fields and that it errors
@@ -113,19 +115,17 @@ def test_writer_partial_load(tmp_path, input_info):
 
 def writer_output_handler(writer, output_osf_file, info):
     assert writer.filename() == str(output_osf_file)
-    assert len(writer.sensor_info()) == 1
-    assert info == writer.sensor_info()[0]
 
     frame1 = core.LidarFrame(info)
     assert frame1 is not None
     frame1.status[:] = 0x1
-    frame1.packet_timestamp[:] = 1
+    frame1.receive_timestamp[:] = 1
     frame1.field(core.ChanField.REFLECTIVITY)[:] = 100
 
     frame2 = core.LidarFrame(info)
     assert frame2 is not None
     frame2.status[:] = 0x1
-    frame2.packet_timestamp[:] = 1
+    frame2.receive_timestamp[:] = 1
     frame2.field(core.ChanField.REFLECTIVITY)[:] = 200
 
     writer.save(0, frame1)
@@ -457,7 +457,7 @@ def test_save_removing_frame_fields_later(tmp_path, input_osf_file):
 
 
 def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
-    new_metadata = core.SensorInfo.from_default(
+    new_metadata = core.LidarInfo.from_default(
         core.LidarMode._1024x10)
 
     expected_version = "2.1.0"
@@ -493,8 +493,97 @@ def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
     assert metadata1 == metadata3
 
 
+def _make_camera_info(fx, width=8, height=4):
+    camera_info = core.CameraInfo()
+    camera_info.format.columns_per_frame = width
+    camera_info.format.pixels_per_column = height
+    camera_info.model = core.CameraModel(fx, fx + 1.0, width / 2.0, height / 2.0)
+    return camera_info
+
+
+def _make_camera_frame(camera_info, timestamp):
+    frame = core.CameraFrame(camera_info)
+    frame.w = camera_info.format.columns_per_frame
+    frame.h = camera_info.format.pixels_per_column
+    frame.add_field("image", np.zeros((frame.h, frame.w), np.uint8))
+    frame.timestamp[0] = timestamp
+    frame.receive_timestamp[0] = timestamp
+    return frame
+
+
+def test_osf_metadata_replacement_mixed_sensors(tmp_path, input_info):
+    """osf_file_modify_metadata rewrites CameraInfo as well as LidarInfo, and the
+    rewritten sensors stay attached to their streams."""
+    camera_info = _make_camera_info(100.0)
+    test_path = str(os.path.join(tmp_path, "mixed.osf"))
+
+    # Register the camera first so the lidar isn't the lowest footer id.
+    with osf.Writer(test_path) as writer:
+        camera_idx = writer.add_sensor(camera_info)
+        lidar_idx = writer.add_sensor(input_info)
+        writer.save(camera_idx, _make_camera_frame(camera_info, 100), 100)
+        writer.save(lidar_idx, core.LidarFrame(input_info), 100)
+
+    src = open_source(test_path)
+    assert isinstance(src.sensor_info[0], core.CameraInfo)
+    assert isinstance(src.sensor_info[1], core.LidarInfo)
+    src.close()
+
+    # new_metadata is positional, in the order the sensors are reported in.
+    new_camera_info = _make_camera_info(200.0)
+    new_lidar_info = core.LidarInfo(input_info.to_json_string())
+    new_lidar_info.sn = 99999
+    new_lidar_info.prod_line = "OS-9-42"
+    assert osf.osf_file_modify_metadata(test_path, [new_camera_info, new_lidar_info]) > 0
+
+    src = open_source(test_path)
+    assert len(src.sensor_info) == 2
+    assert src.sensor_info[0] == new_camera_info
+    # client_version isn't serialized, so compare the lidar metadata as stored.
+    assert src.sensor_info[1].to_json_string() == new_lidar_info.to_json_string()
+
+    # Both streams still resolve to a frame of the right type.
+    camera_frames = 0
+    lidar_frames = 0
+    for frame_set in src:
+        assert len(frame_set) == 2
+        if frame_set[0] is not None:
+            assert isinstance(frame_set[0], core.CameraFrame)
+            camera_frames += 1
+        if frame_set[1] is not None:
+            assert isinstance(frame_set[1], core.LidarFrame)
+            lidar_frames += 1
+    assert camera_frames == 1
+    assert lidar_frames == 1
+    src.close()
+
+
+def test_osf_metadata_replacement_camera_only(tmp_path):
+    """A camera-only OSF can have its CameraInfo replaced."""
+    camera_info = _make_camera_info(100.0)
+    test_path = str(os.path.join(tmp_path, "camera.osf"))
+
+    with osf.Writer(test_path) as writer:
+        camera_idx = writer.add_sensor(camera_info)
+        writer.save(camera_idx, _make_camera_frame(camera_info, 100), 100)
+
+    new_camera_info = _make_camera_info(200.0)
+    assert osf.osf_file_modify_metadata(test_path, [new_camera_info]) > 0
+
+    # The rewritten entry is still a CameraSensor, so it is read back as a camera.
+    entry_types = [e['type'] for e in json.loads(osf.dump_metadata(test_path))['metadata']['entries']]
+    assert osf.CameraSensor.type_id in entry_types
+    assert osf.LidarSensor.type_id not in entry_types
+
+    src = open_source(test_path)
+    assert len(src.sensor_info) == 1
+    assert src.sensor_info[0] == new_camera_info
+    assert len(list(src)) == 1
+    src.close()
+
+
 def test_full_custom_frame(tmp_path):
-    sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x10)
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x10)
     w, h = sensor_info.format.columns_per_frame, sensor_info.format.pixels_per_column
     ls = core.LidarFrame(sensor_info, [])
     ls.add_field("floats", np.ones((h, w), np.float64))
@@ -512,7 +601,7 @@ def test_full_custom_frame(tmp_path):
 
 
 def test_osf_empty_field(tmp_path):
-    sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x10)
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x10)
     ls = core.LidarFrame(sensor_info)
     ls.add_field("temperature", np.array([1.2353]), core.FieldClass.FRAME_FIELD)
     ls.add_field("q", np.ones((128, 1024, 0)), core.FieldClass.FRAME_FIELD)
@@ -537,7 +626,7 @@ def test_osf_empty_field(tmp_path):
 
 
 def test_osf_persists_alerts_thermal_and_shot_limiting_fields(tmp_path) -> None:
-    sensor_info = SensorInfo.from_default(core.LidarMode._1024x10)
+    sensor_info = LidarInfo.from_default(core.LidarMode._1024x10)
     frame = LidarFrame(sensor_info)
     frame.alert_flags[:] = range(len(frame.alert_flags))
     frame.frame_status = 0xabcdef0011223344
@@ -549,6 +638,7 @@ def test_osf_persists_alerts_thermal_and_shot_limiting_fields(tmp_path) -> None:
     src = open_source(test_path)
     read_frame = next(iter(src))[0]
     assert read_frame is not None
+    assert isinstance(read_frame, LidarFrame)
     assert np.array_equal(read_frame.alert_flags, frame.alert_flags)
     assert read_frame.frame_status == frame.frame_status
     assert read_frame.shutdown_countdown == frame.shutdown_countdown
@@ -556,7 +646,7 @@ def test_osf_persists_alerts_thermal_and_shot_limiting_fields(tmp_path) -> None:
 
 
 def test_osf_slice_and_cast() -> None:
-    sensor_info = SensorInfo.from_default(LidarMode._1024x10)
+    sensor_info = LidarInfo.from_default(LidarMode._1024x10)
     frame = LidarFrame(sensor_info)
     frame.alert_flags[:] = range(len(frame.alert_flags))
     frame.frame_status = 0xabcdef0011223344
@@ -582,10 +672,80 @@ def test_osf_slice_and_cast() -> None:
     # Notice that values were truncated to the bottom 8 bits here.
     assert np.array_equal(casted_range_field, np.ones(casted_range_field.shape))
 
+    # The frame's sensor metadata comes across with it.
+    assert sliced_frame.sensor_info == sensor_info
+
+
+def _camera_frame_for_slicing():
+    """A camera frame with a RANGE image, a three-channel image, and a field that
+    slicing is meant to drop."""
+    camera_info = core.CameraInfo()
+    camera_info.format.columns_per_frame = 4
+    camera_info.format.pixels_per_column = 3
+
+    frame = core.CameraFrame(camera_info)
+    frame.w = camera_info.format.columns_per_frame
+    frame.h = camera_info.format.pixels_per_column
+    frame.timestamp[0] = 1234
+    frame.receive_timestamp[0] = 5678
+    frame.add_field("RANGE", np.full((3, 4), 0xffffff01, np.uint32))
+    frame.add_field("LEFT_BGR", np.arange(3 * 4 * 3, dtype=np.uint8).reshape(3, 4, 3))
+    frame.add_field("DROPPED", np.ones((3, 4), np.uint16))
+    return camera_info, frame
+
+
+def test_osf_slice_and_cast_camera_frame() -> None:
+    """slice_and_cast works on a CameraFrame, returning a CameraFrame."""
+    camera_info, frame = _camera_frame_for_slicing()
+
+    sliced_frame = osf.slice_and_cast(frame, [
+        FieldType(ChanField.RANGE, np.uint8),
+        FieldType("LEFT_BGR", np.uint8, (3,), core.FieldClass.PIXEL_FIELD),
+    ])
+
+    assert isinstance(sliced_frame, core.CameraFrame)
+    assert sorted(sliced_frame.fields) == ["LEFT_BGR", "RANGE"]
+
+    # RANGE was narrowed to its bottom 8 bits; the three-channel image came
+    # across untouched, per-pixel dimension and all.
+    casted_range_field = sliced_frame.field(ChanField.RANGE)
+    assert casted_range_field.dtype == np.uint8
+    assert np.array_equal(casted_range_field, np.ones((3, 4), np.uint8))
+    assert np.array_equal(sliced_frame.field("LEFT_BGR"), frame.field("LEFT_BGR"))
+
+    # Dimensions, headers, and metadata are the source frame's.
+    assert (sliced_frame.w, sliced_frame.h) == (frame.w, frame.h)
+    assert sliced_frame.timestamp[0] == 1234
+    assert sliced_frame.receive_timestamp[0] == 5678
+    assert sliced_frame.sensor_info == camera_info
+
+
+def test_osf_slice_and_cast_camera_frame_dtype_dict() -> None:
+    """The {name: dtype} form keeps each field's class and extra dimensions, so a
+    three-channel camera image survives being listed by dtype alone."""
+    _, frame = _camera_frame_for_slicing()
+
+    sliced_frame = osf.slice_and_cast(frame, {"RANGE": np.dtype(np.uint8), "LEFT_BGR": np.dtype(np.uint8)})
+
+    assert isinstance(sliced_frame, core.CameraFrame)
+    assert sorted(sliced_frame.fields) == ["LEFT_BGR", "RANGE"]
+    assert sliced_frame.field(ChanField.RANGE).dtype == np.uint8
+    assert np.array_equal(sliced_frame.field("LEFT_BGR"), frame.field("LEFT_BGR"))
+
+
+def test_osf_slice_and_cast_missing_field() -> None:
+    """Asking for a field the frame doesn't have is an error for either frame kind."""
+    _, camera_frame = _camera_frame_for_slicing()
+    lidar_frame = LidarFrame(LidarInfo.from_default(LidarMode._1024x10))
+
+    for frame in (camera_frame, lidar_frame):
+        with pytest.raises(ValueError, match="NOT_THERE"):
+            osf.slice_and_cast(frame, [FieldType("NOT_THERE", np.uint8)])
+
 
 def get_size_for_compression_amount(tmp_path, input_info, compression_amount) -> int:
     file_name = tmp_path / "test.osf"
-    with osf.Writer(str(file_name), input_info, [], 0, Encoder(PngLidarFrameEncoder(compression_amount))) as writer:
+    with osf.Writer(str(file_name), input_info, [], 0, Encoder(PngFrameEncoder(compression_amount))) as writer:
         frame = core.LidarFrame(input_info)
         writer.save(0, frame)
         writer.close()
@@ -604,7 +764,7 @@ def test_async_writer_exception(tmp_path, input_info) -> None:
     thread."""
     file_name = tmp_path / "test.osf"
     assert len(input_info.format.pixel_shift_by_row) == 128
-    with osf.AsyncWriter(str(file_name), [input_info], [], 0, Encoder(PngLidarFrameEncoder(4))) as writer:
+    with osf.AsyncWriter(str(file_name), [input_info], [], 0, Encoder(PngFrameEncoder(4))) as writer:
         frame = core.LidarFrame(4, 1024, [], 16)  # frame size doesn't match sensor info
         future = writer.save(0, frame)
         with pytest.raises(ValueError, match=escape(
@@ -625,7 +785,7 @@ def test_writer_enforces_lidar_frame_correct_size(tmp_path, input_info):
 
 def async_writer_destruction_helper(tmp_path):
     file_name = tmp_path / "test.osf"
-    _ = osf.AsyncWriter(str(file_name), [SensorInfo.from_default(LidarMode._1024x10)])
+    _ = osf.AsyncWriter(str(file_name), [LidarInfo.from_default(LidarMode._1024x10)])
     #  should exit normally
 
 
@@ -640,6 +800,45 @@ def test_async_writer_destruction(tmp_path):
     p.start()
     p.join()
     assert p.exitcode == 0
+
+
+def test_async_writer_sensor_count_is_immutable(tmp_path, input_info) -> None:
+    """The number of sensors in an AsyncWriter is fixed at construction time.
+
+    This confirms the code-review observation that the sensor count on an
+    AsyncWriter is not mutable: there is no add_sensor() on AsyncWriter (unlike
+    the synchronous Writer), and saving a LidarFrame to a new/out-of-range
+    stream_index does NOT add a sensor -- it raises "Bad Stream ID" instead.
+    """
+    file_name = tmp_path / "test.osf"
+
+    # The synchronous Writer exposes add_sensor(); the AsyncWriter deliberately
+    # does not, so its sensor count can never grow after construction.
+    assert hasattr(osf.Writer, "add_sensor")
+    assert not hasattr(osf.AsyncWriter, "add_sensor")
+
+    with osf.AsyncWriter(str(file_name), [input_info]) as writer:
+        frame = core.LidarFrame(input_info)
+        frame.status[:] = 1
+        frame.receive_timestamp[:] = 100
+
+        # saving to the single existing stream is fine
+        writer.save(0, frame).get()
+
+        # attempting to save to a brand new stream_index (a "new sensor") does
+        # not add a sensor -- the save thread rejects it as a bad stream id.
+        frame.receive_timestamp[:] = 200
+        future = writer.save(1, frame)
+        with pytest.raises(Exception, match="Bad Stream ID"):
+            future.get()
+
+    # the resulting OSF only ever contained the single sensor passed at
+    # construction; no additional sensor was added.
+    src = open_source(str(file_name))
+    try:
+        assert len(src.sensor_info) == 1
+    finally:
+        src.close()
 
 
 def test_error_handler_open_source(test_data_dir):
@@ -662,7 +861,7 @@ def test_writer_save_with_none_frame(test_data_dir, tmp_path):
 
     for frame_sets in src:
         frame = frame_sets[0]
-        frame.packet_timestamp[:] = 1
+        frame.receive_timestamp[:] = 1
         frames_in = [frame, None]
         frame_set = FrameSet(frames_in)
         writer.save(frame_set)
@@ -680,34 +879,144 @@ def test_writer_drop_frame_error(test_data_dir, tmp_path):
 
     writer.save(0, frame_set[0], 100)
 
-    frame_set[0].packet_timestamp[:] = 50
+    frame_set[0].receive_timestamp[:] = 50
     with pytest.raises(OsfDropFrameError, match="decreasing"):
         writer.save(0, frame_set[0])
 
     with pytest.raises(OsfDropFrameError, match="decreasing"):
         writer.save(FrameSet(frame_set))
 
-    frame_set[0].packet_timestamp[:] = 0
+    frame_set[0].receive_timestamp[:] = 0
     with pytest.raises(OsfDropFrameError, match="no valid"):
         writer.save(FrameSet(frame_set))
 
 
 def test_async_writer_drop_frame_err(tmp_path, input_info) -> None:
-    """Saving with illegal timestamps should throw immediately rather than asyncronously."""
+    """Saving with illegal timestamps should throw immediately rather than asynchronously."""
     file_name = tmp_path / "test.osf"
     with osf.AsyncWriter(str(file_name), [input_info]) as writer:
         frame = core.LidarFrame(input_info)
         frame.status[:] = 1
-        frame.packet_timestamp[:] = 100
+        frame.receive_timestamp[:] = 100
         writer.save(0, frame)
 
-        frame.packet_timestamp[:] = 99
+        frame.receive_timestamp[:] = 99
         with pytest.raises(OsfDropFrameError, match="decreasing"):
             writer.save(0, frame)
 
         with pytest.raises(OsfDropFrameError, match="decreasing"):
             writer.save(FrameSet([frame]))
 
-        frame.packet_timestamp[:] = 0
+        frame.receive_timestamp[:] = 0
         with pytest.raises(OsfDropFrameError, match="no valid"):
             writer.save(FrameSet([frame]))
+
+
+@pytest.mark.parametrize("dtype", [np.uint8, np.float32])
+@pytest.mark.parametrize(
+    "encoder_factory",
+    [
+        pytest.param(None, id="default"),
+        pytest.param(lambda: Encoder(PngFrameEncoder(4)), id="libpng"),
+        pytest.param(lambda: Encoder(ZPngFrameEncoder(4)), id="zpng"),
+    ],
+)
+def test_osf_frame_field_n_by_3_roundtrip(tmp_path, dtype, encoder_factory):
+    """Regression for OSF writer/reader roundtrip of (N, 3) FRAME_FIELD data.
+
+    A 0.16 pre-release bug caused libpng decoder errors when saving an ndarray
+    of shape (N, 3) as FieldClass.SCAN_FIELD (now FRAME_FIELD) with np.uint8 or
+    np.float32 and reopening the file.
+    """
+    sensor_info = core.LidarInfo.from_default(core.LidarMode._1024x10)
+    num_boxes = 8
+    field_name = "BBOX_3D"
+    original = np.arange(num_boxes * 3, dtype=dtype).reshape(num_boxes, 3)
+
+    frame = core.LidarFrame(sensor_info, [])
+    frame.add_field(field_name, original, core.FieldClass.FRAME_FIELD)
+
+    test_path = tmp_path / "frame_field_n_by_3.osf"
+    encoder = encoder_factory() if encoder_factory else None
+    writer_kwargs = {"fields_to_write": [], "chunk_size": 0}
+    if encoder is not None:
+        writer_kwargs["encoder"] = encoder
+
+    with osf.Writer(str(test_path), [sensor_info], **writer_kwargs) as writer:
+        writer.save(0, frame)
+
+    reader = osf.Reader(str(test_path))
+    for msg in reader.messages():
+        if msg.of(LidarFrameStream):
+            recovered = msg.decode().field(field_name)
+            break
+    else:
+        pytest.fail("No LidarFrameStream message found in written OSF")
+
+    assert recovered.shape == original.shape
+    assert recovered.dtype == original.dtype
+    assert np.array_equal(recovered, original)
+
+    src = open_source(str(test_path))
+    recovered_via_source = src[0][0].field(field_name)
+    assert np.array_equal(recovered_via_source, original)
+
+
+def test_zone_conversion(test_data_dir):
+    """Validate that we properly decode older OSFs zone states"""
+    path = str(test_data_dir / "osfs" / "old_zone_packet.osf")
+    src = open_source(path)
+
+    zones = next(iter(src))[0].field("ZONE_STATES")
+    assert zones.shape == (16, )
+
+    for i in range(16):
+        assert zones[i]['live'] == 1
+        assert zones[i]['id'] == i
+        assert zones[i]['trigger_type'] == 1
+        assert zones[i]['trigger_status'] == 1
+        assert zones[i]['triggered_frames'] == 66
+        assert zones[i]['min_range'] == 480
+
+    # test a few random fields
+    assert zones[15]['mean_range'] == 1281
+    assert zones[3]['mean_range'] == 967
+    assert zones[0]['max_count'] == 65833
+
+
+@pytest.mark.parametrize(
+    "old_name, new_name",
+    [
+        ("PngLidarFrameEncoder", "PngFrameEncoder"),
+        ("ZPngLidarFrameEncoder", "ZPngFrameEncoder"),
+    ],
+)
+def test_deprecated_encoder_names(old_name, new_name):
+    """The pre-rename encoder names stay usable and warn."""
+    import ouster.sdk.osf as public_osf
+
+    with pytest.warns(FutureWarning, match=escape(f"{old_name} is deprecated")):
+        encoder = getattr(public_osf, old_name)(4)
+
+    assert isinstance(encoder, getattr(public_osf, new_name))
+    # The instance is a real encoder, so Encoder accepts it.
+    assert isinstance(Encoder(encoder), Encoder)
+
+
+def test_deprecated_encoder_base_name():
+    """The pre-rename base class name stays importable and warns."""
+    import ouster.sdk.osf as public_osf
+
+    assert hasattr(public_osf, "LidarFrameEncoder")
+    with pytest.warns(FutureWarning, match=escape("LidarFrameEncoder is deprecated")):
+        with pytest.raises(TypeError):
+            # Abstract in C++, so it has no constructor either way; what
+            # matters is that reaching for the old name warns.
+            public_osf.LidarFrameEncoder()
+
+
+def test_deprecated_encoder_kwarg():
+    """Encoder still accepts the pre-rename keyword argument."""
+    with pytest.warns(FutureWarning, match=escape("'lidar_frame_encoder' is deprecated")):
+        encoder = Encoder(lidar_frame_encoder=PngFrameEncoder(4))
+    assert isinstance(encoder, Encoder)
