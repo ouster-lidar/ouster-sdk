@@ -98,12 +98,28 @@ def sliceable_fixture():
     (None, None, -1),
     (None, None, -2),
     (None, None, -3),
+    (-11, None, -1),    # start before the first element, negative step
+    (-11, 0, -1),
+    (None, -11, -1),    # stop before the first element, negative step
+    (None, -11, -3),
+    (9, -11, -2),
+    (None, 9, -2),      # empty range, step < -1
+    (5, 5, -3),
+    (-1, -1, -2),
 ])
 def test_forward_slicer_valid(sliceable_fixture, start, stop, step):
     ref_sliceable, test_sliceable = sliceable_fixture
     ss = slice(start, stop, step)
     assert ref_sliceable[ss] == test_sliceable[ss], \
         f"Failed test case with the slice [{start}:{stop}:{step}]"
+
+
+@pytest.mark.parametrize("length", [0, 1])
+@pytest.mark.parametrize("step", [-1, -2, -3])
+def test_forward_slicer_short_input_negative_step(length, step):
+    values = list(range(length))
+    test_sliceable = NormalizedSliceable(values)
+    assert test_sliceable[::step] == values[::step]
 
 
 @pytest.mark.parametrize("start, stop, step", [
