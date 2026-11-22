@@ -15,11 +15,11 @@ class ForwardSlicer:
                 raise ValueError("slice step cannot be zero")
             return step
 
-        def _slice_clamp(value, length, default):
+        def _slice_clamp(value, length, default, lower=0):
             if value is None:
                 return default
             if value < 0:
-                return max(0, length + value)
+                return max(lower, length + value)
             return min(value, length)
 
         step = _slice_step(key.step)
@@ -27,13 +27,17 @@ class ForwardSlicer:
             start = _slice_clamp(key.start, L, 0)
             stop = _slice_clamp(key.stop, L, L)
         else:
-            start = _slice_clamp(key.stop, L, -1) + 1
-            stop = min(L, _slice_clamp(key.start, L, L) + 1)
+            # with a negative step an index before the first element maps to -1,
+            # same as python slicing, so element 0 is kept or the slice is empty
+            start = _slice_clamp(key.stop, L, -1, lower=-1) + 1
+            stop = min(L, _slice_clamp(key.start, L, L, lower=-1) + 1)
 
-        return slice(start, stop, step)
+        return slice(start, max(start, stop), step)
 
     @staticmethod
     def _stepper(data_iter, start, stop, step) -> Iterator:
+        if stop <= start:
+            return
         if step < 0:
             # align with the end
             step = -step
