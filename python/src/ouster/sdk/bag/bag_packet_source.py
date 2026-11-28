@@ -37,6 +37,7 @@ sqlite3.connect = _new_connect
 
 class MessageCount(Structure):
     _pack_ = 1
+    _layout_ = "ms"
     _fields_ = [
         ('id', c_uint16),
         ('count', c_uint64),
@@ -45,6 +46,7 @@ class MessageCount(Structure):
 
 class ChannelMetadata(Structure):
     _pack_ = 1
+    _layout_ = "ms"
     _fields_ = [
         ('len', c_uint32),
     ]
